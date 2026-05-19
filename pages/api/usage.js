@@ -1,12 +1,21 @@
 import { getDashboard, rechargeCustomer } from "@/lib/customer-store";
 
-export default function handler(req, res) {
+function isAdmin(req) {
+  const expected = process.env.ADMIN_SECRET || "";
+  const provided = req.headers["x-admin-secret"] || req.body?.adminSecret || req.query?.adminSecret;
+  return expected && provided === expected;
+}
+
+export default async function handler(req, res) {
   if (req.method === "GET") {
-    return res.status(200).json(getDashboard(req.query.customerId));
+    const customer = await getDashboard(req.query.customerId);
+    if (!customer) return res.status(404).json({ error: "用户不存在或服务实例已重启" });
+    return res.status(200).json(customer);
   }
 
   if (req.method === "POST") {
-    return res.status(200).json(rechargeCustomer(req.body?.customerId, req.body?.amount));
+    if (!isAdmin(req)) return res.status(403).json({ error: "Forbidden" });
+    return res.status(200).json(await rechargeCustomer(req.body?.customerId, req.body?.amount));
   }
 
   res.setHeader("Allow", "GET, POST");

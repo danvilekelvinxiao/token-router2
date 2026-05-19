@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   }
 
   if (!process.env.OPENROUTER_API_KEY) {
-    return res.status(500).json({ error: "缺少 OpenRouter API Key" });
+    return res.status(500).json({ error: "上游模型服务暂未配置，请联系 FlowAPI 客服处理。" });
   }
 
   try {
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       headers: {
         Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": process.env.PROXY_HTTP_REFERER || "http://localhost:3000",
+        "HTTP-Referer": process.env.PROXY_HTTP_REFERER || "https://api.flowapi.fun",
         "X-Title": process.env.PROXY_TITLE || "Token Router AI",
       },
       body: JSON.stringify({
@@ -49,14 +49,14 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       return res.status(response.status).json({
-        error: data.error?.message || "OpenRouter 请求失败",
+        error: data.error?.message || "上游模型服务请求失败，请稍后重试。",
       });
     }
 
     const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
-      return res.status(502).json({ error: "OpenRouter 没有返回有效内容" });
+      return res.status(502).json({ error: "上游模型服务没有返回有效内容，请稍后重试。" });
     }
 
     return res.status(200).json({ content });

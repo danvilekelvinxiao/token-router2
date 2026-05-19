@@ -1,9 +1,23 @@
-import { estimateCnyCost, selectModelForPrompt } from "@/lib/models";
-import { findCustomerByToken, recordCallByToken } from "@/lib/customer-store";
+import { MODEL_CATALOG, estimateCnyCost, selectModelForPrompt } from "@/lib/models";
+import { finalizeReservedCallByToken, findCustomerByToken, getTemporaryCreditBalance, reserveBalanceByToken } from "@/lib/customer-store";
+import { acquireConcurrency, getClientIp, graylistKey, isGraylisted, rateLimit, releaseConcurrency, securityLog } from "@/lib/security";
+import { getUpstreamConfigs, getUpstreamSuggestion, sendApiError } from "@/lib/upstream";
+import { Readable } from "stream";
+
+function setCors(res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  res.setHeader("Access-Control-Max-Age", "86400");
+}
 
 function getClientToken(req) {
   const auth = req.headers.authorization || "";
-  return auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+  let token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : String(req.headers["x-api-key"] || "").trim();
+  while (token.toLowerCase().startsWith("bearer ")) {
+    token = token.slice(7).trim();
+  }
+  return token.replace(/^["']|["']$/g, "");
 }
 
 function getPromptFromMessages(messages = []) {
@@ -11,52 +25,262 @@ function getPromptFromMessages(messages = []) {
   return typeof lastUserMessage?.content === "string" ? lastUserMessage.content : "";
 }
 
+function estimatePromptTokens(messages = []) {
+  const text = messages
+    .map((message) => {
+      const content = typeof message.content === "string"
+        ? message.content
+        : JSON.stringify(message.content || "");
+      return `${message.role || ""}:${content}`;
+    })
+    .join("\n");
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function estimateReserveCost(modelId, body = {}, promptTokens = 1) {
+  const maxTokens = Math.min(Number(body.max_tokens || 1024) || 1024, Number(process.env.MAX_COMPLETION_TOKENS || 4096));
+  const estimated = estimateCnyCost(modelId, {
+    prompt_tokens: promptTokens,
+    completion_tokens: maxTokens,
+  });
+  const minimum = Number(process.env.MIN_API_RESERVE_CNY || 0.001);
+  return Number(Math.max(minimum, estimated * 1.25).toFixed(6));
+}
+
+function getProxyReferer(req) {
+  const configured = String(process.env.PROXY_HTTP_REFERER || "").trim();
+  if (configured && !configured.includes("localhost") && !configured.includes("127.0.0.1")) return configured;
+  const host = req.headers.host || "flowapi.fun";
+  const protocol = host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https";
+  return `${protocol}://${host.replace(/^api\./, "")}`;
+}
+
 export default async function handler(req, res) {
+  setCors(res);
+
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+
   if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
-    return res.status(405).json({ error: "Only POST is allowed" });
+    res.setHeader("Allow", "POST, OPTIONS");
+    return sendApiError(res, 405, "METHOD_NOT_ALLOWED", "Only POST is allowed", "请使用 POST 请求调用 /v1/chat/completions。");
   }
 
   const clientToken = getClientToken(req);
-  const customerMatch = findCustomerByToken(clientToken);
+  const ip = getClientIp(req);
+
+  if (isGraylisted(`api:${ip}`)) {
+    return sendApiError(res, 429, "REQUEST_BLOCKED", "请求异常，请稍后再试", "你的请求短时间内异常次数较多，请 30 分钟后重试。");
+  }
+
+  const ipLimit = rateLimit(`api:ip:${ip}`, {
+    limit: Number(process.env.API_IP_RPM || 120),
+    windowMs: 60 * 1000,
+  });
+  if (!ipLimit.ok) {
+    securityLog("api_ip_limited", { ip });
+    return sendApiError(res, 429, "IP_RATE_LIMITED", "请求过快，请稍后再试", "同一 IP 请求频率过高，请降低并发或稍后重试。");
+  }
+
+  if (!clientToken) {
+    const missingLimit = rateLimit(`api-missing-key:${ip}`, { limit: 20, windowMs: 10 * 60 * 1000 });
+    if (!missingLimit.ok) graylistKey(`api:${ip}`, 30 * 60 * 1000);
+    return sendApiError(res, 401, "MISSING_API_KEY", "缺少 API 密匙", "请在请求头加入 Authorization: Bearer 你的 API 密匙，API 密匙可在 FlowAPI 的 API 管理页面复制。");
+  }
+
+  const customerMatch = await findCustomerByToken(clientToken);
 
   if (!customerMatch) {
-    return res.status(401).json({ error: "API Key 无效" });
+    // Not found in local store — try New API pass-through
+    const newApiBase = process.env.NEW_API_BASE_URL;
+    if (newApiBase && clientToken.startsWith("sk-")) {
+      try {
+        const upstreamRes = await fetch(`${newApiBase.replace(/\/+$/, "")}/v1/chat/completions`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${clientToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(req.body || {}),
+        });
+        const text = await upstreamRes.text();
+        res.status(upstreamRes.status);
+        res.setHeader("Content-Type", upstreamRes.headers.get("content-type") || "application/json");
+        return res.send(text);
+      } catch {
+        return sendApiError(res, 502, "UPSTREAM_ERROR", "上游服务异常", "New API 暂不可用，请稍后重试。");
+      }
+    }
+
+    const invalidLimit = rateLimit(`api-invalid-key:${ip}`, { limit: 12, windowMs: 10 * 60 * 1000 });
+    securityLog("invalid_api_key", { ip, tokenPrefix: clientToken.slice(0, 8) });
+    if (!invalidLimit.ok) {
+      graylistKey(`api:${ip}`, 30 * 60 * 1000);
+      return sendApiError(res, 429, "INVALID_API_KEY_LIMITED", "无效 API 密匙尝试过多，请稍后再试", "请停止重试错误密匙，回到 API 管理页面重新复制完整 API 密匙。");
+    }
+    return sendApiError(res, 401, "INVALID_API_KEY", "API 密匙无效", "请确认没有多复制空格、引号或重复 Bearer；如果仍失败，请在 API 管理页面重新创建 API 密匙。");
   }
 
-  if (customerMatch.customer.balance <= 0) {
-    return res.status(402).json({ error: "人民币余额不足，请先充值" });
+  const keyLimit = rateLimit(`api:key:${customerMatch.apiKey.id}`, {
+    limit: Number(process.env.API_KEY_RPM || 60),
+    windowMs: 60 * 1000,
+  });
+  if (!keyLimit.ok) {
+    securityLog("api_key_limited", { ip, customerId: customerMatch.customer.id, keyId: customerMatch.apiKey.id });
+    return sendApiError(res, 429, "API_KEY_RATE_LIMITED", "该 API 密匙请求过快，请稍后再试", "请降低请求频率，或为不同业务创建不同 API 密匙分开使用。");
   }
 
-  if (!process.env.OPENROUTER_API_KEY) {
-    return res.status(500).json({ error: "Missing OPENROUTER_API_KEY" });
+  const concurrencyKey = `api:key:${customerMatch.apiKey.id}`;
+  const maxConcurrency = Number(process.env.API_KEY_MAX_CONCURRENCY || 3);
+  if (!acquireConcurrency(concurrencyKey, maxConcurrency)) {
+    securityLog("api_key_concurrency_limited", { ip, customerId: customerMatch.customer.id, keyId: customerMatch.apiKey.id });
+    return sendApiError(res, 429, "API_KEY_CONCURRENCY_LIMITED", "该 API 密匙并发请求过多，请稍后再试", "请减少同时发起的请求数量，或稍后重试。");
+  }
+
+  const availableBalance = Number(customerMatch.customer.balance || 0) + await getTemporaryCreditBalance(customerMatch.customer.id);
+  if (availableBalance <= 0) {
+    releaseConcurrency(concurrencyKey);
+    return sendApiError(res, 402, "INSUFFICIENT_BALANCE", "人民币余额不足，请先充值", "请进入 FlowAPI 充值页面补充余额，到账后再继续调用。");
+  }
+
+  const upstreams = getUpstreamConfigs();
+  if (upstreams.length === 0) {
+    releaseConcurrency(concurrencyKey);
+    return sendApiError(res, 500, "UPSTREAM_NOT_CONFIGURED", "未配置上游 API", "FlowAPI 服务端暂未配置上游通道，请联系管理员处理。");
   }
 
   const body = req.body || {};
   const prompt = getPromptFromMessages(body.messages);
-  const selected = body.model && body.model !== "auto"
-    ? { modelId: body.model, name: body.model, provider: "Manual" }
-    : selectModelForPrompt(prompt);
+  const requestedManualModel = body.model && body.model !== "auto";
+  const catalogModel = requestedManualModel ? MODEL_CATALOG.find((model) => model.modelId === body.model) : null;
+  if (requestedManualModel && !catalogModel) {
+    releaseConcurrency(concurrencyKey);
+    return sendApiError(
+      res,
+      400,
+      "UNSUPPORTED_MODEL",
+      "模型暂未接入 FlowAPI",
+      "请在模型广场复制推荐的 Model ID，或使用 model: auto 让 FlowAPI 自动选择可用模型。"
+    );
+  }
+  const selected = requestedManualModel ? catalogModel : selectModelForPrompt(prompt);
+  const promptTokens = estimatePromptTokens(body.messages || []);
+  const reserveCost = estimateReserveCost(selected.modelId, body, promptTokens);
+  const reserve = await reserveBalanceByToken(clientToken, reserveCost);
+
+  if (reserve.error) {
+    releaseConcurrency(concurrencyKey);
+    return sendApiError(res, 402, "INSUFFICIENT_BALANCE", reserve.error, "请进入 FlowAPI 充值页面补充余额，到账后再继续调用。");
+  }
+
+  const referer = getProxyReferer(req);
+  const title = process.env.PROXY_TITLE || "FlowAPI";
 
   try {
-    const upstreamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+    const upstreamBody = {
+      ...body,
+      model: selected.modelId,
+    };
+
+    if (upstreamBody.stream) {
+      upstreamBody.stream_options = {
+        include_usage: true,
+        ...(upstreamBody.stream_options || {}),
+      };
+    }
+
+    let upstream = null;
+    let upstreamResponse = null;
+    let lastUpstreamError = null;
+
+    for (const candidate of upstreams) {
+      const headers = {
+        Authorization: `Bearer ${candidate.apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": process.env.PROXY_HTTP_REFERER || "http://localhost:3000",
-        "X-Title": process.env.PROXY_TITLE || "Token Router China",
-      },
-      body: JSON.stringify({
-        ...body,
-        model: selected.modelId,
-      }),
-    });
+      };
+
+      if (candidate.name === "openrouter") {
+        headers["HTTP-Referer"] = referer;
+        headers["X-Title"] = title;
+      }
+
+      try {
+        const response = await fetch(candidate.upstreamUrl, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(upstreamBody),
+        });
+
+        if (response.ok) {
+          upstream = candidate;
+          upstreamResponse = response;
+          break;
+        }
+
+        lastUpstreamError = new Error(`${candidate.label} 返回 ${response.status}`);
+        const shouldTryNext = [401, 403, 404, 429].includes(response.status) || response.status >= 500;
+        if (shouldTryNext) continue;
+
+        upstream = candidate;
+        upstreamResponse = response;
+        break;
+      } catch (error) {
+        lastUpstreamError = error;
+      }
+    }
+
+    if (!upstreamResponse || !upstream) {
+      throw lastUpstreamError || new Error("Upstream request failed");
+    }
+
+    const contentType = upstreamResponse.headers.get("content-type") || "";
+
+    if (body.stream && contentType.includes("text/event-stream") && upstreamResponse.body) {
+      res.status(upstreamResponse.status);
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("Connection", "keep-alive");
+      res.setHeader("X-Accel-Buffering", "no");
+
+      const estimatedCost = estimateCnyCost(selected.modelId, {
+        prompt_tokens: promptTokens,
+        completion_tokens: 0,
+      });
+      const nodeStream = Readable.fromWeb(upstreamResponse.body);
+
+      nodeStream.on("end", () => {
+        finalizeReservedCallByToken(clientToken, {
+          endpoint: "/v1/chat/completions",
+          requestedModel: body.model || "auto",
+          routedModel: selected.name,
+          provider: selected.provider,
+          status: upstreamResponse.status,
+          promptTokens,
+          completionTokens: 0,
+          cost: estimatedCost,
+          grantUsageCredit: true,
+        }, reserve).catch((error) => console.error("[flowapi] stream record failed:", error));
+        releaseConcurrency(concurrencyKey);
+      });
+
+      nodeStream.on("error", (error) => {
+        console.error("[flowapi] upstream stream error:", error);
+        releaseConcurrency(concurrencyKey);
+      });
+
+      res.on("close", () => {
+        releaseConcurrency(concurrencyKey);
+      });
+
+      nodeStream.pipe(res);
+      return;
+    }
 
     const data = await upstreamResponse.json();
     const cost = estimateCnyCost(selected.modelId, data.usage);
 
-    const customer = recordCallByToken(clientToken, {
+    const customer = await finalizeReservedCallByToken(clientToken, {
       endpoint: "/v1/chat/completions",
       requestedModel: body.model || "auto",
       routedModel: selected.name,
@@ -65,29 +289,47 @@ export default async function handler(req, res) {
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: data.usage?.completion_tokens || 0,
       cost,
-    });
+    }, reserve);
 
-    return res.status(upstreamResponse.status).json({
+    releaseConcurrency(concurrencyKey);
+    const responsePayload = {
       ...data,
       token_router: {
         routed_model: selected.name,
         routed_model_id: selected.modelId,
+        upstream: upstream.label,
         estimated_cost_cny: cost,
         balance_cny: customer?.balance,
       },
-    });
+    };
+
+    if (!upstreamResponse.ok) {
+      return res.status(upstreamResponse.status).json({
+        ...responsePayload,
+        code: "UPSTREAM_ERROR",
+        error: "上游模型返回错误",
+        upstreamError: typeof data.error === "string" ? data.error : data.error?.message || "",
+        suggestion: getUpstreamSuggestion(upstreamResponse.status),
+        docsUrl: "/help#error-codes",
+      });
+    }
+
+    return res.status(upstreamResponse.status).json(responsePayload);
   } catch (error) {
-    recordCallByToken(clientToken, {
+    await finalizeReservedCallByToken(clientToken, {
       endpoint: "/v1/chat/completions",
       requestedModel: body.model || "auto",
       routedModel: selected.name,
       provider: selected.provider,
-      status: 502,
+      status: 503,
       promptTokens: 0,
       completionTokens: 0,
       cost: 0,
-    });
+    }, reserve);
 
-    return res.status(502).json({ error: error.message || "Upstream request failed" });
+    releaseConcurrency(concurrencyKey);
+    return sendApiError(res, 503, "UPSTREAM_REQUEST_FAILED", "上游模型服务暂时不可用", "上游模型服务暂时无法连接，请稍后重试；如果持续失败，请切换其他模型或联系 FlowAPI 客服。", {
+      upstreamError: error.message || "",
+    });
   }
 }

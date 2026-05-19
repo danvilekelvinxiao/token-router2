@@ -1,0 +1,1 @@
+- [中文文案不使用中文标点](feedback/no-chinese-punctuation.md) — 页面中文文案禁止使用。，等中文标点符号

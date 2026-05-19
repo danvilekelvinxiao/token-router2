@@ -1,6 +1,6 @@
 # Token Router China
 
-中国版 OpenRouter MVP：客户账户、独立 API Key、统一 Base URL、模型自动切换、Token 余额、人工充值、调用记录、成本可视化、模型价格排行榜。
+中国版 OpenRouter MVP：客户账户、独立 API Key、统一 Base URL、模型自动切换、Token 余额、自动充值、调用记录、成本可视化、模型价格排行榜。
 
 ## 本地启动
 
@@ -29,6 +29,33 @@ PROXY_ACCESS_TOKEN=customer_token_001
 PROXY_HTTP_REFERER=http://localhost:3000
 PROXY_TITLE=Token Router China
 PROXY_USD_CNY_RATE=7.2
+```
+
+如果要启用微信/支付宝自动到账充值，还需要配置商户参数：
+
+```bash
+# 微信支付 Native
+WECHAT_PAY_MCHID=
+WECHAT_PAY_APPID=
+WECHAT_PAY_SERIAL_NO=
+WECHAT_PAY_PRIVATE_KEY=
+WECHAT_PAY_PLATFORM_PUBLIC_KEY=
+WECHAT_PAY_API_V3_KEY=
+WECHAT_PAY_NOTIFY_URL=
+
+# 支付宝当面付
+ALIPAY_APP_ID=
+ALIPAY_PRIVATE_KEY=
+ALIPAY_PUBLIC_KEY=
+ALIPAY_NOTIFY_URL=
+ALIPAY_GATEWAY=https://openapi.alipay.com/gateway.do
+```
+
+默认回调地址：
+
+```bash
+POST /api/payments/wechat/notify
+POST /api/payments/alipay/notify
 ```
 
 ## OpenAI 兼容接入
