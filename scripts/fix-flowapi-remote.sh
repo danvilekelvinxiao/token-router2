@@ -45,20 +45,22 @@ echo "=== Restart flowapi (pm2) ==="
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=768}"
 cd /var/www/flowapi
 
-if pm2 describe flowapi >/dev/null 2>&1; then
-  pm2 restart flowapi --update-env
-else
-  pm2 start npm --name flowapi -- start -- -p 3000
+if [ ! -d .next ]; then
+  echo "ERROR: missing .next build. Run on Mac: cd token-router2 && npm run deploy"
+  exit 1
 fi
+
+pm2 delete flowapi >/dev/null 2>&1 || true
+pm2 start npm --name flowapi --cwd /var/www/flowapi -- start -- -p 3000
 pm2 save >/dev/null || true
-sleep 3
+sleep 5
 
 echo "=== Local app health ==="
-curl -fsS -m 10 http://127.0.0.1:3000/api/health && echo || {
-  echo "WARN: app health failed, showing pm2 logs:"
-  pm2 logs flowapi --lines 40 --nostream || true
+if ! curl -fsS -m 15 http://127.0.0.1:3000/api/health && echo; then
+  echo "WARN: app health failed, pm2 logs:"
+  pm2 logs flowapi --lines 60 --nostream || true
   exit 1
-}
+fi
 
 echo "=== Nginx ==="
 if ! systemctl is-active --quiet nginx; then

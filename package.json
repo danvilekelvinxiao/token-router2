@@ -8,7 +8,11 @@
     "start": "next start",
     "cleanup:production": "node scripts/cleanup-production.js .env.production",
     "fix:remote": "bash scripts/fix-flowapi-remote.sh",
+    "deploy": "bash scripts/一键部署.sh",
     "deploy:prebuilt": "bash scripts/deploy-production-prebuilt.sh",
+    "deploy:rsync": "bash scripts/deploy-rsync-only.sh",
+    "recover": "bash scripts/recover-and-deploy.sh",
+    "verify:newapi": "node scripts/verify-new-api-env.mjs",
     "lint": "eslint"
   },
   "dependencies": {

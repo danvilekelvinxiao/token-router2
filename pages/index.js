@@ -255,6 +255,7 @@ export default function HomePage() {
             <div className="community-right">
               <div className="qr-placeholder">
                 {/* QQ 群二维码图片：请将图片放到 public/images/qq-group-qr.png */}
+                {/* eslint-disable-next-line @next/next/no-img-element -- 需要 onError 回退占位 */}
                 <img
                   src="/images/qq-group-qr.png"
                   alt="FlowAPI QQ 群二维码"

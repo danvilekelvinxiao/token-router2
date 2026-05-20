@@ -8,7 +8,7 @@ import { getPublicApiBaseUrl } from "@/lib/public-api";
 import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 const API_BASE_URL = "https://api.flowapi.fun/v1";
-const defaultModel = "deepseek/deepseek-chat";
+const defaultModel = "deepseek-chat";
 
 /* ==================== helpers ==================== */
 
@@ -376,25 +376,28 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
         return;
       }
 
-      // Sync with New API — create a real sk- token
+      // Sync with New API — create a matching token for quota tracking
       if (modal?.type !== "edit") {
         const newKey = (data.apiKeys || []).slice(-1)[0];
         if (newKey) {
           try {
+            // Create New API token for tracking; keep FlowAPI local key as canonical
             const newApiRes = await fetch("/api/newapi/tokens/create", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ name: form.label.trim() }),
             });
             const newApiData = await newApiRes.json();
-            if (newApiRes.ok && newApiData?.token?.key) {
-              newKey.token = newApiData.token.key;
+            if (newApiRes.ok && newApiData?.token) {
+              // Store New API tracking info but keep the local key as the user-facing key
               newKey.newApiId = newApiData.token.id;
-              newKey.quota = newApiData.token.quota;
-              newKey.usedQuota = newApiData.token.usedQuota || 0;
+              newKey.newApiSyncedQuota = newApiData.token.quota;
+              // IMPORTANT: Do NOT replace newKey.token — the FlowAPI local key
+              // is the canonical key used for CC-Switch import and API calls.
+              // FlowAPI handles auth locally, then forwards to New API with admin token.
             }
           } catch {
-            // New API unavailable — keep the local token
+            // New API unavailable — key still works via local auth
           }
         }
       }
