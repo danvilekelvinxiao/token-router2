@@ -3,12 +3,14 @@ import Head from "next/head";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
-import { buildCcSwitchCodexConfig, buildCcSwitchUrl } from "@/lib/cc-switch";
+import { buildCcSwitchCodexConfig, buildCcSwitchConfigUrl } from "@/lib/cc-switch";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
 import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
-const API_BASE_URL = "https://api.flowapi.fun/v1";
+const API_BASE_URL = "https://flowapi.fun/v1";
 const defaultModel = "deepseek-chat";
+const CC_SWITCH_RELEASE_URL = "https://github.com/farion1231/cc-switch/releases/tag/v3.15.0";
+const CC_SWITCH_WINDOWS_URL = "https://github.com/farion1231/cc-switch/releases/download/v3.15.0/CC-Switch-v3.15.0-Windows.msi";
 
 /* ==================== helpers ==================== */
 
@@ -72,6 +74,122 @@ function Toast({ text }) {
   return <div className="guide-toast-new">{text}</div>;
 }
 
+function CompactAccessAnimation() {
+  const nodes = ["API Key + Base URL", "CC-Switch", defaultModel, "开始调用"];
+  return (
+    <div className="guide-mini-flow" aria-label="FlowAPI 接入路径示意图">
+      <span className="flow-access-kicker">接入路径示意图</span>
+      <div className="guide-mini-flow-track">
+        {nodes.map((item, index) => (
+          <div key={item} className="guide-mini-flow-node">
+            <strong>{item}</strong>
+            {index < nodes.length - 1 ? <span aria-hidden="true" /> : null}
+          </div>
+        ))}
+      </div>
+      <p>不要选择 OpenAI Official 预设栏，建议添加自定义供应商。</p>
+    </div>
+  );
+}
+
+function QuickConnectPanel({ apiBaseUrl, onCreateKey }) {
+  return (
+    <section className="guide-quick-connect">
+      <div className="guide-quick-copy">
+        <span className="flow-access-kicker">快速接入 FlowAPI</span>
+        <h2>3 分钟接入 FlowAPI</h2>
+        <p>复制 Base URL 和 API Key，选择模型，即可在 CC-Switch、Cherry Studio、Chatbox、Claude Code 等工具中调用模型。</p>
+        <div className="guide-quick-info-grid">
+          <article>
+            <span>Base URL</span>
+            <code>{apiBaseUrl}</code>
+            <CopyButton value={apiBaseUrl} label="复制 Base URL" />
+          </article>
+          <article>
+            <span>API Key</span>
+            <code>从 API 管理页创建</code>
+            <button type="button" onClick={onCreateKey}>创建 API Key</button>
+          </article>
+          <article>
+            <span>默认模型</span>
+            <code>{defaultModel}</code>
+            <CopyButton value={defaultModel} label="复制模型 ID" />
+          </article>
+        </div>
+      </div>
+      <CompactAccessAnimation />
+    </section>
+  );
+}
+
+function TutorialSteps({ apiBaseUrl }) {
+  const steps = [
+    ["01", "创建 API Key", "进入 API 管理页面，点击“创建 API Key”。创建成功后，复制你的专属密钥。"],
+    ["02", "复制 Base URL", <>FlowAPI 的接口地址是：<code>{apiBaseUrl}</code><br />注意：必须带 <b>/v1</b>，不能只填 https://flowapi.fun。</>],
+    ["03", "打开 CC-Switch", "点击“添加供应商”，不要选择 OpenAI Official 预设栏，建议添加自定义供应商。"],
+    ["04", "填写配置", <>供应商名称：<b>FlowAPI</b><br />API 请求地址：<code>{apiBaseUrl}</code><br />API Key：填写你在 FlowAPI API 管理页创建的密钥<br />模型名称：<code>{defaultModel}</code></>],
+    ["05", "点击测试", "测试成功后，即可在支持 OpenAI-Compatible API 的工具中使用 FlowAPI。"],
+  ];
+
+  return (
+    <section className="guide-clear-steps">
+      <div className="guide-section-title">
+        <span className="flow-access-kicker">小白步骤教程</span>
+        <h2>按这 5 步填写，不用理解复杂 API</h2>
+        <p>重点记住三件事：Base URL 填 https://flowapi.fun/v1，模型先填 deepseek-chat，API Key 从 FlowAPI API 管理页复制。</p>
+      </div>
+      <div className="guide-clear-step-list">
+        {steps.map(([num, title, desc]) => (
+          <article key={num} className="guide-clear-step-card">
+            <span>{num}</span>
+            <div>
+              <h3>{title}</h3>
+              <p>{desc}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="guide-error-strip">
+        <div><b>401</b><span>API Key 错误，或密钥没有同步到 New API。</span></div>
+        <div><b>404</b><span>Base URL 错误，通常少了 /v1，或工具走了错误路径。</span></div>
+        <div><b>503</b><span>模型路由或上游渠道失败，可先换模型再重试。</span></div>
+      </div>
+    </section>
+  );
+}
+
+function CcSwitchConfigPanel({ apiBaseUrl, onCreateKey, onAutoConfig, onCopyConfig }) {
+  return (
+    <section className="ccswitch-panel">
+      <div className="ccswitch-main">
+        <span className="flow-access-kicker">CC-Switch</span>
+        <h2>CC-Switch 快速配置</h2>
+        <p>创建 API Key 后，可将 Base URL、API Key 和默认模型导入 CC-Switch。如果自动导入失败，也可以复制下方配置手动填写。</p>
+        <div className="ccswitch-actions">
+          <button type="button" onClick={onCreateKey}>创建 API Key</button>
+          <button type="button" onClick={onAutoConfig}>导入 CC-Switch</button>
+          <button type="button" onClick={onCopyConfig}>复制配置</button>
+        </div>
+      </div>
+      <div className="ccswitch-download-card">
+        <strong>下载 CC-Switch</strong>
+        <p>下载区域放在这里备用。Windows 用户优先下载 .msi 安装包，不要下载 .sig 文件。</p>
+        <div>
+          <a href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer">Windows .msi</a>
+          <a href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer">macOS</a>
+          <a href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer">Linux</a>
+          <a href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer">全部版本</a>
+        </div>
+      </div>
+      <div className="ccswitch-base-url">
+        <span>手动 Base URL</span>
+        <code>{apiBaseUrl}</code>
+        <CopyButton value={apiBaseUrl} label="复制" />
+      </div>
+    </section>
+  );
+}
+
 function buildGuideStepDetail(step, apiBaseUrl, onCreateKey) {
   const curl = `curl ${apiBaseUrl}/chat/completions \\
   -H "Authorization: Bearer 你的 API 密匙" \\
@@ -83,8 +201,8 @@ function buildGuideStepDetail(step, apiBaseUrl, onCreateKey) {
       title: "01 下载 CC 配置工具",
       description: "先选择自动配置或手动配置，准备好本地调用环境。",
       rows: [
-        { label: "Mac 下载", value: "/downloads/cc-switch-macos.dmg" },
-        { label: "Windows 下载", value: "/downloads/cc-switch-windows.zip" },
+        { label: "Mac 下载", value: CC_SWITCH_RELEASE_URL },
+        { label: "Windows 下载", value: "CC-Switch-v3.15.0-Windows.msi" },
         { label: "安装步骤", value: "下载 → 安装 → 打开 CC-Switch → 允许浏览器拉起" },
         { label: "下一步", value: "创建 API 密匙" },
       ],
@@ -101,7 +219,7 @@ function buildGuideStepDetail(step, apiBaseUrl, onCreateKey) {
               <span>选项一</span>
               <h4>自动配置</h4>
               <p>适合新手。下载工具后自动写入 FlowAPI Base URL 和推荐模型配置，减少手动填写错误。</p>
-              <a href="/downloads/cc-switch-windows.zip" download>下载自动配置工具</a>
+              <a href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer">下载自动配置工具</a>
             </article>
             <article className="guide-config-choice-card">
               <span>选项二</span>
@@ -120,7 +238,7 @@ function buildGuideStepDetail(step, apiBaseUrl, onCreateKey) {
           </div>
         ),
       },
-      actions: <><a href="/downloads/cc-switch-windows.zip" download>下载自动配置工具</a><Link href="/help#manual-config">查看帮助指南</Link></>,
+      actions: <><a href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer">下载自动配置工具</a><Link href="/help#manual-config">查看帮助指南</Link></>,
     },
     createKey: {
       title: "02 创建 API 密匙",
@@ -208,9 +326,9 @@ function StepCards({ onCreateKey, onAutoConfig, onOpenDetail }) {
         </div>
         <div className="guide-step-wide-bottom">
           <div className="guide-dl-btns">
-            <a className="guide-step-action guide-dl-btn" href="/downloads/cc-switch-windows.zip" download onClick={(event) => event.stopPropagation()}>⊞ Windows 下载</a>
-            <a className="guide-step-action guide-dl-btn" href="/downloads/cc-switch-macos.dmg" download onClick={(event) => event.stopPropagation()}>⌘ MacOS 下载</a>
-            <a className="guide-step-action guide-dl-btn" href="https://github.com/farion1231/cc-switch/releases/tag/v3.15.0" target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>⇣ 备用下载地址</a>
+            <a className="guide-step-action guide-dl-btn" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>⊞ Windows 下载</a>
+            <a className="guide-step-action guide-dl-btn" href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>⌘ macOS 下载</a>
+            <a className="guide-step-action guide-dl-btn" href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>⇣ 全部版本</a>
           </div>
           <p className="guide-dl-hint">无法访问 GitHub？请优先使用上方站内下载按钮。</p>
         </div>
@@ -318,7 +436,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   function openCcSwitch(key) {
     const currentApiBaseUrl = getPublicApiBaseUrl();
     setApiBaseUrl(currentApiBaseUrl);
-    const ccUrl = buildCcSwitchUrl({
+    const ccUrl = buildCcSwitchConfigUrl({
       apiKey: key.token, baseUrl: currentApiBaseUrl, model: defaultModel, name: key.label || "FlowAPI",
     });
     const anchor = document.createElement("a");
@@ -374,32 +492,6 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       if (!res.ok) {
         showMessage(data?.suggestion || data?.error || "创建失败，请稍后重试");
         return;
-      }
-
-      // Sync with New API — create a matching token for quota tracking
-      if (modal?.type !== "edit") {
-        const newKey = (data.apiKeys || []).slice(-1)[0];
-        if (newKey) {
-          try {
-            // Create New API token for tracking; keep FlowAPI local key as canonical
-            const newApiRes = await fetch("/api/newapi/tokens/create", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ name: form.label.trim() }),
-            });
-            const newApiData = await newApiRes.json();
-            if (newApiRes.ok && newApiData?.token) {
-              // Store New API tracking info but keep the local key as the user-facing key
-              newKey.newApiId = newApiData.token.id;
-              newKey.newApiSyncedQuota = newApiData.token.quota;
-              // IMPORTANT: Do NOT replace newKey.token — the FlowAPI local key
-              // is the canonical key used for CC-Switch import and API calls.
-              // FlowAPI handles auth locally, then forwards to New API with admin token.
-            }
-          } catch {
-            // New API unavailable — key still works via local auth
-          }
-        }
       }
 
       updateCustomer(data);
@@ -687,7 +779,8 @@ export default function GuidePage() {
       return;
     }
     try {
-      const url = buildCcSwitchUrl({ apiKey: primaryKey.token, baseUrl: API_BASE_URL, model: defaultModel, name: "FlowAPI" });
+      const currentApiBaseUrl = getPublicApiBaseUrl();
+      const url = buildCcSwitchConfigUrl({ apiKey: primaryKey.token, baseUrl: currentApiBaseUrl, model: defaultModel, name: "FlowAPI" });
       const a = document.createElement("a");
       a.href = url; a.target = "_blank"; a.rel = "noreferrer";
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
@@ -715,6 +808,7 @@ export default function GuidePage() {
       { metric: "常见错误", value: "余额不足 / API 密匙错误 / 模型名错误 / 网络超时", description: "按中文错误提示排查" },
     ] },
   ];
+  const apiBaseUrl = getPublicApiBaseUrl();
 
   return (
     <>
@@ -745,6 +839,8 @@ export default function GuidePage() {
 
           {/* ===== Three Steps ===== */}
           <StepCards onCreateKey={openCreateKey} onAutoConfig={handleAutoConfig} onOpenDetail={openStepDetail} />
+
+          {/* ===== API Key Manager ===== */}
           <ApiKeyManager customer={customer} setCustomer={setCustomer} createSignal={createSignal} />
         </div>
         <Toast text={toast} />

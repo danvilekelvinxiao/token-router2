@@ -15,8 +15,16 @@ export default async function handler(req, res) {
   if (!customerId) return res.status(401).json({ error: "请先登录后再操作" });
 
   if (req.method === "POST") {
-    await createApiKey(customerId, req.body?.label || "API 密匙", req.body?.expiresAt || null);
-    return res.status(200).json(await getDashboard(customerId));
+    try {
+      await createApiKey(customerId, req.body?.label || "API 密匙", req.body?.expiresAt || null);
+      return res.status(200).json(await getDashboard(customerId));
+    } catch (error) {
+      console.error("[api/keys:create]", error);
+      return res.status(502).json({
+        error: "API 密钥创建失败，请稍后重试或联系管理员。",
+        suggestion: error?.message || "New API 令牌创建失败",
+      });
+    }
   }
 
   const keyId = req.body?.keyId;

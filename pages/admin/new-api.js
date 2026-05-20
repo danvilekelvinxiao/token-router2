@@ -49,7 +49,7 @@ export default function AdminNewApiPage() {
           <div className="admin-stat-card">
             <div className="admin-stat-label">用户调用地址</div>
             <div className="admin-stat-value" style={{ fontSize: 15 }}>
-              https://api.flowapi.fun/v1
+              https://flowapi.fun/v1
             </div>
           </div>
           <div className="admin-stat-card">

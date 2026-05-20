@@ -5,7 +5,7 @@ import AdminLayout from "@/components/AdminLayout";
 const MOCK_SETTINGS = {
   siteName: "FlowAPI",
   siteDomain: "flowapi.fun",
-  apiBaseUrl: "https://api.flowapi.fun/v1",
+  apiBaseUrl: "https://flowapi.fun/v1",
   adminEmail: "admin@flowapi.fun",
   openRegistration: true,
   registerBonus: 5.00,

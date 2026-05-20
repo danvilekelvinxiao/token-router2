@@ -2,7 +2,7 @@ import Head from "next/head";
 import Link from "next/link";
 import { useState } from "react";
 
-const apiBaseUrl = "https://api.flowapi.fun/v1";
+const apiBaseUrl = "https://flowapi.fun/v1";
 
 const models = [
   { name: "GPT", scene: "复杂分析 / 代码辅助", price: "均衡", score: "4.8" },

@@ -9,6 +9,7 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [openFaq, setOpenFaq] = useState("faq-401");
 
   const refreshProfile = useCallback(async (c) => {
     if (!c) {
@@ -77,6 +78,34 @@ export default function ProfilePage() {
   const joinDate = customer.createdAt
     ? new Date(customer.createdAt).toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" })
     : "-";
+  const nowText = new Date().toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+  const announcements = [
+    {
+      status: "success",
+      title: "FlowAPI DeepSeek 官方渠道已上线",
+      content: "当前已支持 deepseek-chat 和 deepseek-reasoner。用户可在 API 管理页创建密匙后，通过 CC-Switch、Cherry Studio、Chatbox 等工具接入。",
+      time: nowText,
+    },
+    {
+      status: "progress",
+      title: "CC-Switch 自动配置优化中",
+      content: "正在优化 API Key 同步、/v1/responses 兼容、自动导入自定义供应商等问题。建议优先使用自定义供应商 + https://flowapi.fun/v1 手动配置。",
+      time: nowText,
+    },
+    {
+      status: "default",
+      title: "赠送额度规则说明",
+      content: "登录赠送 0.5 额度，实际产生 Token 使用时赠送 1.5 额度。赠送额度仅当日可用，并优先消耗。",
+      time: nowText,
+    },
+  ];
+  const faqs = [
+    ["faq-401", "为什么 CC-Switch 显示 401？", "通常是 API Key 不正确。请确认使用的是 FlowAPI API 管理页创建的密匙，而不是 DeepSeek、OpenRouter 或管理员 Token。"],
+    ["faq-404", "为什么显示 404？", "通常是接口地址填写错误。请确认 Base URL 为 https://flowapi.fun/v1，不能缺少 /v1。"],
+    ["faq-503", "为什么显示 503？", "通常代表地址和密匙通过了，但上游渠道或模型路由失败。请检查模型名是否正确，例如 DeepSeek 官方渠道使用 deepseek-chat，而 OpenRouter 使用 deepseek/deepseek-chat。"],
+    ["faq-model", "deepseek-chat 和 deepseek/deepseek-chat 有什么区别？", "deepseek-chat 是 DeepSeek 官方渠道模型名；deepseek/deepseek-chat 是 OpenRouter 渠道模型名，不能混用。"],
+    ["faq-gift", "赠送额度怎么扣除？", "赠送额度仅当日有效，系统会优先消耗赠送额度，再消耗充值余额。"],
+  ];
 
   return (
     <>
@@ -269,6 +298,53 @@ export default function ProfilePage() {
             </div>
           </div>
         </div>
+
+        <section className="profile-support-grid">
+          <div className="profile-announcement-card">
+            <div className="profile-panel-head">
+              <div>
+                <span>系统消息</span>
+                <h2>系统公告</h2>
+              </div>
+              <em>显示最新20条</em>
+            </div>
+            <div className="profile-timeline">
+              {announcements.map((item) => (
+                <article key={item.title} className={`profile-timeline-item ${item.status}`}>
+                  <div className="profile-timeline-dot" />
+                  <div>
+                    <div className="profile-timeline-top">
+                      <strong>{item.title}</strong>
+                      <span>{item.status === "success" ? "成功" : item.status === "progress" ? "进行中" : "默认"}</span>
+                    </div>
+                    <p>{item.content}</p>
+                    <time>{item.time}</time>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+
+          <div className="profile-faq-card">
+            <div className="profile-panel-head">
+              <div>
+                <span>自助排查</span>
+                <h2>常见问答</h2>
+              </div>
+            </div>
+            <div className="profile-faq-list">
+              {faqs.map(([id, question, answer]) => (
+                <article key={id} className={openFaq === id ? "open" : ""}>
+                  <button type="button" onClick={() => setOpenFaq(openFaq === id ? "" : id)}>
+                    <strong>{question}</strong>
+                    <span>{openFaq === id ? "−" : "+"}</span>
+                  </button>
+                  {openFaq === id && <p>{answer}</p>}
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
       </ConsoleLayout>
     </>
   );

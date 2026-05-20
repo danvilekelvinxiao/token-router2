@@ -1,9 +1,13 @@
 import { createNewApiToken } from "@/lib/new-api/client";
+import { requireCustomerSession } from "@/lib/session";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+
+  const session = requireCustomerSession(req, res);
+  if (!session) return;
 
   try {
     const { name, group, quota, models } = req.body || {};

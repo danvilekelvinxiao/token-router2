@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 
-const API_BASE_URL = "https://api.flowapi.fun/v1";
+const API_BASE_URL = "https://flowapi.fun/v1";
 const DEFAULT_MODEL = "deepseek/deepseek-chat";
 const CHATGPT_MODEL = "openai/gpt-4o-mini";
 

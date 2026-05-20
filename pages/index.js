@@ -2,7 +2,7 @@ import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-const apiBaseUrl = "https://api.flowapi.fun/v1";
+const apiBaseUrl = "https://flowapi.fun/v1";
 
 const features = [
   {
@@ -234,11 +234,17 @@ export default function HomePage() {
         <section className="community-section-bg">
           <div className="community-card">
             <div className="community-left">
-              <div className="comm-eyebrow">AI 玩家交流群</div>
-              <h2>加群领取 20 额度 Token 兑换码</h2>
+              <div className="comm-eyebrow">QQ 社群支持</div>
+              <h2>更多优惠活动和技术支持，请扫码加入 QQ 群</h2>
               <p className="comm-desc">
-                加入 FlowAPI 玩家交流群，获取新手接入帮助、模型使用技巧和最新额度福利。
+                群里会优先同步模型配置、Base URL、API Key 使用教程、客户端安装说明和不定期福利。遇到连接失败、模型选择、扣费异常等问题，也可以直接咨询。
               </p>
+
+              <div className="community-tags">
+                <span>福利同步</span>
+                <span>模型配置</span>
+                <span>下载协助</span>
+              </div>
 
               <div className="qq-info">
                 <div className="qq-info-label">QQ群号</div>
@@ -247,7 +253,7 @@ export default function HomePage() {
                   className={`btn-copy-qq${qqCopied ? " copied" : ""}`}
                   onClick={copyQQ}
                 >
-                  {qqCopied ? "已复制" : "复制群号"}
+                  {qqCopied ? "已复制" : "复制"}
                 </button>
               </div>
             </div>

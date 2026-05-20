@@ -3,113 +3,16 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import ConsoleLayout from "@/components/ConsoleLayout";
-import ModelLogo, { getModelProvider } from "@/components/ModelLogo";
+import ModelLogo, { getModelProviderLabel } from "@/components/ModelLogo";
 import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import ExportExcelButton from "@/components/ExportExcelButton";
 
 /* ===================================================================
-   MOCK DATA
+   REFERENCE DATA
    =================================================================== */
 
-const MOCK_CUSTOMER = {
-  name: "Xiao",
-  email: "xiao@example.com",
-  balance: 2.0,
-  totalSpend: 0.87,
-  level: "Pro",
-  streakDays: 7,
-};
-
-const MOCK_ACTIVITY = {
-  spend: {
-    total: 0.87,
-    daily: [0.12, 0.08, 0.15, 0.22, 0.05, 0.18, 0.07],
-    dailyDates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
-    models: [
-      { name: "DeepSeek V4", percent: 42, spend: 0.365, color: "#6366f1" },
-      { name: "Claude Sonnet", percent: 28, spend: 0.244, color: "#8b5cf6" },
-      { name: "GPT-4o Mini", percent: 18, spend: 0.157, color: "#a78bfa" },
-      { name: "Gemini Flash", percent: 12, spend: 0.104, color: "#7c3aed" },
-    ],
-  },
-  requests: {
-    total: 47,
-    daily: [8, 5, 9, 13, 3, 7, 2],
-    dailyDates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
-    models: [
-      { name: "DeepSeek V4", percent: 38, requests: 18, color: "#6366f1" },
-      { name: "Claude Sonnet", percent: 25, requests: 12, color: "#8b5cf6" },
-      { name: "GPT-4o Mini", percent: 22, requests: 10, color: "#a78bfa" },
-      { name: "Gemini Flash", percent: 15, requests: 7, color: "#7c3aed" },
-    ],
-  },
-  tokens: {
-    total: "29.2K",
-    daily: [4200, 3100, 5800, 7200, 1800, 4900, 2200],
-    dailyDates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
-    models: [
-      { name: "DeepSeek V4", percent: 45, tokens: "13.1K", color: "#6366f1" },
-      { name: "Claude Sonnet", percent: 30, tokens: "8.8K", color: "#8b5cf6" },
-      { name: "GPT-4o Mini", percent: 15, tokens: "4.4K", color: "#a78bfa" },
-      { name: "Gemini Flash", percent: 10, tokens: "2.9K", color: "#7c3aed" },
-    ],
-  },
-};
-
-const MOCK_TOKEN_ASSET_MANAGEMENT = {
-  consumption: [
-    { period: "今日消耗", amount: 0.18, tokens: 9200, requests: 18, change: "+12.4%" },
-    { period: "本周消耗", amount: 1.36, tokens: 68400, requests: 126, change: "+8.1%" },
-    { period: "本月消耗", amount: 5.82, tokens: 286500, requests: 548, change: "+21.7%" },
-  ],
-  costRanking: [
-    { model: "Claude Sonnet", provider: "Anthropic", amount: 2.18, tokens: 38200, share: 37.5, avgCost: 0.042, trend: "+14.8%", direction: "up", modelId: "anthropic/claude-3.5-haiku", spark: [0.018, 0.021, 0.027, 0.031, 0.038, 0.036, 0.042], note: "代码和长文本任务集中，单次成本偏高。" },
-    { model: "DeepSeek V4", provider: "DeepSeek", amount: 1.64, tokens: 118600, share: 28.2, avgCost: 0.009, trend: "-6.2%", direction: "down", modelId: "deepseek/deepseek-chat", spark: [0.014, 0.012, 0.011, 0.010, 0.010, 0.009, 0.009], note: "中文问答和批量任务占比高，性价比稳定。" },
-    { model: "GPT-4o Mini", provider: "OpenAI", amount: 1.08, tokens: 61200, share: 18.6, avgCost: 0.018, trend: "+3.4%", direction: "up", modelId: "openai/gpt-4o-mini", spark: [0.015, 0.016, 0.017, 0.016, 0.018, 0.019, 0.018], note: "通用任务稳定，适合作为默认兜底模型。" },
-    { model: "Gemini Flash", provider: "Google", amount: 0.62, tokens: 68500, share: 10.7, avgCost: 0.007, trend: "-2.1%", direction: "down", modelId: "google/gemini-2.0-flash-001", spark: [0.009, 0.008, 0.008, 0.007, 0.007, 0.007, 0.007], note: "长上下文成本友好，可承接资料整理任务。" },
-    { model: "Qwen3 32B", provider: "Alibaba", amount: 0.30, tokens: 21400, share: 5.0, avgCost: 0.011, trend: "0.0%", direction: "flat", modelId: "qwen/qwen3-32b", spark: [0.011, 0.011, 0.012, 0.011, 0.011, 0.010, 0.011], note: "中文办公场景表现平衡。" },
-  ],
-  averageRequestCost: {
-    avgCost: 0.018,
-    avgInputTokens: 620,
-    avgOutputTokens: 410,
-    avgTotalTokens: 1030,
-    trend: [0.014, 0.016, 0.015, 0.019, 0.018, 0.021, 0.018],
-    dates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
-  },
-  balanceForecast: {
-    currentBalance: 12.8,
-    coverDays: 9,
-    futureTokens: 146000,
-    requiredCredit: 3.42,
-    suggestedRecharge: 30,
-    chart: {
-      pastDates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
-      pastValues: [0.42, 0.38, 0.51, 0.63, 0.58, 0.71, 0.69],
-      futureDates: ["05/18", "05/19", "05/20", "05/21", "05/22", "05/23", "05/24"],
-      futureValues: [0.72, 0.78, 0.76, 0.83, 0.88, 0.91, 0.86],
-      unit: "¥",
-    },
-  },
-  alerts: {
-    status: "warning",
-    statusText: "警告",
-    summary: "余额可覆盖天数低于 10 天，建议本周内补充额度。",
-    thresholds: [
-      { label: "余额低于 ¥10 提醒", enabled: true },
-      { label: "可用天数少于 3 天提醒", enabled: true },
-      { label: "单日消耗超过 ¥5 提醒", enabled: false },
-    ],
-  },
-  recommendations: [
-    { title: "简单中文问答", model: "DeepSeek V4", save: 1.26, reason: "中文问答命中率高，单位 Token 成本低，适合客服、资料问答、短内容生成。", href: "/models?model=deepseek/deepseek-chat" },
-    { title: "代码任务", model: "Claude Sonnet", save: 0.00, reason: "代码理解和复杂推理质量更稳，建议保留为高价值任务模型，不盲目降级。", href: "/models?model=anthropic/claude-3.5-haiku" },
-    { title: "批量任务", model: "Gemini Flash / Qwen3", save: 2.48, reason: "批量摘要、改写、分类可优先走低成本模型，减少高价模型浪费。", href: "/models" },
-  ],
-};
-
-const MOCK_PREDICTION = {
+const REFERENCE_PREDICTION = {
   pastDates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
   pastValues: [38, 42, 35, 48, 52, 61, 58],
   futureDates: ["05/18", "05/19", "05/20", "05/21", "05/22", "05/23", "05/24"],
@@ -117,7 +20,7 @@ const MOCK_PREDICTION = {
   unit: "K",
 };
 
-const MOCK_PREDICTION_SPEND = {
+const REFERENCE_PREDICTION_SPEND = {
   pastDates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
   pastValues: [0.08, 0.10, 0.07, 0.12, 0.13, 0.15, 0.14],
   futureDates: ["05/18", "05/19", "05/20", "05/21", "05/22", "05/23", "05/24"],
@@ -125,7 +28,7 @@ const MOCK_PREDICTION_SPEND = {
   unit: "¥",
 };
 
-const MOCK_PREDICTION_REQUESTS = {
+const REFERENCE_PREDICTION_REQUESTS = {
   pastDates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
   pastValues: [8, 5, 9, 13, 3, 7, 2],
   futureDates: ["05/18", "05/19", "05/20", "05/21", "05/22", "05/23", "05/24"],
@@ -133,7 +36,7 @@ const MOCK_PREDICTION_REQUESTS = {
   unit: "",
 };
 
-const MOCK_MODEL_RANKING = [
+const REFERENCE_MODEL_RANKING = [
   { rank: 1, name: "DeepSeek V4 Flash", tokens: "1.65T", change: "+70%", direction: "up", pct: 100, color: "#6366f1" },
   { rank: 2, name: "Claude Opus 4.7", tokens: "1.61T", change: "+41%", direction: "up", pct: 97, color: "#f59e0b" },
   { rank: 3, name: "Claude Sonnet 4.6", tokens: "1.55T", change: "+8%", direction: "up", pct: 94, color: "#8b5cf6" },
@@ -145,7 +48,7 @@ const MOCK_MODEL_RANKING = [
   { rank: 9, name: "Owl Alpha", tokens: "689B", change: "+125%", direction: "up", pct: 41, color: "#06b6d4" },
 ];
 
-const MOCK_TOP_MODELS_STACKED = {
+const REFERENCE_TOP_MODELS_STACKED = {
   dates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
   models: [
     { name: "Others", daily: [2.2, 2.5, 2.1, 2.8, 2.4, 3.0, 2.7], color: "#64748b" },
@@ -161,13 +64,6 @@ const MOCK_TOP_MODELS_STACKED = {
   ],
 };
 
-const MOCK_TOP_USER_MODELS = [
-  { name: "DeepSeek V4", tokens: "12.5K", pct: 85, color: "#6366f1" },
-  { name: "Claude Sonnet 4", tokens: "8.2K", pct: 55, color: "#8b5cf6" },
-  { name: "GPT-4o Mini", tokens: "5.1K", pct: 35, color: "#a78bfa" },
-  { name: "Gemini Flash", tokens: "3.3K", pct: 22, color: "#7c3aed" },
-];
-
 const MODEL_FLOW_COLORS = {
   deepseek: "#3b82f6",
   claude: "#8b5cf6",
@@ -177,151 +73,22 @@ const MODEL_FLOW_COLORS = {
   others: "#94a3b8",
 };
 
-const ASSET_OVERVIEW = {
-  balance: 92.31,
-  callableTokens: 14200000,
-  todaySpend: 1.27,
-  todayTokens: 428700,
-  weekSpend: 8.42,
-  weekTokens: 2910000,
-  lastCall: {
-    model: "DeepSeek V4",
-    tokens: 8200,
-    amount: 0.13,
-    time: "2 分钟前",
-  },
-};
-
-const modelSpendFlow = [
-  {
-    date: "05/11",
-    models: [
-      { model: "DeepSeek V4", provider: "DeepSeek", spend: 0.42, tokens: 128000, requests: 18, color: MODEL_FLOW_COLORS.deepseek },
-      { model: "Claude Sonnet", provider: "Anthropic", spend: 0.31, tokens: 84000, requests: 9, color: MODEL_FLOW_COLORS.claude },
-      { model: "GPT-4o Mini", provider: "OpenAI", spend: 0.12, tokens: 41000, requests: 14, color: MODEL_FLOW_COLORS.gpt },
-      { model: "Gemini Flash", provider: "Google", spend: 0.08, tokens: 29000, requests: 5, color: MODEL_FLOW_COLORS.gemini },
-      { model: "Qwen", provider: "Alibaba", spend: 0.05, tokens: 17000, requests: 4, color: MODEL_FLOW_COLORS.qwen },
-      { model: "Others", provider: "Mixed", spend: 0.03, tokens: 10000, requests: 2, color: MODEL_FLOW_COLORS.others },
-    ],
-  },
-  {
-    date: "05/12",
-    models: [
-      { model: "DeepSeek V4", provider: "DeepSeek", spend: 0.46, tokens: 136000, requests: 20, color: MODEL_FLOW_COLORS.deepseek },
-      { model: "Claude Sonnet", provider: "Anthropic", spend: 0.28, tokens: 76000, requests: 8, color: MODEL_FLOW_COLORS.claude },
-      { model: "GPT-4o Mini", provider: "OpenAI", spend: 0.16, tokens: 52000, requests: 16, color: MODEL_FLOW_COLORS.gpt },
-      { model: "Gemini Flash", provider: "Google", spend: 0.09, tokens: 31000, requests: 6, color: MODEL_FLOW_COLORS.gemini },
-      { model: "Qwen", provider: "Alibaba", spend: 0.04, tokens: 15000, requests: 3, color: MODEL_FLOW_COLORS.qwen },
-      { model: "Others", provider: "Mixed", spend: 0.04, tokens: 13000, requests: 3, color: MODEL_FLOW_COLORS.others },
-    ],
-  },
-  {
-    date: "05/13",
-    models: [
-      { model: "DeepSeek V4", provider: "DeepSeek", spend: 0.51, tokens: 154000, requests: 23, color: MODEL_FLOW_COLORS.deepseek },
-      { model: "Claude Sonnet", provider: "Anthropic", spend: 0.33, tokens: 92000, requests: 10, color: MODEL_FLOW_COLORS.claude },
-      { model: "GPT-4o Mini", provider: "OpenAI", spend: 0.18, tokens: 61000, requests: 18, color: MODEL_FLOW_COLORS.gpt },
-      { model: "Gemini Flash", provider: "Google", spend: 0.10, tokens: 36000, requests: 7, color: MODEL_FLOW_COLORS.gemini },
-      { model: "Qwen", provider: "Alibaba", spend: 0.05, tokens: 18000, requests: 4, color: MODEL_FLOW_COLORS.qwen },
-      { model: "Others", provider: "Mixed", spend: 0.03, tokens: 12000, requests: 2, color: MODEL_FLOW_COLORS.others },
-    ],
-  },
-  {
-    date: "05/14",
-    models: [
-      { model: "DeepSeek V4", provider: "DeepSeek", spend: 0.58, tokens: 175000, requests: 25, color: MODEL_FLOW_COLORS.deepseek },
-      { model: "Claude Sonnet", provider: "Anthropic", spend: 0.39, tokens: 118000, requests: 13, color: MODEL_FLOW_COLORS.claude },
-      { model: "GPT-4o Mini", provider: "OpenAI", spend: 0.17, tokens: 72000, requests: 17, color: MODEL_FLOW_COLORS.gpt },
-      { model: "Gemini Flash", provider: "Google", spend: 0.12, tokens: 41000, requests: 8, color: MODEL_FLOW_COLORS.gemini },
-      { model: "Qwen", provider: "Alibaba", spend: 0.07, tokens: 23000, requests: 5, color: MODEL_FLOW_COLORS.qwen },
-      { model: "Others", provider: "Mixed", spend: 0.05, tokens: 16000, requests: 4, color: MODEL_FLOW_COLORS.others },
-    ],
-  },
-  {
-    date: "05/15",
-    models: [
-      { model: "DeepSeek V4", provider: "DeepSeek", spend: 0.62, tokens: 188000, requests: 28, color: MODEL_FLOW_COLORS.deepseek },
-      { model: "Claude Sonnet", provider: "Anthropic", spend: 0.34, tokens: 126000, requests: 14, color: MODEL_FLOW_COLORS.claude },
-      { model: "GPT-4o Mini", provider: "OpenAI", spend: 0.20, tokens: 89000, requests: 19, color: MODEL_FLOW_COLORS.gpt },
-      { model: "Gemini Flash", provider: "Google", spend: 0.11, tokens: 39000, requests: 7, color: MODEL_FLOW_COLORS.gemini },
-      { model: "Qwen", provider: "Alibaba", spend: 0.07, tokens: 25000, requests: 5, color: MODEL_FLOW_COLORS.qwen },
-      { model: "Others", provider: "Mixed", spend: 0.04, tokens: 15000, requests: 3, color: MODEL_FLOW_COLORS.others },
-    ],
-  },
-  {
-    date: "05/16",
-    models: [
-      { model: "DeepSeek V4", provider: "DeepSeek", spend: 0.67, tokens: 206000, requests: 30, color: MODEL_FLOW_COLORS.deepseek },
-      { model: "Claude Sonnet", provider: "Anthropic", spend: 0.36, tokens: 156000, requests: 17, color: MODEL_FLOW_COLORS.claude },
-      { model: "GPT-4o Mini", provider: "OpenAI", spend: 0.21, tokens: 94000, requests: 21, color: MODEL_FLOW_COLORS.gpt },
-      { model: "Gemini Flash", provider: "Google", spend: 0.13, tokens: 44000, requests: 9, color: MODEL_FLOW_COLORS.gemini },
-      { model: "Qwen", provider: "Alibaba", spend: 0.08, tokens: 28000, requests: 6, color: MODEL_FLOW_COLORS.qwen },
-      { model: "Others", provider: "Mixed", spend: 0.07, tokens: 28000, requests: 4, color: MODEL_FLOW_COLORS.others },
-    ],
-  },
-  {
-    date: "05/17",
-    models: [
-      { model: "DeepSeek V4", provider: "DeepSeek", spend: 0.56, tokens: 213000, requests: 24, color: MODEL_FLOW_COLORS.deepseek },
-      { model: "Claude Sonnet", provider: "Anthropic", spend: 0.30, tokens: 168000, requests: 20, color: MODEL_FLOW_COLORS.claude },
-      { model: "GPT-4o Mini", provider: "OpenAI", spend: 0.20, tokens: 101000, requests: 18, color: MODEL_FLOW_COLORS.gpt },
-      { model: "Gemini Flash", provider: "Google", spend: 0.10, tokens: 40000, requests: 8, color: MODEL_FLOW_COLORS.gemini },
-      { model: "Qwen", provider: "Alibaba", spend: 0.06, tokens: 24000, requests: 5, color: MODEL_FLOW_COLORS.qwen },
-      { model: "Others", provider: "Mixed", spend: 0.06, tokens: 26000, requests: 4, color: MODEL_FLOW_COLORS.others },
-    ],
-  },
-];
-
-const modelSpendRanking = [
-  { model: "DeepSeek V4", provider: "DeepSeek", spend: 3.82, tokens: 1200000, requests: 168, share: 45, trend: 12, color: MODEL_FLOW_COLORS.deepseek, spark: [0.42, 0.46, 0.51, 0.58, 0.62, 0.67, 0.56] },
-  { model: "Claude Sonnet", provider: "Anthropic", spend: 2.31, tokens: 820000, requests: 91, share: 27, trend: 5, color: MODEL_FLOW_COLORS.claude, spark: [0.31, 0.28, 0.33, 0.39, 0.34, 0.36, 0.30] },
-  { model: "GPT-4o Mini", provider: "OpenAI", spend: 1.24, tokens: 510000, requests: 103, share: 15, trend: -8, color: MODEL_FLOW_COLORS.gpt, spark: [0.12, 0.16, 0.18, 0.17, 0.20, 0.21, 0.20] },
-  { model: "Gemini Flash", provider: "Google", spend: 0.73, tokens: 260000, requests: 54, share: 9, trend: 2, color: MODEL_FLOW_COLORS.gemini, spark: [0.08, 0.09, 0.10, 0.12, 0.11, 0.13, 0.10] },
-  { model: "Others", provider: "Mixed", spend: 0.32, tokens: 120000, requests: 22, share: 4, trend: 0, color: MODEL_FLOW_COLORS.others, spark: [0.03, 0.04, 0.03, 0.05, 0.04, 0.07, 0.06] },
-];
-
-const RECENT_CALLS = [
-  { time: "2 分钟前", model: "DeepSeek V4", apiKey: "默认 API 密匙", source: "Web 控制台", input: 3200, output: 5000, total: 8200, amount: 0.13, status: "成功", statusKey: "success", latency: "1.4s" },
-  { time: "9 分钟前", model: "Claude Sonnet", apiKey: "默认 API 密匙", source: "Cursor", input: 6100, output: 9200, total: 15300, amount: 0.31, status: "成功", statusKey: "success", latency: "2.8s" },
-  { time: "18 分钟前", model: "GPT-4o Mini", apiKey: "测试 API 密匙", source: "脚本任务", input: 1800, output: 2600, total: 4400, amount: 0.06, status: "成功", statusKey: "success", latency: "1.1s" },
-  { time: "32 分钟前", model: "Gemini Flash", apiKey: "默认 API 密匙", source: "批量摘要", input: 9200, output: 2100, total: 11300, amount: 0.08, status: "超时", statusKey: "timeout", latency: "9.8s" },
-  { time: "46 分钟前", model: "Qwen", apiKey: "测试 API 密匙", source: "客服问答", input: 1200, output: 1600, total: 2800, amount: 0.03, status: "失败", statusKey: "failed", latency: "0.7s" },
-];
-
-const MOCK_DASHBOARD_STATS = {
-  balance: 92.31,
-  totalCost: 92.31,
-  todayCost: 1.27,
-  todayTokens: 428700,
-  monthCost: 18.62,
-  monthTokens: 6910000,
-  todayRequests: 64,
-  monthRequests: 1428,
-  avgLatency: 1.2,
-  cacheHitRate: 18.6,
-  successRate: 98.2,
-};
-
-const MOCK_TREND_DATA = [
-  { date: "05-12", tokens: 156000, cost: 0.46, requests: 42, success: 41, failed: 1 },
-  { date: "05-13", tokens: 212000, cost: 0.61, requests: 58, success: 57, failed: 1 },
-  { date: "05-14", tokens: 184000, cost: 0.53, requests: 49, success: 48, failed: 1 },
-  { date: "05-15", tokens: 286000, cost: 0.84, requests: 76, success: 74, failed: 2 },
-  { date: "05-16", tokens: 328000, cost: 0.96, requests: 88, success: 86, failed: 2 },
-  { date: "05-17", tokens: 304000, cost: 0.89, requests: 81, success: 80, failed: 1 },
-  { date: "05-18", tokens: 428700, cost: 1.27, requests: 64, success: 63, failed: 1 },
-];
-
-const MOCK_MODEL_USAGE = [
-  { model: "deepseek/deepseek-chat", provider: "DeepSeek", requests: 168, tokens: 1200000, cost: 3.82, avgLatency: 1.1, successRate: 99.1, color: MODEL_FLOW_COLORS.deepseek },
-  { model: "anthropic/claude-3.5-haiku", provider: "Anthropic", requests: 91, tokens: 820000, cost: 2.31, avgLatency: 2.4, successRate: 98.6, color: MODEL_FLOW_COLORS.claude },
-  { model: "openai/gpt-4o-mini", provider: "OpenAI", requests: 103, tokens: 510000, cost: 1.24, avgLatency: 1.3, successRate: 99.4, color: MODEL_FLOW_COLORS.gpt },
-  { model: "google/gemini-2.0-flash-001", provider: "Google", requests: 54, tokens: 260000, cost: 0.73, avgLatency: 1.6, successRate: 97.8, color: MODEL_FLOW_COLORS.gemini },
-];
-
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
-function generateHeatmapWeeks() {
+function generateHeatmapWeeks(calls = []) {
+  const byDate = new Map();
+  calls.forEach((call) => {
+    const rawDate = call.createdAt ? new Date(call.createdAt) : null;
+    if (!rawDate || Number.isNaN(rawDate.getTime())) return;
+    const date = rawDate.toISOString().slice(0, 10);
+    const current = byDate.get(date) || { requests: 0, tokens: 0, spend: 0 };
+    current.requests += 1;
+    current.tokens += Number(call.tokens || 0);
+    current.spend += Number(call.cost || 0);
+    byDate.set(date, current);
+  });
+
+  const maxTokens = Math.max(...Array.from(byDate.values()).map((item) => item.tokens), 0);
   const weeks = [];
   const now = new Date();
   for (let w = 11; w >= 0; w--) {
@@ -329,11 +96,16 @@ function generateHeatmapWeeks() {
     for (let d = 6; d >= 0; d--) {
       const date = new Date(now);
       date.setDate(date.getDate() - (w * 7 + d));
-      const level = Math.random() < 0.35 ? 0 : Math.random() < 0.5 ? 1 : Math.random() < 0.6 ? 2 : Math.random() < 0.7 ? 3 : 4;
-      const requests = level === 0 ? 0 : Math.floor(Math.random() * 20 * level);
-      const tokens = level === 0 ? 0 : Math.floor(Math.random() * 5000 * level);
-      const spend = level === 0 ? 0 : +(Math.random() * 0.1 * level).toFixed(3);
-      week.push({ date: date.toISOString().slice(0, 10), level, requests, tokens, spend });
+      const key = date.toISOString().slice(0, 10);
+      const day = byDate.get(key) || { requests: 0, tokens: 0, spend: 0 };
+      const level = day.tokens > 0 && maxTokens > 0 ? Math.max(1, Math.ceil((day.tokens / maxTokens) * 4)) : 0;
+      week.push({
+        date: key,
+        level,
+        requests: day.requests,
+        tokens: day.tokens,
+        spend: Number(day.spend.toFixed(4)),
+      });
     }
     weeks.push(week);
   }
@@ -946,7 +718,7 @@ function isSameDay(a, b) {
   return startOfDay(a).getTime() === startOfDay(b).getTime();
 }
 
-function buildDashboardUsage(customer, live) {
+function buildDashboardUsage(customer) {
   const calls = Array.isArray(customer?.calls) ? customer.calls : [];
   const now = new Date();
   const todayCalls = calls.filter((call) => isSameDay(new Date(call.createdAt), now));
@@ -955,22 +727,30 @@ function buildDashboardUsage(customer, live) {
   weekStart.setHours(0, 0, 0, 0);
   const weekCalls = calls.filter((call) => new Date(call.createdAt) >= weekStart);
   const sum = (items, key) => items.reduce((total, item) => total + Number(item[key] || 0), 0);
-  const totalTokens = Math.max(1, sum(calls, "tokens"));
+  const totalTokens = sum(calls, "tokens");
   const totalCost = sum(calls, "cost");
-  const avgCostPerToken = totalCost > 0 ? totalCost / totalTokens : 0.0000065;
+  const avgCostPerToken = totalCost > 0 && totalTokens > 0 ? totalCost / totalTokens : 0;
   const balance = Number(customer?.balance || 0);
+  const paidBalance = Number(customer?.paidBalance ?? balance ?? 0);
+  const giftBalance = Number(customer?.temporaryBalance || 0);
   const lastCall = calls[0] || null;
+  const todayCost = sum(todayCalls, "cost");
+  const weekCost = sum(weekCalls, "cost");
+  const weekTokens = sum(weekCalls, "tokens");
+  const averageDailyCost = weekCost > 0 ? weekCost / 7 : todayCost;
 
   return {
     hasCalls: calls.length > 0,
     calls,
     overview: {
       balance,
-      callableTokens: Math.floor(balance / avgCostPerToken),
-      todaySpend: sum(todayCalls, "cost"),
+      paidBalance,
+      giftBalance,
+      callableTokens: avgCostPerToken > 0 ? Math.floor(balance / avgCostPerToken) : 0,
+      todaySpend: todayCost,
       todayTokens: sum(todayCalls, "tokens"),
-      weekSpend: sum(weekCalls, "cost"),
-      weekTokens: sum(weekCalls, "tokens"),
+      weekSpend: weekCost,
+      weekTokens,
       lastCall: lastCall ? {
         model: getCallModel(lastCall),
         tokens: Number(lastCall.tokens || 0),
@@ -979,10 +759,10 @@ function buildDashboardUsage(customer, live) {
       } : null,
     },
     prediction: {
-      weekTokens: Math.max(0, sum(weekCalls, "tokens") + Math.floor((live?.tokens || 0) * 0.5)),
-      weekCost: Number((sum(weekCalls, "cost") || 0).toFixed(2)),
-      coverDays: Math.max(1, Math.floor(balance / Math.max(sum(todayCalls, "cost"), (sum(weekCalls, "cost") || 0.5) / 7, 0.1))),
-      suggestRecharge: Math.max(50, Math.ceil((sum(weekCalls, "cost") || 8.4) * 6 / 10) * 10),
+      weekTokens,
+      weekCost: Number(weekCost.toFixed(2)),
+      coverDays: averageDailyCost > 0 ? Math.max(1, Math.floor(balance / averageDailyCost)) : 0,
+      suggestRecharge: averageDailyCost > 0 ? Math.max(50, Math.ceil((averageDailyCost * 30) / 10) * 10) : 0,
     },
   };
 }
@@ -1087,14 +867,13 @@ function startOfMonth(date) {
   return next;
 }
 
-function getCallLatencySeconds(call, index = 0) {
+function getCallLatencySeconds(call) {
   const ms = Number(call.latencyMs || call.durationMs || call.responseMs || 0);
   if (ms > 0) return ms / 1000;
-  return [1.1, 1.4, 1.8, 2.2, 0.9][index % 5];
+  return 0;
 }
 
 function buildDashboardStats(customer, calls) {
-  if (!calls.length) return MOCK_DASHBOARD_STATS;
   const now = new Date();
   const todayCalls = calls.filter((call) => isSameDay(new Date(call.createdAt), now));
   const monthStart = startOfMonth(now);
@@ -1102,7 +881,10 @@ function buildDashboardStats(customer, calls) {
   const sum = (items, key) => items.reduce((total, item) => total + Number(item[key] || 0), 0);
   const successful = calls.filter((call) => getCallStatus(call).key === "success").length;
   const cacheHits = calls.filter((call) => call.cacheHit || call.cached).length;
-  const avgLatency = calls.reduce((total, call, index) => total + getCallLatencySeconds(call, index), 0) / calls.length;
+  const callsWithLatency = calls.map(getCallLatencySeconds).filter((value) => value > 0);
+  const avgLatency = callsWithLatency.length
+    ? callsWithLatency.reduce((total, value) => total + value, 0) / callsWithLatency.length
+    : 0;
 
   return {
     balance: Number(customer?.balance || 0),
@@ -1120,7 +902,6 @@ function buildDashboardStats(customer, calls) {
 }
 
 function buildTrendData(calls) {
-  if (!calls.length) return MOCK_TREND_DATA;
   return Array.from({ length: 7 }, (_, index) => {
     const date = new Date();
     date.setDate(date.getDate() - (6 - index));
@@ -1138,15 +919,14 @@ function buildTrendData(calls) {
 }
 
 function buildModelUsage(ranking) {
-  if (!ranking.length) return MOCK_MODEL_USAGE;
   return ranking.slice(0, 5).map((item, index) => ({
     model: item.model,
     provider: item.provider || "FlowAPI",
     requests: item.requests,
     tokens: item.tokens,
     cost: item.spend,
-    avgLatency: [1.1, 2.2, 1.4, 1.7, 1.3][index % 5],
-    successRate: [99.1, 98.4, 99.4, 97.8, 98.9][index % 5],
+    avgLatency: 0,
+    successRate: 0,
     color: item.color,
   }));
 }
@@ -1304,7 +1084,13 @@ function ModelDistributionDonut({ models, onTooltip, theme }) {
       <div className="dash3-donut-legend">
         {models.map((item) => (
           <div key={item.model}>
-            <span><i style={{ background: item.color }} />{item.model}</span>
+            <span className="model-name-cell">
+              <ModelLogo model={item.model} provider={item.provider} size={24} />
+              <span className="model-text">
+                <strong className="model-name">{item.model}</strong>
+                <small className="model-provider">{item.provider || getModelProviderLabel(item.model)}</small>
+              </span>
+            </span>
             <b>¥{item.cost.toFixed(2)}</b>
           </div>
         ))}
@@ -1441,9 +1227,12 @@ function DashboardOperationsSection({ stats, trendData, modelUsage, recentRows, 
             {modelUsage.map((item, index) => (
               <button type="button" onClick={() => onOpenModel(item)} key={item.model}>
                 <span>{index + 1}</span>
-                <span style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                  <ModelLogo model={item.model} size={22} />
-                  <strong style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.model}</strong>
+                <span className="model-name-cell">
+                  <ModelLogo model={item.model} provider={item.provider} size={24} />
+                  <span className="model-text">
+                    <strong className="model-name">{item.model}</strong>
+                    <small className="model-provider">{item.provider || getModelProviderLabel(item.model)}</small>
+                  </span>
                 </span>
                 <small>{item.requests} 次 · {formatCompactToken(item.tokens)} Tokens</small>
                 <b>¥{item.cost.toFixed(2)}</b>
@@ -1793,6 +1582,9 @@ function AssetOverviewSection({ overview, tick }) {
           <span>当前余额</span>
           <strong><MetricValueInline prefix="¥" value={overview.balance.toFixed(2)} /></strong>
           <p>约可调用 <b>{formatCompactToken(overview.callableTokens)} Tokens</b></p>
+          <p className="dash3-gift-credit" title="赠送额度仅当日有效，调用模型时优先消耗赠送额度，用完后再消耗充值余额。">
+            赠送额度：<b>¥{Number(overview.giftBalance || 0).toFixed(2)}</b> 今日有效，优先使用
+          </p>
         </article>
         <article className="dash3-asset-card">
           <span>今日消耗</span>
@@ -2014,10 +1806,12 @@ function TokenSpendFlowSection({ flow, ranking, metric, setMetric, onTooltip, th
             ) : ranking.map((item, index) => (
               <Link href={`/models?model=${encodeURIComponent(item.model)}`} key={item.model} className="dash3-flow-row">
                 <span className="dash3-flow-rank">{index + 1}</span>
-                <ModelLogo model={item.model} size={20} />
-                <div className="dash3-flow-model">
-                  <strong>{item.model}</strong>
-                  <small>{item.provider}</small>
+                <div className="model-name-cell dash3-flow-model-cell">
+                  <ModelLogo model={item.model} provider={item.provider} size={26} />
+                  <span className="model-text">
+                    <strong className="model-name">{item.model}</strong>
+                    <small className="model-provider">{item.provider || getModelProviderLabel(item.model)}</small>
+                  </span>
                 </div>
                 <div className="dash3-flow-money">¥{item.spend.toFixed(2)}</div>
                 <div className="dash3-flow-meta">{formatCompactToken(item.tokens)} Tokens</div>
@@ -2055,10 +1849,12 @@ function ModelSpendTrendSection({ ranking, onTooltip, theme }) {
           {ranking.slice(0, 4).map((item) => (
           <Link href={`/models?model=${encodeURIComponent(item.model)}`} className="dash3-model-trend-card" key={item.model}>
             <div className="dash3-model-trend-head">
-              <ModelLogo model={item.model} size={24} />
-              <div>
-                <strong>{item.model}</strong>
-                <small>{item.provider}</small>
+              <div className="model-name-cell">
+                <ModelLogo model={item.model} provider={item.provider} size={28} />
+                <span className="model-text">
+                  <strong className="model-name">{item.model}</strong>
+                  <small className="model-provider">{item.provider || getModelProviderLabel(item.model)}</small>
+                </span>
               </div>
               <b className={trendClass(item.trend)}>{trendText(item.trend)}</b>
             </div>
@@ -2238,8 +2034,13 @@ function ModelCostRanking({ models, onTooltip, theme }) {
           >
             <span className="dash3-cost-rank">#{index + 1}</span>
             <div className="dash3-cost-model">
-              <strong>{model.model}</strong>
-              <span>{model.provider}</span>
+              <div className="model-name-cell">
+                <ModelLogo model={model.modelId || model.model} provider={model.provider} size={30} />
+                <span className="model-text">
+                  <strong className="model-name">{model.model}</strong>
+                  <small className="model-provider">{model.provider || getModelProviderLabel(model.modelId || model.model)}</small>
+                </span>
+              </div>
             </div>
             <div className="dash3-cost-main">
               <strong>¥{model.amount.toFixed(2)}</strong>
@@ -2417,13 +2218,6 @@ export default function DashboardPage() {
   const [detailModal, setDetailModal] = useState(null);
   const [flowMetric, setFlowMetric] = useState("spend");
   const [predictionMetric, setPredictionMetric] = useState("tokens");
-  const [liveSnapshot, setLiveSnapshot] = useState(() => ({
-    requests: 0,
-    tokens: 0,
-    spend: 0,
-    modelHeatNoise: Array.from({ length: 9 }, () => 0),
-  }));
-  const [heatmapWeeks] = useState(() => generateHeatmapWeeks());
   const [greeting] = useState(() => {
     const h = new Date().getHours();
     if (h < 6) return "凌晨好";
@@ -2451,61 +2245,48 @@ export default function DashboardPage() {
     } catch {/* ignore */}
   }, []);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLiveSnapshot((current) => ({
-        requests: current.requests + Math.floor(Math.random() * 3),
-        tokens: current.tokens + Math.floor(Math.random() * 2900) + 100,
-        spend: current.spend + Math.random() * 0.003,
-        modelHeatNoise: current.modelHeatNoise.map((n) => n + (Math.random() - 0.5) * 2),
-      }));
-      setTick((t) => t + 1);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // Fetch New API usage data — falls back to local mock on failure
-  const [newApiUsage, setNewApiUsage] = useState(null);
-  useEffect(() => {
-    fetch("/api/newapi/usage")
-      .then((r) => r.ok && r.json())
-      .then((data) => {
-        if (data?.usage) setNewApiUsage(data.usage);
-      })
-      .catch(() => {});
-  }, []);
-
-  const live = liveSnapshot;
-
   /* Computed */
-  const user = customer || MOCK_CUSTOMER;
+  const user = customer || { name: "用户", email: "", balance: 0, totalSpend: 0, apiKeys: [], calls: [] };
   const userName = user.name || "用户";
   const baseBalance = Number(user.balance) || 0;
-  const usage = buildDashboardUsage(user, live);
+  const usage = buildDashboardUsage(user);
   const modelSpend = buildModelSpendData(usage.calls);
   const recentCallRows = buildRecentCallRows(usage.calls, user.apiKeys || []);
   const dashboardStats = buildDashboardStats(user, usage.calls);
   const trendData = buildTrendData(usage.calls);
   const modelUsage = buildModelUsage(modelSpend.ranking);
+  const heatmapWeeks = generateHeatmapWeeks(usage.calls);
+  const userTopModels = modelSpend.ranking.slice(0, 4).map((item) => ({
+    name: item.model,
+    id: item.model,
+    provider: item.provider,
+    tokens: `${formatCompactToken(item.tokens)} Tokens`,
+    pct: item.share,
+    color: item.color,
+  }));
+  const mostUsedModel = modelSpend.ranking[0];
+  const mostExpensiveModel = [...modelSpend.ranking].sort((a, b) => b.spend - a.spend)[0];
+  const avgRequestCost = usage.calls.length
+    ? usage.calls.reduce((sum, call) => sum + Number(call.cost || 0), 0) / usage.calls.length
+    : 0;
 
-  const heatNoise = live.modelHeatNoise;
-  const rankedModels = MOCK_MODEL_RANKING.map((m, i) => ({
+  const rankedModels = REFERENCE_MODEL_RANKING.map((m) => ({
     ...m,
-    heatPct: Math.max(0, Math.min(100, m.pct + (heatNoise[i] || 0))),
+    heatPct: m.pct,
   })).sort((a, b) => b.heatPct - a.heatPct).map((m, i) => ({ ...m, rank: i + 1 }));
 
   const predictionData = predictionMetric === "spend"
-    ? MOCK_PREDICTION_SPEND
+    ? REFERENCE_PREDICTION_SPEND
     : predictionMetric === "requests"
-      ? MOCK_PREDICTION_REQUESTS
-      : MOCK_PREDICTION;
+      ? REFERENCE_PREDICTION_REQUESTS
+      : REFERENCE_PREDICTION;
   const basePrediction = usage.hasCalls
     ? usage.prediction
     : {
       weekTokens: 0,
       weekCost: 0,
-      coverDays: Math.max(1, Math.floor(baseBalance / 0.1)),
-      suggestRecharge: 50,
+      coverDays: 0,
+      suggestRecharge: 0,
     };
 
   const contentStyle = {
@@ -2553,7 +2334,7 @@ export default function DashboardPage() {
 
           <OnboardingChecklist customer={customer} usage={usage} />
 
-          <AssetOverviewSection overview={usage.hasCalls || customer ? usage.overview : ASSET_OVERVIEW} tick={tick} />
+          <AssetOverviewSection overview={usage.overview} tick={tick} />
 
           <DashboardOperationsSection
             stats={dashboardStats}
@@ -2599,7 +2380,7 @@ export default function DashboardPage() {
               <div className="dash3-card">
                 <div className="dash3-card-subtitle">Top Models 调用热度</div>
                 <div className="dash3-topmodels-chart">
-                  <TopModelStackedBars data={MOCK_TOP_MODELS_STACKED} height={400} onTooltip={handleTooltip} theme={theme} />
+                  <TopModelStackedBars data={REFERENCE_TOP_MODELS_STACKED} height={400} onTooltip={handleTooltip} theme={theme} />
                 </div>
               </div>
 
@@ -2619,8 +2400,13 @@ export default function DashboardPage() {
                       <tr key={m.rank}>
                         <td className="dash3-rank-num">{m.rank}</td>
                         <td className="dash3-rank-name">
-                          <span className="dash3-rank-dot" style={{ background: m.color }} />
-                          {m.name}
+                          <span className="model-name-cell">
+                            <ModelLogo model={m.id || m.name} provider={m.provider} size={24} />
+                            <span className="model-text">
+                              <strong className="model-name">{m.name}</strong>
+                              <small className="model-provider">{m.provider || getModelProviderLabel(m.id || m.name)}</small>
+                            </span>
+                          </span>
                           <Sparkline
                             data={Array.from({ length: 10 }, (_, i) => m.heatPct + (Math.sin(i * 0.8 + m.rank) * 5))}
                             color={m.direction === "up" ? "var(--dash-green)" : m.direction === "down" ? "var(--dash-red)" : "var(--dash-sub)"}
@@ -2656,35 +2442,37 @@ export default function DashboardPage() {
                   </div>
                   <div>
                     <div className="dash3-profile-name">{userName}</div>
-                    <div className="dash3-profile-email">{user.email || MOCK_CUSTOMER.email}</div>
+                    <div className="dash3-profile-email">{user.email || "未登录"}</div>
                   </div>
                 </div>
 
                 <div className="dash3-portrait-tags">
-                  <span className="dash3-portrait-tag" style={{ background: "rgba(99,102,241,0.12)", color: "var(--dash-accent)" }}>Coding 用户</span>
-                  <span className="dash3-portrait-tag" style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>高频使用</span>
-                  <span className="dash3-portrait-tag" style={{ background: "rgba(34,197,94,0.12)", color: "#22c55e" }}>成本均衡型</span>
+                  <span className="dash3-portrait-tag" style={{ background: "rgba(99,102,241,0.12)", color: "var(--dash-accent)" }}>{usage.hasCalls ? "已开始调用" : "待首次调用"}</span>
+                  <span className="dash3-portrait-tag" style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>{usage.hasCalls ? `${usage.calls.length} 次调用` : "暂无调用数据"}</span>
+                  <span className="dash3-portrait-tag" style={{ background: "rgba(34,197,94,0.12)", color: "#22c55e" }}>{baseBalance > 0 ? "余额可用" : "建议充值"}</span>
                 </div>
 
                 <p className="dash3-portrait-summary-text">
-                  你主要将 AI 用于代码与自动化任务，最近消耗集中在 DeepSeek 和 Gemini，建议继续使用高性价比模型处理日常任务。
+                  {usage.hasCalls
+                    ? "这里会根据你的真实调用记录展示常用模型、消耗模型和活跃趋势，方便你判断 Token 花在哪里。"
+                    : "完成第一次 API 调用后，这里会自动生成你的 AI 使用画像和模型消耗建议。"}
                 </p>
 
                 <div className="dash3-portrait-balance-row">
                   <span>当前余额</span>
                   <MetricValueInline prefix="¥" value={baseBalance.toFixed(2)} />
-                  <span style={{ fontSize: 11, color: "var(--dash-green)" }}>+{MOCK_CUSTOMER.streakDays} 天连续使用</span>
+                  <span style={{ fontSize: 11, color: "var(--dash-green)" }}>{usage.hasCalls ? `${usage.calls.length} 次真实调用` : "等待首次调用"}</span>
                 </div>
               </div>
 
               {/* === Right: Profile Metric Grid === */}
               <div className="dash3-portrait-metrics">
-                <PortraitMetric label="最常用模型" value="deepseek-chat" sub="DeepSeek V4" />
-                <PortraitMetric label="最耗费模型" value="claude-3.5-haiku" sub="¥0.026 昨日消耗" />
-                <PortraitMetric label="平均单次成本" value="¥0.003" sub="/ 次调用" />
-                <PortraitMetric label="高频使用时段" value="20:00 - 24:00" sub="夜间集中调用" />
-                <PortraitMetric label="主要任务类型" value="Coding / 自动化" sub="代码 + 数据处理" />
-                <PortraitMetric label="优化建议" value="尝试低价模型" sub="可节省约 ¥0.02/次" />
+                <PortraitMetric label="最常用模型" value={mostUsedModel?.model || "暂无数据"} sub={mostUsedModel?.provider || "调用后生成"} />
+                <PortraitMetric label="最耗费模型" value={mostExpensiveModel?.model || "暂无数据"} sub={mostExpensiveModel ? `¥${mostExpensiveModel.spend.toFixed(4)} 累计消耗` : "调用后生成"} />
+                <PortraitMetric label="平均单次成本" value={`¥${avgRequestCost.toFixed(4)}`} sub="/ 次调用" />
+                <PortraitMetric label="本周 Token" value={`${formatCompactToken(usage.overview.weekTokens)} Tokens`} sub="最近 7 天真实消耗" />
+                <PortraitMetric label="本周请求" value={`${usage.calls.length} 次`} sub="最近调用记录" />
+                <PortraitMetric label="优化建议" value={mostExpensiveModel ? "检查高成本模型" : "先完成首次调用"} sub={mostExpensiveModel ? "确认是否用于高价值任务" : "数据生成后给出建议"} />
               </div>
             </div>
 
@@ -2693,17 +2481,19 @@ export default function DashboardPage() {
               <div className="dash3-card">
                 <div className="dash3-card-subtitle">热门模型</div>
                 <div className="dash3-topmodels-mini">
-                  {MOCK_TOP_USER_MODELS.map((m, i) => (
+                  {userTopModels.length ? userTopModels.map((m, i) => (
                     <div key={m.name} className="dash3-topmodel-row">
                       <span className="dash3-topmodel-rank">{i + 1}</span>
-                      <ModelLogo model={m.name} size={22} />
+                      <ModelLogo model={m.id || m.name} provider={m.provider} size={24} />
                       <span className="dash3-topmodel-name">{m.name}</span>
                       <span className="dash3-topmodel-tokens">{m.tokens}</span>
                       <div className="dash3-topmodel-bar-track">
                         <div className="dash3-topmodel-bar-fill" style={{ width: `${m.pct}%`, background: m.color }} />
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <div className="dash3-empty-small">暂无真实模型数据，完成调用后自动生成排行。</div>
+                  )}
                 </div>
               </div>
               <div className="dash3-card">

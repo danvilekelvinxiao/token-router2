@@ -94,7 +94,8 @@ export default async function handler(req, res) {
   if (!customerMatch) {
     // Not found in local store — try New API pass-through
     const newApiBase = process.env.NEW_API_BASE_URL;
-    if (newApiBase && clientToken.startsWith("sk-")) {
+    // Try New API pass-through for any token not in local store
+    if (newApiBase && clientToken.length >= 32) {
       try {
         const upstreamRes = await fetch(`${newApiBase.replace(/\/+$/, "")}/v1/chat/completions`, {
           method: "POST",
@@ -196,7 +197,7 @@ export default async function handler(req, res) {
 
     for (const candidate of upstreams) {
       const headers = {
-        Authorization: `Bearer ${candidate.apiKey}`,
+        Authorization: `Bearer ${candidate.name === "new-api" ? clientToken : candidate.apiKey}`,
         "Content-Type": "application/json",
       };
 

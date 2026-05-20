@@ -4,20 +4,23 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
+import { buildCcSwitchCodexConfig, buildCcSwitchConfigUrl } from "@/lib/cc-switch";
+import ModelLogo from "@/components/ModelLogo";
 
 const providers = ["全部供应商", "OpenAI", "Anthropic", "Google", "DeepSeek", "Alibaba", "Moonshot", "Meta"];
 const billingTypes = ["全部类型", "按量计费"];
 const tags = ["全部标签", "免费体验", "高性价比", "Coding 推荐", "长上下文", "图片/多模态", "高速响应", "中文", "写作", "代码", "推理", "低价", "长文本"];
 
 const freeModels = [
-  { id: "deepseek/deepseek-chat", name: "DeepSeek Chat", provider: "DeepSeek", context: "64K", speed: "高速响应", allowance: "注册赠送额度内可用", limit: "适合测试，不建议高并发生产", bestFor: "聊天、API 测试、简单 Coding", tags: ["免费体验", "新手推荐", "高性价比", "中文", "低价"] },
+  { id: "deepseek-chat", name: "DeepSeek Chat", provider: "DeepSeek", context: "64K", speed: "高速响应", allowance: "注册赠送额度内可用", limit: "适合测试，不建议高并发生产", bestFor: "聊天、API 测试、简单 Coding", tags: ["免费体验", "新手推荐", "高性价比", "中文", "低价"] },
   { id: "qwen/qwen-2.5-7b-instruct", name: "Qwen 2.5 7B", provider: "Alibaba", context: "32K", speed: "轻量快速", allowance: "限量免费测试", limit: "每日请求次数有限", bestFor: "中文问答、低成本验证、批量小任务", tags: ["免费体验", "高性价比", "中文"] },
   { id: "google/gemini-2.0-flash-lite", name: "Gemini Flash Lite", provider: "Google", context: "1M", speed: "长文本友好", allowance: "注册赠送额度内可用", limit: "适合长文测试，不保证高并发", bestFor: "长上下文、资料整理、快速问答", tags: ["免费体验", "长上下文", "高速响应"] },
   { id: "meta-llama/llama-3.1-8b-instruct", name: "Llama 3.1 8B", provider: "Meta", context: "128K", speed: "稳定测试", allowance: "限量免费测试", limit: "主要用于接入流程验证", bestFor: "英文问答、基础测试、低成本验证", tags: ["免费体验", "低价"] },
 ];
 
 const models = [
-  { id: "deepseek/deepseek-chat", name: "DeepSeek V3", provider: "DeepSeek", input: "¥1.0080 / 1M Tokens", output: "¥2.0160 / 1M Tokens", context: "64K", tags: ["中文", "低价", "写作", "高性价比", "免费体验"], bestFor: "中文内容、客服、批量文案" },
+  { id: "deepseek-chat", name: "DeepSeek Chat", provider: "DeepSeek", input: "¥1.0080 / 1M Tokens", output: "¥2.0160 / 1M Tokens", context: "64K", tags: ["中文", "低价", "写作", "高性价比", "免费体验"], bestFor: "中文内容、客服、批量文案" },
+  { id: "deepseek-reasoner", name: "DeepSeek Reasoner", provider: "DeepSeek", input: "¥3.9600 / 1M Tokens", output: "¥15.7680 / 1M Tokens", context: "64K", tags: ["推理", "代码", "Coding 推荐", "中文"], bestFor: "复杂推理、数学、编程和代码任务" },
   { id: "qwen/qwen3-32b", name: "Qwen3 32B", provider: "Alibaba", input: "¥2.1600 / 1M Tokens", output: "¥6.4800 / 1M Tokens", context: "128K", tags: ["中文", "写作", "代码", "高性价比"], bestFor: "外贸邮件、中文办公、商务沟通" },
   { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", input: "¥1.0800 / 1M Tokens", output: "¥4.3200 / 1M Tokens", context: "128K", tags: ["推理", "代码", "低价", "Coding 推荐"], bestFor: "分析总结、结构化任务、代码辅助" },
   { id: "anthropic/claude-3.5-haiku", name: "Claude Haiku", provider: "Anthropic", input: "¥5.7600 / 1M Tokens", output: "¥28.8000 / 1M Tokens", context: "200K", tags: ["长文本", "写作", "推理", "Coding 推荐"], bestFor: "英文写作、长文阅读、轻量推理" },
@@ -68,6 +71,64 @@ export default function ModelsPage() {
     setAccessMode("ready");
   }
 
+  function getPrimaryApiKey() {
+    return customer?.apiKeys?.find((key) => key?.token)?.token || "";
+  }
+
+  function openCcSwitchConfig(model) {
+    if (!customer) {
+      setAccessModel(model);
+      setAccessMode("login");
+      return;
+    }
+
+    const apiKey = getPrimaryApiKey();
+    if (!apiKey) {
+      setAccessModel(model);
+      setAccessMode("create-key");
+      return;
+    }
+
+    const url = buildCcSwitchConfigUrl({
+      apiKey,
+      baseUrl: apiBaseUrl,
+      model: model.id,
+      name: "FlowAPI",
+    });
+    window.open(url, "_blank", "noopener,noreferrer");
+    setToast(`正在配置 ${model.name} 到 CC-Switch`);
+    setTimeout(() => setToast(""), 2000);
+  }
+
+  function copyCcSwitchConfig(model) {
+    if (!customer) {
+      setAccessModel(model);
+      setAccessMode("login");
+      return;
+    }
+
+    const apiKey = getPrimaryApiKey();
+    if (!apiKey) {
+      setAccessModel(model);
+      setAccessMode("create-key");
+      return;
+    }
+
+    const config = buildCcSwitchCodexConfig({
+      apiKey,
+      baseUrl: apiBaseUrl,
+      model: model.id,
+    });
+    const text = [
+      "auth.json 文件内容：",
+      JSON.stringify(config.auth, null, 2),
+      "",
+      "config.toml 文件内容：",
+      config.config,
+    ].join("\n");
+    copyText("CC-Switch 配置", text);
+  }
+
   const allModels = models;
   const filteredModels = allModels.filter((m) => {
     if (provider !== "全部供应商" && m.provider !== provider) return false;
@@ -110,7 +171,7 @@ export default function ModelsPage() {
           </div>
           <div className="free-model-grid">
             {freeModels.map((model) => (
-              <FreeModelCard key={model.id} model={model} onAccess={openAccess} />
+              <FreeModelCard key={model.id} model={model} onAccess={openAccess} onConfigure={openCcSwitchConfig} />
             ))}
           </div>
         </section>
@@ -130,7 +191,7 @@ export default function ModelsPage() {
           {filteredModels.length > 0 ? (
             <div className="model-card-grid">
               {filteredModels.map((model) => (
-                <ModelCard key={model.id} model={model} onAccess={openAccess} />
+                <ModelCard key={model.id} model={model} onAccess={openAccess} onConfigure={openCcSwitchConfig} />
               ))}
             </div>
           ) : (
@@ -144,18 +205,15 @@ export default function ModelsPage() {
       model={accessModel}
       mode={accessMode}
       apiBaseUrl={apiBaseUrl}
-      apiKey={customer?.apiKeys?.[0]?.token || ""}
+      apiKey={getPrimaryApiKey()}
       onClose={() => setAccessModel(null)}
       onCopy={copyText}
+      onConfigure={openCcSwitchConfig}
+      onCopyConfig={copyCcSwitchConfig}
     />
     {toast ? <div style={{ position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)", background: "#111", color: "#fff", padding: "10px 24px", borderRadius: 999, fontSize: 13, fontWeight: 700, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}>{toast}</div> : null}
     </>
   );
-}
-
-function getProviderMark(provider) {
-  const marks = { OpenAI: "O", Anthropic: "A", Google: "G", DeepSeek: "D", Alibaba: "Q", Moonshot: "K", Meta: "M" };
-  return marks[provider] || "M";
 }
 
 function maskKey(token = "") {
@@ -177,7 +235,7 @@ function PillGroup({ title, values, active, setActive, tone = "blue" }) {
   );
 }
 
-function ModelCard({ model, onAccess }) {
+function ModelCard({ model, onAccess, onConfigure }) {
   const [copied, setCopied] = useState(false);
   async function copyModel() {
     await navigator.clipboard.writeText(model.id);
@@ -193,10 +251,12 @@ function ModelCard({ model, onAccess }) {
     }}>
       <button type="button" className="interactive-card-icon" onClick={(event) => { event.stopPropagation(); onAccess(model); }}>↗</button>
       <div className="model-card-top">
-        <div className="model-mark">{getProviderMark(model.provider)}</div>
+        <div className="model-mark" aria-hidden="true">
+          <ModelLogo model={model.id} provider={model.provider} size={28} />
+        </div>
         <div>
           <h3>{model.name}</h3>
-          <p>{model.bestFor}</p>
+          <p>{model.provider} · {model.bestFor}</p>
         </div>
         <button type="button" className="model-copy-icon" onClick={(event) => { event.stopPropagation(); copyModel(); }} aria-label={`复制 ${model.name} 模型 ID`}>
           {copied ? "✓" : "▣"}
@@ -214,12 +274,15 @@ function ModelCard({ model, onAccess }) {
           {model.tags.slice(0, 4).map((tag) => (<span key={tag} className="model-tag">{tag}</span>))}
         </div>
       </div>
-      <button type="button" className="model-access-btn" onClick={(event) => { event.stopPropagation(); onAccess(model); }}>接入此模型</button>
+      <div className="model-card-actions">
+        <button type="button" className="model-access-btn" onClick={(event) => { event.stopPropagation(); onAccess(model); }}>接入此模型</button>
+        <button type="button" className="model-ccswitch-btn" onClick={(event) => { event.stopPropagation(); onConfigure(model); }}>配置到 CC-Switch</button>
+      </div>
     </article>
   );
 }
 
-function FreeModelCard({ model, onAccess }) {
+function FreeModelCard({ model, onAccess, onConfigure }) {
   return (
     <article className="free-model-card interactive-card" role="button" tabIndex={0} onClick={() => onAccess(model)} onKeyDown={(event) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -229,8 +292,13 @@ function FreeModelCard({ model, onAccess }) {
     }}>
       <button type="button" className="interactive-card-icon" onClick={(event) => { event.stopPropagation(); onAccess(model); }}>↗</button>
       <div className="free-model-card-top">
-        <span>免费试用</span>
-        <span>新手推荐</span>
+        <div className="model-mark" aria-hidden="true">
+          <ModelLogo model={model.id} provider={model.provider} size={28} />
+        </div>
+        <div className="free-model-badges">
+          <span>免费试用</span>
+          <span>新手推荐</span>
+        </div>
       </div>
       <h3>{model.name}</h3>
       <p>{model.bestFor}</p>
@@ -241,12 +309,15 @@ function FreeModelCard({ model, onAccess }) {
         <div><span>上下文</span><strong>{model.context}</strong></div>
       </div>
       <small>{model.limit}。升级套餐可获得更高额度和更稳定并发。</small>
-      <button type="button" onClick={(event) => { event.stopPropagation(); onAccess(model); }}>接入此模型</button>
+      <div className="free-model-card-actions">
+        <button type="button" onClick={(event) => { event.stopPropagation(); onAccess(model); }}>接入此模型</button>
+        <button type="button" className="model-ccswitch-btn" onClick={(event) => { event.stopPropagation(); onConfigure(model); }}>配置到 CC-Switch</button>
+      </div>
     </article>
   );
 }
 
-function AccessModal({ model, mode, apiBaseUrl, apiKey, onClose, onCopy }) {
+function AccessModal({ model, mode, apiBaseUrl, apiKey, onClose, onCopy, onConfigure, onCopyConfig }) {
   if (!model) return null;
   const curl = `curl ${apiBaseUrl}/chat/completions \\
   -H "Content-Type: application/json" \\
@@ -294,6 +365,8 @@ function AccessModal({ model, mode, apiBaseUrl, apiKey, onClose, onCopy }) {
             <div className="model-access-modal-actions">
               <button type="button" onClick={() => onCopy("模型 ID", model.id)}>复制模型 ID</button>
               <button type="button" onClick={() => onCopy("调用示例", curl)}>复制调用示例</button>
+              <button type="button" onClick={() => onConfigure(model)}>配置到 CC-Switch</button>
+              <button type="button" onClick={() => onCopyConfig(model)}>复制 CC-Switch 配置</button>
               <Link href="/help#manual-config">查看帮助指南</Link>
               <Link href="/guide">去 API 管理</Link>
             </div>

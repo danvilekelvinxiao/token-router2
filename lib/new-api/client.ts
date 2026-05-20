@@ -3,12 +3,12 @@
  * All functions are server-only. Never import this in browser code.
  *
  * Strategy:
- * - Token keys: generated locally in sk- format (New API doesn't return keys on create)
- * - Usage data: fetched from New API /api/log/ when admin token is valid
- * - Quota sync: pushed to New API /api/token/ (PUT) when admin token is valid
- * - Health: verified by checking New API /api/status and /api/token/
+ * - Token keys: created in New API, then fetched once via /api/token/:id/key.
+ * - Usage data: fetched from New API /api/log/ when admin token is valid.
+ * - Quota sync: pushed to New API /api/token/ (PUT) when admin token is valid.
+ * - Health: verified by checking New API /api/status and /api/token/.
  *
- * Falls back to mock data when NEW_API_ADMIN_TOKEN is missing or invalid.
+ * Important: user-facing API Keys must never be local mock keys.
  */
 
 const NEW_API_BASE_URL =
@@ -19,6 +19,8 @@ const NEW_API_DEFAULT_GROUP =
 const NEW_API_DEFAULT_QUOTA = Number(
   process.env.NEW_API_DEFAULT_QUOTA || 500000,
 );
+const NEW_API_TOKEN_UNLIMITED =
+  process.env.NEW_API_TOKEN_UNLIMITED !== "false";
 
 let _adminValid: boolean | null = null;
 
@@ -69,36 +71,10 @@ export interface NewApiToken {
   models: string[];
 }
 
-let mockTokenCounter = 1;
-
-function generateSkKey(): string {
-  const hex = Array.from({ length: 48 }, () =>
-    Math.floor(Math.random() * 16).toString(16),
-  ).join("");
-  return `sk-${hex}`;
-}
-
-function mockToken(params: { name: string; group?: string; quota?: number }): NewApiToken {
-  const now = Date.now();
-  return {
-    id: `token_mock_${mockTokenCounter++}`,
-    key: generateSkKey(),
-    name: params.name,
-    group: params.group || NEW_API_DEFAULT_GROUP,
-    quota: params.quota || NEW_API_DEFAULT_QUOTA,
-    usedQuota: 0,
-    createdTime: now,
-    accessedTime: now,
-    expiredTime: 0,
-    disabled: false,
-    models: [],
-  };
-}
-
 /**
- * Create a new API token. Always generates a local sk- key because New API
- * doesn't return the full key after creation. If New API is available, the
- * token is also synced there for quota tracking.
+ * Create a new API token in New API and return the real full key.
+ * New API's create endpoint only returns success, so we list recent tokens by
+ * name and then call /api/token/:id/key to fetch the one-time full key.
  */
 export async function createNewApiToken(params: {
   name: string;
@@ -106,24 +82,64 @@ export async function createNewApiToken(params: {
   quota?: number;
   models?: string[];
 }): Promise<NewApiToken> {
-  // Always generate key locally — New API doesn't expose it
-  const token = mockToken(params);
-
-  // Sync to New API if available (for quota/usage tracking)
-  if (NEW_API_ADMIN_TOKEN) {
-    const { ok } = await apiFetch("/api/token/", {
-      method: "POST",
-      body: JSON.stringify({
-        name: params.name,
-        remain_quota: params.quota || NEW_API_DEFAULT_QUOTA,
-        unlimited_quota: false,
-        group: params.group || NEW_API_DEFAULT_GROUP,
-      }),
-    });
-    if (ok) token.id = "newapi_synced";
+  if (!NEW_API_ADMIN_TOKEN) {
+    throw new Error("NEW_API_ADMIN_TOKEN 未配置，无法创建真实 New API 令牌");
   }
 
-  return token;
+  const name = String(params.name || "API 密匙").slice(0, 50);
+  const group = params.group || NEW_API_DEFAULT_GROUP;
+  const quota = params.quota || NEW_API_DEFAULT_QUOTA;
+  const beforeCreate = Math.floor(Date.now() / 1000) - 5;
+
+  const create = await apiFetch("/api/token/", {
+    method: "POST",
+    body: JSON.stringify({
+      name,
+      remain_quota: quota,
+      unlimited_quota: NEW_API_TOKEN_UNLIMITED,
+      group,
+      expired_time: -1,
+      ...(params.models?.length
+        ? { model_limits_enabled: true, model_limits: params.models.join(",") }
+        : {}),
+    }),
+  });
+
+  if (!create.ok) {
+    throw new Error(create.data?.message || create.data?.error || "New API 令牌创建失败");
+  }
+
+  const list = await apiFetch("/api/token/?p=1&size=50");
+  const items = Array.isArray(list.data?.items) ? list.data.items : [];
+  const matched = items
+    .filter((item: any) => item.name === name && Number(item.created_time || 0) >= beforeCreate)
+    .sort((a: any, b: any) => Number(b.id || 0) - Number(a.id || 0))[0]
+    || items.filter((item: any) => item.name === name).sort((a: any, b: any) => Number(b.id || 0) - Number(a.id || 0))[0];
+
+  if (!matched?.id) {
+    throw new Error("New API 令牌已创建，但无法读取令牌 ID");
+  }
+
+  const keyResponse = await apiFetch(`/api/token/${matched.id}/key`, { method: "POST" });
+  const key = keyResponse.data?.key || keyResponse.data?.token || keyResponse.data?.data?.key;
+
+  if (!key) {
+    throw new Error("New API 令牌已创建，但无法读取完整 Key");
+  }
+
+  return {
+    id: String(matched.id),
+    key,
+    name: matched.name || name,
+    group: matched.group || group,
+    quota: Number(matched.remain_quota ?? quota),
+    usedQuota: Number(matched.used_quota || 0),
+    createdTime: matched.created_time ? Number(matched.created_time) * 1000 : Date.now(),
+    accessedTime: matched.accessed_time ? Number(matched.accessed_time) * 1000 : Date.now(),
+    expiredTime: matched.expired_time > 0 ? Number(matched.expired_time) * 1000 : 0,
+    disabled: matched.status === 2,
+    models: matched.model_limits ? String(matched.model_limits).split(",").filter(Boolean) : [],
+  };
 }
 
 export async function listNewApiTokens(
@@ -148,7 +164,7 @@ export async function listNewApiTokens(
     }));
   }
 
-  return [mockToken({ name: "默认密匙" })];
+  return [];
 }
 
 export async function disableNewApiToken(
@@ -231,25 +247,11 @@ export async function getNewApiUsage(params: {
     }
   }
 
-  // Mock fallback
-  const days = 7;
-  const daily: NewApiUsageRecord[] = [];
-  const now = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    daily.push({
-      date: d.toISOString().slice(0, 10),
-      tokens: Math.floor(Math.random() * 80000) + 20000,
-      cost: Math.round((Math.random() * 0.8 + 0.1) * 100) / 100,
-      requests: Math.floor(Math.random() * 400) + 50,
-    });
-  }
   return {
-    totalTokens: daily.reduce((s, d) => s + d.tokens, 0),
-    totalCost: Math.round(daily.reduce((s, d) => s + d.cost, 0) * 100) / 100,
-    totalRequests: daily.reduce((s, d) => s + d.requests, 0),
-    daily,
+    totalTokens: 0,
+    totalCost: 0,
+    totalRequests: 0,
+    daily: [],
   };
 }
 
