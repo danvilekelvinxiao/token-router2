@@ -1,14 +1,7 @@
 export const dynamic = "force-dynamic";
 import Head from "next/head";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
-
-const MOCK_CHANNELS = [
-  { id: "ch_01", name: "DeepSeek 官方", provider: "DeepSeek", type: "OpenAI 兼容", baseUrl: "https://api.deepseek.com", path: "/v1", apiKey: "sk-ds-****", models: ["deepseek-chat", "deepseek-reasoner"], weight: 10, timeout: 30, retry: true, fallback: "ch_03", costInput: 0.5, costOutput: 2.0, priceMultiplier: 2.0, status: "active" },
-  { id: "ch_02", name: "聚合路由", provider: "聚合路由", type: "OpenAI 兼容", baseUrl: "https://router.example.com/api", path: "/v1", apiKey: "sk-route-****", models: ["openai/gpt-4o-mini", "anthropic/claude-3.5-haiku"], weight: 8, timeout: 45, retry: true, fallback: "ch_01", costInput: 0.8, costOutput: 3.0, priceMultiplier: 1.5, status: "active" },
-  { id: "ch_03", name: "阿里云模型", provider: "Alibaba", type: "OpenAI 兼容", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode", path: "/v1", apiKey: "sk-ali-****", models: ["qwen3-32b", "qwen-max"], weight: 5, timeout: 60, retry: false, fallback: "", costInput: 0.6, costOutput: 2.5, priceMultiplier: 2.2, status: "disabled" },
-  { id: "ch_04", name: "Together AI", provider: "Together", type: "OpenAI 兼容", baseUrl: "https://api.together.xyz", path: "/v1", apiKey: "sk-tog-****", models: ["meta-llama/llama-4"], weight: 6, timeout: 25, retry: true, fallback: "ch_02", costInput: 0.4, costOutput: 1.5, priceMultiplier: 2.5, status: "active" },
-];
 
 const PROVIDERS = ["DeepSeek", "聚合路由", "Alibaba", "Together", "Anthropic", "OpenAI", "Google", "Moonshot", "Custom"];
 const TYPES = ["OpenAI 兼容", "Anthropic 兼容", "Custom HTTP"];
@@ -20,33 +13,80 @@ function StatusBadge({ status }) {
 }
 
 export default function AdminChannels() {
-  const [channels, setChannels] = useState(MOCK_CHANNELS);
+  const [secret, setSecret] = useState("");
+  const [channels, setChannels] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => {
+    const s = localStorage.getItem("flowapi_admin_secret") || "";
+    setSecret(s);
+    if (s) fetchChannels(s);
+    else setLoading(false);
+  }, []);
+
+  async function fetchChannels(sec) {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/channels", { headers: { "x-admin-secret": sec } });
+      const data = await res.json();
+      if (res.ok) setChannels(data.channels || []);
+      else setMsg(data.error || "加载失败");
+    } catch { setMsg("网络错误"); }
+    setLoading(false);
+  }
+
+  async function apiCall(method, body) {
+    const s = secret || localStorage.getItem("flowapi_admin_secret") || "";
+    const res = await fetch("/api/admin/channels", {
+      method, headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "请求失败");
+    return data;
+  }
 
   function openNew() { setEditing(null); setForm({ name: "", provider: "", type: "OpenAI 兼容", baseUrl: "", path: "/v1", apiKey: "", models: "", weight: 5, timeout: 30, retry: true, fallback: "", costInput: "", costOutput: "", priceMultiplier: 2.0, status: "active" }); setModalOpen(true); }
   function openEdit(ch) { setEditing(ch.id); setForm({ ...ch }); setModalOpen(true); }
 
-  function handleSave() {
-    if (editing) {
-      setChannels((prev) => prev.map((c) => c.id === editing ? { ...form, id: editing, models: typeof form.models === "string" ? form.models.split(",").map((s) => s.trim()) : form.models } : c));
-    } else {
-      const newCh = { ...form, id: "ch_" + Date.now(), models: typeof form.models === "string" ? form.models.split(",").map((s) => s.trim()) : form.models };
-      setChannels((prev) => [...prev, newCh]);
-    }
-    setModalOpen(false);
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const models = typeof form.models === "string" ? form.models.split(",").map((s) => s.trim()).filter(Boolean) : form.models;
+      await apiCall("POST", { ...form, id: editing || undefined, models });
+      await fetchChannels(secret);
+      setModalOpen(false);
+    } catch (e) { setMsg(e.message); }
+    setSaving(false);
   }
 
-  function handleDelete(id) { setChannels((prev) => prev.filter((c) => c.id !== id)); }
+  async function handleDelete(id) {
+    if (!confirm("确认删除此渠道？")) return;
+    try { await apiCall("DELETE", { id }); await fetchChannels(secret); } catch (e) { setMsg(e.message); }
+  }
 
-  function handleToggle(id) {
-    setChannels((prev) => prev.map((c) => c.id === id ? { ...c, status: c.status === "active" ? "disabled" : "active" } : c));
+  async function handleToggle(ch) {
+    try {
+      await apiCall("POST", { ...ch, status: ch.status === "active" ? "disabled" : "active" });
+      await fetchChannels(secret);
+    } catch (e) { setMsg(e.message); }
+  }
+
+  function handleSecretSave() {
+    const s = secret.trim();
+    if (!s) return setMsg("请输入管理密钥");
+    localStorage.setItem("flowapi_admin_secret", s);
+    setMsg("");
+    fetchChannels(s);
   }
 
   return (
     <>
-      <Head><title>管理后台 - FlowAPI</title></Head>
+      <Head><title>上游渠道管理 - FlowAPI</title></Head>
       <AdminLayout currentPath="/admin/channels">
         <div style={{ color: "var(--dash-text)" }}>
           <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
@@ -55,66 +95,77 @@ export default function AdminChannels() {
               <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>管理所有上游 API 渠道的接入配置、权重和定价</p>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
+              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
+              <button onClick={handleSecretSave} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>验证</button>
               <button onClick={openNew} style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>+ 新增渠道</button>
             </div>
           </header>
 
-          <div style={{ background: "var(--dash-card-bg)", border: "1px solid var(--dash-border)", borderRadius: 10, overflow: "hidden" }}>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
-                <thead>
-                  <tr style={{ background: "var(--dash-card-hover)" }}>
-                    <th style={thStyle}>渠道名称</th><th style={thStyle}>供应商</th><th style={thStyle}>类型</th><th style={thStyle}>Base URL</th><th style={thStyle}>权重</th><th style={thStyle}>成本(入/出)</th><th style={thStyle}>售价倍率</th><th style={thStyle}>状态</th><th style={thStyle}>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {channels.map((ch) => (
-                    <tr key={ch.id} style={{ borderTop: "1px solid var(--dash-border)" }}>
-                      <td style={tdStyle}><b>{ch.name}</b></td>
-                      <td style={tdStyle}>{ch.provider}</td>
-                      <td style={tdStyle}>{ch.type}</td>
-                      <td style={{ ...tdStyle, fontFamily: "'SF Mono', monospace", fontSize: 11, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.baseUrl}</td>
-                      <td style={tdStyle}>{ch.weight}</td>
-                      <td style={{ ...tdStyle, fontFamily: "'SF Mono', monospace" }}>¥{ch.costInput} / ¥{ch.costOutput}</td>
-                      <td style={tdStyle}>x{ch.priceMultiplier}</td>
-                      <td style={tdStyle}><StatusBadge status={ch.status} /></td>
-                      <td style={tdStyle}>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => openEdit(ch)} style={btnSmStyle}>编辑</button>
-                          <button onClick={() => handleToggle(ch.id)} style={{ ...btnSmStyle, color: ch.status === "active" ? "#ef4444" : "#22c55e" }}>{ch.status === "active" ? "禁用" : "启用"}</button>
-                          <button onClick={() => handleDelete(ch.id)} style={{ ...btnSmStyle, color: "#ef4444" }}>删除</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div style={{ padding: "12px 16px", borderTop: "1px solid var(--dash-border)", fontSize: 12, color: "var(--dash-sub)" }}>共 {channels.length} 个渠道</div>
-          </div>
+          {msg && <div style={{ padding: "10px 16px", borderRadius: 8, background: "rgba(239,68,68,0.1)", color: "#ef4444", fontSize: 13, marginBottom: 14, fontWeight: 600 }}>{msg}</div>}
 
-          {/* Modal */}
+          {loading ? (
+            <div style={{ textAlign: "center", padding: 40, color: "var(--dash-sub)" }}>加载中...</div>
+          ) : (
+            <div style={{ background: "var(--dash-card-bg)", border: "1px solid var(--dash-border)", borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
+                  <thead>
+                    <tr style={{ background: "var(--dash-card-hover)" }}>
+                      <th style={thStyle}>渠道名称</th><th style={thStyle}>供应商</th><th style={thStyle}>类型</th><th style={thStyle}>Base URL</th><th style={thStyle}>权重</th><th style={thStyle}>成本(入/出)</th><th style={thStyle}>售价倍率</th><th style={thStyle}>状态</th><th style={thStyle}>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {channels.map((ch) => (
+                      <tr key={ch.id} style={{ borderTop: "1px solid var(--dash-border)" }}>
+                        <td style={tdStyle}><b>{ch.name}</b></td>
+                        <td style={tdStyle}>{ch.provider}</td>
+                        <td style={tdStyle}>{ch.type}</td>
+                        <td style={{ ...tdStyle, fontFamily: "'SF Mono', monospace", fontSize: 11, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.baseUrl}</td>
+                        <td style={tdStyle}>{ch.weight}</td>
+                        <td style={{ ...tdStyle, fontFamily: "'SF Mono', monospace" }}>¥{ch.costInput} / ¥{ch.costOutput}</td>
+                        <td style={tdStyle}>x{ch.priceMultiplier}</td>
+                        <td style={tdStyle}><StatusBadge status={ch.status} /></td>
+                        <td style={tdStyle}>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button onClick={() => openEdit(ch)} style={btnSmStyle}>编辑</button>
+                            <button onClick={() => handleToggle(ch)} style={{ ...btnSmStyle, color: ch.status === "active" ? "#ef4444" : "#22c55e" }}>{ch.status === "active" ? "禁用" : "启用"}</button>
+                            <button onClick={() => handleDelete(ch.id)} style={{ ...btnSmStyle, color: "#ef4444" }}>删除</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {channels.length === 0 && (
+                      <tr><td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--dash-sub)" }}>暂无渠道，点击"+ 新增渠道"添加</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ padding: "12px 16px", borderTop: "1px solid var(--dash-border)", fontSize: 12, color: "var(--dash-sub)" }}>共 {channels.length} 个渠道</div>
+            </div>
+          )}
+
           {modalOpen && (
             <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }} onClick={() => setModalOpen(false)}>
               <div style={{ background: "var(--dash-card-bg)", border: "1px solid var(--dash-border)", borderRadius: 14, padding: "28px 32px", width: 640, maxHeight: "80vh", overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
                 <h2 style={{ fontSize: 18, fontWeight: 900, margin: "0 0 20px" }}>{editing ? "编辑渠道" : "新增渠道"}</h2>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                  <Field label="渠道名称" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
-                  <Field label="供应商" value={form.provider} onChange={(v) => setForm({ ...form, provider: v })} type="select" options={PROVIDERS} />
-                  <Field label="接口类型" value={form.type} onChange={(v) => setForm({ ...form, type: v })} type="select" options={TYPES} />
-                  <Field label="Base URL" value={form.baseUrl} onChange={(v) => setForm({ ...form, baseUrl: v })} />
-                  <Field label="接口路径" value={form.path} onChange={(v) => setForm({ ...form, path: v })} />
-                  <Field label="上游 API 密匙" value={form.apiKey} onChange={(v) => setForm({ ...form, apiKey: v })} type="password" />
-                  <Field label="权重" value={String(form.weight)} onChange={(v) => setForm({ ...form, weight: Number(v) })} type="number" />
-                  <Field label="超时(秒)" value={String(form.timeout)} onChange={(v) => setForm({ ...form, timeout: Number(v) })} type="number" />
-                  <Field label="输入成本(¥/1M)" value={String(form.costInput)} onChange={(v) => setForm({ ...form, costInput: v })} />
-                  <Field label="输出成本(¥/1M)" value={String(form.costOutput)} onChange={(v) => setForm({ ...form, costOutput: v })} />
-                  <Field label="售价倍率" value={String(form.priceMultiplier)} onChange={(v) => setForm({ ...form, priceMultiplier: Number(v) })} type="number" />
-                  <Field label="支持模型(逗号分隔)" value={typeof form.models === "string" ? form.models : form.models?.join(", ")} onChange={(v) => setForm({ ...form, models: v })} />
+                  <Field label="渠道名称" value={form.name || ""} onChange={(v) => setForm({ ...form, name: v })} />
+                  <Field label="供应商" value={form.provider || ""} onChange={(v) => setForm({ ...form, provider: v })} type="select" options={PROVIDERS} />
+                  <Field label="接口类型" value={form.type || ""} onChange={(v) => setForm({ ...form, type: v })} type="select" options={TYPES} />
+                  <Field label="Base URL" value={form.baseUrl || ""} onChange={(v) => setForm({ ...form, baseUrl: v })} />
+                  <Field label="接口路径" value={form.path || ""} onChange={(v) => setForm({ ...form, path: v })} />
+                  <Field label="上游 API 密匙" value={form.apiKey || ""} onChange={(v) => setForm({ ...form, apiKey: v })} type="password" />
+                  <Field label="权重" value={String(form.weight || 0)} onChange={(v) => setForm({ ...form, weight: Number(v) })} type="number" />
+                  <Field label="超时(秒)" value={String(form.timeout || 0)} onChange={(v) => setForm({ ...form, timeout: Number(v) })} type="number" />
+                  <Field label="输入成本(¥/1M)" value={String(form.costInput || "")} onChange={(v) => setForm({ ...form, costInput: v })} />
+                  <Field label="输出成本(¥/1M)" value={String(form.costOutput || "")} onChange={(v) => setForm({ ...form, costOutput: v })} />
+                  <Field label="售价倍率" value={String(form.priceMultiplier || 0)} onChange={(v) => setForm({ ...form, priceMultiplier: Number(v) })} type="number" />
+                  <Field label="支持模型(逗号分隔)" value={typeof form.models === "string" ? form.models : (form.models || []).join(", ")} onChange={(v) => setForm({ ...form, models: v })} />
+                  <Field label="故障转移渠道ID" value={form.fallback || ""} onChange={(v) => setForm({ ...form, fallback: v })} />
                 </div>
                 <div style={{ display: "flex", gap: 10, marginTop: 20, justifyContent: "flex-end" }}>
                   <button onClick={() => setModalOpen(false)} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid var(--dash-border)", background: "transparent", color: "var(--dash-text)", fontSize: 14, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>取消</button>
-                  <button onClick={handleSave} style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>保存</button>
+                  <button onClick={handleSave} disabled={saving} style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.7 : 1 }}>{saving ? "保存中..." : "保存"}</button>
                 </div>
               </div>
             </div>

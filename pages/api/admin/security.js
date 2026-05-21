@@ -1,0 +1,54 @@
+import {
+  listBlacklist, addBlacklist, removeBlacklist,
+  listRiskRules, saveRiskRule, deleteRiskRule,
+  listRiskEvents, updateRiskEvent,
+  ensureAdminSchema,
+} from "@/lib/admin-store";
+
+function checkAdmin(req) {
+  const expected = process.env.ADMIN_SECRET || "";
+  const provided = req.headers["x-admin-secret"] || req.query?.secret || req.body?.secret;
+  return expected && provided === expected;
+}
+
+export default async function handler(req, res) {
+  if (!checkAdmin(req)) return res.status(403).json({ error: "Forbidden" });
+  await ensureAdminSchema();
+
+  if (req.method === "GET") {
+    const result = {
+      blacklist: await listBlacklist(),
+      riskRules: await listRiskRules(),
+      riskEvents: await listRiskEvents(),
+    };
+    return res.status(200).json(result);
+  }
+
+  if (req.method === "POST") {
+    const { action, data } = req.body || {};
+    if (action === "addBlacklist") {
+      const entry = await addBlacklist(data);
+      return res.status(200).json({ ok: true, entry });
+    }
+    if (action === "removeBlacklist") {
+      await removeBlacklist(data.id);
+      return res.status(200).json({ ok: true });
+    }
+    if (action === "saveRiskRule") {
+      const rule = await saveRiskRule(data);
+      return res.status(200).json({ ok: true, rule });
+    }
+    if (action === "deleteRiskRule") {
+      await deleteRiskRule(data.id);
+      return res.status(200).json({ ok: true });
+    }
+    if (action === "updateRiskEvent") {
+      const event = await updateRiskEvent(data.id, data.updates);
+      return res.status(200).json({ ok: true, event });
+    }
+    return res.status(400).json({ error: "Unknown action" });
+  }
+
+  res.setHeader("Allow", "GET, POST");
+  return res.status(405).json({ error: "Method not allowed" });
+}
