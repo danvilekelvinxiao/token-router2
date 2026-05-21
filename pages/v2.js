@@ -141,7 +141,7 @@ export default function V2() {
 {`curl ${apiBaseUrl}/chat/completions \\
   -H "Authorization: Bearer sk-xxxx" \\
   -H "Content-Type: application/json" \\
-  -d '{"model": "deepseek/deepseek-chat",
+  -d '{"model": "deepseek-chat",
        "messages": [{"role":"user","content":"你好"}]}'`}
               </pre>
             </div>

@@ -434,6 +434,10 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   }
 
   function openCcSwitch(key) {
+    if (!key?.token || !String(key.token).startsWith("sk-")) {
+      showMessage("没有拿到完整 sk- 开头 API Key，已停止导入 CC-Switch。请重新创建 API 密匙。");
+      return;
+    }
     const currentApiBaseUrl = getPublicApiBaseUrl();
     setApiBaseUrl(currentApiBaseUrl);
     const ccUrl = buildCcSwitchConfigUrl({
@@ -774,7 +778,7 @@ export default function GuidePage() {
 
   function handleAutoConfig() {
     const primaryKey = customer?.apiKeys?.[0];
-    if (!primaryKey?.token) {
+    if (!primaryKey?.token || !String(primaryKey.token).startsWith("sk-")) {
       showToast("请先创建 API 密匙");
       return;
     }

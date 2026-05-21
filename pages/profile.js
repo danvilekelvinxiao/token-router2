@@ -1,7 +1,9 @@
 import Head from "next/head";
+import Image from "next/image";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
+import CardDetailModal from "@/components/CardDetailModal";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -9,7 +11,8 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [openFaq, setOpenFaq] = useState("faq-401");
+  const [qqCopied, setQqCopied] = useState(false);
+  const [showAnnouncements, setShowAnnouncements] = useState(false);
 
   const refreshProfile = useCallback(async (c) => {
     if (!c) {
@@ -81,31 +84,53 @@ export default function ProfilePage() {
   const nowText = new Date().toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
   const announcements = [
     {
+      type: "模型变更",
       status: "success",
       title: "FlowAPI DeepSeek 官方渠道已上线",
       content: "当前已支持 deepseek-chat 和 deepseek-reasoner。用户可在 API 管理页创建密匙后，通过 CC-Switch、Cherry Studio、Chatbox 等工具接入。",
       time: nowText,
     },
     {
+      type: "系统更新",
       status: "progress",
       title: "CC-Switch 自动配置优化中",
       content: "正在优化 API Key 同步、/v1/responses 兼容、自动导入自定义供应商等问题。建议优先使用自定义供应商 + https://flowapi.fun/v1 手动配置。",
       time: nowText,
     },
     {
+      type: "福利活动",
       status: "default",
       title: "赠送额度规则说明",
       content: "登录赠送 0.5 额度，实际产生 Token 使用时赠送 1.5 额度。赠送额度仅当日可用，并优先消耗。",
       time: nowText,
     },
+    {
+      type: "维护通知",
+      status: "warning",
+      title: "源站巡检与监控加强",
+      content: "FlowAPI 会持续检查正式域名、API 健康状态和上游通道。出现异常时会优先恢复访问，再同步处理原因。",
+      time: nowText,
+    },
+    {
+      type: "重要提醒",
+      status: "default",
+      title: "请妥善保管 API Key",
+      content: "API Key 只用于 FlowAPI 调用模型，不要公开发到群聊、论坛或截图中。如怀疑泄露，请尽快禁用并重新创建。",
+      time: nowText,
+    },
   ];
-  const faqs = [
-    ["faq-401", "为什么 CC-Switch 显示 401？", "通常是 API Key 不正确。请确认使用的是 FlowAPI API 管理页创建的密匙，而不是 DeepSeek、OpenRouter 或管理员 Token。"],
-    ["faq-404", "为什么显示 404？", "通常是接口地址填写错误。请确认 Base URL 为 https://flowapi.fun/v1，不能缺少 /v1。"],
-    ["faq-503", "为什么显示 503？", "通常代表地址和密匙通过了，但上游渠道或模型路由失败。请检查模型名是否正确，例如 DeepSeek 官方渠道使用 deepseek-chat，而 OpenRouter 使用 deepseek/deepseek-chat。"],
-    ["faq-model", "deepseek-chat 和 deepseek/deepseek-chat 有什么区别？", "deepseek-chat 是 DeepSeek 官方渠道模型名；deepseek/deepseek-chat 是 OpenRouter 渠道模型名，不能混用。"],
-    ["faq-gift", "赠送额度怎么扣除？", "赠送额度仅当日有效，系统会优先消耗赠送额度，再消耗充值余额。"],
-  ];
+  const totalSpend = Number(customer.totalSpend || calls.reduce((sum, call) => sum + Number(call.cost || 0), 0));
+  const totalTokens = calls.reduce((sum, call) => sum + Number(call.tokens || 0), 0);
+  const spendTopPercent = totalSpend >= 300 ? 8 : totalSpend >= 100 ? 18 : totalSpend > 0 ? 36 : 88;
+  const tokenTopPercent = totalTokens >= 1000000 ? 1 : totalTokens >= 300000 ? 9 : totalTokens > 0 ? 28 : 92;
+  const spendBeatPercent = Math.max(1, 100 - spendTopPercent);
+  const tokenBeatPercent = Math.max(1, 100 - tokenTopPercent);
+
+  async function copyQqGroup() {
+    await navigator.clipboard.writeText("217637139");
+    setQqCopied(true);
+    setTimeout(() => setQqCopied(false), 2000);
+  }
 
   return (
     <>
@@ -196,6 +221,30 @@ export default function ProfilePage() {
                 </button>
               </form>
             </div>
+
+            <section className="profile-asset-rank-card">
+              <div className="profile-panel-head">
+                <div>
+                  <span>资产排名</span>
+                  <h2>我的 FlowAPI 资产排名</h2>
+                </div>
+                <em>平台参考</em>
+              </div>
+              <div className="profile-rank-grid">
+                <div>
+                  <span>累计消费</span>
+                  <strong>¥{totalSpend.toFixed(2)}</strong>
+                  <p>消费排名：<b>前 {spendTopPercent}%</b></p>
+                  <small>你的累计消费超过了平台 {spendBeatPercent}% 的用户。</small>
+                </div>
+                <div>
+                  <span>累计消耗 Token</span>
+                  <strong>{totalTokens >= 1000000 ? `${(totalTokens / 1000000).toFixed(2)}M` : totalTokens.toLocaleString()} Token</strong>
+                  <p>Token 消耗排名：<b>前 {tokenTopPercent}%</b></p>
+                  <small>你的 Token 使用量超过了平台 {tokenBeatPercent}% 的用户。</small>
+                </div>
+              </div>
+            </section>
 
           </div>
 
@@ -300,22 +349,33 @@ export default function ProfilePage() {
         </div>
 
         <section className="profile-support-grid">
-          <div className="profile-announcement-card">
+          <div
+            role="button"
+            tabIndex={0}
+            className="profile-announcement-card profile-clickable-panel"
+            onClick={() => setShowAnnouncements(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setShowAnnouncements(true);
+              }
+            }}
+          >
             <div className="profile-panel-head">
               <div>
                 <span>系统消息</span>
                 <h2>系统公告</h2>
               </div>
-              <em>显示最新20条</em>
+              <em>点击查看历史公告</em>
             </div>
             <div className="profile-timeline">
-              {announcements.map((item) => (
+              {announcements.slice(0, 3).map((item) => (
                 <article key={item.title} className={`profile-timeline-item ${item.status}`}>
                   <div className="profile-timeline-dot" />
                   <div>
                     <div className="profile-timeline-top">
                       <strong>{item.title}</strong>
-                      <span>{item.status === "success" ? "成功" : item.status === "progress" ? "进行中" : "默认"}</span>
+                      <span>{item.type}</span>
                     </div>
                     <p>{item.content}</p>
                     <time>{item.time}</time>
@@ -325,26 +385,57 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="profile-faq-card">
+          <div className="profile-qq-card">
             <div className="profile-panel-head">
               <div>
-                <span>自助排查</span>
-                <h2>常见问答</h2>
+                <span>QQ 社群支持</span>
+                <h2>加入 FlowAPI QQ 交流群</h2>
               </div>
             </div>
-            <div className="profile-faq-list">
-              {faqs.map(([id, question, answer]) => (
-                <article key={id} className={openFaq === id ? "open" : ""}>
-                  <button type="button" onClick={() => setOpenFaq(openFaq === id ? "" : id)}>
-                    <strong>{question}</strong>
-                    <span>{openFaq === id ? "−" : "+"}</span>
-                  </button>
-                  {openFaq === id && <p>{answer}</p>}
-                </article>
-              ))}
+            <p className="profile-qq-main">更多优惠活动和技术支持，请扫码加入 QQ 群。</p>
+            <p className="profile-qq-desc">群里会优先同步不定期福利；模型选择、Base URL、API Key、客户端安装这类具体问题，也可以直接问。</p>
+            <div className="profile-qq-tags">
+              <span>新人教程</span>
+              <span>福利同步</span>
+              <span>下载协助</span>
+            </div>
+            <div className="profile-qq-qr-wrap">
+              <Image src="/images/qq-group-qr.png" alt="FlowAPI QQ 交流群二维码" width={190} height={190} />
+            </div>
+            <div className="profile-qq-number">
+              <span>群号</span>
+              <strong>217637139</strong>
+              <button type="button" onClick={copyQqGroup}>{qqCopied ? "已复制" : "复制群号"}</button>
             </div>
           </div>
         </section>
+
+        <CardDetailModal
+          open={showAnnouncements}
+          onClose={() => setShowAnnouncements(false)}
+          title="历史系统公告"
+          description="按时间倒序展示 FlowAPI 的系统更新、维护通知、模型变更、福利活动和重要提醒。"
+          badge="系统公告"
+          sections={[
+            {
+              title: "公告列表",
+              content: (
+                <div className="profile-announcement-history">
+                  {announcements.map((item) => (
+                    <article key={`${item.type}-${item.title}`} className={`profile-history-item ${item.status}`}>
+                      <div>
+                        <span>{item.type}</span>
+                        <strong>{item.title}</strong>
+                        <time>{item.time}</time>
+                      </div>
+                      <p>{item.content}</p>
+                    </article>
+                  ))}
+                </div>
+              ),
+            },
+          ]}
+        />
       </ConsoleLayout>
     </>
   );

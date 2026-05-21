@@ -9,6 +9,10 @@
  * usage logs, model routing, and Chinese error handling stay consistent.
  */
 
+import { MODEL_CATALOG } from "@/lib/models";
+
+const SUPPORTED_MODEL_IDS = new Set(MODEL_CATALOG.map((model) => model.modelId));
+
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -31,6 +35,18 @@ function normalizeContent(content) {
     return content.text || content.content || content.input_text || JSON.stringify(content);
   }
   return "";
+}
+
+function normalizeMessages(messages = []) {
+  if (!Array.isArray(messages)) return [];
+
+  return messages
+    .map((message) => {
+      const role = message?.role === "assistant" ? "assistant" : message?.role === "system" ? "system" : "user";
+      const content = normalizeContent(message?.content || message?.text || message?.input_text);
+      return content ? { role, content } : null;
+    })
+    .filter(Boolean);
 }
 
 function inputToMessages(input, instructions) {
@@ -58,16 +74,37 @@ function inputToMessages(input, instructions) {
   }
 
   if (messages.length === 0) {
-    messages.push({ role: "user", content: "" });
+    messages.push({ role: "user", content: "ping" });
   }
 
   return messages;
 }
 
+function normalizeResponsesModel(model) {
+  const rawModel = String(model || "").trim();
+  if (SUPPORTED_MODEL_IDS.has(rawModel)) return rawModel;
+
+  const name = rawModel.toLowerCase();
+
+  if (name.includes("reasoner") || name.includes("r1")) return "deepseek-reasoner";
+  if (name.includes("deepseek")) return "deepseek-chat";
+  if (name.includes("qwen") || name.includes("alibaba")) return "qwen/qwen3-32b";
+  if (name.includes("claude") || name.includes("anthropic")) return "anthropic/claude-3.5-haiku";
+  if (name.includes("gpt-4o-mini")) return "openai/gpt-4o-mini";
+  if (name.includes("gpt") || name.includes("openai") || name.includes("codex")) return "deepseek-chat";
+
+  return "deepseek-chat";
+}
+
 function responsesToChatCompletions(body = {}) {
+  const chatMessages = normalizeMessages(body.messages);
+  const messages = chatMessages.length > 0
+    ? chatMessages
+    : inputToMessages(body.input, body.instructions);
+
   return {
-    model: body.model || "deepseek-chat",
-    messages: inputToMessages(body.input, body.instructions),
+    model: normalizeResponsesModel(body.model),
+    messages,
     ...(body.temperature != null ? { temperature: body.temperature } : {}),
     ...(body.max_output_tokens ? { max_tokens: body.max_output_tokens } : {}),
   };

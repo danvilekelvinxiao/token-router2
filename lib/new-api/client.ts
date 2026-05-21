@@ -13,7 +13,8 @@
 
 const NEW_API_BASE_URL =
   process.env.NEW_API_BASE_URL || "http://localhost:3001";
-const NEW_API_ADMIN_TOKEN = process.env.NEW_API_ADMIN_TOKEN || "";
+const NEW_API_ADMIN_TOKEN =
+  process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || "";
 const NEW_API_DEFAULT_GROUP =
   process.env.NEW_API_DEFAULT_GROUP || "default";
 const NEW_API_DEFAULT_QUOTA = Number(
@@ -83,7 +84,7 @@ export async function createNewApiToken(params: {
   models?: string[];
 }): Promise<NewApiToken> {
   if (!NEW_API_ADMIN_TOKEN) {
-    throw new Error("NEW_API_ADMIN_TOKEN 未配置，无法创建真实 New API 令牌");
+    throw new Error("NEW_API_ADMIN_TOKEN 或 NEW_API_KEY 未配置，无法创建真实 New API API Key");
   }
 
   const name = String(params.name || "API 密匙").slice(0, 50);
@@ -106,7 +107,7 @@ export async function createNewApiToken(params: {
   });
 
   if (!create.ok) {
-    throw new Error(create.data?.message || create.data?.error || "New API 令牌创建失败");
+    throw new Error(create.data?.message || create.data?.error || "New API API Key 创建失败");
   }
 
   const list = await apiFetch("/api/token/?p=1&size=50");
@@ -117,14 +118,19 @@ export async function createNewApiToken(params: {
     || items.filter((item: any) => item.name === name).sort((a: any, b: any) => Number(b.id || 0) - Number(a.id || 0))[0];
 
   if (!matched?.id) {
-    throw new Error("New API 令牌已创建，但无法读取令牌 ID");
+    throw new Error("New API API Key 已创建，但无法读取 Key ID");
   }
 
   const keyResponse = await apiFetch(`/api/token/${matched.id}/key`, { method: "POST" });
-  const key = keyResponse.data?.key || keyResponse.data?.token || keyResponse.data?.data?.key;
+  let key = keyResponse.data?.key || keyResponse.data?.token || keyResponse.data?.data?.key;
 
   if (!key) {
-    throw new Error("New API 令牌已创建，但无法读取完整 Key");
+    throw new Error("New API API Key 已创建，但无法读取完整 Key");
+  }
+
+  key = String(key).trim();
+  if (!key.startsWith("sk-")) {
+    key = `sk-${key}`;
   }
 
   return {

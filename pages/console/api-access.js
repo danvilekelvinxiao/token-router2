@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 const apiBaseUrl = "https://flowapi.fun/v1";
 
 const modelDirectory = [
-  { name: "DeepSeek V3", modelId: "deepseek/deepseek-chat", provider: "DeepSeek", bestFor: "中文内容、客服、批量文案" },
+  { name: "DeepSeek Chat", modelId: "deepseek-chat", provider: "DeepSeek", bestFor: "中文内容、客服、批量文案" },
   { name: "Qwen3 32B", modelId: "qwen/qwen3-32b", provider: "Alibaba", bestFor: "外贸邮件、商务沟通、中文办公" },
   { name: "GPT-4o Mini", modelId: "openai/gpt-4o-mini", provider: "OpenAI", bestFor: "复杂分析、结构化总结、代码辅助" },
   { name: "Claude Haiku", modelId: "anthropic/claude-3.5-haiku", provider: "Anthropic", bestFor: "长文分析、英文写作、轻量推理" },
@@ -17,8 +17,8 @@ const modelDirectory = [
 function getSelectedModel(queryModel) {
   const cleanModel = typeof queryModel === "string" ? queryModel : "";
   return modelDirectory.find((model) => model.modelId === cleanModel) || {
-    name: cleanModel || "DeepSeek V3",
-    modelId: cleanModel || "deepseek/deepseek-chat",
+    name: cleanModel || "DeepSeek Chat",
+    modelId: cleanModel || "deepseek-chat",
     provider: "Auto Router",
     bestFor: "通用任务",
   };

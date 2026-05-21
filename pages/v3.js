@@ -135,7 +135,7 @@ export default function V3Page() {
                 </div>
                 <div>
                   <div style={{ color: "#6f7d98", fontSize: 12 }}>Model</div>
-                  <code style={{ display: "block", marginTop: 8, color: "#f4f8ff", fontSize: 14 }}>deepseek/deepseek-chat</code>
+                  <code style={{ display: "block", marginTop: 8, color: "#f4f8ff", fontSize: 14 }}>deepseek-chat</code>
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginTop: 24 }}>

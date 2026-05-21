@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 
 const API_BASE_URL = "https://flowapi.fun/v1";
-const DEFAULT_MODEL = "deepseek/deepseek-chat";
+const DEFAULT_MODEL = "deepseek-chat";
 const CHATGPT_MODEL = "openai/gpt-4o-mini";
 
 /* ==================== helpers ==================== */
@@ -71,16 +71,16 @@ function DeepSeekGuideSection({ customer }) {
 
       <div className="help-model-card">
         <h4>推荐模型</h4>
-        <code>deepseek/deepseek-chat</code>
+        <code>deepseek-chat</code>
         <p>适合中文问答、日常对话、轻量代码和高性价比任务。</p>
-        <CopyButton value="deepseek/deepseek-chat" label="复制模型名" />
+        <CopyButton value="deepseek-chat" label="复制模型名" />
       </div>
 
       <h4 className="help-params-title">接入参数</h4>
       <div className="help-params">
         <ParamsCard title="Base URL" value={API_BASE_URL} copyLabel="复制" />
         <ParamsCard title="API 密匙" value={primaryKey?.token || ""} copyLabel="复制 API 密匙" isKey />
-        <ParamsCard title="Model" value="deepseek/deepseek-chat" copyLabel="复制模型名" />
+        <ParamsCard title="Model" value="deepseek-chat" copyLabel="复制模型名" />
       </div>
 
       <div className="help-tips-box">
@@ -88,7 +88,7 @@ function DeepSeekGuideSection({ customer }) {
         <ul>
           <li>Base URL 固定填写：<code>{API_BASE_URL}</code></li>
           <li>API 密匙使用你在 FlowAPI 创建的密匙</li>
-          <li>模型名填写：<code>deepseek/deepseek-chat</code></li>
+          <li>模型名填写：<code>deepseek-chat</code></li>
           <li>如果连接失败，先检查 API 密匙是否复制完整，再检查模型名是否填错</li>
         </ul>
       </div>

@@ -12,30 +12,6 @@ import ExportExcelButton from "@/components/ExportExcelButton";
    REFERENCE DATA
    =================================================================== */
 
-const REFERENCE_PREDICTION = {
-  pastDates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
-  pastValues: [38, 42, 35, 48, 52, 61, 58],
-  futureDates: ["05/18", "05/19", "05/20", "05/21", "05/22", "05/23", "05/24"],
-  futureValues: [62, 65, 59, 68, 72, 78, 74],
-  unit: "K",
-};
-
-const REFERENCE_PREDICTION_SPEND = {
-  pastDates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
-  pastValues: [0.08, 0.10, 0.07, 0.12, 0.13, 0.15, 0.14],
-  futureDates: ["05/18", "05/19", "05/20", "05/21", "05/22", "05/23", "05/24"],
-  futureValues: [0.16, 0.17, 0.15, 0.18, 0.19, 0.20, 0.19],
-  unit: "¥",
-};
-
-const REFERENCE_PREDICTION_REQUESTS = {
-  pastDates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
-  pastValues: [8, 5, 9, 13, 3, 7, 2],
-  futureDates: ["05/18", "05/19", "05/20", "05/21", "05/22", "05/23", "05/24"],
-  futureValues: [10, 12, 9, 14, 15, 16, 13],
-  unit: "",
-};
-
 const REFERENCE_MODEL_RANKING = [
   { rank: 1, name: "DeepSeek V4 Flash", tokens: "1.65T", change: "+70%", direction: "up", pct: 100, color: "#6366f1" },
   { rank: 2, name: "Claude Opus 4.7", tokens: "1.61T", change: "+41%", direction: "up", pct: 97, color: "#f59e0b" },
@@ -655,6 +631,14 @@ function formatCompactToken(value) {
   return `${value}`;
 }
 
+function formatTokens(value) {
+  return `${formatCompactToken(Number(value || 0))} Tokens`;
+}
+
+function formatCurrency(value) {
+  return `¥${Number(value || 0).toFixed(2)}`;
+}
+
 function formatFlowMetric(value, metric) {
   if (metric === "spend") return `¥${value.toFixed(2)}`;
   if (metric === "tokens") return `${formatCompactToken(value)} Tokens`;
@@ -737,7 +721,8 @@ function buildDashboardUsage(customer) {
   const todayCost = sum(todayCalls, "cost");
   const weekCost = sum(weekCalls, "cost");
   const weekTokens = sum(weekCalls, "tokens");
-  const averageDailyCost = weekCost > 0 ? weekCost / 7 : todayCost;
+  const activeDays = new Set(weekCalls.map((call) => new Date(call.createdAt).toISOString().slice(0, 10))).size;
+  const averageDailyCost = weekCost > 0 && activeDays > 0 ? weekCost / activeDays : todayCost;
 
   return {
     hasCalls: calls.length > 0,
@@ -756,6 +741,7 @@ function buildDashboardUsage(customer) {
         tokens: Number(lastCall.tokens || 0),
         amount: Number(lastCall.cost || 0),
         time: formatCallTime(lastCall.createdAt),
+        status: getCallStatus(lastCall).label,
       } : null,
     },
     prediction: {
@@ -841,10 +827,13 @@ function buildModelSpendData(calls) {
 }
 
 function buildRecentCallRows(calls, apiKeys = []) {
-  return calls.slice(0, 20).map((call) => {
+  return calls.slice(0, 50).map((call) => {
     const status = getCallStatus(call);
     const key = apiKeys.find((item) => item.id === call.apiKeyId);
+    const latencySeconds = getCallLatencySeconds(call);
     return {
+      id: call.id || `${call.createdAt}-${getCallModel(call)}`,
+      createdAt: call.createdAt,
       time: formatCallTime(call.createdAt),
       model: getCallModel(call),
       apiKey: key?.label || "API 密匙",
@@ -855,7 +844,8 @@ function buildRecentCallRows(calls, apiKeys = []) {
       amount: Number(call.cost || 0),
       status: status.label,
       statusKey: status.key,
-      latency: "-",
+      latency: latencySeconds > 0 ? `${latencySeconds.toFixed(1)}s` : "-",
+      error: status.key === "success" ? "" : "上游返回异常，请检查余额、模型名或稍后重试。",
     };
   });
 }
@@ -901,14 +891,16 @@ function buildDashboardStats(customer, calls) {
   };
 }
 
-function buildTrendData(calls) {
-  return Array.from({ length: 7 }, (_, index) => {
+function buildTrendData(calls, days = 7) {
+  return Array.from({ length: days }, (_, index) => {
     const date = new Date();
-    date.setDate(date.getDate() - (6 - index));
+    date.setDate(date.getDate() - ((days - 1) - index));
     const dayCalls = calls.filter((call) => isSameDay(new Date(call.createdAt), date));
     const success = dayCalls.filter((call) => getCallStatus(call).key === "success").length;
     return {
       date: date.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" }).replace(/\//g, "-"),
+      inputTokens: dayCalls.reduce((sum, call) => sum + Number(call.promptTokens || 0), 0),
+      outputTokens: dayCalls.reduce((sum, call) => sum + Number(call.completionTokens || 0), 0),
       tokens: dayCalls.reduce((sum, call) => sum + Number(call.tokens || 0), 0),
       cost: dayCalls.reduce((sum, call) => sum + Number(call.cost || 0), 0),
       requests: dayCalls.length,
@@ -916,6 +908,79 @@ function buildTrendData(calls) {
       failed: Math.max(0, dayCalls.length - success),
     };
   });
+}
+
+function getFutureDateLabels(days = 7) {
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() + index + 1);
+    return date.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" }).replace(/\//g, "/");
+  });
+}
+
+function buildPredictionFromTrend(trendData, metric, balance) {
+  const activeDays = trendData.filter((item) => Number(item.cost || 0) > 0 || Number(item.tokens || 0) > 0 || Number(item.requests || 0) > 0);
+  const daysForAverage = activeDays.length || trendData.length || 1;
+  const lastSeven = trendData.slice(-7);
+  const activeSeven = lastSeven.filter((item) => Number(item.cost || 0) > 0 || Number(item.tokens || 0) > 0 || Number(item.requests || 0) > 0);
+  const averageBase = activeSeven.length ? activeSeven : activeDays;
+  const averageDays = averageBase.length || 1;
+  const totalCost = averageBase.reduce((sum, item) => sum + Number(item.cost || 0), 0);
+  const totalTokens = averageBase.reduce((sum, item) => sum + Number(item.tokens || 0), 0);
+  const totalRequests = averageBase.reduce((sum, item) => sum + Number(item.requests || 0), 0);
+  const dailyAverageCost = totalCost / averageDays;
+  const dailyAverageTokens = totalTokens / averageDays;
+  const dailyAverageRequests = totalRequests / averageDays;
+
+  const metricConfig = {
+    spend: {
+      unit: "¥",
+      pastValues: trendData.map((item) => Number(item.cost || 0)),
+      futureValue: dailyAverageCost,
+    },
+    requests: {
+      unit: "",
+      pastValues: trendData.map((item) => Number(item.requests || 0)),
+      futureValue: dailyAverageRequests,
+    },
+    tokens: {
+      unit: "K",
+      pastValues: trendData.map((item) => Number(((Number(item.tokens || 0)) / 1000).toFixed(2))),
+      futureValue: dailyAverageTokens / 1000,
+    },
+  }[metric] || {
+    unit: "K",
+    pastValues: trendData.map((item) => Number(((Number(item.tokens || 0)) / 1000).toFixed(2))),
+    futureValue: dailyAverageTokens / 1000,
+  };
+
+  const hasData = activeDays.length > 0;
+  const growth = hasData && activeDays.length >= 2 ? 1.04 : 1;
+  const futureValues = Array.from({ length: 7 }, (_, index) => Number((metricConfig.futureValue * Math.pow(growth, index)).toFixed(metric === "tokens" ? 2 : 4)));
+  const estimatedDaysLeft = dailyAverageCost > 0 ? Math.max(1, Math.floor(Number(balance || 0) / dailyAverageCost)) : 0;
+  const weekTokens = Math.round(dailyAverageTokens * 7);
+  const weekCost = Number((dailyAverageCost * 7).toFixed(2));
+
+  return {
+    data: {
+      pastDates: trendData.map((item) => item.date.replace("-", "/")),
+      pastValues: metricConfig.pastValues,
+      futureDates: getFutureDateLabels(7),
+      futureValues,
+      unit: metricConfig.unit,
+    },
+    summary: {
+      weekTokens,
+      weekCost,
+      coverDays: estimatedDaysLeft,
+      suggestRecharge: dailyAverageCost > 0 ? Math.max(50, Math.ceil((dailyAverageCost * 30) / 10) * 10) : 0,
+      dailyAverageCost,
+      message: dailyAverageCost > 0
+        ? `按最近 7 天平均消耗，当前余额预计可使用 ${estimatedDaysLeft} 天。`
+        : "暂无足够数据生成预测，继续使用后将自动生成。",
+      hasData,
+    },
+  };
 }
 
 function buildModelUsage(ranking) {
@@ -995,7 +1060,10 @@ function TokenTrendMiniChart({ data, onTooltip, theme }) {
   const toTokenY = (value) => margin.top + chartH - (value / maxTokens) * chartH;
   const toCostY = (value) => margin.top + chartH - (value / maxCost) * chartH;
   const tokenPoints = data.map((item, index) => `${toX(index)},${toTokenY(item.tokens)}`).join(" ");
+  const inputPoints = data.map((item, index) => `${toX(index)},${toTokenY(item.inputTokens || 0)}`).join(" ");
+  const outputPoints = data.map((item, index) => `${toX(index)},${toTokenY(item.outputTokens || 0)}`).join(" ");
   const costPoints = data.map((item, index) => `${toX(index)},${toCostY(item.cost)}`).join(" ");
+  const labelEvery = data.length > 45 ? 14 : data.length > 14 ? 5 : 1;
 
   return (
     <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} className="dash3-ops-chart">
@@ -1004,6 +1072,8 @@ function TokenTrendMiniChart({ data, onTooltip, theme }) {
         return <line key={frac} x1={margin.left} y1={y} x2={width - margin.right} y2={y} stroke="var(--dash-border)" />;
       })}
       <polyline points={tokenPoints} fill="none" stroke="#6366f1" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points={inputPoints} fill="none" stroke="#22c55e" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+      <polyline points={outputPoints} fill="none" stroke="#06b6d4" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
       <polyline points={costPoints} fill="none" stroke="#f59e0b" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="6,4" />
       {data.map((item, index) => (
         <g
@@ -1014,7 +1084,9 @@ function TokenTrendMiniChart({ data, onTooltip, theme }) {
             content: (
               <div>
                 <strong>{item.date}</strong>
-                <div style={{ marginTop: 8, color: theme === "light" ? "#6b7280" : "#9ca3af" }}>Token：<b>{formatCompactToken(item.tokens)} Tokens</b></div>
+                <div style={{ marginTop: 8, color: theme === "light" ? "#6b7280" : "#9ca3af" }}>总 Token：<b>{formatTokens(item.tokens)}</b></div>
+                <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af" }}>输入 Token：<b>{formatTokens(item.inputTokens || 0)}</b></div>
+                <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af" }}>输出 Token：<b>{formatTokens(item.outputTokens || 0)}</b></div>
                 <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af" }}>消耗：<b>¥{item.cost.toFixed(2)}</b></div>
                 <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af" }}>请求：<b>{item.requests} 次</b></div>
               </div>
@@ -1027,7 +1099,9 @@ function TokenTrendMiniChart({ data, onTooltip, theme }) {
         </g>
       ))}
       {data.map((item, index) => (
-        <text key={`x-${item.date}`} x={toX(index)} y={height - 10} textAnchor="middle" fill="var(--dash-sub)" fontSize="12">{item.date}</text>
+        index % labelEvery === 0 || index === data.length - 1 ? (
+          <text key={`x-${item.date}`} x={toX(index)} y={height - 10} textAnchor="middle" fill="var(--dash-sub)" fontSize="12">{item.date}</text>
+        ) : null
       ))}
     </svg>
   );
@@ -1162,7 +1236,7 @@ function ModelUsageTrendChart({ data, onTooltip, theme }) {
   );
 }
 
-function DashboardOperationsSection({ stats, trendData, modelUsage, recentRows, onTooltip, theme, onOpenMetric, onOpenModel }) {
+function DashboardOperationsSection({ stats, trendData, trendRange, setTrendRange, modelUsage, recentRows, onTooltip, theme, onOpenMetric, onOpenModel }) {
   const modelUsageTrend = buildModelUsageTrend(trendData, modelUsage);
   const totalCost = Number(stats.totalCost ?? stats.monthCost ?? 0);
   const exportSheets = [
@@ -1204,10 +1278,23 @@ function DashboardOperationsSection({ stats, trendData, modelUsage, recentRows, 
 
       <div className="dash3-ops-grid">
         <article className="dash3-card dash3-ops-card large">
-          <div className="dash3-card-subtitle">Token 消耗趋势</div>
-          <p className="dash3-ops-desc">最近 7 天 Token 数与消耗金额变化。</p>
+          <div className="dash3-card-title-row">
+            <div className="dash3-card-subtitle">Token 消耗趋势</div>
+            <div className="dash3-range-tabs">
+              {[
+                { key: "7d", label: "7 天" },
+                { key: "30d", label: "30 天" },
+                { key: "90d", label: "90 天" },
+              ].map((item) => (
+                <button key={item.key} type="button" className={trendRange === item.key ? "active" : ""} onClick={() => setTrendRange(item.key)}>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="dash3-ops-desc">基于真实调用日志生成，展示 Token 数与消耗金额变化。</p>
           <TokenTrendMiniChart data={trendData} onTooltip={onTooltip} theme={theme} />
-          <div className="dash3-mini-legend"><span><i style={{ background: "#6366f1" }} />Token</span><span><i style={{ background: "#f59e0b" }} />金额</span></div>
+          <div className="dash3-mini-legend"><span><i style={{ background: "#6366f1" }} />总 Token</span><span><i style={{ background: "#22c55e" }} />输入 Token</span><span><i style={{ background: "#06b6d4" }} />输出 Token</span><span><i style={{ background: "#f59e0b" }} />金额</span></div>
         </article>
         <article className="dash3-card dash3-ops-card">
           <div className="dash3-card-subtitle">模型消耗分布</div>
@@ -1569,7 +1656,149 @@ function OnboardingChecklist({ customer, usage }) {
   );
 }
 
-function AssetOverviewSection({ overview, tick }) {
+function AssetDetailMiniChart({ data = [], onTooltip, theme }) {
+  const maxValue = Math.max(...data.map((item) => Number(item.value || 0)), 1);
+  return (
+    <div className="dash3-asset-detail-chart">
+      {data.map((item) => (
+        <div
+          key={item.label}
+          className="dash3-asset-detail-bar"
+          onMouseMove={(event) => onTooltip?.({
+            x: event.clientX + 14,
+            y: event.clientY - 24,
+            content: (
+              <div>
+                <strong>{item.label}</strong>
+                <p style={{ margin: "8px 0 0", color: theme === "light" ? "#6b7280" : "#9ca3af" }}>{item.tooltip}</p>
+              </div>
+            ),
+          })}
+          onMouseLeave={() => onTooltip?.(null)}
+        >
+          <span>{item.label}</span>
+          <div>
+            <i style={{ width: `${Math.max(6, (Number(item.value || 0) / maxValue) * 100)}%`, background: item.color }} />
+          </div>
+          <strong>{item.display}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, onTooltip, theme }) {
+  const updatedAt = new Date().toLocaleString("zh-CN", { hour12: false });
+  const tokenChart = trendData.map((item) => ({
+    label: item.date,
+    value: item.tokens,
+    display: `${formatCompactToken(item.tokens)} Tokens`,
+    tooltip: `${item.date} 消耗 ${formatCompactToken(item.tokens)} Tokens，金额 ¥${Number(item.cost || 0).toFixed(2)}`,
+    color: "#6366f1",
+  }));
+  const costChart = trendData.map((item) => ({
+    label: item.date,
+    value: item.cost,
+    display: `¥${Number(item.cost || 0).toFixed(2)}`,
+    tooltip: `${item.date} 消耗金额 ¥${Number(item.cost || 0).toFixed(2)}，请求 ${item.requests} 次`,
+    color: "#8b5cf6",
+  }));
+  const recentCallRows = recentRows.slice(0, 8).map((row) => ({
+    time: row.time,
+    model: row.model,
+    totalTokens: `${formatCompactToken(row.total)} Tokens`,
+    cost: `¥${Number(row.amount || 0).toFixed(4)}`,
+    status: row.status,
+  }));
+  const configs = {
+    balance: {
+      title: "当前余额详情",
+      description: "查看当前可用额度、赠送额度和最近 7 天消耗趋势。",
+      rows: [
+        { label: "当前余额", value: `¥${overview.balance.toFixed(2)}`, note: "账户当前可用总额度" },
+        { label: "赠送额度", value: `¥${Number(overview.giftBalance || 0).toFixed(2)}`, note: "今日有效，调用模型时优先使用" },
+        { label: "约可调用", value: `${formatCompactToken(overview.callableTokens)} Tokens`, note: "按当前平均成本粗略估算" },
+        { label: "最近更新时间", value: updatedAt },
+      ],
+      chartTitle: "最近 7 天金额消耗",
+      chartData: costChart,
+      tableTitle: "最近调用记录",
+      tableRows: recentCallRows,
+      advice: "建议：赠送额度当天有效，适合优先完成测试调用；正式业务建议保持充值余额充足。",
+    },
+    today: {
+      title: "今日消耗详情",
+      description: "查看今天的金额流出、Token 消耗和调用记录。",
+      rows: [
+        { label: "今日消耗", value: `¥${overview.todaySpend.toFixed(2)}` },
+        { label: "今日 Token", value: `${formatCompactToken(overview.todayTokens)} Tokens` },
+        { label: "最近调用", value: overview.lastCall?.model || "暂无调用" },
+        { label: "最近更新时间", value: updatedAt },
+      ],
+      chartTitle: "最近 7 天 Token 消耗",
+      chartData: tokenChart,
+      tableTitle: "今日与近期调用",
+      tableRows: recentCallRows,
+      advice: "建议：如果今日消耗突然上升，优先检查高成本模型和长输出任务。",
+    },
+    week: {
+      title: "本周消耗详情",
+      description: "查看最近 7 天的 Token 使用节奏和成本变化。",
+      rows: [
+        { label: "本周消耗", value: `¥${overview.weekSpend.toFixed(2)}` },
+        { label: "本周 Token", value: `${formatCompactToken(overview.weekTokens)} Tokens` },
+        { label: "日均消耗", value: `¥${(overview.weekSpend / 7).toFixed(2)}` },
+        { label: "最近更新时间", value: updatedAt },
+      ],
+      chartTitle: "最近 7 天金额消耗",
+      chartData: costChart,
+      tableTitle: "近期调用记录",
+      tableRows: recentCallRows,
+      advice: "建议：本周消耗可以作为充值和套餐选择的基础参考。",
+    },
+    lastCall: {
+      title: "最近调用详情",
+      description: "查看最近一次 API 调用的模型、Token 和金额。",
+      rows: [
+        { label: "模型", value: overview.lastCall?.model || "暂无调用" },
+        { label: "消耗 Token", value: overview.lastCall ? `${formatCompactToken(overview.lastCall.tokens)} Tokens` : "暂无" },
+        { label: "消耗金额", value: overview.lastCall ? `¥${overview.lastCall.amount.toFixed(4)}` : "暂无" },
+        { label: "调用时间", value: overview.lastCall?.time || "完成首次调用后展示" },
+      ],
+      chartTitle: "最近 7 天 Token 消耗",
+      chartData: tokenChart,
+      tableTitle: "最近调用记录",
+      tableRows: recentCallRows,
+      advice: "建议：最近调用是排查 API Key、模型名和扣费是否正常的第一入口。",
+    },
+  };
+  const config = configs[assetKey] || configs.balance;
+  return {
+    title: config.title,
+    description: config.description,
+    badge: "资产总览",
+    sections: [
+      { title: "核心数据", content: <DetailRows rows={config.rows} /> },
+      {
+        title: config.chartTitle,
+        content: <AssetDetailMiniChart data={config.chartData} onTooltip={onTooltip} theme={theme} />,
+      },
+      {
+        title: config.tableTitle,
+        content: <DetailTable columns={[
+          { key: "time", label: "时间" },
+          { key: "model", label: "模型" },
+          { key: "totalTokens", label: "总 Token" },
+          { key: "cost", label: "成本" },
+          { key: "status", label: "状态" },
+        ]} rows={config.tableRows} />,
+      },
+      { title: "资产建议", content: <p className="dash3-asset-detail-advice">{config.advice}</p> },
+    ],
+  };
+}
+
+function AssetOverviewSection({ overview, tick, onOpenAsset }) {
   return (
     <section className="dash3-section dash3-asset-overview-section">
       <SectionTitle
@@ -1578,38 +1807,69 @@ function AssetOverviewSection({ overview, tick }) {
         right={<span className="dash3-live-badge"><span className="dash3-live-dot" /> Live</span>}
       />
       <div className="dash3-asset-overview-grid">
-        <article className="dash3-asset-card dash3-asset-card-primary">
+        <article
+          className="dash3-asset-card dash3-asset-card-primary"
+          role="button"
+          tabIndex={0}
+          onClick={() => onOpenAsset("balance")}
+          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenAsset("balance"); } }}
+        >
           <span>当前余额</span>
           <strong><MetricValueInline prefix="¥" value={overview.balance.toFixed(2)} /></strong>
-          <p>约可调用 <b>{formatCompactToken(overview.callableTokens)} Tokens</b></p>
+          <p>约可调用 <b>{formatTokens(overview.callableTokens)}</b></p>
           <p className="dash3-gift-credit" title="赠送额度仅当日有效，调用模型时优先消耗赠送额度，用完后再消耗充值余额。">
             赠送额度：<b>¥{Number(overview.giftBalance || 0).toFixed(2)}</b> 今日有效，优先使用
           </p>
+          <em className="dash3-asset-card-hint">查看详情</em>
         </article>
-        <article className="dash3-asset-card">
+        <article
+          className="dash3-asset-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => onOpenAsset("today")}
+          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenAsset("today"); } }}
+        >
           <span>今日消耗</span>
           <strong><MetricValueInline prefix="¥" value={<FlashValue value={overview.todaySpend.toFixed(2)} tick={tick} />} /></strong>
-          <p><b>{formatCompactToken(overview.todayTokens)} Tokens</b></p>
+          <p><b>{formatTokens(overview.todayTokens)}</b></p>
+          <em className="dash3-asset-card-hint">查看详情</em>
         </article>
-        <article className="dash3-asset-card">
+        <article
+          className="dash3-asset-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => onOpenAsset("week")}
+          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenAsset("week"); } }}
+        >
           <span>本周消耗</span>
           <strong><MetricValueInline prefix="¥" value={<FlashValue value={overview.weekSpend.toFixed(2)} tick={tick} />} /></strong>
-          <p><b>{formatCompactToken(overview.weekTokens)} Tokens</b></p>
+          <p><b>{formatTokens(overview.weekTokens)}</b></p>
+          <em className="dash3-asset-card-hint">查看详情</em>
         </article>
-        <article className="dash3-asset-card dash3-live-call">
+        <article
+          className="dash3-asset-card dash3-live-call"
+          role="button"
+          tabIndex={0}
+          onClick={() => onOpenAsset("lastCall")}
+          onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenAsset("lastCall"); } }}
+        >
           <span>最近调用</span>
           <strong className="dash3-recent-call-value">{overview.lastCall?.model || "暂无调用"}</strong>
           {overview.lastCall ? (
             <>
               <p>
-                <b>-{formatCompactToken(overview.lastCall.tokens)} Tokens</b>
-                <b>-¥{overview.lastCall.amount.toFixed(2)}</b>
+                <b>-{formatTokens(overview.lastCall.tokens)}</b>
+                <b>-{formatCurrency(overview.lastCall.amount)}</b>
               </p>
-              <small>{overview.lastCall.time}</small>
+              <div className="dash3-last-call-footer">
+                <small>{overview.lastCall.time}</small>
+                <span className="dash3-status-pill success">{overview.lastCall.status || "成功"}</span>
+              </div>
             </>
           ) : (
             <p><b>完成首次 API 调用后自动记录</b></p>
           )}
+          <em className="dash3-asset-card-hint">查看详情</em>
         </article>
       </div>
     </section>
@@ -1876,6 +2136,7 @@ function ModelSpendTrendSection({ ranking, onTooltip, theme }) {
 }
 
 function TokenForecastDecisionSection({ data, summary, metric, setMetric, onTooltip, theme, tick }) {
+  const hasPredictionData = Boolean(summary?.hasData);
   return (
     <section className="dash3-section">
       <SectionTitle
@@ -1907,67 +2168,85 @@ function TokenForecastDecisionSection({ data, summary, metric, setMetric, onTool
             <span><span className="dash3-prediction-legend-dot" style={{ background: "#f59e0b" }} /> 实际使用</span>
             <span><span className="dash3-prediction-legend-dot" style={{ background: "#3b82f6" }} /> 预测趋势</span>
           </div>
-          <DualLineChart data={data} unit={data.unit} height={400} width={980} onTooltip={onTooltip} theme={theme} />
+          {hasPredictionData ? (
+            <DualLineChart data={data} unit={data.unit} height={400} width={980} onTooltip={onTooltip} theme={theme} />
+          ) : (
+            <div className="dash3-empty-chart">
+              <strong>暂无调用数据</strong>
+              <span>完成一次 API 调用后，这里会自动生成 Token 消耗趋势和余额预测。</span>
+            </div>
+          )}
         </div>
-        <p className="dash3-advice">建议：按照当前消耗速度，你的余额预计还能覆盖 {summary.coverDays} 天，建议提前充值 ¥{summary.suggestRecharge.toFixed(0)} 避免调用中断。</p>
+        <p className="dash3-advice">
+          {summary.message || "暂无足够数据生成预测，继续使用后将自动生成。"}
+          {hasPredictionData && summary.suggestRecharge > 0 ? ` 建议提前充值 ¥${summary.suggestRecharge.toFixed(0)} 避免调用中断。` : ""}
+        </p>
       </div>
     </section>
   );
 }
 
 function RecentCallLedger({ rows }) {
-  const filters = ["全部模型", "全部 API 密匙", "成功 / 失败", "时间范围"];
+  const [expanded, setExpanded] = useState(false);
+  const visibleRows = expanded ? rows.slice(0, 50) : rows.slice(0, 5);
+  const canExpand = rows.length > 5;
   return (
     <section className="dash3-section" id="dash-recent-calls">
       <SectionTitle
         title="最近调用流水"
         subtitle="像交易流水一样记录每一次模型调用和 Token 消耗。"
+        right={canExpand ? (
+          <button type="button" className="dash3-ledger-toggle" onClick={() => setExpanded((value) => !value)}>
+            {expanded ? "收起" : `展开全部（${Math.min(rows.length, 50)}）`}
+          </button>
+        ) : null}
       />
       <div className="dash3-ledger-card">
-        <div className="dash3-ledger-filters">
-          {filters.map((filter) => (
-            <button key={filter}>{filter}</button>
-          ))}
-        </div>
-        <div className="dash3-ledger-table-wrap">
-          <table className="dash3-ledger-table">
-            <thead>
-              <tr>
-                <th>时间</th>
-                <th>模型</th>
-                <th>API 密匙</th>
-                <th>来源</th>
-                <th>请求 Tokens</th>
-                <th>响应 Tokens</th>
-                <th>总 Tokens</th>
-                <th>金额</th>
-                <th>状态</th>
-                <th>耗时</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr key={`${row.time}-${row.model}`}>
-                  <td>{row.time}</td>
-                  <td><strong>{row.model}</strong></td>
-                  <td>{row.apiKey}</td>
-                  <td>{row.source}</td>
-                  <td>{row.input.toLocaleString()}</td>
-                  <td>{row.output.toLocaleString()}</td>
-                  <td>{row.total.toLocaleString()}</td>
-                  <td><b>¥{row.amount.toFixed(2)}</b></td>
-                  <td><span className={`dash3-status-pill ${row.statusKey}`}>{row.status}</span></td>
-                  <td>{row.latency}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {rows.length === 0 && (
-            <div className="dash3-empty-table">
-              暂无真实调用流水。复制 API 管理页的 CURL 测试一次后，这里会记录模型、Token、金额和状态。
-            </div>
-          )}
-        </div>
+        {visibleRows.length > 0 ? (
+          <div className="dash3-ledger-list">
+            {visibleRows.map((row, index) => (
+              <article className="dash3-ledger-item" key={`${row.id}-${index}`}>
+                <div className="dash3-ledger-item-main">
+                  <div className="model-name-cell">
+                    <ModelLogo model={row.model} size={28} />
+                    <span className="model-text">
+                      <strong className="model-name">{row.model}</strong>
+                      <small className="model-provider">{row.apiKey} · {row.source}</small>
+                    </span>
+                  </div>
+                  <div className="dash3-ledger-item-status">
+                    <span className={`dash3-status-pill ${row.statusKey}`}>{row.status}</span>
+                    <time>{row.time}</time>
+                  </div>
+                </div>
+                {row.statusKey === "success" ? (
+                  <div className="dash3-ledger-item-meta">
+                    <span>{formatTokens(row.total)}</span>
+                    <b>{formatCurrency(row.amount)}</b>
+                    <span>{row.latency}</span>
+                    <small>输入 {formatCompactToken(row.input)} · 输出 {formatCompactToken(row.output)}</small>
+                  </div>
+                ) : (
+                  <div className="dash3-ledger-item-error">错误原因：{row.error}</div>
+                )}
+              </article>
+            ))}
+            {rows.length > 50 && expanded ? (
+              <p className="dash3-ledger-limit">已显示最近 50 条调用记录，更多历史数据后续可在调用日志页查看。</p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="dash3-empty-table">
+            暂无真实调用流水。复制 API 管理页的 CURL 测试一次后，这里会记录模型、Token、金额和状态。
+          </div>
+        )}
+        {canExpand ? (
+          <div className="dash3-ledger-bottom">
+            <button type="button" className="dash3-ledger-toggle" onClick={() => setExpanded((value) => !value)}>
+              {expanded ? "收起" : "展开全部"}
+            </button>
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -2218,6 +2497,9 @@ export default function DashboardPage() {
   const [detailModal, setDetailModal] = useState(null);
   const [flowMetric, setFlowMetric] = useState("spend");
   const [predictionMetric, setPredictionMetric] = useState("tokens");
+  const [trendRange, setTrendRange] = useState("7d");
+  const [loadingDashboard, setLoadingDashboard] = useState(false);
+  const [dashboardError, setDashboardError] = useState("");
   const [greeting] = useState(() => {
     const h = new Date().getHours();
     if (h < 6) return "凌晨好";
@@ -2228,6 +2510,22 @@ export default function DashboardPage() {
   });
 
   const handleTooltip = useCallback((t) => setTooltip(t), []);
+  const loadCustomer = useCallback(async (customerId) => {
+    if (!customerId) return;
+    setLoadingDashboard(true);
+    setDashboardError("");
+    try {
+      const response = await fetch(`/api/customer?customerId=${customerId}`);
+      if (!response.ok) throw new Error("加载数据面板失败");
+      const data = await response.json();
+      setCustomer(data);
+      localStorage.setItem("flowapi_customer", JSON.stringify(data));
+    } catch (error) {
+      setDashboardError(error.message || "数据面板刷新失败，请稍后重试。");
+    } finally {
+      setLoadingDashboard(false);
+    }
+  }, []);
 
   /* Load customer */
   useEffect(() => {
@@ -2236,14 +2534,9 @@ export default function DashboardPage() {
     try {
       const c = JSON.parse(stored);
       queueMicrotask(() => setCustomer(c));
-      fetch(`/api/customer?customerId=${c.id}`)
-        .then((r) => r.ok && r.json())
-        .then((data) => {
-          if (data) { setCustomer(data); localStorage.setItem("flowapi_customer", JSON.stringify(data)); }
-        })
-        .catch(() => {});
+      queueMicrotask(() => loadCustomer(c.id));
     } catch {/* ignore */}
-  }, []);
+  }, [loadCustomer]);
 
   /* Computed */
   const user = customer || { name: "用户", email: "", balance: 0, totalSpend: 0, apiKeys: [], calls: [] };
@@ -2253,7 +2546,8 @@ export default function DashboardPage() {
   const modelSpend = buildModelSpendData(usage.calls);
   const recentCallRows = buildRecentCallRows(usage.calls, user.apiKeys || []);
   const dashboardStats = buildDashboardStats(user, usage.calls);
-  const trendData = buildTrendData(usage.calls);
+  const trendDays = trendRange === "90d" ? 90 : trendRange === "30d" ? 30 : 7;
+  const trendData = buildTrendData(usage.calls, trendDays);
   const modelUsage = buildModelUsage(modelSpend.ranking);
   const heatmapWeeks = generateHeatmapWeeks(usage.calls);
   const userTopModels = modelSpend.ranking.slice(0, 4).map((item) => ({
@@ -2275,19 +2569,9 @@ export default function DashboardPage() {
     heatPct: m.pct,
   })).sort((a, b) => b.heatPct - a.heatPct).map((m, i) => ({ ...m, rank: i + 1 }));
 
-  const predictionData = predictionMetric === "spend"
-    ? REFERENCE_PREDICTION_SPEND
-    : predictionMetric === "requests"
-      ? REFERENCE_PREDICTION_REQUESTS
-      : REFERENCE_PREDICTION;
-  const basePrediction = usage.hasCalls
-    ? usage.prediction
-    : {
-      weekTokens: 0,
-      weekCost: 0,
-      coverDays: 0,
-      suggestRecharge: 0,
-    };
+  const prediction = buildPredictionFromTrend(trendData.slice(-7), predictionMetric, baseBalance);
+  const predictionData = prediction.data;
+  const basePrediction = prediction.summary;
 
   const contentStyle = {
     background: "var(--dash-bg)",
@@ -2323,22 +2607,54 @@ export default function DashboardPage() {
               <span className="dash3-live-badge">
                 <span className="dash3-live-dot" /> 实时
               </span>
-              <button className="dash3-icon-btn" title="刷新" onClick={() => setTick((t) => t + 1)}>
+              <button
+                className="dash3-icon-btn"
+                title="刷新"
+                onClick={() => {
+                  setTick((t) => t + 1);
+                  loadCustomer(user.id);
+                }}
+              >
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
                   <path d="M3 10a7 7 0 0113.2-3.5M17 10a7 7 0 01-13.2 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
                   <path d="M17 4v3h-3M3 16v-3h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
+              <button
+                className="dash3-refresh-btn"
+                type="button"
+                disabled={loadingDashboard}
+                onClick={() => {
+                  setTick((t) => t + 1);
+                  loadCustomer(user.id);
+                }}
+              >
+                {loadingDashboard ? "刷新中" : "刷新数据"}
+              </button>
             </div>
           </header>
 
+          {dashboardError ? <div className="dash3-error-banner">{dashboardError}</div> : null}
+
           <OnboardingChecklist customer={customer} usage={usage} />
 
-          <AssetOverviewSection overview={usage.overview} tick={tick} />
+          <AssetOverviewSection
+            overview={usage.overview}
+            tick={tick}
+            onOpenAsset={(assetKey) => setDetailModal(buildAssetOverviewDetail(assetKey, {
+              overview: usage.overview,
+              trendData,
+              recentRows: recentCallRows,
+              onTooltip: handleTooltip,
+              theme,
+            }))}
+          />
 
           <DashboardOperationsSection
             stats={dashboardStats}
             trendData={trendData}
+            trendRange={trendRange}
+            setTrendRange={setTrendRange}
             modelUsage={modelUsage}
             recentRows={recentCallRows}
             onTooltip={handleTooltip}
