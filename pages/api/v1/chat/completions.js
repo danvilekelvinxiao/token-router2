@@ -1,7 +1,9 @@
-import { MODEL_CATALOG, estimateCnyCost, selectModelForPrompt } from "@/lib/models";
+import { MODEL_CATALOG, estimateCnyCost } from "@/lib/models";
+import { smartSelectModel } from "@/lib/smart-router";
 import { finalizeReservedCallByToken, findCustomerByToken, getTemporaryCreditBalance, reserveBalanceByToken } from "@/lib/customer-store";
 import { acquireConcurrency, getClientIp, graylistKey, isGraylisted, rateLimit, releaseConcurrency, securityLog } from "@/lib/security";
 import { getUpstreamConfigs, getUpstreamSuggestion, sendApiError } from "@/lib/upstream";
+import { selectUpstream, STRATEGY } from "@/lib/smart-router";
 import { Readable } from "stream";
 
 function setCors(res) {
@@ -165,7 +167,7 @@ export default async function handler(req, res) {
       "请在模型广场复制推荐的 Model ID，或使用 model: auto 让 FlowAPI 自动选择可用模型。"
     );
   }
-  const selected = requestedManualModel ? catalogModel : selectModelForPrompt(prompt);
+  const selected = requestedManualModel ? catalogModel : smartSelectModel(prompt);
   const promptTokens = estimatePromptTokens(body.messages || []);
   const reserveCost = estimateReserveCost(selected.modelId, body, promptTokens);
   const reserve = await reserveBalanceByToken(clientToken, reserveCost);
@@ -191,11 +193,25 @@ export default async function handler(req, res) {
       };
     }
 
+    // Smart routing: determine best upstream strategy
+    const routeDecision = await selectUpstream({
+      modelId: selected.modelId,
+      strategy: STRATEGY.AUTO,
+    });
+
     let upstream = null;
     let upstreamResponse = null;
     let lastUpstreamError = null;
 
-    for (const candidate of upstreams) {
+    // Try upstreams in smart order: primary first, then fallback chain
+    const candidates = routeDecision.fallbackChain && routeDecision.fallbackChain.length > 0
+      ? routeDecision.fallbackChain
+      : upstreams;
+    const orderedUpstreams = routeDecision.upstream
+      ? [routeDecision.upstream, ...candidates.filter((u) => u.name !== (routeDecision.upstream?.name))]
+      : candidates;
+
+    for (const candidate of orderedUpstreams) {
       const headers = {
         Authorization: `Bearer ${candidate.name === "new-api" ? clientToken : candidate.apiKey}`,
         "Content-Type": "application/json",
