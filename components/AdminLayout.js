@@ -11,6 +11,7 @@ const adminMenuItems = [
   { key: "security", label: "安全风控", href: "/admin/security", icon: IconSecurity },
   { key: "insights", label: "用户画像分析", href: "/admin/user-insights", icon: IconInsights },
   { key: "logs", label: "调用日志", href: "/admin/logs", icon: IconLogs },
+  { key: "announcements", label: "系统公告管理", href: "/admin/announcements", icon: IconAnnouncements },
   { key: "settings", label: "系统设置", href: "/admin/settings", icon: IconSettings },
   { key: "recharges", label: "充值审核", href: "/admin/recharges", icon: IconRecharges },
   { key: "newapi", label: "New API 中转内核", href: "/admin/new-api", icon: IconNewApi },
@@ -23,6 +24,7 @@ function IconBilling() { return <svg width="18" height="18" viewBox="0 0 24 24" 
 function IconRouting() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4M5.6 5.6l2.8 2.8m7.2 7.2l2.8 2.8M5.6 18.4l2.8-2.8m7.2-7.2l2.8-2.8"/></svg>; }
 function IconSecurity() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 2l8 4v6c0 5.5-3.8 10.7-8 12-4.2-1.3-8-6.5-8-12V6l8-4z"/><circle cx="12" cy="12" r="2"/></svg>; }
 function IconLogs() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>; }
+function IconAnnouncements() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 5h16v11H7l-3 3V5z"/><path d="M8 9h8M8 13h5"/></svg>; }
 function IconSettings() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>; }
 function IconRecharges() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="1" y="5" width="22" height="14" rx="2"/><path d="M7 15l4-6 4 4 4-8"/></svg>; }
 function IconInsights() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="7" r="4"/><path d="M1 21c0-4.4 3.6-8 8-8"/><circle cx="18" cy="9" r="3"/><path d="M12 21c0-2.8 2.2-5 5-5"/><path d="M19 16v5M17 18h4"/></svg>; }

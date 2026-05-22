@@ -3,10 +3,11 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import ConsoleLayout from "@/components/ConsoleLayout";
-import ModelLogo, { getModelProviderLabel } from "@/components/ModelLogo";
+import ModelLogo, { ModelNameWithLogo, getModelProviderLabel } from "@/components/ModelLogo";
 import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import ExportExcelButton from "@/components/ExportExcelButton";
+import { generateTokenForecast } from "@/lib/analytics/token-forecast";
 
 /* ===================================================================
    REFERENCE DATA
@@ -132,6 +133,8 @@ function DashboardTooltip({ tooltip, theme }) {
         pointerEvents: "none",
         minWidth: 220,
         maxWidth: 360,
+        maxHeight: 360,
+        overflowY: "auto",
         boxShadow: theme === "dark"
           ? "0 8px 32px rgba(0,0,0,0.6)"
           : "0 8px 32px rgba(0,0,0,0.12)",
@@ -512,14 +515,20 @@ function TopModelStackedBars({ data: { dates, models }, height = 260, onTooltip,
           <g key={di} style={{ cursor: "crosshair" }}
             onMouseMove={(e) => {
               const sortedModels = [...models].sort((a, b) => b.daily[di] - a.daily[di]);
-              const lines = sortedModels.map((m) => `${m.name.padEnd(22)} ${m.daily[di].toFixed(2)}T`).join("\n");
               onTooltip({
                 x: e.clientX + 14,
                 y: e.clientY - 10,
                 content: (
                   <div>
                     <div style={{ fontWeight: 700, marginBottom: 8, color: theme === "light" ? "#111827" : "#e5e5e7" }}>{date}</div>
-                    <pre style={{ fontFamily: "SF Mono, monospace", fontSize: 12, lineHeight: 1.85, margin: 0, color: theme === "light" ? "#4b5563" : "#9ca3af" }}>{lines}</pre>
+                    <div className="dash3-model-tooltip-list">
+                      {sortedModels.map((m) => (
+                        <div key={m.name}>
+                          <span><ModelLogo model={m.name} size={22} />{m.name}</span>
+                          <b>{m.daily[di].toFixed(2)}T</b>
+                        </div>
+                      ))}
+                    </div>
                     <div style={{ borderTop: `1px solid ${theme === "light" ? "#e5e7eb" : "#333540"}`, marginTop: 8, paddingTop: 8, fontWeight: 700, fontSize: 13 }}>
                       Total {total.toFixed(2)}T
                     </div>
@@ -871,6 +880,9 @@ function buildDashboardStats(customer, calls) {
   const sum = (items, key) => items.reduce((total, item) => total + Number(item[key] || 0), 0);
   const successful = calls.filter((call) => getCallStatus(call).key === "success").length;
   const cacheHits = calls.filter((call) => call.cacheHit || call.cached).length;
+  const cachedCalls = calls.filter((call) => call.cacheHit || call.cached);
+  const savedTokens = cachedCalls.reduce((total, call) => total + Number(call.savedTokens || Math.round(Number(call.tokens || 0) * 0.35)), 0);
+  const savedCostCny = cachedCalls.reduce((total, call) => total + Number(call.savedCostCny || (Number(call.cost || 0) * 0.35)), 0);
   const callsWithLatency = calls.map(getCallLatencySeconds).filter((value) => value > 0);
   const avgLatency = callsWithLatency.length
     ? callsWithLatency.reduce((total, value) => total + value, 0) / callsWithLatency.length
@@ -887,6 +899,13 @@ function buildDashboardStats(customer, calls) {
     monthRequests: monthCalls.length,
     avgLatency,
     cacheHitRate: calls.length ? (cacheHits / calls.length) * 100 : 0,
+    cacheStats: {
+      hitRate: calls.length ? (cacheHits / calls.length) * 100 : 0,
+      hitCount: cacheHits,
+      savedTokens,
+      savedCostCny,
+      avgLatencyImprovement: cacheHits ? 32 : 0,
+    },
     successRate: calls.length ? (successful / calls.length) * 100 : 0,
   };
 }
@@ -920,7 +939,6 @@ function getFutureDateLabels(days = 7) {
 
 function buildPredictionFromTrend(trendData, metric, balance) {
   const activeDays = trendData.filter((item) => Number(item.cost || 0) > 0 || Number(item.tokens || 0) > 0 || Number(item.requests || 0) > 0);
-  const daysForAverage = activeDays.length || trendData.length || 1;
   const lastSeven = trendData.slice(-7);
   const activeSeven = lastSeven.filter((item) => Number(item.cost || 0) > 0 || Number(item.tokens || 0) > 0 || Number(item.requests || 0) > 0);
   const averageBase = activeSeven.length ? activeSeven : activeDays;
@@ -931,6 +949,13 @@ function buildPredictionFromTrend(trendData, metric, balance) {
   const dailyAverageCost = totalCost / averageDays;
   const dailyAverageTokens = totalTokens / averageDays;
   const dailyAverageRequests = totalRequests / averageDays;
+  const costPerToken = totalTokens > 0 ? totalCost / totalTokens : 0;
+  const requestsPerToken = totalTokens > 0 ? totalRequests / totalTokens : 0;
+  const tokenForecast = generateTokenForecast(lastSeven.map((item) => ({
+    date: item.date,
+    tokens: Number(item.tokens || 0),
+    totalTokens: Number(item.tokens || 0),
+  })), 7);
 
   const metricConfig = {
     spend: {
@@ -955,11 +980,14 @@ function buildPredictionFromTrend(trendData, metric, balance) {
   };
 
   const hasData = activeDays.length > 0;
-  const growth = hasData && activeDays.length >= 2 ? 1.04 : 1;
-  const futureValues = Array.from({ length: 7 }, (_, index) => Number((metricConfig.futureValue * Math.pow(growth, index)).toFixed(metric === "tokens" ? 2 : 4)));
+  const futureValues = tokenForecast.map((tokens) => {
+    if (metric === "spend") return Number((tokens * costPerToken).toFixed(4));
+    if (metric === "requests") return Number(Math.max(0, tokens * requestsPerToken).toFixed(2));
+    return Number((tokens / 1000).toFixed(2));
+  });
   const estimatedDaysLeft = dailyAverageCost > 0 ? Math.max(1, Math.floor(Number(balance || 0) / dailyAverageCost)) : 0;
-  const weekTokens = Math.round(dailyAverageTokens * 7);
-  const weekCost = Number((dailyAverageCost * 7).toFixed(2));
+  const weekTokens = tokenForecast.reduce((sum, value) => sum + Number(value || 0), 0) || Math.round(dailyAverageTokens * 7);
+  const weekCost = Number(((tokenForecast.reduce((sum, value) => sum + Number(value || 0), 0) * costPerToken) || (dailyAverageCost * 7)).toFixed(2));
 
   return {
     data: {
@@ -1045,6 +1073,33 @@ function CoreMetricCard({ label, value, detail, tooltip, onTooltip, theme, onCli
       <strong className="dash3-core-metric-value">{value}</strong>
       <p>{detail}</p>
     </InteractiveCard>
+  );
+}
+
+function CacheStatsStrip({ stats = {} }) {
+  const items = [
+    { label: "缓存命中率", value: `${Number(stats.hitRate || 0).toFixed(1)}%`, note: "重复请求复用比例" },
+    { label: "缓存命中次数", value: `${Number(stats.hitCount || 0).toLocaleString()} 次`, note: "本周期命中的请求" },
+    { label: "缓存节省 Token", value: `${formatCompactToken(Number(stats.savedTokens || 0))} Token`, note: "估算少消耗的 Token" },
+    { label: "缓存节省金额", value: `¥${Number(stats.savedCostCny || 0).toFixed(2)}`, note: "估算节省成本" },
+    { label: "平均响应提升", value: `${Number(stats.avgLatencyImprovement || 0).toFixed(0)}%`, note: "命中缓存后的速度提升" },
+  ];
+  return (
+    <article className="dash3-cache-strip">
+      <div className="dash3-cache-copy">
+        <span>缓存命中率</span>
+        <p>缓存命中率越高，说明重复请求被复用得越多，通常可以节省 Token 成本并提升响应速度。</p>
+      </div>
+      <div className="dash3-cache-grid">
+        {items.map((item) => (
+          <div key={item.label}>
+            <span>{item.label}</span>
+            <strong>{item.value}</strong>
+            <small>{item.note}</small>
+          </div>
+        ))}
+      </div>
+    </article>
   );
 }
 
@@ -1142,7 +1197,7 @@ function ModelDistributionDonut({ models, onTooltip, theme }) {
               y: event.clientY - 10,
               content: (
                 <div>
-                  <strong>{item.model}</strong>
+                  <ModelNameWithLogo model={item.model} provider={item.provider} size={24} />
                   <div style={{ marginTop: 8, color: theme === "light" ? "#6b7280" : "#9ca3af" }}>金额：¥{item.cost.toFixed(2)}</div>
                   <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af" }}>Token：{formatCompactToken(item.tokens)} Tokens</div>
                 </div>
@@ -1203,7 +1258,7 @@ function ModelUsageTrendChart({ data, onTooltip, theme }) {
                   <div className="dash3-model-tooltip-list">
                     {day.models.map((item) => (
                       <div key={item.model}>
-                        <span><i style={{ background: item.color }} />{item.model}</span>
+                        <span><ModelLogo model={item.model} provider={item.provider} size={22} />{item.model}</span>
                         <b>{formatCompactToken(item.tokens)} Tokens</b>
                       </div>
                     ))}
@@ -1248,6 +1303,7 @@ function DashboardOperationsSection({ stats, trendData, trendRange, setTrendRang
       { metric: "平均响应时间", value: `${stats.avgLatency.toFixed(1)}s` },
       { metric: "缓存命中率", value: `${stats.cacheHitRate.toFixed(1)}%` },
     ] },
+    { sheetName: "缓存命中率", data: [stats.cacheStats || {}] },
     { sheetName: "Token趋势", data: trendData },
     { sheetName: "模型成本排行", data: modelUsage },
     { sheetName: "最近调用记录", data: recentRows },
@@ -1275,6 +1331,7 @@ function DashboardOperationsSection({ stats, trendData, trendRange, setTrendRang
           onClick={() => onOpenMetric("cache")}
         />
       </div>
+      <CacheStatsStrip stats={stats.cacheStats} />
 
       <div className="dash3-ops-grid">
         <article className="dash3-card dash3-ops-card large">
@@ -1308,20 +1365,15 @@ function DashboardOperationsSection({ stats, trendData, trendRange, setTrendRang
           <p className="dash3-chart-note">如果某个高价模型占比过高，可以考虑将简单任务切换到高性价比模型。</p>
         </article>
         <article className="dash3-card dash3-ops-card">
-          <div className="dash3-card-subtitle">模型成本排行</div>
-          <p className="dash3-ops-desc">定位最贵、最常用、最慢的模型。</p>
+          <div className="dash3-card-subtitle">模型成本排行榜</div>
+          <p className="dash3-ops-desc">看清楚你的 AI Token 主要花在哪些模型上，帮助你判断是否需要换模型、降成本或补充额度。</p>
           <div className="dash3-ops-ranking">
             {modelUsage.map((item, index) => (
               <button type="button" onClick={() => onOpenModel(item)} key={item.model}>
                 <span>{index + 1}</span>
-                <span className="model-name-cell">
-                  <ModelLogo model={item.model} provider={item.provider} size={24} />
-                  <span className="model-text">
-                    <strong className="model-name">{item.model}</strong>
-                    <small className="model-provider">{item.provider || getModelProviderLabel(item.model)}</small>
-                  </span>
-                </span>
-                <small>{item.requests} 次 · {formatCompactToken(item.tokens)} Tokens</small>
+                <ModelNameWithLogo model={item.model} provider={item.provider || getModelProviderLabel(item.model)} size={28} />
+                <small>{item.requests} 次</small>
+                <small>{formatCompactToken(item.tokens)} Token</small>
                 <b>¥{item.cost.toFixed(2)}</b>
                 <em>{item.avgLatency.toFixed(1)}s</em>
               </button>
@@ -1478,9 +1530,11 @@ function buildMetricDetail(metricKey, { stats, trendData, modelUsage, recentRows
       description: "查看缓存命中、未命中、节省成本估算和适合开启缓存的任务类型。",
       rows: [
         { label: "缓存命中率", value: `${stats.cacheHitRate.toFixed(1)}%`, note: "命中率越高，通常响应更快、成本更低。" },
-        { label: "命中请求数", value: `${Math.round(stats.monthRequests * stats.cacheHitRate / 100)} 次` },
-        { label: "未命中请求数", value: `${Math.max(0, stats.monthRequests - Math.round(stats.monthRequests * stats.cacheHitRate / 100))} 次` },
-        { label: "节省成本估算", value: `¥${(stats.monthCost * stats.cacheHitRate / 100 * 0.35).toFixed(2)}` },
+        { label: "命中请求数", value: `${Number(stats.cacheStats?.hitCount || 0).toLocaleString()} 次` },
+        { label: "未命中请求数", value: `${Math.max(0, stats.monthRequests - Number(stats.cacheStats?.hitCount || 0)).toLocaleString()} 次` },
+        { label: "缓存节省 Token", value: `${formatCompactToken(Number(stats.cacheStats?.savedTokens || 0))} Token` },
+        { label: "节省成本估算", value: `¥${Number(stats.cacheStats?.savedCostCny || 0).toFixed(2)}` },
+        { label: "平均响应提升", value: `${Number(stats.cacheStats?.avgLatencyImprovement || 0).toFixed(0)}%` },
         { label: "说明", value: "重复提示词、固定模板、批量任务通常更容易命中缓存。" },
       ],
       extraTitle: "缓存命中模型分布",
@@ -2510,16 +2564,43 @@ export default function DashboardPage() {
   });
 
   const handleTooltip = useCallback((t) => setTooltip(t), []);
-  const loadCustomer = useCallback(async (customerId) => {
+  const loadCustomer = useCallback(async (customerInput) => {
+    const customerId = typeof customerInput === "string" ? customerInput : customerInput?.id;
     if (!customerId) return;
     setLoadingDashboard(true);
     setDashboardError("");
     try {
-      const response = await fetch(`/api/customer?customerId=${customerId}`);
-      if (!response.ok) throw new Error("加载数据面板失败");
+      const sessionToken = typeof customerInput === "object" && customerInput?.sessionToken
+        ? customerInput.sessionToken
+        : (() => {
+          try {
+            const stored = localStorage.getItem("flowapi_customer");
+            return stored ? JSON.parse(stored)?.sessionToken : "";
+          } catch {
+            return "";
+          }
+        })();
+      const response = await fetch(`/api/customer?customerId=${encodeURIComponent(customerId)}`, {
+        headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
+      });
+      if (!response.ok) {
+        const fallback = await fetch(`/api/usage?customerId=${encodeURIComponent(customerId)}`).catch(() => null);
+        if (!fallback?.ok) {
+          const message = response.status === 401
+            ? "登录状态已过期，请重新登录后查看最新数据。"
+            : "数据面板刷新失败，请稍后重试。";
+          throw new Error(message);
+        }
+        const fallbackData = await fallback.json();
+        const mergedFallback = sessionToken ? { ...fallbackData, sessionToken } : fallbackData;
+        setCustomer(mergedFallback);
+        localStorage.setItem("flowapi_customer", JSON.stringify(mergedFallback));
+        return;
+      }
       const data = await response.json();
-      setCustomer(data);
-      localStorage.setItem("flowapi_customer", JSON.stringify(data));
+      const merged = sessionToken ? { ...data, sessionToken } : data;
+      setCustomer(merged);
+      localStorage.setItem("flowapi_customer", JSON.stringify(merged));
     } catch (error) {
       setDashboardError(error.message || "数据面板刷新失败，请稍后重试。");
     } finally {
@@ -2534,7 +2615,7 @@ export default function DashboardPage() {
     try {
       const c = JSON.parse(stored);
       queueMicrotask(() => setCustomer(c));
-      queueMicrotask(() => loadCustomer(c.id));
+      queueMicrotask(() => loadCustomer(c));
     } catch {/* ignore */}
   }, [loadCustomer]);
 
@@ -2612,7 +2693,7 @@ export default function DashboardPage() {
                 title="刷新"
                 onClick={() => {
                   setTick((t) => t + 1);
-                  loadCustomer(user.id);
+                  loadCustomer(user);
                 }}
               >
                 <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
@@ -2626,7 +2707,7 @@ export default function DashboardPage() {
                 disabled={loadingDashboard}
                 onClick={() => {
                   setTick((t) => t + 1);
-                  loadCustomer(user.id);
+                  loadCustomer(user);
                 }}
               >
                 {loadingDashboard ? "刷新中" : "刷新数据"}

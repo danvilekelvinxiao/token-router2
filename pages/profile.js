@@ -5,6 +5,105 @@ import { useCallback, useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal from "@/components/CardDetailModal";
 
+const ANNOUNCEMENTS = [
+  {
+    id: "ann-dashboard-upgrade",
+    type: "系统更新",
+    status: "已发布",
+    tone: "success",
+    pinned: true,
+    title: "FlowAPI 数据面板升级",
+    content: "数据面板已升级为 AI Token 资产分析中心，新增模型成本排行、余额预测和缓存命中率。",
+    publishedAt: "2026-05-22T09:00:00+08:00",
+  },
+  {
+    id: "ann-deepseek-online",
+    type: "模型变更",
+    status: "已发布",
+    tone: "success",
+    pinned: false,
+    title: "FlowAPI DeepSeek 官方渠道已上线",
+    content: "当前已支持 deepseek-chat 和 deepseek-reasoner。用户可在 API 管理页创建 API Key 后，通过 CC-Switch、Cherry Studio、Chatbox 等工具接入。",
+    publishedAt: "2026-05-21T16:00:00+08:00",
+  },
+  {
+    id: "ann-ccswitch-progress",
+    type: "系统更新",
+    status: "进行中",
+    tone: "progress",
+    pinned: false,
+    title: "CC-Switch 自动配置持续优化",
+    content: "正在优化 API Key 同步、/v1/responses 兼容、自动导入自定义供应商等问题。建议优先使用自定义供应商 + https://flowapi.fun/v1 手动配置。",
+    publishedAt: "2026-05-20T14:30:00+08:00",
+  },
+  {
+    id: "ann-gift-credit",
+    type: "福利活动",
+    status: "已发布",
+    tone: "default",
+    pinned: false,
+    title: "赠送额度规则说明",
+    content: "登录赠送 0.5 额度，实际产生 Token 使用时赠送 1.5 额度。赠送额度仅当日可用，并优先消耗。",
+    publishedAt: "2026-05-19T10:00:00+08:00",
+  },
+  {
+    id: "ann-monitoring",
+    type: "维护通知",
+    status: "已发布",
+    tone: "warning",
+    pinned: false,
+    title: "源站巡检与监控加强",
+    content: "FlowAPI 会持续检查正式域名、API 健康状态和上游通道。出现异常时会优先恢复访问，再同步处理原因。",
+    publishedAt: "2026-05-18T18:00:00+08:00",
+  },
+  {
+    id: "ann-key-safe",
+    type: "重要提醒",
+    status: "已发布",
+    tone: "default",
+    pinned: false,
+    title: "请妥善保管 API Key",
+    content: "API Key 只用于 FlowAPI 调用模型，不要公开发到群聊、论坛或截图中。如怀疑泄露，请尽快禁用并重新创建。",
+    publishedAt: "2026-05-18T12:00:00+08:00",
+  },
+];
+
+function formatProfileTime(value) {
+  return new Date(value).toLocaleString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+function formatRelativeUpdate(value) {
+  if (!value) return "等待更新";
+  const diff = Date.now() - new Date(value).getTime();
+  if (diff < 60_000) return "刚刚";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  return formatProfileTime(value);
+}
+
+function buildLocalRanking(customer = {}) {
+  const calls = Array.isArray(customer.calls) ? customer.calls : [];
+  const totalSpendCny = Number(customer.totalSpend || calls.reduce((sum, call) => sum + Number(call.cost || 0), 0));
+  const totalTokens = calls.reduce((sum, call) => sum + Number(call.tokens || 0), 0);
+  const spendPercentileTop = totalSpendCny >= 300 ? 8 : totalSpendCny >= 100 ? 18 : totalSpendCny > 0 ? 36 : 88;
+  const tokenPercentileTop = totalTokens >= 1000000 ? 1 : totalTokens >= 300000 ? 9 : totalTokens > 0 ? 28 : 92;
+  return {
+    totalSpendCny,
+    totalTokens,
+    spendPercentileTop,
+    tokenPercentileTop,
+    spendBeatsUsersPercent: Math.max(1, 100 - spendPercentileTop),
+    tokenBeatsUsersPercent: Math.max(1, 100 - tokenPercentileTop),
+    rankUpdatedAt: new Date().toISOString(),
+  };
+}
+
 export default function ProfilePage() {
   const router = useRouter();
   const [customer, setCustomer] = useState(null);
@@ -13,6 +112,7 @@ export default function ProfilePage() {
   const [saved, setSaved] = useState(false);
   const [qqCopied, setQqCopied] = useState(false);
   const [showAnnouncements, setShowAnnouncements] = useState(false);
+  const [assetRanking, setAssetRanking] = useState(null);
 
   const refreshProfile = useCallback(async (c) => {
     if (!c) {
@@ -44,6 +144,25 @@ export default function ProfilePage() {
     try { c = JSON.parse(stored); } catch { router.push("/login"); return; }
     queueMicrotask(() => refreshProfile(c));
   }, [refreshProfile, router]);
+
+  const refreshAssetRanking = useCallback(async (currentCustomer = customer) => {
+    if (!currentCustomer?.id) return;
+    try {
+      const res = await fetch(`/api/user/asset-ranking?customerId=${encodeURIComponent(currentCustomer.id)}`);
+      if (!res.ok) throw new Error("ranking unavailable");
+      const data = await res.json();
+      setAssetRanking(data);
+    } catch {
+      setAssetRanking(buildLocalRanking(currentCustomer));
+    }
+  }, [customer]);
+
+  useEffect(() => {
+    if (!customer?.id) return undefined;
+    queueMicrotask(() => refreshAssetRanking(customer));
+    const timer = window.setInterval(() => refreshAssetRanking(customer), 30_000);
+    return () => window.clearInterval(timer);
+  }, [customer, refreshAssetRanking]);
 
   async function handleSave(e) {
     e.preventDefault();
@@ -81,50 +200,10 @@ export default function ProfilePage() {
   const joinDate = customer.createdAt
     ? new Date(customer.createdAt).toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" })
     : "-";
-  const nowText = new Date().toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
-  const announcements = [
-    {
-      type: "模型变更",
-      status: "success",
-      title: "FlowAPI DeepSeek 官方渠道已上线",
-      content: "当前已支持 deepseek-chat 和 deepseek-reasoner。用户可在 API 管理页创建密匙后，通过 CC-Switch、Cherry Studio、Chatbox 等工具接入。",
-      time: nowText,
-    },
-    {
-      type: "系统更新",
-      status: "progress",
-      title: "CC-Switch 自动配置优化中",
-      content: "正在优化 API Key 同步、/v1/responses 兼容、自动导入自定义供应商等问题。建议优先使用自定义供应商 + https://flowapi.fun/v1 手动配置。",
-      time: nowText,
-    },
-    {
-      type: "福利活动",
-      status: "default",
-      title: "赠送额度规则说明",
-      content: "登录赠送 0.5 额度，实际产生 Token 使用时赠送 1.5 额度。赠送额度仅当日可用，并优先消耗。",
-      time: nowText,
-    },
-    {
-      type: "维护通知",
-      status: "warning",
-      title: "源站巡检与监控加强",
-      content: "FlowAPI 会持续检查正式域名、API 健康状态和上游通道。出现异常时会优先恢复访问，再同步处理原因。",
-      time: nowText,
-    },
-    {
-      type: "重要提醒",
-      status: "default",
-      title: "请妥善保管 API Key",
-      content: "API Key 只用于 FlowAPI 调用模型，不要公开发到群聊、论坛或截图中。如怀疑泄露，请尽快禁用并重新创建。",
-      time: nowText,
-    },
-  ];
-  const totalSpend = Number(customer.totalSpend || calls.reduce((sum, call) => sum + Number(call.cost || 0), 0));
-  const totalTokens = calls.reduce((sum, call) => sum + Number(call.tokens || 0), 0);
-  const spendTopPercent = totalSpend >= 300 ? 8 : totalSpend >= 100 ? 18 : totalSpend > 0 ? 36 : 88;
-  const tokenTopPercent = totalTokens >= 1000000 ? 1 : totalTokens >= 300000 ? 9 : totalTokens > 0 ? 28 : 92;
-  const spendBeatPercent = Math.max(1, 100 - spendTopPercent);
-  const tokenBeatPercent = Math.max(1, 100 - tokenTopPercent);
+  const announcements = ANNOUNCEMENTS
+    .filter((item) => item.status === "已发布" || item.status === "进行中")
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.publishedAt) - new Date(a.publishedAt));
+  const ranking = assetRanking || buildLocalRanking(customer);
 
   async function copyQqGroup() {
     await navigator.clipboard.writeText("217637139");
@@ -233,17 +312,18 @@ export default function ProfilePage() {
               <div className="profile-rank-grid">
                 <div>
                   <span>累计消费</span>
-                  <strong>¥{totalSpend.toFixed(2)}</strong>
-                  <p>消费排名：<b>前 {spendTopPercent}%</b></p>
-                  <small>你的累计消费超过了平台 {spendBeatPercent}% 的用户。</small>
+                  <strong>¥{Number(ranking.totalSpendCny || 0).toFixed(2)}</strong>
+                  <p>消费排名：<b>前 {Number(ranking.spendPercentileTop || 0)}%</b></p>
+                  <small>你的累计消费超过了平台 {Number(ranking.spendBeatsUsersPercent || 0)}% 的用户。</small>
                 </div>
                 <div>
                   <span>累计消耗 Token</span>
-                  <strong>{totalTokens >= 1000000 ? `${(totalTokens / 1000000).toFixed(2)}M` : totalTokens.toLocaleString()} Token</strong>
-                  <p>Token 消耗排名：<b>前 {tokenTopPercent}%</b></p>
-                  <small>你的 Token 使用量超过了平台 {tokenBeatPercent}% 的用户。</small>
+                  <strong>{Number(ranking.totalTokens || 0) >= 1000000 ? `${(Number(ranking.totalTokens || 0) / 1000000).toFixed(2)}M` : Number(ranking.totalTokens || 0).toLocaleString()} Token</strong>
+                  <p>Token 消耗排名：<b>前 {Number(ranking.tokenPercentileTop || 0)}%</b></p>
+                  <small>你的 Token 使用量超过了平台 {Number(ranking.tokenBeatsUsersPercent || 0)}% 的用户。</small>
                 </div>
               </div>
+              <p className="profile-rank-updated">排名更新时间：{formatRelativeUpdate(ranking.rankUpdatedAt)}</p>
             </section>
 
           </div>
@@ -370,15 +450,15 @@ export default function ProfilePage() {
             </div>
             <div className="profile-timeline">
               {announcements.slice(0, 3).map((item) => (
-                <article key={item.title} className={`profile-timeline-item ${item.status}`}>
+                <article key={item.id} className={`profile-timeline-item ${item.tone}`}>
                   <div className="profile-timeline-dot" />
                   <div>
                     <div className="profile-timeline-top">
-                      <strong>{item.title}</strong>
+                      <strong>{item.pinned ? <b className="profile-pinned-badge">置顶</b> : null}{item.title}</strong>
                       <span>{item.type}</span>
                     </div>
                     <p>{item.content}</p>
-                    <time>{item.time}</time>
+                    <time>{formatProfileTime(item.publishedAt)}</time>
                   </div>
                 </article>
               ))}
@@ -422,11 +502,11 @@ export default function ProfilePage() {
               content: (
                 <div className="profile-announcement-history">
                   {announcements.map((item) => (
-                    <article key={`${item.type}-${item.title}`} className={`profile-history-item ${item.status}`}>
+                    <article key={`${item.type}-${item.title}`} className={`profile-history-item ${item.tone}`}>
                       <div>
-                        <span>{item.type}</span>
+                        <span>{item.pinned ? "置顶" : item.type}</span>
                         <strong>{item.title}</strong>
-                        <time>{item.time}</time>
+                        <time>{formatProfileTime(item.publishedAt)}</time>
                       </div>
                       <p>{item.content}</p>
                     </article>

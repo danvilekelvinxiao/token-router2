@@ -18,14 +18,40 @@ const freeModels = [
   { id: "meta-llama/llama-3.1-8b-instruct", name: "Llama 3.1 8B", provider: "Meta", context: "128K", speed: "稳定测试", allowance: "限量免费测试", limit: "主要用于接入流程验证", bestFor: "英文问答、基础测试、低成本验证", tags: ["免费体验", "低价"] },
 ];
 
-const models = [
-  { id: "deepseek-chat", name: "DeepSeek Chat", provider: "DeepSeek", input: "¥1.0080 / 1M Tokens", output: "¥2.0160 / 1M Tokens", context: "64K", tags: ["中文", "低价", "写作", "高性价比", "免费体验"], bestFor: "中文内容、客服、批量文案" },
-  { id: "deepseek-reasoner", name: "DeepSeek Reasoner", provider: "DeepSeek", input: "¥3.9600 / 1M Tokens", output: "¥15.7680 / 1M Tokens", context: "64K", tags: ["推理", "代码", "Coding 推荐", "中文"], bestFor: "复杂推理、数学、编程和代码任务" },
-  { id: "qwen/qwen3-32b", name: "Qwen3 32B", provider: "Alibaba", input: "¥2.1600 / 1M Tokens", output: "¥6.4800 / 1M Tokens", context: "128K", tags: ["中文", "写作", "代码", "高性价比"], bestFor: "外贸邮件、中文办公、商务沟通" },
-  { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", input: "¥1.0800 / 1M Tokens", output: "¥4.3200 / 1M Tokens", context: "128K", tags: ["推理", "代码", "低价", "Coding 推荐"], bestFor: "分析总结、结构化任务、代码辅助" },
-  { id: "anthropic/claude-3.5-haiku", name: "Claude Haiku", provider: "Anthropic", input: "¥5.7600 / 1M Tokens", output: "¥28.8000 / 1M Tokens", context: "200K", tags: ["长文本", "写作", "推理", "Coding 推荐"], bestFor: "英文写作、长文阅读、轻量推理" },
-  { id: "google/gemini-2.0-flash-001", name: "Gemini Flash", provider: "Google", input: "¥0.7200 / 1M Tokens", output: "¥2.8800 / 1M Tokens", context: "1M", tags: ["长文本", "低价", "推理", "长上下文", "高速响应"], bestFor: "长上下文、资料整理、快速问答" },
-  { id: "moonshot/kimi-k2", name: "Kimi K2", provider: "Moonshot", input: "¥3.6000 / 1M Tokens", output: "¥14.4000 / 1M Tokens", context: "128K", tags: ["中文", "长文本", "写作", "长上下文"], bestFor: "中文资料整理、长文分析、办公场景" },
+const modelSections = [
+  {
+    id: "codex",
+    title: "Codex / Coding 模型",
+    description: "适合 Claude Code、Codex、Cursor、自动化脚本和代码任务，优先推荐稳定、推理和代码能力更强的模型。",
+    badge: "编程优先",
+    models: [
+      { id: "deepseek-reasoner", name: "DeepSeek Reasoner", provider: "DeepSeek", input: "¥3.9600 / 1M Tokens", output: "¥15.7680 / 1M Tokens", context: "64K", tags: ["推理", "代码", "Coding 推荐", "中文"], bestFor: "复杂推理、数学、编程和代码任务", rank: 1 },
+      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", input: "¥1.0800 / 1M Tokens", output: "¥4.3200 / 1M Tokens", context: "128K", tags: ["推理", "代码", "低价", "Coding 推荐"], bestFor: "分析总结、结构化任务、代码辅助", rank: 2 },
+      { id: "anthropic/claude-3.5-haiku", name: "Claude Haiku", provider: "Anthropic", input: "¥5.7600 / 1M Tokens", output: "¥28.8000 / 1M Tokens", context: "200K", tags: ["长文本", "写作", "推理", "Coding 推荐"], bestFor: "英文代码解释、长文阅读、轻量推理", rank: 3 },
+    ],
+  },
+  {
+    id: "chatgpt",
+    title: "ChatGPT 模型",
+    description: "适合习惯 ChatGPT 体验的用户，用于通用问答、总结、结构化输出和办公场景。",
+    badge: "OpenAI 系列",
+    models: [
+      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", input: "¥1.0800 / 1M Tokens", output: "¥4.3200 / 1M Tokens", context: "128K", tags: ["推理", "代码", "低价", "Coding 推荐"], bestFor: "高性价比 ChatGPT 类体验、总结和结构化任务", rank: 1 },
+      { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI", input: "¥18.0000 / 1M Tokens", output: "¥72.0000 / 1M Tokens", context: "128K", tags: ["推理", "写作", "图片/多模态"], bestFor: "更强通用问答、多模态和复杂内容生成", rank: 2 },
+    ],
+  },
+  {
+    id: "ranked",
+    title: "其他热门模型排行",
+    description: "按综合使用场景、中文体验、长文本能力和成本表现排序，方便快速选择替代模型。",
+    badge: "按推荐排名",
+    models: [
+      { id: "deepseek-chat", name: "DeepSeek Chat", provider: "DeepSeek", input: "¥1.0080 / 1M Tokens", output: "¥2.0160 / 1M Tokens", context: "64K", tags: ["中文", "低价", "写作", "高性价比", "免费体验"], bestFor: "中文内容、客服、批量文案", rank: 1 },
+      { id: "qwen/qwen3-32b", name: "Qwen3 32B", provider: "Alibaba", input: "¥2.1600 / 1M Tokens", output: "¥6.4800 / 1M Tokens", context: "128K", tags: ["中文", "写作", "代码", "高性价比"], bestFor: "外贸邮件、中文办公、商务沟通", rank: 2 },
+      { id: "google/gemini-2.0-flash-001", name: "Gemini Flash", provider: "Google", input: "¥0.7200 / 1M Tokens", output: "¥2.8800 / 1M Tokens", context: "1M", tags: ["长文本", "低价", "推理", "长上下文", "高速响应"], bestFor: "长上下文、资料整理、快速问答", rank: 3 },
+      { id: "moonshot/kimi-k2", name: "Kimi K2", provider: "Moonshot", input: "¥3.6000 / 1M Tokens", output: "¥14.4000 / 1M Tokens", context: "128K", tags: ["中文", "长文本", "写作", "长上下文"], bestFor: "中文资料整理、长文分析、办公场景", rank: 4 },
+    ],
+  },
 ];
 
 export default function ModelsPage() {
@@ -129,13 +155,21 @@ export default function ModelsPage() {
     copyText("CC-Switch 配置", text);
   }
 
-  const allModels = models;
-  const filteredModels = allModels.filter((m) => {
+  function matchesFilter(m) {
     if (provider !== "全部供应商" && m.provider !== provider) return false;
     if (tag !== "全部标签" && !(m.tags || []).includes(tag)) return false;
-    if (search && !m.name.includes(search) && !m.id.includes(search)) return false;
+    const query = search.trim().toLowerCase();
+    if (query && !m.name.toLowerCase().includes(query) && !m.id.toLowerCase().includes(query)) return false;
     return true;
-  });
+  }
+  const filteredFreeModels = freeModels.filter(matchesFilter);
+  const filteredSections = modelSections
+    .map((section) => ({
+      ...section,
+      models: section.models.filter(matchesFilter).sort((a, b) => (a.rank || 99) - (b.rank || 99)),
+    }))
+    .filter((section) => section.models.length > 0);
+  const filteredModelCount = filteredSections.reduce((sum, section) => sum + section.models.length, 0);
 
   const safeCustomer = customer || { name: "用户", email: "", balance: 0 };
   return (
@@ -170,7 +204,7 @@ export default function ModelsPage() {
             <span>免费试用 · 新手推荐 · 低成本验证</span>
           </div>
           <div className="free-model-grid">
-            {freeModels.map((model) => (
+            {filteredFreeModels.map((model) => (
               <FreeModelCard key={model.id} model={model} onAccess={openAccess} onConfigure={openCcSwitchConfig} />
             ))}
           </div>
@@ -180,24 +214,23 @@ export default function ModelsPage() {
           <input type="text" placeholder="搜索模型或 Model ID..." value={search} onChange={(e) => setSearch(e.target.value)} style={{ flex: 1, padding: "12px 14px", borderRadius: 12, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 14, outline: "none", fontFamily: "inherit" }} />
         </div>
 
-        <section>
-          <div className="section-heading-row">
-            <div>
-              <h2>推荐模型</h2>
-              <p>按场景选择更合适的模型，先复制 Model ID，再到客户端或代码里填写。</p>
-            </div>
-            <strong>{filteredModels.length} 个模型</strong>
+        {filteredSections.length > 0 ? (
+          <div className="model-section-stack">
+            {filteredSections.map((section) => (
+              <ModelSection
+                key={section.id}
+                section={section}
+                totalCount={filteredModelCount}
+                onAccess={openAccess}
+                onConfigure={openCcSwitchConfig}
+              />
+            ))}
           </div>
-          {filteredModels.length > 0 ? (
-            <div className="model-card-grid">
-              {filteredModels.map((model) => (
-                <ModelCard key={model.id} model={model} onAccess={openAccess} onConfigure={openCcSwitchConfig} />
-              ))}
-            </div>
-          ) : (
+        ) : (
+          <section>
             <div className="empty-state-card">没有找到匹配模型，试试清空筛选或搜索 DeepSeek / GPT / Claude。</div>
-          )}
-        </section>
+          </section>
+        )}
       </div>
     </div>
     </ConsoleLayout>
@@ -213,6 +246,31 @@ export default function ModelsPage() {
     />
     {toast ? <div style={{ position: "fixed", bottom: 32, left: "50%", transform: "translateX(-50%)", background: "#111", color: "#fff", padding: "10px 24px", borderRadius: 999, fontSize: 13, fontWeight: 700, zIndex: 9999, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}>{toast}</div> : null}
     </>
+  );
+}
+
+function ModelSection({ section, totalCount, onAccess, onConfigure }) {
+  return (
+    <section className={`model-ranked-section model-ranked-section-${section.id}`}>
+      <div className="section-heading-row">
+        <div>
+          <h2>{section.title}</h2>
+          <p>{section.description}</p>
+        </div>
+        <strong>{section.badge} · {section.models.length}/{totalCount}</strong>
+      </div>
+      <div className="model-card-grid">
+        {section.models.map((model) => (
+          <ModelCard
+            key={`${section.id}-${model.id}`}
+            model={model}
+            rank={model.rank}
+            onAccess={onAccess}
+            onConfigure={onConfigure}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -235,7 +293,7 @@ function PillGroup({ title, values, active, setActive, tone = "blue" }) {
   );
 }
 
-function ModelCard({ model, onAccess, onConfigure }) {
+function ModelCard({ model, rank, onAccess, onConfigure }) {
   const [copied, setCopied] = useState(false);
   async function copyModel() {
     await navigator.clipboard.writeText(model.id);
@@ -250,6 +308,7 @@ function ModelCard({ model, onAccess, onConfigure }) {
       }
     }}>
       <button type="button" className="interactive-card-icon" onClick={(event) => { event.stopPropagation(); onAccess(model); }}>↗</button>
+      {rank ? <span className="model-rank-badge">TOP {rank}</span> : null}
       <div className="model-card-top">
         <div className="model-mark" aria-hidden="true">
           <ModelLogo model={model.id} provider={model.provider} size={28} />

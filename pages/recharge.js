@@ -4,7 +4,6 @@ import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
-import ExportExcelButton from "@/components/ExportExcelButton";
 
 const amounts = [
   { value: 20, label: "¥20", desc: "体验测试" },
@@ -310,27 +309,6 @@ export default function RechargePage() {
     };
   }, [purchaseType, selectedPackage, selectedRechargeAmount]);
   const badges = ["人民币充值", "套餐可选", "异常订单人工兜底"];
-  const packageExportSheets = useMemo(() => [
-    { sheetName: "周卡套餐", data: weeklyPackages.map((pkg) => ({
-      name: pkg.name,
-      modelId: pkg.code,
-      price: pkg.price,
-      quotaText: `${pkg.quotaText} Token`,
-      validDays: pkg.validDays,
-      unitPrice: pkg.unitPrice,
-      scenario: pkg.scene,
-      note: "可叠加购买，优先消耗最早到期权益",
-    })) },
-    { sheetName: "月卡套餐", data: monthlyPackages.map((pkg) => ({
-      name: pkg.name,
-      price: pkg.price,
-      quotaText: `${pkg.quotaText} Token`,
-      validDays: pkg.validDays,
-      unitPrice: pkg.unitPrice,
-      scenario: pkg.plusEquivalent,
-      note: "每日额度重置，已购权益以我的订阅为准",
-    })) },
-  ], []);
 
   function selectRechargeAmount(amount) {
     setPurchaseType("balance_recharge");
@@ -515,7 +493,6 @@ export default function RechargePage() {
                     <h2>充值金额</h2>
                     <p>默认选择 ¥100，也可以输入自定义金额。点击套餐后会自动切换订单摘要。</p>
                   </div>
-                  <ExportExcelButton fileName="FlowAPI_套餐清单" sheets={packageExportSheets} />
                 </div>
                 <div className="recharge-amount-grid">
                   {amounts.map((item) => (
@@ -774,13 +751,6 @@ function buildPackageDetail(pkg, type) {
     title: `${pkg.name} 套餐详情`,
     description: isMonthly ? "查看月卡额度、重置规则、适合人群和购买后权益说明。" : "查看周畅用包额度、有效期、消耗规则和适合人群。",
     badge: isMonthly ? "月卡套餐" : "周畅用包",
-    exportFileName: `${isMonthly ? "套餐统计" : "套餐统计"}_${pkg.code || pkg.id}`,
-    exportSheets: [
-      { sheetName: "套餐基础信息", data: rows.map((item) => ({ metric: item.label, value: item.value })) },
-      { sheetName: "套餐权益", data: (pkg.benefits || []).map((benefit) => ({ description: benefit })) },
-      { sheetName: "适合场景", data: scenes },
-      { sheetName: "购买规则", data: [{ note: isMonthly ? "每日额度重置，已购权益以我的订阅为准。" : "可叠加购买，优先消耗最早到期权益。" }] },
-    ],
     sections: [
       { title: "套餐基础信息", content: <DetailRows rows={rows} /> },
       { title: "套餐权益", content: <DetailTable columns={[{ key: "description", label: "权益说明" }]} rows={(pkg.benefits || []).map((benefit) => ({ description: benefit }))} /> },
