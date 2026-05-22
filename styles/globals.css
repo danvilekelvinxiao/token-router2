@@ -8414,6 +8414,9 @@ pre {
   display: grid;
   align-content: start;
   gap: 12px;
+  overflow-x: auto;
+  overflow-y: visible;
+  min-width: 0;
 }
 
 .model-logo {
@@ -8482,7 +8485,7 @@ pre {
 
 .dash3-flow-row {
   display: grid;
-  grid-template-columns: 30px minmax(190px, 1fr) 76px 112px 66px 48px 54px;
+  grid-template-columns: 30px minmax(0, 1fr) 76px 112px 66px 48px 54px;
   align-items: center;
   gap: 12px;
   min-height: 76px;
@@ -8491,12 +8494,12 @@ pre {
   color: var(--dash-text);
   text-decoration: none;
   border: 1px solid transparent;
-  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+  transition: background 0.16s ease, border-color 0.16s ease;
+  overflow: hidden;
 }
 .dash3-flow-row:hover {
   background: var(--dash-card-hover);
   border-color: rgba(99,102,241,0.35);
-  transform: translateY(-1px);
 }
 .dash3-flow-rank {
   width: 30px;

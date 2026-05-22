@@ -467,9 +467,9 @@ function HeatmapGrid({ weeks, size = 12, gap = 3, onTooltip, theme }) {
                 content: (
                   <div>
                     <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13, color: theme === "light" ? "#111827" : "#e5e5e7" }}>{day.date}</div>
-                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 11 }}>Requests: <b>{day.requests}</b></div>
+                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 11 }}>请求: <b>{day.requests}</b></div>
                     <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 11 }}>Token: <b>{day.tokens.toLocaleString()}</b></div>
-                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 11 }}>消耗: <b>¥{day.spend}</b></div>
+                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 11 }}>花费: <b>¥{day.spend}</b></div>
                   </div>
                 ),
               });
@@ -2567,28 +2567,35 @@ export default function DashboardPage() {
   const loadCustomer = useCallback(async (customerInput) => {
     const customerId = typeof customerInput === "string" ? customerInput : customerInput?.id;
     if (!customerId) return;
+    const cachedCustomer = typeof customerInput === "object" ? customerInput : (() => {
+      try {
+        const stored = localStorage.getItem("flowapi_customer");
+        const parsed = stored ? JSON.parse(stored) : null;
+        return parsed?.id === customerId ? parsed : null;
+      } catch {
+        return null;
+      }
+    })();
     setLoadingDashboard(true);
     setDashboardError("");
     try {
-      const sessionToken = typeof customerInput === "object" && customerInput?.sessionToken
-        ? customerInput.sessionToken
-        : (() => {
-          try {
-            const stored = localStorage.getItem("flowapi_customer");
-            return stored ? JSON.parse(stored)?.sessionToken : "";
-          } catch {
-            return "";
-          }
-        })();
-      const response = await fetch(`/api/customer?customerId=${encodeURIComponent(customerId)}`, {
-        headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
-      });
-      if (!response.ok) {
+      const sessionToken = cachedCustomer?.sessionToken || "";
+      const response = sessionToken
+        ? await fetch(`/api/customer?customerId=${encodeURIComponent(customerId)}`, {
+          headers: { Authorization: `Bearer ${sessionToken}` },
+        })
+        : null;
+
+      if (!response?.ok) {
         const fallback = await fetch(`/api/usage?customerId=${encodeURIComponent(customerId)}`).catch(() => null);
         if (!fallback?.ok) {
-          const message = response.status === 401
+          if (cachedCustomer) {
+            setCustomer(cachedCustomer);
+            return;
+          }
+          const message = response?.status === 401
             ? "登录状态已过期，请重新登录后查看最新数据。"
-            : "数据面板刷新失败，请稍后重试。";
+            : "数据面板暂时无法连接，请稍后刷新。";
           throw new Error(message);
         }
         const fallbackData = await fallback.json();
@@ -2893,7 +2900,7 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
-              <div className="dash3-card">
+              <div className="dash3-card" style={{ overflow: "hidden" }}>
                 <div className="dash3-card-subtitle">活跃热力图</div>
                 <div className="dash3-heatmap-wrap">
                   <div className="dash3-heatmap-days">
@@ -2901,7 +2908,16 @@ export default function DashboardPage() {
                       <span key={d} className="dash3-heatmap-day-label">{d}</span>
                     ))}
                   </div>
-                  <HeatmapGrid weeks={heatmapWeeks} size={14} gap={3} onTooltip={handleTooltip} theme={theme} />
+                  <HeatmapGrid weeks={heatmapWeeks} size={16} gap={4} onTooltip={handleTooltip} theme={theme} />
+                </div>
+                <div className="dash3-heatmap-legend" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 11, color: "var(--dash-sub)" }}>
+                  <span>少</span>
+                  <span style={{ width: 14, height: 14, borderRadius: 3, background: theme === "light" ? "#e5e7eb" : "#1e293b", opacity: 0.6 }} />
+                  <span style={{ width: 14, height: 14, borderRadius: 3, background: theme === "light" ? "#dbeafe" : "#1e3a5f" }} />
+                  <span style={{ width: 14, height: 14, borderRadius: 3, background: theme === "light" ? "#d1fae5" : "#1e4a3f" }} />
+                  <span style={{ width: 14, height: 14, borderRadius: 3, background: theme === "light" ? "#86efac" : "#25632d" }} />
+                  <span style={{ width: 14, height: 14, borderRadius: 3, background: theme === "light" ? "#22c55e" : "#388a34" }} />
+                  <span>多</span>
                 </div>
               </div>
             </div>
