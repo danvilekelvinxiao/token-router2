@@ -1309,7 +1309,11 @@ function ModelUsageTrendChart({ data, onTooltip, theme }) {
       </div>
       <div className="dash3-mini-legend dash3-model-usage-legend">
         {(data[0]?.models || []).slice(0, 4).map((item) => (
-          <span key={item.model}><i style={{ background: item.color }} />{item.model.length > 22 ? item.model.slice(0, 20) + "…" : item.model}</span>
+          <span key={item.model}>
+            <i style={{ background: item.color }} />
+            <ModelLogo model={item.model} provider={item.provider} size={16} />
+            {item.model.length > 22 ? item.model.slice(0, 20) + "…" : item.model}
+          </span>
         ))}
       </div>
     </div>
