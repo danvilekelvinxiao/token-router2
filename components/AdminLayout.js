@@ -14,7 +14,7 @@ const adminMenuItems = [
   { key: "announcements", label: "系统公告管理", href: "/admin/announcements", icon: IconAnnouncements },
   { key: "settings", label: "系统设置", href: "/admin/settings", icon: IconSettings },
   { key: "recharges", label: "充值审核", href: "/admin/recharges", icon: IconRecharges },
-  { key: "newapi", label: "New API 中转内核", href: "/admin/new-api", icon: IconNewApi },
+  { key: "newapi", label: "New API 管理", href: "/admin/new-api", icon: IconNewApi },
 ];
 
 function IconOverview() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>; }
