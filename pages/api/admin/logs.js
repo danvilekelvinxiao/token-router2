@@ -1,13 +1,8 @@
 import { listCallRecords } from "@/lib/customer-store";
-
-function checkAdmin(req) {
-  const expected = process.env.ADMIN_SECRET || "";
-  const provided = req.headers["x-admin-secret"] || req.query?.secret || req.body?.secret;
-  return expected && provided === expected;
-}
+import { requireAdmin } from "@/lib/admin-auth";
 
 export default async function handler(req, res) {
-  if (!checkAdmin(req)) return res.status(403).json({ error: "Forbidden" });
+  if (!(await requireAdmin(req, res))) return;
 
   if (req.method === "GET") {
     const filters = {

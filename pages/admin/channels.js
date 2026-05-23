@@ -13,7 +13,7 @@ function StatusBadge({ status }) {
 }
 
 export default function AdminChannels() {
-  const [secret, setSecret] = useState("");
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -24,9 +24,7 @@ export default function AdminChannels() {
 
   useEffect(() => {
     const s = localStorage.getItem("flowapi_admin_secret") || "";
-    setSecret(s);
-    if (s) fetchChannels(s);
-    else setLoading(false);
+    fetchChannels(s);
   }, []);
 
   async function fetchChannels(sec) {
@@ -135,7 +133,7 @@ export default function AdminChannels() {
                       </tr>
                     ))}
                     {channels.length === 0 && (
-                      <tr><td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--dash-sub)" }}>暂无渠道，点击"+ 新增渠道"添加</td></tr>
+                      <tr><td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--dash-sub)" }}>暂无渠道，点击“+ 新增渠道”添加</td></tr>
                     )}
                   </tbody>
                 </table>

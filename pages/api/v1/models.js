@@ -1,4 +1,5 @@
 import { MODEL_CATALOG } from "@/lib/models";
+import { findCustomerByToken } from "@/lib/customer-store";
 
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -7,7 +8,14 @@ function setCors(res) {
   res.setHeader("Access-Control-Max-Age", "86400");
 }
 
-export default function handler(req, res) {
+function getClientToken(req) {
+  const auth = req.headers.authorization || "";
+  let token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : String(req.headers["x-api-key"] || "").trim();
+  while (token.toLowerCase().startsWith("bearer ")) token = token.slice(7).trim();
+  return token.replace(/^["']|["']$/g, "");
+}
+
+export default async function handler(req, res) {
   setCors(res);
 
   if (req.method === "OPTIONS") {
@@ -22,6 +30,16 @@ export default function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET, HEAD, OPTIONS");
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const clientToken = getClientToken(req);
+  if (!clientToken || !(await findCustomerByToken(clientToken))) {
+    return res.status(401).json({
+      error: {
+        message: "Invalid FlowAPI API Key",
+        type: "invalid_api_key",
+      },
+    });
   }
 
   const created = Math.floor(Date.now() / 1000);

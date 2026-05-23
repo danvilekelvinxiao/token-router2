@@ -15,7 +15,7 @@ const STRATEGY_INFO = {
 };
 
 export default function AdminRouting() {
-  const [secret, setSecret] = useState("");
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -33,9 +33,7 @@ export default function AdminRouting() {
 
   useEffect(() => {
     const s = localStorage.getItem("flowapi_admin_secret") || "";
-    setSecret(s);
-    if (s) fetchData(s);
-    else setLoading(false);
+    fetchData(s);
   }, []);
 
   async function fetchData(sec) {
@@ -200,12 +198,12 @@ export default function AdminRouting() {
                         </tr>
                       ))}
                       {rules.length === 0 && (
-                        <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "var(--dash-sub)" }}>暂无规则，点击"+ 新增规则"创建第一条路由规则</td></tr>
+                        <tr><td colSpan={7} style={{ padding: 40, textAlign: "center", color: "var(--dash-sub)" }}>暂无规则，点击“+ 新增规则”创建第一条路由规则</td></tr>
                       )}
                     </tbody>
                   </table>
                 </div>
-                <div style={{ padding: "12px 16px", borderTop: "1px solid var(--dash-border)", fontSize: 12, color: "var(--dash-sub)" }}>共 {rules.length} 条规则 · 默认使用"智能自动选择"策略</div>
+                <div style={{ padding: "12px 16px", borderTop: "1px solid var(--dash-border)", fontSize: 12, color: "var(--dash-sub)" }}>共 {rules.length} 条规则 · 默认使用“智能自动选择”策略</div>
               </div>
 
               {/* Smart Routing Flow */}

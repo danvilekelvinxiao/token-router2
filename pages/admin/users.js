@@ -10,7 +10,7 @@ function StatusBadge({ status }) {
 }
 
 export default function AdminUsers() {
-  const [secret, setSecret] = useState("");
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -21,9 +21,7 @@ export default function AdminUsers() {
 
   useEffect(() => {
     const s = localStorage.getItem("flowapi_admin_secret") || "";
-    setSecret(s);
-    if (s) fetchUsers(s);
-    else setLoading(false);
+    fetchUsers(s);
   }, []);
 
   async function fetchUsers(sec) {

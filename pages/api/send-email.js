@@ -1,10 +1,5 @@
 import { sendEmail } from "@/lib/resend";
-
-function checkAdmin(req) {
-  const expected = process.env.ADMIN_SECRET || "";
-  const provided = req.headers["x-admin-secret"] || req.query?.secret || req.body?.secret;
-  return expected && provided === expected;
-}
+import { requireAdmin } from "@/lib/admin-auth";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -12,9 +7,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  if (!checkAdmin(req)) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+  if (!(await requireAdmin(req, res))) return;
 
   const { to, subject, html } = req.body || {};
 

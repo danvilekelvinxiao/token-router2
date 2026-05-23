@@ -10,7 +10,7 @@ function LevelBadge({ level }) {
 }
 
 export default function AdminSecurity() {
-  const [secret, setSecret] = useState("");
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
   const [blacklist, setBlacklist] = useState([]);
   const [riskRules, setRiskRules] = useState([]);
   const [riskEvents, setRiskEvents] = useState([]);
@@ -25,9 +25,7 @@ export default function AdminSecurity() {
 
   useEffect(() => {
     const s = localStorage.getItem("flowapi_admin_secret") || "";
-    setSecret(s);
-    if (s) fetchData(s);
-    else setLoading(false);
+    fetchData(s);
   }, []);
 
   async function fetchData(sec) {

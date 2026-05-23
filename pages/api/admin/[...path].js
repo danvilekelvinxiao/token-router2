@@ -1,9 +1,11 @@
 /* Proxy to new-api admin panel. Only accessible to admin users. */
+import { requireAdmin } from "@/lib/admin-auth";
 
 const NEW_API_BASE = process.env.NEW_API_BASE_URL || "http://localhost:3001";
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || "xiaoyijie@flowapi.fun").split(",").map((e) => e.trim());
 
 export default async function handler(req, res) {
+  if (!(await requireAdmin(req, res))) return;
+
   const { path } = req.query;
   const targetPath = Array.isArray(path) ? path.join("/") : path || "";
 

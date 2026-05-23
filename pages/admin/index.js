@@ -10,7 +10,7 @@ function StatusDot({ status }) {
 }
 
 export default function AdminOverview() {
-  const [secret, setSecret] = useState("");
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
   const [stats, setStats] = useState([
     { label: "今日调用", value: "-" },
     { label: "今日 Token", value: "-" },
@@ -22,9 +22,7 @@ export default function AdminOverview() {
 
   useEffect(() => {
     const s = localStorage.getItem("flowapi_admin_secret") || "";
-    setSecret(s);
-    if (s) fetchOverview(s);
-    else setLoading(false);
+    fetchOverview(s);
   }, []);
 
   async function fetchOverview(sec) {

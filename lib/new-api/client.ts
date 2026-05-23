@@ -183,6 +183,16 @@ export async function disableNewApiToken(
   return { success: ok };
 }
 
+export async function enableNewApiToken(
+  tokenId: string,
+): Promise<{ success: boolean }> {
+  const { ok } = await apiFetch("/api/token/", {
+    method: "PUT",
+    body: JSON.stringify({ id: Number(tokenId), status: 1 }),
+  });
+  return { success: ok };
+}
+
 export async function deleteNewApiToken(
   tokenId: string,
 ): Promise<{ success: boolean }> {

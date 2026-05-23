@@ -207,7 +207,7 @@ function StackedDailyBars({ daily, models, dailyDates, height = 140, barWidth = 
 }
 
 function DualLineChart({ data, unit = "K", height = 220, width = 700, onTooltip, theme }) {
-  const { pastDates, pastValues, futureDates, futureValues } = data;
+  const { pastDates, pastValues, futureDates, futureValues, pastCosts = [], futureCosts = [], primaryModel = "DeepSeek Chat" } = data;
   const allDates = useMemo(() => [...pastDates, ...futureDates], [pastDates, futureDates]);
   const allValues = useMemo(() => [...pastValues, ...futureValues], [pastValues, futureValues]);
   const maxV = Math.max(...allValues, 1);
@@ -233,61 +233,75 @@ function DualLineChart({ data, unit = "K", height = 220, width = 700, onTooltip,
 
   const [activeIndex, setActiveIndex] = useState(null);
   const svgRef = useRef(null);
-  const pointsX = useMemo(() => allValues.map((_, i) => margin.left + i * stepX), [allValues, margin.left, stepX]);
+  const formatChartValue = useCallback((value) => {
+    if (value === null || value === undefined || Number.isNaN(Number(value))) return "暂无实际数据";
+    if (unit === "¥") return `¥${Number(value).toFixed(2)}`;
+    if (unit === "K") return `${Number(value).toFixed(2)}K Token`;
+    return `${Number(value).toLocaleString()} 次`;
+  }, [unit]);
+
+  const getCostText = useCallback((idx, fallbackValue) => {
+    const rawCost = idx < pastValues.length ? pastCosts[idx] : futureCosts[idx - pastValues.length];
+    if (rawCost !== undefined && rawCost !== null && !Number.isNaN(Number(rawCost))) {
+      return `¥${Number(rawCost).toFixed(2)}`;
+    }
+    if (unit === "¥") return `¥${Number(fallbackValue || 0).toFixed(2)}`;
+    if (unit === "K") return `¥${(Number(fallbackValue || 0) * 0.002).toFixed(2)}`;
+    return "¥0.00";
+  }, [futureCosts, pastCosts, pastValues.length, unit]);
 
   const showTooltipForIndex = useCallback((e, idx) => {
     if (idx < 0 || idx >= totalPoints) return;
     const date = allDates[idx];
     const isPast = idx < pastValues.length;
     const actualVal = isPast ? pastValues[idx] : null;
-    const predictedVal = futureValues[idx - pastValues.length] ?? futureValues[idx] ?? null;
+    const predictedVal = !isPast ? futureValues[idx - pastValues.length] ?? null : null;
+    const focusValue = predictedVal ?? actualVal ?? 0;
+    const tooltipWidth = 280;
+    const tooltipHeight = 168;
+    let tooltipX = e.clientX + 16;
+    let tooltipY = e.clientY - 78;
+    if (typeof window !== "undefined") {
+      if (tooltipX + tooltipWidth > window.innerWidth - 12) tooltipX = e.clientX - tooltipWidth - 16;
+      if (tooltipY < 12) tooltipY = e.clientY + 18;
+      if (tooltipY + tooltipHeight > window.innerHeight - 12) tooltipY = window.innerHeight - tooltipHeight - 12;
+    }
     onTooltip({
-      x: e.clientX + 16,
-      y: e.clientY - 70,
+      x: tooltipX,
+      y: tooltipY,
       content: (
-        <div>
+        <div style={{ minWidth: 230 }}>
           <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13, color: theme === "light" ? "#111827" : "#e5e5e7" }}>{date}</div>
-          {actualVal !== null && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+          <div style={{ display: "grid", gap: 7, color: theme === "light" ? "#6b7280" : "#9ca3af" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", flex: "none" }} />
-              <span style={{ color: theme === "light" ? "#6b7280" : "#9ca3af" }}>实际使用</span>
-              <span style={{ marginLeft: "auto", fontWeight: 700, fontFamily: "SF Mono, monospace" }}>{unit === "¥" ? `¥${actualVal}` : `${actualVal}${unit === "K" ? "K Token" : " 次"}`}</span>
+              <span>实际使用</span>
+              <span style={{ marginLeft: "auto", fontWeight: 700, fontFamily: "SF Mono, monospace", color: theme === "light" ? "#111827" : "#e5e5e7" }}>{formatChartValue(actualVal)}</span>
             </div>
-          )}
-          {predictedVal !== null && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#3b82f6", flex: "none" }} />
-              <span style={{ color: theme === "light" ? "#6b7280" : "#9ca3af" }}>预测趋势</span>
-              <span style={{ marginLeft: "auto", fontWeight: 700, fontFamily: "SF Mono, monospace" }}>{unit === "¥" ? `¥${predictedVal}` : `${predictedVal}${unit === "K" ? "K Token" : " 次"}`}</span>
+              <span>预测趋势</span>
+              <span style={{ marginLeft: "auto", fontWeight: 700, fontFamily: "SF Mono, monospace", color: theme === "light" ? "#111827" : "#e5e5e7" }}>{predictedVal === null ? "暂无预测数据" : formatChartValue(predictedVal)}</span>
             </div>
-          )}
-          {predictedVal !== null && unit === "K" && (
-            <div style={{ borderTop: `1px solid ${theme === "light" ? "#e5e7eb" : "#333540"}`, marginTop: 6, paddingTop: 6, color: theme === "light" ? "#6b7280" : "#9ca3af" }}>
-              预计金额: <span style={{ fontWeight: 700, color: theme === "light" ? "#111827" : "#e5e5e7" }}>¥{(predictedVal * 0.002).toFixed(2)}</span>
-              <div style={{ marginTop: 6 }}>
-                主要模型: <span style={{ fontWeight: 700, color: theme === "light" ? "#111827" : "#e5e5e7" }}>DeepSeek V4</span>
-              </div>
+          </div>
+          <div style={{ borderTop: `1px solid ${theme === "light" ? "#e5e7eb" : "#333540"}`, marginTop: 8, paddingTop: 8, color: theme === "light" ? "#6b7280" : "#9ca3af" }}>
+            预计花费：<span style={{ fontWeight: 700, color: theme === "light" ? "#111827" : "#e5e5e7" }}>{getCostText(idx, focusValue)}</span>
+            <div style={{ marginTop: 6 }}>
+              主要模型：<span style={{ fontWeight: 700, color: theme === "light" ? "#111827" : "#e5e5e7" }}>{primaryModel}</span>
             </div>
-          )}
+          </div>
         </div>
       ),
     });
-  }, [pastValues, futureValues, allDates, totalPoints, unit, onTooltip, theme]);
+  }, [allDates, formatChartValue, futureValues, getCostText, onTooltip, pastValues, primaryModel, theme, totalPoints]);
 
   const findNearestIndex = useCallback((clientX) => {
     const rect = svgRef.current?.getBoundingClientRect();
     if (!rect) return -1;
-    const svgX = clientX - rect.left;
-    const scaleX = width / rect.width;
-    const mouseViewX = svgX * scaleX;
-    let nearest = 0;
-    let minDist = Infinity;
-    pointsX.forEach((px, i) => {
-      const d = Math.abs(px - mouseViewX);
-      if (d < minDist) { minDist = d; nearest = i; }
-    });
-    return nearest;
-  }, [pointsX, width]);
+    const viewX = ((clientX - rect.left) / rect.width) * width;
+    const ratio = Math.min(1, Math.max(0, (viewX - margin.left) / Math.max(1, chartW)));
+    return Math.min(totalPoints - 1, Math.max(0, Math.round(ratio * (totalPoints - 1))));
+  }, [chartW, margin.left, totalPoints, width]);
 
   const handleChartMouseMove = useCallback((e) => {
     const idx = findNearestIndex(e.clientX);
@@ -389,8 +403,8 @@ function DualLineChart({ data, unit = "K", height = 220, width = 700, onTooltip,
 
       {/* Transparent overlay for axis-based hover */}
       <rect
-        x={margin.left} y={margin.top}
-        width={chartW} height={chartH}
+        x={0} y={margin.top}
+        width={width} height={chartH}
         fill="transparent"
         onMouseMove={handleChartMouseMove}
         onMouseLeave={handleChartMouseLeave}
@@ -467,9 +481,9 @@ function HeatmapGrid({ weeks, size = 12, gap = 3, onTooltip, theme }) {
                 content: (
                   <div>
                     <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13, color: theme === "light" ? "#111827" : "#e5e5e7" }}>{day.date}</div>
-                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 11 }}>请求: <b>{day.requests}</b></div>
-                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 11 }}>Token: <b>{day.tokens.toLocaleString()}</b></div>
-                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 11 }}>花费: <b>¥{day.spend}</b></div>
+                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 12 }}>请求数：<b>{day.requests}</b></div>
+                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 12 }}>Token：<b>{day.tokens.toLocaleString()}</b></div>
+                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 12 }}>花费：<b>¥{Number(day.spend || 0).toFixed(2)}</b></div>
                   </div>
                 ),
               });
@@ -993,9 +1007,12 @@ function buildPredictionFromTrend(trendData, metric, balance) {
     data: {
       pastDates: trendData.map((item) => item.date.replace("-", "/")),
       pastValues: metricConfig.pastValues,
+      pastCosts: trendData.map((item) => Number(item.cost || 0)),
       futureDates: getFutureDateLabels(7),
       futureValues,
+      futureCosts: tokenForecast.map((tokens) => Number((Number(tokens || 0) * costPerToken).toFixed(4))),
       unit: metricConfig.unit,
+      primaryModel: "DeepSeek Chat",
     },
     summary: {
       weekTokens,
@@ -2251,13 +2268,13 @@ function RecentCallLedger({ rows }) {
         subtitle="像交易流水一样记录每一次模型调用和 Token 消耗。"
         right={canExpand ? (
           <button type="button" className="dash3-ledger-toggle" onClick={() => setExpanded((value) => !value)}>
-            {expanded ? "收起" : `展开全部（${Math.min(rows.length, 50)}）`}
+            {expanded ? "收起记录" : `展开全部记录（${Math.min(rows.length, 50)}）`}
           </button>
         ) : null}
       />
       <div className="dash3-ledger-card">
         {visibleRows.length > 0 ? (
-          <div className="dash3-ledger-list">
+          <div className={`dash3-ledger-list ${expanded ? "expanded" : "collapsed"}`}>
             {visibleRows.map((row, index) => (
               <article className="dash3-ledger-item" key={`${row.id}-${index}`}>
                 <div className="dash3-ledger-item-main">
@@ -2291,13 +2308,14 @@ function RecentCallLedger({ rows }) {
           </div>
         ) : (
           <div className="dash3-empty-table">
-            暂无真实调用流水。复制 API 管理页的 CURL 测试一次后，这里会记录模型、Token、金额和状态。
+            <strong>暂无调用记录</strong>
+            <span>完成第一次调用后，这里会显示 Token 消耗和请求状态。</span>
           </div>
         )}
         {canExpand ? (
           <div className="dash3-ledger-bottom">
             <button type="button" className="dash3-ledger-toggle" onClick={() => setExpanded((value) => !value)}>
-              {expanded ? "收起" : "展开全部"}
+              {expanded ? "收起记录" : "展开全部记录"}
             </button>
           </div>
         ) : null}
@@ -2881,7 +2899,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Bottom: Top Models + Heatmap */}
-            <div className="dash3-portrait-bottom" style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <div className="dash3-portrait-bottom">
               <div className="dash3-card">
                 <div className="dash3-card-subtitle">热门模型</div>
                 <div className="dash3-topmodels-mini">
@@ -2900,7 +2918,7 @@ export default function DashboardPage() {
                   )}
                 </div>
               </div>
-              <div className="dash3-card" style={{ overflow: "hidden" }}>
+              <div className="dash3-card dash3-heatmap-card">
                 <div className="dash3-card-subtitle">活跃热力图</div>
                 <div className="dash3-heatmap-wrap">
                   <div className="dash3-heatmap-days">
@@ -2910,7 +2928,7 @@ export default function DashboardPage() {
                   </div>
                   <HeatmapGrid weeks={heatmapWeeks} size={16} gap={4} onTooltip={handleTooltip} theme={theme} />
                 </div>
-                <div className="dash3-heatmap-legend" style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 10, fontSize: 11, color: "var(--dash-sub)" }}>
+                <div className="dash3-heatmap-legend">
                   <span>少</span>
                   <span style={{ width: 14, height: 14, borderRadius: 3, background: theme === "light" ? "#e5e7eb" : "#1e293b", opacity: 0.6 }} />
                   <span style={{ width: 14, height: 14, borderRadius: 3, background: theme === "light" ? "#dbeafe" : "#1e3a5f" }} />

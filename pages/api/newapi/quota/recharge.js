@@ -1,9 +1,11 @@
 import { rechargeNewApiUserQuota } from "@/lib/new-api/client";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+  if (!(await requireAdmin(req, res))) return;
 
   try {
     const { tokenId, quota } = req.body || {};

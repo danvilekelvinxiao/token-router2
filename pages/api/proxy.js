@@ -1,17 +1,10 @@
+import { requireAdmin } from "@/lib/admin-auth";
+
 const ALLOWED_ENDPOINTS = [
   "chat/completions",
   "responses",
   "embeddings",
 ];
-
-function getClientToken(req) {
-  const auth = req.headers.authorization || "";
-  let token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : String(req.headers["x-api-key"] || "").trim();
-  while (token.toLowerCase().startsWith("bearer ")) {
-    token = token.slice(7).trim();
-  }
-  return token.replace(/^["']|["']$/g, "");
-}
 
 function normalizeTarget(target) {
   if (!target) return "chat/completions";
@@ -48,19 +41,12 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Only POST is allowed" });
   }
 
+  const admin = await requireAdmin(req, res);
+  if (!admin) return;
+
   const upstream = getUpstreamConfig();
   if (!upstream) {
     return res.status(500).json({ error: "未配置上游 API" });
-  }
-
-  const proxyAccessToken = process.env.PROXY_ACCESS_TOKEN;
-  if (!proxyAccessToken) {
-    return res.status(500).json({ error: "Missing PROXY_ACCESS_TOKEN" });
-  }
-
-  const clientToken = getClientToken(req);
-  if (clientToken !== proxyAccessToken) {
-    return res.status(401).json({ error: "Unauthorized" });
   }
 
   const target = normalizeTarget(req.query.target);

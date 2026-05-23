@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
 export default function AdminBillingRules() {
-  const [secret, setSecret] = useState("");
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
   const [config, setConfig] = useState(null);
   const [prices, setPrices] = useState([]);
   const [alerts, setAlerts] = useState([]);
@@ -21,9 +21,7 @@ export default function AdminBillingRules() {
 
   useEffect(() => {
     const s = localStorage.getItem("flowapi_admin_secret") || "";
-    setSecret(s);
-    if (s) fetchData(s);
-    else setLoading(false);
+    fetchData(s);
   }, []);
 
   async function fetchData(sec) {

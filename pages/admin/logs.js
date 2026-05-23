@@ -1,10 +1,10 @@
 export const dynamic = "force-dynamic";
 import Head from "next/head";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
 export default function AdminLogs() {
-  const [secret, setSecret] = useState("");
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -13,11 +13,6 @@ export default function AdminLogs() {
   const [appliedFilters, setAppliedFilters] = useState({ user: "", model: "", status: "", channel: "" });
   const [page, setPage] = useState(0);
   const pageSize = 50;
-
-  useEffect(() => {
-    const s = localStorage.getItem("flowapi_admin_secret") || "";
-    setSecret(s);
-  }, []);
 
   async function fetchLogs(sec, filt, pg) {
     setLoading(true);

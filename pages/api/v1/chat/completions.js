@@ -94,35 +94,18 @@ export default async function handler(req, res) {
   const customerMatch = await findCustomerByToken(clientToken);
 
   if (!customerMatch) {
-    // Not found in local store — try New API pass-through
-    const newApiBase = process.env.NEW_API_BASE_URL;
-    // Try New API pass-through for any token not in local store
-    if (newApiBase && clientToken.length >= 32) {
-      try {
-        const upstreamRes = await fetch(`${newApiBase.replace(/\/+$/, "")}/v1/chat/completions`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${clientToken}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(req.body || {}),
-        });
-        const text = await upstreamRes.text();
-        res.status(upstreamRes.status);
-        res.setHeader("Content-Type", upstreamRes.headers.get("content-type") || "application/json");
-        return res.send(text);
-      } catch {
-        return sendApiError(res, 502, "UPSTREAM_ERROR", "上游服务异常", "New API 暂不可用，请稍后重试。");
-      }
-    }
-
     const invalidLimit = rateLimit(`api-invalid-key:${ip}`, { limit: 12, windowMs: 10 * 60 * 1000 });
     securityLog("invalid_api_key", { ip, tokenPrefix: clientToken.slice(0, 8) });
     if (!invalidLimit.ok) {
       graylistKey(`api:${ip}`, 30 * 60 * 1000);
       return sendApiError(res, 429, "INVALID_API_KEY_LIMITED", "无效 API 密匙尝试过多，请稍后再试", "请停止重试错误密匙，回到 API 管理页面重新复制完整 API 密匙。");
     }
-    return sendApiError(res, 401, "INVALID_API_KEY", "API 密匙无效", "请确认没有多复制空格、引号或重复 Bearer；如果仍失败，请在 API 管理页面重新创建 API 密匙。");
+    return sendApiError(res, 401, "INVALID_API_KEY", "Invalid FlowAPI API Key", "请确认该 API 密匙是在 FlowAPI API 管理页创建，未知 New API Token 不允许直通。", {
+      error: {
+        message: "Invalid FlowAPI API Key",
+        type: "invalid_api_key",
+      },
+    });
   }
 
   const keyLimit = rateLimit(`api:key:${customerMatch.apiKey.id}`, {

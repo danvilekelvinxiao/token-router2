@@ -1,8 +1,25 @@
+import { findCustomerByToken } from "@/lib/customer-store";
+
 const MODEL_MAP = {
-  DeepSeek: "deepseek/deepseek-chat",
+  DeepSeek: "deepseek-chat",
   Qwen: "qwen/qwen3-32b",
   "GPT-4o": "openai/gpt-4o-mini",
 };
+
+function getClientToken(req) {
+  const auth = req.headers.authorization || "";
+  let token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : String(req.headers["x-api-key"] || "").trim();
+  while (token.toLowerCase().startsWith("bearer ")) token = token.slice(7).trim();
+  return token.replace(/^["']|["']$/g, "");
+}
+
+function getInternalChatUrl(req) {
+  const configured = process.env.INTERNAL_FLOWAPI_BASE_URL?.replace(/\/+$/, "");
+  if (configured) return `${configured}/api/v1/chat/completions`;
+  const host = req.headers.host || "localhost:3000";
+  const protocol = host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https";
+  return `${protocol}://${host}/api/v1/chat/completions`;
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -21,18 +38,22 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "模型参数无效" });
   }
 
-  if (!process.env.OPENROUTER_API_KEY) {
-    return res.status(500).json({ error: "上游模型服务暂未配置，请联系 FlowAPI 客服处理。" });
+  const clientToken = getClientToken(req);
+  if (!clientToken || !(await findCustomerByToken(clientToken))) {
+    return res.status(401).json({
+      error: {
+        message: "Invalid FlowAPI API Key",
+        type: "invalid_api_key",
+      },
+    });
   }
 
   try {
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    const response = await fetch(getInternalChatUrl(req), {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${clientToken}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": process.env.PROXY_HTTP_REFERER || "https://flowapi.fun",
-        "X-Title": process.env.PROXY_TITLE || "Token Router AI",
       },
       body: JSON.stringify({
         model: MODEL_MAP[selectedModel],
