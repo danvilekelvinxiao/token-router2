@@ -4,6 +4,7 @@ import { finalizeReservedCallByToken, findCustomerByToken, getTemporaryCreditBal
 import { acquireConcurrency, getClientIp, graylistKey, isGraylisted, rateLimit, releaseConcurrency, securityLog } from "@/lib/security";
 import { getUpstreamConfigs, getUpstreamSuggestion, sendApiError } from "@/lib/upstream";
 import { selectUpstream, STRATEGY } from "@/lib/smart-router";
+import { isTokenWhitelisted, logPassthroughCall } from "@/lib/new-api/passthrough";
 import { Readable } from "stream";
 
 function setCors(res) {
@@ -94,18 +95,76 @@ export default async function handler(req, res) {
   const customerMatch = await findCustomerByToken(clientToken);
 
   if (!customerMatch) {
-    const invalidLimit = rateLimit(`api-invalid-key:${ip}`, { limit: 12, windowMs: 10 * 60 * 1000 });
-    securityLog("invalid_api_key", { ip, tokenPrefix: clientToken.slice(0, 8) });
-    if (!invalidLimit.ok) {
-      graylistKey(`api:${ip}`, 30 * 60 * 1000);
-      return sendApiError(res, 429, "INVALID_API_KEY_LIMITED", "无效 API 密匙尝试过多，请稍后再试", "请停止重试错误密匙，回到 API 管理页面重新复制完整 API 密匙。");
+    // Admin whitelist: token not in FlowAPI local store but may be
+    // whitelisted for direct New API passthrough (debug-only feature).
+    const passthroughOk = await isTokenWhitelisted(clientToken);
+    if (!passthroughOk) {
+      const invalidLimit = rateLimit(`api-invalid-key:${ip}`, { limit: 12, windowMs: 10 * 60 * 1000 });
+      securityLog("invalid_api_key", { ip, tokenPrefix: clientToken.slice(0, 8) });
+      if (!invalidLimit.ok) {
+        graylistKey(`api:${ip}`, 30 * 60 * 1000);
+        return sendApiError(res, 429, "INVALID_API_KEY_LIMITED", "无效 API 密匙尝试过多，请稍后再试", "请停止重试错误密匙，回到 API 管理页面重新复制完整 API 密匙。");
+      }
+      return sendApiError(res, 401, "INVALID_API_KEY", "Invalid FlowAPI API Key", "请确认该 API 密匙是在 FlowAPI API 管理页创建，未知 New API Token 不允许直通。", {
+        error: {
+          message: "Invalid FlowAPI API Key",
+          type: "invalid_api_key",
+        },
+      });
     }
-    return sendApiError(res, 401, "INVALID_API_KEY", "Invalid FlowAPI API Key", "请确认该 API 密匙是在 FlowAPI API 管理页创建，未知 New API Token 不允许直通。", {
-      error: {
-        message: "Invalid FlowAPI API Key",
-        type: "invalid_api_key",
-      },
-    });
+
+    // Pass-through: whitelist token → direct to New API, no local balance check
+    const body = req.body || {};
+    const upstreams = getUpstreamConfigs();
+    if (upstreams.length === 0) {
+      return sendApiError(res, 500, "UPSTREAM_NOT_CONFIGURED", "未配置上游 API", "FlowAPI 服务端暂未配置上游通道。");
+    }
+
+    const startMs = Date.now();
+    try {
+      const upstreamRes = await fetch(upstreams[0].upstreamUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${clientToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      const text = await upstreamRes.text();
+      let usage = {};
+      try {
+        const j = JSON.parse(text);
+        usage = {
+          inputTokens: j.usage?.prompt_tokens || 0,
+          outputTokens: j.usage?.completion_tokens || 0,
+          totalTokens: j.usage?.total_tokens || 0,
+        };
+      } catch {}
+
+      const latency = Date.now() - startMs;
+      logPassthroughCall({
+        token: clientToken,
+        model: body.model || "",
+        status: upstreamRes.ok ? 1 : 0,
+        ...usage,
+        latencyMs: latency,
+        errorMsg: upstreamRes.ok ? "" : text.slice(0, 500),
+      }).catch(() => {});
+
+      res.status(upstreamRes.status);
+      res.setHeader("Content-Type", upstreamRes.headers.get("content-type") || "application/json");
+      return res.send(text);
+    } catch (e) {
+      logPassthroughCall({
+        token: clientToken,
+        model: body.model || "",
+        status: 0,
+        latencyMs: Date.now() - startMs,
+        errorMsg: e.message || "upstream error",
+      }).catch(() => {});
+      return sendApiError(res, 502, "UPSTREAM_ERROR", "上游服务异常", "New API 暂不可用，请稍后重试。");
+    }
   }
 
   const keyLimit = rateLimit(`api:key:${customerMatch.apiKey.id}`, {

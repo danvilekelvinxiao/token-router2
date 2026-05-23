@@ -15,6 +15,7 @@ const adminMenuItems = [
   { key: "settings", label: "系统设置", href: "/admin/settings", icon: IconSettings },
   { key: "recharges", label: "充值审核", href: "/admin/recharges", icon: IconRecharges },
   { key: "newapi", label: "New API 管理", href: "/admin/new-api", icon: IconNewApi },
+  { key: "passthrough", label: "Token 直通白名单", href: "/admin/newapi-passthrough", icon: IconPassthrough },
 ];
 
 function IconOverview() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>; }
@@ -29,6 +30,7 @@ function IconSettings() { return <svg width="18" height="18" viewBox="0 0 24 24"
 function IconRecharges() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="1" y="5" width="22" height="14" rx="2"/><path d="M7 15l4-6 4 4 4-8"/></svg>; }
 function IconInsights() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="9" cy="7" r="4"/><path d="M1 21c0-4.4 3.6-8 8-8"/><circle cx="18" cy="9" r="3"/><path d="M12 21c0-2.8 2.2-5 5-5"/><path d="M19 16v5M17 18h4"/></svg>; }
 function IconNewApi() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>; }
+function IconPassthrough() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 2l8 4v6c0 5.5-3.8 10.7-8 12-4.2-1.3-8-6.5-8-12V6l8-4z"/><line x1="12" y1="9" x2="12" y2="15"/><line x1="9" y1="12" x2="15" y2="12"/></svg>; }
 
 function isAdminCustomer(customer) {
   return Boolean(
