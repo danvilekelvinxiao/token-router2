@@ -1,4 +1,5 @@
 import { createApiKey, deleteApiKey, getDashboard, updateApiKey } from "@/lib/customer-store";
+import { getModelProduct } from "@/lib/model-products";
 import { assertCustomerOwner } from "@/lib/session";
 
 export default async function handler(req, res) {
@@ -16,10 +17,56 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     try {
-      await createApiKey(customerId, req.body?.label || "API 密匙", req.body?.expiresAt || null);
-      return res.status(200).json(await getDashboard(customerId));
+      const modelId = req.body?.modelId || req.body?.productId;
+      if (!modelId) {
+        return res.status(400).json({
+          error: {
+            message: "请先选择要使用的模型，再创建 API 密钥。",
+            type: "model_required",
+          },
+        });
+      }
+
+      const modelProduct = getModelProduct(modelId);
+      if (!modelProduct) {
+        return res.status(404).json({
+          error: {
+            message: "模型不存在或未开放。",
+            type: "model_not_available",
+          },
+        });
+      }
+
+      if (!modelProduct.isAvailable) {
+        return res.status(400).json({
+          error: {
+            message: "该模型暂未开放，请选择其他模型或联系客服。",
+            type: "model_coming_soon",
+          },
+        });
+      }
+
+      const createdKey = await createApiKey(
+        customerId,
+        req.body?.label || `${modelProduct.displayName} Key`,
+        req.body?.expiresAt || null,
+        modelProduct
+      );
+      const customer = await getDashboard(customerId);
+      return res.status(200).json({
+        ...customer,
+        customer,
+        createdKey,
+        modelProduct,
+        baseUrl: process.env.NEXT_PUBLIC_FLOWAPI_BASE_URL || "https://flowapi.fun/v1",
+      });
     } catch (error) {
       console.error("[api/keys:create]", error);
+      if (error?.type === "model_required") {
+        return res.status(400).json({
+          error: { message: error.message, type: "model_required" },
+        });
+      }
       return res.status(502).json({
         error: "API 密钥创建失败，请稍后重试或联系管理员。",
         suggestion: error?.message || "New API 令牌创建失败",

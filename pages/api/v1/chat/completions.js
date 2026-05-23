@@ -1,4 +1,4 @@
-import { MODEL_CATALOG, estimateCnyCost } from "@/lib/models";
+import { estimateCnyCost, getActualModelId, getCatalogModel } from "@/lib/models";
 import { smartSelectModel } from "@/lib/smart-router";
 import { finalizeReservedCallByToken, findCustomerByToken, getTemporaryCreditBalance, reserveBalanceByToken } from "@/lib/customer-store";
 import { acquireConcurrency, getClientIp, graylistKey, isGraylisted, rateLimit, releaseConcurrency, securityLog } from "@/lib/security";
@@ -138,8 +138,22 @@ export default async function handler(req, res) {
 
   const body = req.body || {};
   const prompt = getPromptFromMessages(body.messages);
-  const requestedManualModel = body.model && body.model !== "auto";
-  const catalogModel = requestedManualModel ? MODEL_CATALOG.find((model) => model.modelId === body.model) : null;
+  const boundPublicModel = customerMatch.apiKey.publicModelId || "";
+  const boundActualModel = customerMatch.apiKey.actualModelId || boundPublicModel;
+  const requestedModel = body.model && body.model !== "auto" ? String(body.model).trim() : "";
+  const effectiveRequestedModel = requestedModel || boundPublicModel;
+  const requestedManualModel = Boolean(effectiveRequestedModel);
+  if (boundPublicModel && effectiveRequestedModel && ![boundPublicModel, boundActualModel].includes(effectiveRequestedModel)) {
+    releaseConcurrency(concurrencyKey);
+    return sendApiError(
+      res,
+      403,
+      "MODEL_NOT_ALLOWED",
+      "该 API Key 不能调用这个模型",
+      `这个 API Key 绑定的是 ${boundPublicModel}，请在模型广场为其他模型单独创建 API Key。`
+    );
+  }
+  const catalogModel = requestedManualModel ? getCatalogModel(effectiveRequestedModel) : null;
   if (requestedManualModel && !catalogModel) {
     releaseConcurrency(concurrencyKey);
     return sendApiError(
@@ -151,6 +165,7 @@ export default async function handler(req, res) {
     );
   }
   const selected = requestedManualModel ? catalogModel : smartSelectModel(prompt);
+  const upstreamModelId = getActualModelId(selected);
   const promptTokens = estimatePromptTokens(body.messages || []);
   const reserveCost = estimateReserveCost(selected.modelId, body, promptTokens);
   const reserve = await reserveBalanceByToken(clientToken, reserveCost);
@@ -166,7 +181,7 @@ export default async function handler(req, res) {
   try {
     const upstreamBody = {
       ...body,
-      model: selected.modelId,
+      model: upstreamModelId,
     };
 
     if (upstreamBody.stream) {
@@ -178,7 +193,7 @@ export default async function handler(req, res) {
 
     // Smart routing: determine best upstream strategy
     const routeDecision = await selectUpstream({
-      modelId: selected.modelId,
+      modelId: upstreamModelId,
       strategy: STRATEGY.AUTO,
     });
 
@@ -297,6 +312,7 @@ export default async function handler(req, res) {
       token_router: {
         routed_model: selected.name,
         routed_model_id: selected.modelId,
+        upstream_model_id: upstreamModelId,
         upstream: upstream.label,
         estimated_cost_cny: cost,
         balance_cny: customer?.balance,

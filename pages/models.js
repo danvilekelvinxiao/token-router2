@@ -6,13 +6,14 @@ import ConsoleLayout from "@/components/ConsoleLayout";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
 import { buildCcSwitchCodexConfig, buildCcSwitchConfigUrl } from "@/lib/cc-switch";
 import ModelLogo from "@/components/ModelLogo";
+import { getModelProduct } from "@/lib/model-products";
 
 const providers = ["全部供应商", "OpenAI", "Anthropic", "Google", "DeepSeek", "Alibaba", "Moonshot", "Meta"];
 const billingTypes = ["全部类型", "按量计费"];
 const tags = ["全部标签", "免费体验", "高性价比", "Coding 推荐", "长上下文", "图片/多模态", "高速响应", "中文", "写作", "代码", "推理", "低价", "长文本"];
 
 const freeModels = [
-  { id: "deepseek-chat", name: "DeepSeek Chat", provider: "DeepSeek", context: "64K", speed: "高速响应", allowance: "注册赠送额度内可用", limit: "适合测试，不建议高并发生产", bestFor: "聊天、API 测试、简单 Coding", tags: ["免费体验", "新手推荐", "高性价比", "中文", "低价"] },
+  { id: "deepseek-chat", productId: "deepseek-chat", name: "DeepSeek Chat", provider: "DeepSeek", context: "64K", speed: "高速响应", allowance: "注册赠送额度内可用", limit: "适合测试，不建议高并发生产", bestFor: "聊天、API 测试、简单 Coding", tags: ["免费体验", "新手推荐", "高性价比", "中文", "低价"], isAvailable: true },
   { id: "qwen/qwen-2.5-7b-instruct", name: "Qwen 2.5 7B", provider: "Alibaba", context: "32K", speed: "轻量快速", allowance: "限量免费测试", limit: "每日请求次数有限", bestFor: "中文问答、低成本验证、批量小任务", tags: ["免费体验", "高性价比", "中文"] },
   { id: "google/gemini-2.0-flash-lite", name: "Gemini Flash Lite", provider: "Google", context: "1M", speed: "长文本友好", allowance: "注册赠送额度内可用", limit: "适合长文测试，不保证高并发", bestFor: "长上下文、资料整理、快速问答", tags: ["免费体验", "长上下文", "高速响应"] },
   { id: "meta-llama/llama-3.1-8b-instruct", name: "Llama 3.1 8B", provider: "Meta", context: "128K", speed: "稳定测试", allowance: "限量免费测试", limit: "主要用于接入流程验证", bestFor: "英文问答、基础测试、低成本验证", tags: ["免费体验", "低价"] },
@@ -25,9 +26,10 @@ const modelSections = [
     description: "适合 Claude Code、Codex、Cursor、自动化脚本和代码任务，优先推荐稳定、推理和代码能力更强的模型。",
     badge: "编程优先",
     models: [
-      { id: "deepseek-reasoner", name: "DeepSeek Reasoner", provider: "DeepSeek", input: "¥3.9600 / 1M Tokens", output: "¥15.7680 / 1M Tokens", context: "64K", tags: ["推理", "代码", "Coding 推荐", "中文"], bestFor: "复杂推理、数学、编程和代码任务", rank: 1 },
-      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", input: "¥1.0800 / 1M Tokens", output: "¥4.3200 / 1M Tokens", context: "128K", tags: ["推理", "代码", "低价", "Coding 推荐"], bestFor: "分析总结、结构化任务、代码辅助", rank: 2 },
-      { id: "anthropic/claude-3.5-haiku", name: "Claude Haiku", provider: "Anthropic", input: "¥5.7600 / 1M Tokens", output: "¥28.8000 / 1M Tokens", context: "200K", tags: ["长文本", "写作", "推理", "Coding 推荐"], bestFor: "英文代码解释、长文阅读、轻量推理", rank: 3 },
+      { id: "flowapi-code-lite", productId: "codex-plus", name: "Codex Plus", provider: "FlowAPI", input: "¥1.5120 / 1M Tokens", output: "¥3.0240 / 1M Tokens", context: "64K", tags: ["代码", "Coding 推荐", "Codex", "低价"], bestFor: "Codex、Cursor、Claude Code 轻量编程任务（底层路由：DeepSeek Chat）", rank: 1, isAvailable: true },
+      { id: "deepseek-reasoner", productId: "deepseek-reasoner", name: "DeepSeek Reasoner", provider: "DeepSeek", input: "¥3.9600 / 1M Tokens", output: "¥15.7680 / 1M Tokens", context: "64K", tags: ["推理", "代码", "Coding 推荐", "中文"], bestFor: "复杂推理、数学、编程和代码任务", rank: 2, isAvailable: true },
+      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", input: "即将开放", output: "即将开放", context: "128K", tags: ["推理", "代码", "低价", "Coding 推荐"], bestFor: "分析总结、结构化任务、代码辅助", rank: 3, isAvailable: false },
+      { id: "anthropic/claude-3.5-haiku", name: "Claude Haiku", provider: "Anthropic", input: "即将开放", output: "即将开放", context: "200K", tags: ["长文本", "写作", "推理", "Coding 推荐"], bestFor: "英文代码解释、长文阅读、轻量推理", rank: 4, isAvailable: false },
     ],
   },
   {
@@ -36,8 +38,9 @@ const modelSections = [
     description: "适合习惯 ChatGPT 体验的用户，用于通用问答、总结、结构化输出和办公场景。",
     badge: "OpenAI 系列",
     models: [
-      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", input: "¥1.0800 / 1M Tokens", output: "¥4.3200 / 1M Tokens", context: "128K", tags: ["推理", "代码", "低价", "Coding 推荐"], bestFor: "高性价比 ChatGPT 类体验、总结和结构化任务", rank: 1 },
-      { id: "openai/gpt-4o", name: "GPT-4o", provider: "OpenAI", input: "¥18.0000 / 1M Tokens", output: "¥72.0000 / 1M Tokens", context: "128K", tags: ["推理", "写作", "图片/多模态"], bestFor: "更强通用问答、多模态和复杂内容生成", rank: 2 },
+      { id: "gpt-5", productId: "chatgpt-5", name: "ChatGPT-5", provider: "OpenAI", input: "即将开放", output: "即将开放", context: "待开放", tags: ["推理", "写作", "Agent"], bestFor: "高级 ChatGPT 系列模型入口，待真实上游接通后开放", rank: 1, isAvailable: false },
+      { id: "gpt-5.5", productId: "gpt-5.5", name: "GPT-5.5", provider: "OpenAI", input: "即将开放", output: "即将开放", context: "待开放", tags: ["推理", "代码", "长上下文"], bestFor: "复杂推理、专业代码、长上下文 Agent，待真实上游接通后开放", rank: 2, isAvailable: false },
+      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", input: "即将开放", output: "即将开放", context: "128K", tags: ["推理", "代码", "低价", "Coding 推荐"], bestFor: "高性价比 ChatGPT 类体验、总结和结构化任务", rank: 3, isAvailable: false },
     ],
   },
   {
@@ -46,7 +49,7 @@ const modelSections = [
     description: "按综合使用场景、中文体验、长文本能力和成本表现排序，方便快速选择替代模型。",
     badge: "按推荐排名",
     models: [
-      { id: "deepseek-chat", name: "DeepSeek Chat", provider: "DeepSeek", input: "¥1.0080 / 1M Tokens", output: "¥2.0160 / 1M Tokens", context: "64K", tags: ["中文", "低价", "写作", "高性价比", "免费体验"], bestFor: "中文内容、客服、批量文案", rank: 1 },
+      { id: "deepseek-chat", productId: "deepseek-chat", name: "DeepSeek Chat", provider: "DeepSeek", input: "¥1.0080 / 1M Tokens", output: "¥2.0160 / 1M Tokens", context: "64K", tags: ["中文", "低价", "写作", "高性价比", "免费体验"], bestFor: "中文内容、客服、批量文案", rank: 1, isAvailable: true },
       { id: "qwen/qwen3-32b", name: "Qwen3 32B", provider: "Alibaba", input: "¥2.1600 / 1M Tokens", output: "¥6.4800 / 1M Tokens", context: "128K", tags: ["中文", "写作", "代码", "高性价比"], bestFor: "外贸邮件、中文办公、商务沟通", rank: 2 },
       { id: "google/gemini-2.0-flash-001", name: "Gemini Flash", provider: "Google", input: "¥0.7200 / 1M Tokens", output: "¥2.8800 / 1M Tokens", context: "1M", tags: ["长文本", "低价", "推理", "长上下文", "高速响应"], bestFor: "长上下文、资料整理、快速问答", rank: 3 },
       { id: "moonshot/kimi-k2", name: "Kimi K2", provider: "Moonshot", input: "¥3.6000 / 1M Tokens", output: "¥14.4000 / 1M Tokens", context: "128K", tags: ["中文", "长文本", "写作", "长上下文"], bestFor: "中文资料整理、长文分析、办公场景", rank: 4 },
@@ -62,6 +65,8 @@ export default function ModelsPage() {
   const [search, setSearch] = useState("");
   const [accessModel, setAccessModel] = useState(null);
   const [accessMode, setAccessMode] = useState(null);
+  const [createdKey, setCreatedKey] = useState(null);
+  const [creatingModelId, setCreatingModelId] = useState("");
   const [toast, setToast] = useState("");
   const apiBaseUrl = getPublicApiBaseUrl();
 
@@ -82,15 +87,66 @@ export default function ModelsPage() {
     });
   }
 
-  function openAccess(model) {
+  function resolveProduct(model) {
+    return getModelProduct(model.productId || model.id);
+  }
+
+  function getModelApiKey(model) {
+    const product = resolveProduct(model);
+    const publicModelId = product?.publicModelId || model.id;
+    return customer?.apiKeys?.find((key) => key.publicModelId === publicModelId)?.token || "";
+  }
+
+  async function createKeyForModel(model) {
     if (!customer) {
       setAccessModel(model);
       setAccessMode("login");
       return;
     }
-    if (!customer.apiKeys?.length) {
+    const product = resolveProduct(model);
+    if (!product || !product.isAvailable) {
       setAccessModel(model);
-      setAccessMode("create-key");
+      setAccessMode("coming-soon");
+      return;
+    }
+    setCreatingModelId(model.id);
+    try {
+      const res = await fetch("/api/keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId: customer.id,
+          modelId: product.id,
+          label: `${product.displayName} Key`,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        const message = data?.error?.message || data?.suggestion || data?.error || "创建失败，请稍后重试";
+        setToast(message);
+        setTimeout(() => setToast(""), 2400);
+        return;
+      }
+      const updatedCustomer = data.customer || data;
+      setCustomer(updatedCustomer);
+      localStorage.setItem("flowapi_customer", JSON.stringify(updatedCustomer));
+      setCreatedKey(data.createdKey || updatedCustomer.apiKeys?.slice(-1)?.[0] || null);
+      setAccessModel({ ...model, id: product.publicModelId, name: product.displayName, provider: product.provider, bestFor: product.description });
+      setAccessMode("created");
+      setToast(`${product.displayName} API 密钥已创建`);
+      setTimeout(() => setToast(""), 2000);
+    } catch {
+      setToast("网络异常，请检查连接后重试");
+      setTimeout(() => setToast(""), 2400);
+    } finally {
+      setCreatingModelId("");
+    }
+  }
+
+  function openAccess(model) {
+    if (!customer) {
+      setAccessModel(model);
+      setAccessMode("login");
       return;
     }
     setAccessModel(model);
@@ -108,7 +164,7 @@ export default function ModelsPage() {
       return;
     }
 
-    const apiKey = getPrimaryApiKey();
+    const apiKey = getModelApiKey(model);
     if (!apiKey) {
       setAccessModel(model);
       setAccessMode("create-key");
@@ -120,6 +176,7 @@ export default function ModelsPage() {
       baseUrl: apiBaseUrl,
       model: model.id,
       name: "FlowAPI",
+      displayName: model.name,
     });
     window.open(url, "_blank", "noopener,noreferrer");
     setToast(`正在配置 ${model.name} 到 CC-Switch`);
@@ -133,7 +190,7 @@ export default function ModelsPage() {
       return;
     }
 
-    const apiKey = getPrimaryApiKey();
+    const apiKey = getModelApiKey(model);
     if (!apiKey) {
       setAccessModel(model);
       setAccessMode("create-key");
@@ -205,7 +262,14 @@ export default function ModelsPage() {
           </div>
           <div className="free-model-grid">
             {filteredFreeModels.map((model) => (
-              <FreeModelCard key={model.id} model={model} onAccess={openAccess} onConfigure={openCcSwitchConfig} />
+              <FreeModelCard
+                key={model.id}
+                model={model}
+                onAccess={openAccess}
+                onCreate={createKeyForModel}
+                onConfigure={openCcSwitchConfig}
+                creating={creatingModelId === model.id}
+              />
             ))}
           </div>
         </section>
@@ -222,7 +286,9 @@ export default function ModelsPage() {
                 section={section}
                 totalCount={filteredModelCount}
                 onAccess={openAccess}
+                onCreate={createKeyForModel}
                 onConfigure={openCcSwitchConfig}
+                creatingModelId={creatingModelId}
               />
             ))}
           </div>
@@ -238,7 +304,8 @@ export default function ModelsPage() {
       model={accessModel}
       mode={accessMode}
       apiBaseUrl={apiBaseUrl}
-      apiKey={getPrimaryApiKey()}
+      apiKey={createdKey?.token || getModelApiKey(accessModel || {}) || getPrimaryApiKey()}
+      createdKey={createdKey}
       onClose={() => setAccessModel(null)}
       onCopy={copyText}
       onConfigure={openCcSwitchConfig}
@@ -249,7 +316,7 @@ export default function ModelsPage() {
   );
 }
 
-function ModelSection({ section, totalCount, onAccess, onConfigure }) {
+function ModelSection({ section, totalCount, onAccess, onCreate, onConfigure, creatingModelId }) {
   return (
     <section className={`model-ranked-section model-ranked-section-${section.id}`}>
       <div className="section-heading-row">
@@ -266,7 +333,9 @@ function ModelSection({ section, totalCount, onAccess, onConfigure }) {
             model={model}
             rank={model.rank}
             onAccess={onAccess}
+            onCreate={onCreate}
             onConfigure={onConfigure}
+            creating={creatingModelId === model.id}
           />
         ))}
       </div>
@@ -293,7 +362,7 @@ function PillGroup({ title, values, active, setActive, tone = "blue" }) {
   );
 }
 
-function ModelCard({ model, rank, onAccess, onConfigure }) {
+function ModelCard({ model, rank, onAccess, onCreate, onConfigure, creating }) {
   const [copied, setCopied] = useState(false);
   async function copyModel() {
     await navigator.clipboard.writeText(model.id);
@@ -334,14 +403,16 @@ function ModelCard({ model, rank, onAccess, onConfigure }) {
         </div>
       </div>
       <div className="model-card-actions">
-        <button type="button" className="model-access-btn" onClick={(event) => { event.stopPropagation(); onAccess(model); }}>接入此模型</button>
+        <button type="button" className="model-access-btn" disabled={creating || model.isAvailable === false} onClick={(event) => { event.stopPropagation(); onCreate(model); }}>
+          {model.isAvailable === false ? "即将开放" : creating ? "创建中..." : "创建该模型 API 密钥"}
+        </button>
         <button type="button" className="model-ccswitch-btn" onClick={(event) => { event.stopPropagation(); onConfigure(model); }}>配置到 CC-Switch</button>
       </div>
     </article>
   );
 }
 
-function FreeModelCard({ model, onAccess, onConfigure }) {
+function FreeModelCard({ model, onAccess, onCreate, onConfigure, creating }) {
   return (
     <article className="free-model-card interactive-card" role="button" tabIndex={0} onClick={() => onAccess(model)} onKeyDown={(event) => {
       if (event.key === "Enter" || event.key === " ") {
@@ -369,14 +440,16 @@ function FreeModelCard({ model, onAccess, onConfigure }) {
       </div>
       <small>{model.limit}。升级套餐可获得更高额度和更稳定并发。</small>
       <div className="free-model-card-actions">
-        <button type="button" onClick={(event) => { event.stopPropagation(); onAccess(model); }}>接入此模型</button>
+        <button type="button" disabled={creating || model.isAvailable === false} onClick={(event) => { event.stopPropagation(); onCreate(model); }}>
+          {model.isAvailable === false ? "即将开放" : creating ? "创建中..." : "创建该模型 API 密钥"}
+        </button>
         <button type="button" className="model-ccswitch-btn" onClick={(event) => { event.stopPropagation(); onConfigure(model); }}>配置到 CC-Switch</button>
       </div>
     </article>
   );
 }
 
-function AccessModal({ model, mode, apiBaseUrl, apiKey, onClose, onCopy, onConfigure, onCopyConfig }) {
+function AccessModal({ model, mode, apiBaseUrl, apiKey, createdKey, onClose, onCopy, onConfigure, onCopyConfig }) {
   if (!model) return null;
   const curl = `curl ${apiBaseUrl}/chat/completions \\
   -H "Content-Type: application/json" \\
@@ -410,8 +483,30 @@ function AccessModal({ model, mode, apiBaseUrl, apiKey, onClose, onCopy, onConfi
         ) : mode === "create-key" ? (
           <div className="model-access-state">
             <strong>还没有 API 密匙</strong>
-            <p>先去 API 管理页创建一个 API 密匙，再回来复制模型 ID 和调用示例。</p>
+            <p>请点击模型卡片上的“创建该模型 API 密钥”，系统会绑定当前模型并自动生成配置。</p>
             <Link href="/guide">去 API 管理</Link>
+          </div>
+        ) : mode === "coming-soon" ? (
+          <div className="model-access-state">
+            <strong>该模型暂未开放</strong>
+            <p>{model.name} 还没有接通真实上游，暂不允许创建可用 API Key。你可以先使用 DeepSeek Chat 或加入 QQ 群联系客服开通。</p>
+            <Link href="/profile">去个人中心查看支持入口</Link>
+          </div>
+        ) : mode === "created" ? (
+          <div className="model-access-info">
+            <div><span>创建结果</span><code>API 密钥创建成功</code></div>
+            <div><span>模型名称</span><code>{model.name}</code></div>
+            <div><span>Base URL</span><code>{apiBaseUrl}</code></div>
+            <div><span>完整 API Key</span><code>{apiKey}</code></div>
+            <div><span>Model ID</span><code>{model.id}</code></div>
+            <p className="model-key-warning">完整 Key 只展示一次，请立即复制保存。CC-Switch 导入会使用同一个 Key 和同一个模型 ID。</p>
+            <div className="model-access-modal-actions">
+              <button type="button" onClick={() => onCopy("API Key", apiKey)}>复制 API Key</button>
+              <button type="button" onClick={() => onCopy("Base URL", apiBaseUrl)}>复制 Base URL</button>
+              <button type="button" onClick={() => onCopy("模型 ID", model.id)}>复制 Model ID</button>
+              <button type="button" onClick={() => onConfigure({ ...model, id: createdKey?.publicModelId || model.id })}>导入 CC-Switch</button>
+              <Link href="/guide">查看已有 API Key</Link>
+            </div>
           </div>
         ) : (
           <div className="model-access-info">

@@ -1042,22 +1042,30 @@ function buildModelUsage(ranking) {
 }
 
 function buildModelUsageTrend(trendData, modelUsage) {
-  const models = modelUsage.slice(0, 5);
-  const modelTotal = models.reduce((sum, item) => sum + Number(item.tokens || 0), 0);
-  if (!trendData.length || !models.length || modelTotal <= 0) return [];
+  const top3 = modelUsage.slice(0, 3);
+  const rest = modelUsage.slice(3);
+  const topTokens = top3.reduce((s, m) => s + Number(m.tokens || 0), 0);
+  const restTokens = rest.reduce((s, m) => s + Number(m.tokens || 0), 0);
+  const allTokens = topTokens + restTokens;
+  if (!trendData.length || !modelUsage.length || allTokens <= 0) return [];
 
   return trendData.map((day) => {
     const totalTokens = Number(day.tokens || 0);
-    return {
-      date: day.date,
-      totalTokens,
-      models: models.map((model) => ({
-        model: model.model,
-        provider: model.provider,
-        color: model.color || "#6366f1",
-        tokens: Math.round(totalTokens * (Number(model.tokens || 0) / modelTotal)),
-      })),
-    };
+    const mapped = top3.map((model) => ({
+      model: model.model,
+      provider: model.provider,
+      color: model.color || "#6366f1",
+      tokens: Math.round(totalTokens * (Number(model.tokens || 0) / allTokens)),
+    }));
+    if (restTokens > 0) {
+      mapped.push({
+        model: `其他 ${rest.length} 个模型`,
+        provider: "",
+        color: "#9ca3af",
+        tokens: Math.round(totalTokens * (restTokens / allTokens)),
+      });
+    }
+    return { date: day.date, totalTokens, models: mapped };
   });
 }
 
@@ -1300,8 +1308,8 @@ function ModelUsageTrendChart({ data, onTooltip, theme }) {
       })}
       </div>
       <div className="dash3-mini-legend dash3-model-usage-legend">
-        {(data[0]?.models || []).map((item) => (
-          <span key={item.model}><i style={{ background: item.color }} />{item.model}</span>
+        {(data[0]?.models || []).slice(0, 4).map((item) => (
+          <span key={item.model}><i style={{ background: item.color }} />{item.model.length > 22 ? item.model.slice(0, 20) + "…" : item.model}</span>
         ))}
       </div>
     </div>
@@ -1385,16 +1393,30 @@ function DashboardOperationsSection({ stats, trendData, trendRange, setTrendRang
           <div className="dash3-card-subtitle">模型成本排行榜</div>
           <p className="dash3-ops-desc">看清楚你的 AI Token 主要花在哪些模型上，帮助你判断是否需要换模型、降成本或补充额度。</p>
           <div className="dash3-ops-ranking">
-            {modelUsage.map((item, index) => (
-              <button type="button" onClick={() => onOpenModel(item)} key={item.model}>
-                <span>{index + 1}</span>
-                <ModelNameWithLogo model={item.model} provider={item.provider || getModelProviderLabel(item.model)} size={28} />
-                <small>{item.requests} 次</small>
-                <small>{formatCompactToken(item.tokens)} Token</small>
-                <b>¥{item.cost.toFixed(2)}</b>
-                <em>{item.avgLatency.toFixed(1)}s</em>
-              </button>
-            ))}
+            <div className="model-cost-row model-cost-header">
+              <span className="model-cost-rank">#</span>
+              <span>模型</span>
+              <span className="model-cost-number">请求数</span>
+              <span className="model-cost-number">Token</span>
+              <span className="model-cost-number">金额</span>
+              <span className="model-cost-number">占比</span>
+            </div>
+            {modelUsage.map((item, index) => {
+              const totalCost = modelUsage.reduce((s, m) => s + Number(m.cost || 0), 0) || 1;
+              const pct = ((Number(item.cost || 0) / totalCost) * 100).toFixed(1);
+              return (
+                <button type="button" className="model-cost-row" onClick={() => onOpenModel(item)} key={item.model}>
+                  <span className="model-cost-rank">{index + 1}</span>
+                  <span className="model-cost-info">
+                    <ModelNameWithLogo model={item.model} provider={item.provider || getModelProviderLabel(item.model)} size={24} />
+                  </span>
+                  <span className="model-cost-number sub">{item.requests || 0} 次</span>
+                  <span className="model-cost-number sub">{formatCompactToken(item.tokens)}</span>
+                  <span className="model-cost-number primary">¥{Number(item.cost || 0).toFixed(2)}</span>
+                  <span className="model-cost-number sub">{pct}%</span>
+                </button>
+              );
+            })}
           </div>
         </article>
       </div>
