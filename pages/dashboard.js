@@ -1395,8 +1395,7 @@ function DashboardOperationsSection({ stats, trendData, trendRange, setTrendRang
           <div className="dash3-ops-ranking">
             <div className="model-cost-row model-cost-header">
               <span className="model-cost-rank">#</span>
-              <span>模型</span>
-              <span className="model-cost-number">请求数</span>
+              <span className="model-cost-info">模型</span>
               <span className="model-cost-number">Token</span>
               <span className="model-cost-number">金额</span>
               <span className="model-cost-number">占比</span>
@@ -1408,9 +1407,8 @@ function DashboardOperationsSection({ stats, trendData, trendRange, setTrendRang
                 <button type="button" className="model-cost-row" onClick={() => onOpenModel(item)} key={item.model}>
                   <span className="model-cost-rank">{index + 1}</span>
                   <span className="model-cost-info">
-                    <ModelNameWithLogo model={item.model} provider={item.provider || getModelProviderLabel(item.model)} size={24} />
+                    <ModelNameWithLogo model={item.model} provider={item.provider || getModelProviderLabel(item.model)} size={22} gap={10} />
                   </span>
-                  <span className="model-cost-number sub">{item.requests || 0} 次</span>
                   <span className="model-cost-number sub">{formatCompactToken(item.tokens)}</span>
                   <span className="model-cost-number primary">¥{Number(item.cost || 0).toFixed(2)}</span>
                   <span className="model-cost-number sub">{pct}%</span>
