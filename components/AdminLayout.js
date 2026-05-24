@@ -17,7 +17,10 @@ const adminMenuItems = [
   { key: "newapi", label: "New API 管理", href: "/admin/new-api", icon: IconNewApi },
   { key: "passthrough", label: "Token 直通白名单", href: "/admin/newapi-passthrough", icon: IconPassthrough },
   { key: "importToken", label: "导入 New API Token", href: "/admin/api-keys/import-newapi-token", icon: IconImportToken },
+  { key: "redeemCodes", label: "激活码管理", href: "/admin/redeem-codes", icon: IconRedeem },
 ];
+
+function IconRedeem() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M8 10l3 3 5-5"/><line x1="12" y1="18" x2="12" y2="13"/></svg>; }
 
 function IconOverview() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>; }
 function IconChannels() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M2 16.1A5 5 0 015.9 12M8 12a5 5 0 017 0M18 12a5 5 0 013.9 4.1"/><line x1="12" y1="2" x2="12" y2="7"/><circle cx="12" cy="10" r="2"/></svg>; }
