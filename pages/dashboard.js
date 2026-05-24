@@ -179,7 +179,7 @@ function StackedDailyBars({ daily, models, dailyDates, height = 140, barWidth = 
   );
 }
 
-function DualLineChart({ data, unit = "K", height = 220, width = 700, onTooltip, theme }) {
+function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip, theme }) {
   const { pastDates, pastValues, futureDates, futureValues, pastCosts = [], futureCosts = [], primaryModel = "DeepSeek Chat" } = data;
   const allDates = useMemo(() => [...pastDates, ...futureDates], [pastDates, futureDates]);
   const allValues = useMemo(() => [...pastValues, ...futureValues], [pastValues, futureValues]);
@@ -187,10 +187,11 @@ function DualLineChart({ data, unit = "K", height = 220, width = 700, onTooltip,
   const minV = Math.min(...allValues, 0);
   const range = maxV - minV || 1;
   const totalPoints = allValues.length;
-  const margin = { top: 24, right: 24, bottom: 38, left: 66 };
+  const margin = { top: 28, right: 28, bottom: 44, left: 62 };
   const chartW = width - margin.left - margin.right;
   const chartH = height - margin.top - margin.bottom;
   const stepX = chartW / (totalPoints - 1);
+  const baseline = margin.top + chartH;
 
   const toX = (i) => margin.left + i * stepX;
   const toY = (v) => margin.top + chartH - ((v - minV) / range) * chartH;
@@ -198,10 +199,14 @@ function DualLineChart({ data, unit = "K", height = 220, width = 700, onTooltip,
   const pastPts = pastValues.map((v, i) => `${toX(i)},${toY(v)}`).join(" ");
   const futurePts = futureValues.map((v, i) => `${toX(i + pastValues.length)},${toY(v)}`).join(" ");
 
+  // Gradient fill area under past line
+  const pastArea = `${toX(0)},${baseline} ${pastValues.map((v, i) => `${toX(i)},${toY(v)}`).join(" ")} ${toX(pastValues.length - 1)},${baseline} Z`;
+  const futureArea = `${toX(pastValues.length)},${baseline} ${futureValues.map((v, i) => `${toX(i + pastValues.length)},${toY(v)}`).join(" ")} ${toX(totalPoints - 1)},${baseline} Z`;
+
   const yTicks = 4;
   const yLabels = Array.from({ length: yTicks }, (_, i) => {
     const val = minV + (range / (yTicks - 1)) * i;
-    return { y: toY(val), label: unit ? `${val.toFixed(1)}${unit}` : `${Math.round(val)}` };
+    return { y: toY(val), label: unit === "¥" ? `¥${val.toFixed(1)}` : unit === "K" ? `${val.toFixed(1)}K` : `${Math.round(val)}` };
   });
 
   const [activeIndex, setActiveIndex] = useState(null);
@@ -231,9 +236,9 @@ function DualLineChart({ data, unit = "K", height = 220, width = 700, onTooltip,
     const predictedVal = !isPast ? futureValues[idx - pastValues.length] ?? null : null;
     const focusValue = predictedVal ?? actualVal ?? 0;
     const tooltipWidth = 280;
-    const tooltipHeight = 168;
+    const tooltipHeight = 180;
     let tooltipX = e.clientX + 16;
-    let tooltipY = e.clientY - 78;
+    let tooltipY = e.clientY - 90;
     if (typeof window !== "undefined") {
       if (tooltipX + tooltipWidth > window.innerWidth - 12) tooltipX = e.clientX - tooltipWidth - 16;
       if (tooltipY < 12) tooltipY = e.clientY + 18;
@@ -300,84 +305,123 @@ function DualLineChart({ data, unit = "K", height = 220, width = 700, onTooltip,
   }, [findNearestIndex, showTooltipForIndex]);
 
   const handleTouchEnd = useCallback(() => {
-    // keep tooltip visible briefly then hide
     setTimeout(() => { setActiveIndex(null); onTooltip(null); }, 2000);
   }, [onTooltip]);
 
-  const refLineColor = theme === "light" ? "rgba(17,24,39,0.18)" : "rgba(255,255,255,0.18)";
+  const refLineColor = theme === "light" ? "rgba(17,24,39,0.22)" : "rgba(255,255,255,0.22)";
+  const gridColor = theme === "light" ? "rgba(17,24,39,0.06)" : "rgba(255,255,255,0.06)";
+  const bgGradientId = "forecast-bg-grad";
+  const futureGradientId = "forecast-future-grad";
 
   return (
-    <svg ref={svgRef} width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", cursor: "crosshair" }}>
-      {/* Grid */}
+    <svg ref={svgRef} width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", cursor: "crosshair", borderRadius: "12px" }}>
+      <defs>
+        <linearGradient id={bgGradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.13" />
+          <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.01" />
+        </linearGradient>
+        <linearGradient id={futureGradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.01" />
+        </linearGradient>
+      </defs>
+
+      {/* Grid lines */}
       {yLabels.map((t, i) => (
         <g key={`yg-${i}`}>
-          <line x1={margin.left} y1={t.y} x2={width - margin.right} y2={t.y} stroke="var(--dash-border)" strokeWidth="1" />
-          <text x={margin.left - 8} y={t.y + 4} textAnchor="end" fill="var(--dash-sub)" fontSize="12" fontFamily="inherit">{t.label}</text>
+          <line x1={margin.left} y1={t.y} x2={width - margin.right} y2={t.y} stroke={gridColor} strokeWidth="1" />
+          <text x={margin.left - 10} y={t.y + 4} textAnchor="end" fill="var(--dash-sub)" fontSize="11" fontFamily="inherit" fontWeight="600">{t.label}</text>
         </g>
       ))}
 
-      {/* Confidence band (future) */}
-      <path
-        d={`M${toX(pastValues.length)} ${toY(futureValues[0] * 1.1)} ${futureValues.map((v, i) => `L${toX(i + pastValues.length)} ${toY(v * 1.12)}`).join(" ")} L${toX(totalPoints - 1)} ${toY(futureValues[futureValues.length - 1] * 0.85)} ${futureValues.map((_, i) => `L${toX(totalPoints - 1 - i)} ${toY(futureValues[futureValues.length - 1 - i] * 0.85)}`).join(" ")} Z`}
-        fill="rgba(59,130,246,0.06)"
-      />
+      {/* Past area fill */}
+      <path d={pastArea} fill={`url(#${bgGradientId})`} />
 
-      {/* Past line (yellow) */}
-      <polyline points={pastPts} fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Future area fill */}
+      <path d={futureArea} fill={`url(#${futureGradientId})`} />
+
+      {/* Active highlight band */}
+      {activeIndex !== null && (
+        <rect
+          x={toX(activeIndex) - stepX / 2}
+          y={margin.top}
+          width={stepX}
+          height={chartH}
+          fill={theme === "light" ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.1)"}
+          rx="4"
+        />
+      )}
+
+      {/* Past line (gold) */}
+      <polyline points={pastPts} fill="none" stroke="#f59e0b" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
       {pastValues.map((v, i) => {
         const isActive = activeIndex === i;
         return (
           <circle
             key={`pa-${i}`} cx={toX(i)} cy={toY(v)}
-            r={isActive ? 6 : 4}
+            r={isActive ? 7 : 3.5}
             fill={isActive ? "#f59e0b" : "#f59e0b"}
             stroke={isActive ? "#fff" : "var(--dash-bg)"}
-            strokeWidth={isActive ? 2.5 : 2}
-            style={{ transition: "r 0.15s ease", cursor: "pointer" }}
+            strokeWidth={isActive ? 3 : 2}
+            style={{ transition: "r 0.15s ease, stroke-width 0.15s ease", cursor: "pointer" }}
           />
         );
       })}
 
-      {/* Future line (blue) */}
-      <polyline points={futurePts} fill="none" stroke="#3b82f6" strokeWidth="2.2" strokeDasharray="7,4" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Future line (blue dashed) */}
+      <polyline points={futurePts} fill="none" stroke="#3b82f6" strokeWidth="2.6" strokeDasharray="6,5" strokeLinecap="round" strokeLinejoin="round" />
       {futureValues.map((v, i) => {
         const idx = i + pastValues.length;
         const isActive = activeIndex === idx;
         return (
           <circle
             key={`fu-${i}`} cx={toX(idx)} cy={toY(v)}
-            r={isActive ? 6 : 4}
+            r={isActive ? 7 : 3.5}
             fill={isActive ? "#3b82f6" : "#3b82f6"}
             stroke={isActive ? "#fff" : "var(--dash-bg)"}
-            strokeWidth={isActive ? 2.5 : 2}
-            style={{ transition: "r 0.15s ease", cursor: "pointer" }}
+            strokeWidth={isActive ? 3 : 2}
+            style={{ transition: "r 0.15s ease, stroke-width 0.15s ease", cursor: "pointer" }}
           />
         );
       })}
 
-      {/* Vertical reference line */}
+      {/* Vertical reference line on hover */}
       {activeIndex !== null && (
         <line
           x1={toX(activeIndex)} y1={margin.top}
           x2={toX(activeIndex)} y2={margin.top + chartH}
-          stroke={refLineColor} strokeWidth="1" strokeDasharray="4,3"
+          stroke={refLineColor} strokeWidth="1.5" strokeDasharray="5,3"
           pointerEvents="none"
         />
       )}
 
-      {/* Divider */}
-      <line x1={toX(pastValues.length - 0.5)} y1={margin.top} x2={toX(pastValues.length - 0.5)} y2={margin.top + chartH} stroke="var(--dash-border)" strokeWidth="1" strokeDasharray="4,4" />
-      <text x={toX(pastValues.length - 0.5)} y={margin.top - 8} textAnchor="middle" fill="var(--dash-sub)" fontSize="11" fontFamily="inherit">现在</text>
+      {/* Now divider */}
+      {pastValues.length > 0 && futureValues.length > 0 && (
+        <>
+          <line x1={toX(pastValues.length - 0.5)} y1={margin.top} x2={toX(pastValues.length - 0.5)} y2={margin.top + chartH} stroke="var(--dash-border)" strokeWidth="1.2" strokeDasharray="3,3" />
+          <text x={toX(pastValues.length - 0.5)} y={margin.top - 10} textAnchor="middle" fill="var(--dash-sub)" fontSize="10" fontFamily="inherit" fontWeight="700">现在</text>
+        </>
+      )}
 
-      {/* X labels */}
-      {allDates.map((d, i) => (
-        <text key={`xl-${i}`} x={toX(i)} y={height - 8} textAnchor="middle" fill="var(--dash-sub)" fontSize="11" fontFamily="inherit">{d}</text>
-      ))}
+      {/* X axis labels */}
+      {allDates.map((d, i) => {
+        const isActive = activeIndex === i;
+        return (
+          <text
+            key={`xl-${i}`} x={toX(i)} y={height - 10}
+            textAnchor="middle"
+            fill={isActive ? "var(--dash-accent)" : "var(--dash-sub)"}
+            fontSize={isActive ? 12 : 10}
+            fontWeight={isActive ? 800 : 500}
+            fontFamily="inherit"
+          >{d}</text>
+        );
+      })}
 
-      {/* Transparent overlay for axis-based hover */}
+      {/* Transparent overlay for interaction */}
       <rect
-        x={0} y={margin.top}
-        width={width} height={chartH}
+        x={margin.left} y={margin.top}
+        width={chartW} height={chartH}
         fill="transparent"
         onMouseMove={handleChartMouseMove}
         onMouseLeave={handleChartMouseLeave}
@@ -2237,7 +2281,7 @@ function TokenForecastDecisionSection({ data, summary, metric, setMetric, onTool
             <span><span className="dash3-prediction-legend-dot" style={{ background: "#3b82f6" }} /> 预测趋势</span>
           </div>
           {hasPredictionData ? (
-            <DualLineChart data={data} unit={data.unit} height={400} width={980} onTooltip={onTooltip} theme={theme} />
+            <DualLineChart data={data} unit={data.unit} height={360} width={960} onTooltip={onTooltip} theme={theme} />
           ) : (
             <div className="dash3-empty-chart">
               <strong>暂无调用数据</strong>
@@ -2786,29 +2830,32 @@ export default function DashboardPage() {
 
           <RecentCallLedger rows={recentCallRows} />
 
+          {/* ===== 全球模型热度参考 + 网站模型热度参考 ===== */}
           <section className="dash3-section">
             <SectionTitle
-              title="模型热度参考"
-              subtitle="基于公开模型热度数据与 FlowAPI 平台调用数据，仅供选择模型时参考。"
+              title="全球模型热度参考"
+              subtitle="基于 OpenRouter 公开模型热度数据与 FlowAPI 站内真实调用数据，仅供选择模型时参考。"
               right={marketRanks?.updatedAt ? (
-                <span className="dash3-section-hint">更新于 {new Date(marketRanks.updatedAt).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" })}</span>
+                <span className="dash3-section-hint">全球数据更新于 {new Date(marketRanks.updatedAt).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" })}</span>
               ) : null}
             />
-            {marketRanksLoading ? (
-              <div className="dash3-empty-chart"><strong>模型热度数据同步中</strong><span>正在从公开数据源获取最新模型热度...</span></div>
-            ) : marketRanks?.dataSource === "empty" || !marketRanks?.models?.length ? (
-              <div className="dash3-empty-chart"><strong>模型热度数据同步中</strong><span>暂无公开模型热度数据，请稍后刷新查看。</span></div>
-            ) : (
-              <div className="dash3-ranking-layout">
-                <div className="dash3-card dash3-card-table">
-                  <div className="dash3-card-subtitle">模型热度排行榜</div>
+            <div className="dash3-dual-ranking-grid">
+              {/* Left: Global market ranking */}
+              <div className="dash3-card dash3-card-table">
+                <div className="dash3-card-subtitle">全球模型热度排行</div>
+                <div className="dash3-card-source-badge">{marketRanks?.source || "OpenRouter"} · 每日同步</div>
+                {marketRanksLoading ? (
+                  <div className="dash3-empty-chart"><strong>数据同步中...</strong></div>
+                ) : !marketRanks?.models?.length ? (
+                  <div className="dash3-empty-chart"><strong>数据同步中</strong><span>暂无公开模型热度数据。</span></div>
+                ) : (
                   <table className="dash3-ranking-table">
                     <thead>
                       <tr>
                         <th>#</th>
                         <th>模型</th>
                         <th>Token</th>
-                        <th>热度趋势</th>
+                        <th>趋势</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2817,7 +2864,7 @@ export default function DashboardPage() {
                           <td className="dash3-rank-num">{m.rank}</td>
                           <td className="dash3-rank-name">
                             <span className="model-name-cell">
-                              <ModelLogo model={m.model} provider={m.provider} size={24} />
+                              <ModelLogo model={m.model} provider={m.provider} size={22} />
                               <span className="model-text">
                                 <strong className="model-name">{m.model}</strong>
                                 <small className="model-provider">{m.provider}</small>
@@ -2832,38 +2879,31 @@ export default function DashboardPage() {
                       ))}
                     </tbody>
                   </table>
-                </div>
+                )}
               </div>
-            )}
-            <p className="dash3-advice">模型热度参考数据来源：{marketRanks?.source || "OpenRouter"} · 每日更新 · 仅供选型参考，请优先依据自己的 Token 花费流向做决策。</p>
-          </section>
 
-          {/* ===== FlowAPI 用户调用排名 ===== */}
-          <section className="dash3-section">
-            <SectionTitle
-              title="FlowAPI 用户调用排名"
-              subtitle="基于 FlowAPI 用户真实调用数据，展示本站最常被使用的大模型。"
-              right={(
-                <div className="dash3-metric-tabs">
-                  {[
-                    { key: "today", label: "今日" },
-                    { key: "week", label: "本周" },
-                    { key: "month", label: "本月" },
-                  ].map((tab) => (
-                    <button key={tab.key} className={`dash3-metric-tab ${flowApiRanksPeriod === tab.key ? "active" : ""}`} onClick={() => setFlowApiRanksPeriod(tab.key)}>
-                      {tab.label}
-                    </button>
-                  ))}
+              {/* Right: FlowAPI website ranking */}
+              <div className="dash3-card dash3-card-table">
+                <div className="dash3-card-subtitle">网站模型热度排行</div>
+                <div className="dash3-card-source-badge">
+                  FlowAPI 站内真实调用
+                  <span className="dash3-metric-tabs" style={{ marginLeft: 12 }}>
+                    {[
+                      { key: "today", label: "今日" },
+                      { key: "week", label: "本周" },
+                      { key: "month", label: "本月" },
+                    ].map((tab) => (
+                      <button key={tab.key} className={`dash3-metric-tab ${flowApiRanksPeriod === tab.key ? "active" : ""}`} onClick={() => setFlowApiRanksPeriod(tab.key)} style={{ padding: "1px 8px", fontSize: 11 }}>
+                        {tab.label}
+                      </button>
+                    ))}
+                  </span>
                 </div>
-              )}
-            />
-            {flowApiRanksLoading ? (
-              <div className="dash3-empty-chart"><strong>数据加载中</strong><span>正在获取 FlowAPI 站内调用统计...</span></div>
-            ) : flowApiRanks?.dataSource === "empty" || !flowApiRanks?.models?.length ? (
-              <div className="dash3-empty-chart"><strong>暂无调用数据</strong><span>开始使用 FlowAPI 后，这里将展示本站真实模型调用排名。</span></div>
-            ) : (
-              <div className="dash3-ranking-layout">
-                <div className="dash3-card dash3-card-table">
+                {flowApiRanksLoading ? (
+                  <div className="dash3-empty-chart"><strong>数据加载中...</strong></div>
+                ) : !flowApiRanks?.models?.length ? (
+                  <div className="dash3-empty-chart"><strong>暂无调用数据</strong><span>开始使用后将自动生成。</span></div>
+                ) : (
                   <table className="dash3-ranking-table">
                     <thead>
                       <tr>
@@ -2871,7 +2911,7 @@ export default function DashboardPage() {
                         <th>模型</th>
                         <th>请求次数</th>
                         <th>Token</th>
-                        <th>消耗金额</th>
+                        <th>金额</th>
                         <th>占比</th>
                       </tr>
                     </thead>
@@ -2881,28 +2921,26 @@ export default function DashboardPage() {
                           <td className="dash3-rank-num">{m.rank}</td>
                           <td className="dash3-rank-name">
                             <span className="model-name-cell">
-                              <ModelLogo model={m.model} provider={m.provider} size={24} />
+                              <ModelLogo model={m.model} provider={m.provider} size={22} />
                               <span className="model-text">
                                 <strong className="model-name">{m.model}</strong>
                                 <small className="model-provider">{m.provider}</small>
                               </span>
                             </span>
                           </td>
-                          <td className="dash3-rank-num">{m.requests.toLocaleString()} 次</td>
-                          <td><code>{formatCompactToken(m.tokens)} Tokens</code></td>
+                          <td className="dash3-rank-num">{m.requests.toLocaleString()}</td>
+                          <td><code>{formatCompactToken(m.tokens)}</code></td>
                           <td><b>¥{m.costCny.toFixed(2)}</b></td>
                           <td>{m.share}%</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
+                )}
               </div>
-            )}
+            </div>
             <p className="dash3-advice">
-              {flowApiRanks?.dataSource === "real"
-                ? `FlowAPI 站内「${flowApiRanksPeriod === "today" ? "今日" : flowApiRanksPeriod === "week" ? "本周" : "本月"}」用户真实调用数据。`
-                : "完成调用后，FlowAPI 将自动统计站内用户真实模型使用排名。"}
+              全球数据来源：{marketRanks?.source || "OpenRouter"} · 站内数据基于 FlowAPI 用户真实调用 · 每日更新 · 仅供选型参考
             </p>
           </section>
 
@@ -2983,7 +3021,7 @@ export default function DashboardPage() {
                       <span key={d} className="dash3-heatmap-day-label">{d}</span>
                     ))}
                   </div>
-                  <HeatmapGrid weeks={heatmapWeeks} size={16} gap={4} onTooltip={handleTooltip} theme={theme} />
+                  <HeatmapGrid weeks={heatmapWeeks} size={26} gap={5} onTooltip={handleTooltip} theme={theme} />
                 </div>
                 <div className="dash3-heatmap-legend">
                   <span>少</span>
