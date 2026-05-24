@@ -2163,36 +2163,48 @@ function TokenSpendFlowSection({ flow, ranking, metric, setMetric, onTooltip, th
           <div><span>总请求</span><strong>{totals.requests} 次</strong></div>
           <div><span>主要消耗模型</span><strong>{mainModel}</strong></div>
         </div>
-        <div className="dash3-flow-layout">
-          <div className="dash3-flow-chart-card">
-            <div className="dash3-card-subtitle">模型消耗分布</div>
-            <ModelSpendFlowChart data={flow} metric={metric} onTooltip={onTooltip} theme={theme} />
-          </div>
-          <div className="dash3-flow-ranking">
-            <div className="dash3-card-subtitle">模型排行</div>
-            {ranking.length === 0 ? (
-              <div className="dash3-empty-list">
-                <strong>还没有模型消费排行</strong>
-                <span>使用 API 密匙发起一次调用后，系统会按模型自动汇总金额、Token 和请求次数。</span>
+        <div className="dash3-card">
+          <div className="dash3-card-subtitle">模型消耗分布</div>
+          <ModelSpendFlowChart data={flow} metric={metric} onTooltip={onTooltip} theme={theme} />
+        </div>
+
+        <div className="dash3-card" style={{ marginTop: 16 }}>
+          <div className="dash3-card-subtitle">模型排行</div>
+          {ranking.length === 0 ? (
+            <div className="dash3-empty-list">
+              <strong>还没有模型消费排行</strong>
+              <span>使用 API 密匙发起一次调用后，系统会按模型自动汇总金额、Token 和请求次数。</span>
+            </div>
+          ) : (
+            <div className="dash3-model-ranking-list">
+              <div className="dash3-model-ranking-header">
+                <span>#</span>
+                <span>模型</span>
+                <span className="text-right">金额</span>
+                <span className="text-right">Token</span>
+                <span className="text-right">请求次数</span>
+                <span className="text-right">占比</span>
+                <span className="text-right">趋势</span>
               </div>
-            ) : ranking.map((item, index) => (
-              <Link href={`/models?model=${encodeURIComponent(item.model)}`} key={item.model} className="dash3-flow-row">
-                <span className="dash3-flow-rank">{index + 1}</span>
-                <div className="model-name-cell dash3-flow-model-cell">
-                  <ModelLogo model={item.model} provider={item.provider} size={26} />
-                  <span className="model-text">
-                    <strong className="model-name">{item.model}</strong>
-                    <small className="model-provider">{item.provider || getModelProviderLabel(item.model)}</small>
-                  </span>
-                </div>
-                <div className="dash3-flow-money">¥{item.spend.toFixed(2)}</div>
-                <div className="dash3-flow-meta">{formatCompactToken(item.tokens)} Tokens</div>
-                <div className="dash3-flow-meta">{item.requests} 次</div>
-                <div className="dash3-flow-share">{item.share}%</div>
-                <div className={trendClass(item.trend)}>{trendText(item.trend)}</div>
-              </Link>
-            ))}
-          </div>
+              {ranking.map((item, index) => (
+                <Link href={`/models?model=${encodeURIComponent(item.model)}`} key={item.model} className="dash3-flow-row">
+                  <span className="dash3-flow-rank">{index + 1}</span>
+                  <div className="model-name-cell dash3-flow-model-cell">
+                    <ModelLogo model={item.model} provider={item.provider} size={26} />
+                    <span className="model-text">
+                      <strong className="model-name">{item.model}</strong>
+                      <small className="model-provider">{item.provider || getModelProviderLabel(item.model)}</small>
+                    </span>
+                  </div>
+                  <div className="dash3-flow-money">¥{item.spend.toFixed(2)}</div>
+                  <div className="dash3-flow-meta">{formatCompactToken(item.tokens)} Tokens</div>
+                  <div className="dash3-flow-meta">{item.requests} 次</div>
+                  <div className="dash3-flow-share">{item.share}%</div>
+                  <div className={trendClass(item.trend)}>{trendText(item.trend)}</div>
+                </Link>
+              ))}
+            </div>
+          )}
         </div>
         <p className="dash3-advice">
           {ranking.length > 0

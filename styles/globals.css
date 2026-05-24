@@ -14465,6 +14465,31 @@ html {
   white-space: nowrap;
 }
 
+/* ===== Model ranking list below chart ===== */
+.dash3-model-ranking-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dash3-model-ranking-header {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 100px 110px 70px 56px 54px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--dash-border);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dash-sub);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dash3-model-ranking-header .text-right {
+  text-align: right;
+}
+
 /* ===== Heatmap fill card ===== */
 .dash3-heatmap-card {
   display: flex;
