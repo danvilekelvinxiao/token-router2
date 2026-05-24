@@ -90,8 +90,11 @@ function normalizeResponsesModel(model) {
   if (name.includes("deepseek")) return "deepseek-chat";
   if (name.includes("qwen") || name.includes("alibaba")) return "qwen/qwen3-32b";
   if (name.includes("claude") || name.includes("anthropic")) return "anthropic/claude-3.5-haiku";
+  if (name.includes("flowapi-codex") || name.includes("codex")) return "flowapi-codex-plus";
+  if (name.includes("gpt-5.5")) return "gpt-5.5";
+  if (name.includes("gpt-5.3-codex")) return "gpt-5.3-codex";
   if (name.includes("gpt-4o-mini")) return "openai/gpt-4o-mini";
-  if (name.includes("gpt") || name.includes("openai") || name.includes("codex")) return "deepseek-chat";
+  if (name.includes("gpt") || name.includes("openai")) return "flowapi-codex-plus";
 
   return "deepseek-chat";
 }

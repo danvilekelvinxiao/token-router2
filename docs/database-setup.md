@@ -29,7 +29,7 @@ DATABASE_SSL=false
 - 数据库会自动写入 demo 账号和默认 API Key：
   - demo 邮箱：`demo@flowapi.fun`
   - demo 密码：`demo123`
-  - demo API Key：来自 `PROXY_ACCESS_TOKEN`，未配置则为 `customer_token_001`
+  - demo API Key：来自 `PROXY_ACCESS_TOKEN`，未配置则为 `flowapi-demo-token-change-me`
 
 ## 推荐数据库
 

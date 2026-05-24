@@ -25,10 +25,13 @@ cp .env.example .env.local
 
 ```bash
 OPENROUTER_API_KEY=your_openrouter_key
-PROXY_ACCESS_TOKEN=customer_token_001
+PROXY_ACCESS_TOKEN=flowapi-demo-token-change-me
 PROXY_HTTP_REFERER=http://localhost:3000
 PROXY_TITLE=Token Router China
 PROXY_USD_CNY_RATE=7.2
+OPENAI_API_KEY=请填入新的 OpenAI API Key
+FLOWAPI_CODEX_PLUS_AVAILABLE=false
+FLOWAPI_CODEX_PLUS_ACTUAL_MODEL=gpt-5.5
 ```
 
 如果要启用微信/支付宝自动到账充值，还需要配置商户参数：

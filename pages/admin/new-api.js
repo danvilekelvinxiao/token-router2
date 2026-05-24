@@ -52,7 +52,10 @@ export default function AdminNewApiPage() {
   }
 
   useEffect(() => {
-    void testConnection();
+    const timer = window.setTimeout(() => {
+      void testConnection();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const config = health?.config || {};

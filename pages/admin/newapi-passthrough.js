@@ -26,7 +26,12 @@ export default function AdminPassthroughPage() {
     } catch {}
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   async function handleAdd() {
     if (!form.name.trim() || !form.token.trim()) {

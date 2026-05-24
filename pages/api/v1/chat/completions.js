@@ -1,4 +1,4 @@
-import { estimateCnyCost, getActualModelId, getCatalogModel } from "@/lib/models";
+import { estimateCnyCost, getActualModelId, getCatalogModel, normalizeModelLookup } from "@/lib/models";
 import { smartSelectModel } from "@/lib/smart-router";
 import { finalizeReservedCallByToken, findCustomerByToken, getTemporaryCreditBalance, reserveBalanceByToken } from "@/lib/customer-store";
 import { acquireConcurrency, getClientIp, graylistKey, isGraylisted, rateLimit, releaseConcurrency, securityLog } from "@/lib/security";
@@ -199,7 +199,7 @@ export default async function handler(req, res) {
   const prompt = getPromptFromMessages(body.messages);
   const boundPublicModel = customerMatch.apiKey.publicModelId || "";
   const boundActualModel = customerMatch.apiKey.actualModelId || boundPublicModel;
-  const requestedModel = body.model && body.model !== "auto" ? String(body.model).trim() : "";
+  const requestedModel = body.model && body.model !== "auto" ? normalizeModelLookup(body.model) : "";
   const effectiveRequestedModel = requestedModel || boundPublicModel;
   const requestedManualModel = Boolean(effectiveRequestedModel);
   if (boundPublicModel && effectiveRequestedModel && ![boundPublicModel, boundActualModel].includes(effectiveRequestedModel)) {
