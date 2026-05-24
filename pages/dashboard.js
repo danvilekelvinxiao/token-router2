@@ -3016,11 +3016,6 @@ export default function DashboardPage() {
               <div className="dash3-card dash3-heatmap-card">
                 <div className="dash3-card-subtitle">活跃热力图</div>
                 <div className="dash3-heatmap-wrap">
-                  <div className="dash3-heatmap-days">
-                    {WEEKDAYS.map((d) => (
-                      <span key={d} className="dash3-heatmap-day-label">{d}</span>
-                    ))}
-                  </div>
                   <HeatmapGrid weeks={heatmapWeeks} size={26} gap={5} onTooltip={handleTooltip} theme={theme} />
                 </div>
                 <div className="dash3-heatmap-legend">
