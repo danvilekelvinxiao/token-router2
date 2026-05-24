@@ -10953,9 +10953,15 @@ pre {
   padding: 24px;
 }
 
-.recharge-summary-card {
+/* ===== Right sidebar ===== */
+.recharge-sidebar {
+  display: grid;
+  gap: 16px;
   position: sticky;
   top: 88px;
+}
+
+.recharge-summary-card {
   display: grid;
   gap: 18px;
   padding: 24px;
@@ -10980,9 +10986,365 @@ pre {
   gap: 14px;
 }
 
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.summary-row span:first-child {
+  color: var(--page-sub);
+  font-size: 13px;
+}
+
+.summary-row span:last-child {
+  font-weight: 700;
+  color: var(--page-heading);
+  font-size: 13px;
+  text-align: right;
+}
+
+.summary-row.strong span:last-child {
+  font-weight: 900;
+  color: var(--dash-accent);
+  font-size: 18px;
+}
+
+.summary-divider {
+  border-top: 1px solid var(--dash-border);
+  margin: 4px 0;
+}
+
+.summary-addons {
+  border-top: 1px dashed var(--dash-border);
+  padding-top: 12px;
+}
+
+.summary-addons-label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--dash-sub);
+  margin-bottom: 8px;
+}
+
+.summary-addon-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--dash-sub);
+}
+
+.summary-addon-row span:last-child {
+  font-weight: 700;
+  color: var(--dash-text);
+  font-family: "SF Mono", monospace;
+}
+
 .recharge-pay-button {
   width: 100%;
   min-height: 48px;
+}
+
+.recharge-sidebar-note {
+  margin: 0;
+  color: var(--page-sub);
+  font-size: 12px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+/* ===== Page header ===== */
+.recharge-page-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-end;
+  margin-bottom: 28px;
+}
+
+.recharge-page-kicker {
+  font-size: 12px;
+  font-weight: 800;
+  color: #6366f1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.recharge-page-header h1 {
+  font-size: 28px;
+  font-weight: 900;
+  color: var(--page-heading);
+  margin: 4px 0 0;
+  letter-spacing: -0.03em;
+}
+
+.recharge-page-header p {
+  color: var(--page-sub);
+  font-size: 14px;
+  margin-top: 6px;
+}
+
+.recharge-page-header strong {
+  color: #6366f1;
+  font-size: 18px;
+}
+
+.recharge-page-badges {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* ===== Payment method sidebar cards ===== */
+.payment-method-sidebar-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.payment-method-sidebar-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  border: 1px solid var(--dash-border);
+  border-radius: 14px;
+  background: var(--dash-card-bg);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.payment-method-sidebar-card:hover {
+  border-color: var(--dash-accent);
+}
+
+.payment-method-sidebar-card.selected {
+  border-color: var(--dash-accent);
+  background: rgba(99, 102, 241, 0.06);
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+}
+
+.payment-method-sidebar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 900;
+  flex: none;
+}
+
+.payment-method-sidebar-card strong {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--dash-text);
+}
+
+/* ===== Activation code inline ===== */
+.activation-inline-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.activation-inline-box input {
+  padding: 10px 14px;
+  border: 1px solid var(--dash-border);
+  border-radius: 10px;
+  background: var(--dash-card-bg);
+  color: var(--dash-text);
+  font-size: 13px;
+  font-family: "SF Mono", monospace;
+}
+
+.activation-inline-box button {
+  min-height: 40px;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.pay-success { color: var(--dash-green); font-size: 13px; font-weight: 700; margin: 4px 0 0; }
+.pay-error { color: var(--dash-red); font-size: 13px; font-weight: 700; margin: 4px 0 0; }
+
+/* ===== Add-on services grid ===== */
+.addon-services-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+.addon-service-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px;
+  border: 2px solid var(--dash-border);
+  border-radius: 18px;
+  background: var(--dash-card-bg);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.addon-service-card:hover {
+  border-color: rgba(99, 102, 241, 0.3);
+  background: var(--dash-card-hover);
+}
+
+.addon-service-card.selected {
+  border-color: transparent;
+  background: linear-gradient(var(--dash-card-bg), var(--dash-card-bg)) padding-box,
+              linear-gradient(135deg, #6366f1, #8b5cf6) border-box;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.12);
+}
+
+.addon-service-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.addon-service-head strong {
+  font-size: 15px;
+  font-weight: 900;
+  color: var(--dash-text);
+  line-height: 1.3;
+}
+
+.addon-service-price {
+  display: inline-flex;
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--dash-accent);
+  font-size: 14px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.addon-service-card.selected .addon-service-price {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.addon-service-card p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dash-sub);
+  line-height: 1.65;
+}
+
+.addon-service-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.addon-service-tags span {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(107, 114, 128, 0.08);
+  color: var(--dash-sub);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.addon-service-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--dash-sub);
+  border: 1px solid var(--dash-border);
+  transition: all 0.15s ease;
+}
+
+.addon-service-action.selected {
+  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  color: #fff;
+  border-color: transparent;
+}
+
+/* Quantity control */
+.addon-service-quantity {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--dash-card-hover);
+  border: 1px solid var(--dash-border);
+}
+
+.addon-service-quantity > span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dash-sub);
+}
+
+.addon-quantity-control {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.addon-quantity-control button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  background: var(--dash-card-bg);
+  color: var(--dash-text);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.addon-quantity-control strong {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--dash-text);
+  min-width: 40px;
+  text-align: center;
+}
+
+.addon-quantity-total {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--dash-accent);
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 960px) {
+  .recharge-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .recharge-sidebar {
+    position: static;
+  }
+
+  .addon-services-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .recharge-page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 .recharge-amount-grid,
