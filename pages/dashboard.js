@@ -13,33 +13,6 @@ import { generateTokenForecast } from "@/lib/analytics/token-forecast";
    REFERENCE DATA
    =================================================================== */
 
-const REFERENCE_MODEL_RANKING = [
-  { rank: 1, name: "DeepSeek V4 Flash", tokens: "1.65T", change: "+70%", direction: "up", pct: 100, color: "#6366f1" },
-  { rank: 2, name: "Claude Opus 4.7", tokens: "1.61T", change: "+41%", direction: "up", pct: 97, color: "#f59e0b" },
-  { rank: 3, name: "Claude Sonnet 4.6", tokens: "1.55T", change: "+8%", direction: "up", pct: 94, color: "#8b5cf6" },
-  { rank: 4, name: "Kimi K2.6", tokens: "1.22T", change: "-29%", direction: "down", pct: 74, color: "#ef4444" },
-  { rank: 5, name: "Gemini 3 Flash Preview", tokens: "1.12T", change: "+5%", direction: "up", pct: 68, color: "#22c55e" },
-  { rank: 6, name: "DeepSeek V3.2", tokens: "980B", change: "+17%", direction: "up", pct: 59, color: "#a78bfa" },
-  { rank: 7, name: "DeepSeek V4 Pro", tokens: "882B", change: "+16%", direction: "up", pct: 53, color: "#7c3aed" },
-  { rank: 8, name: "MiniMax M2.7", tokens: "768B", change: "0%", direction: "flat", pct: 46, color: "#94a3b8" },
-  { rank: 9, name: "Owl Alpha", tokens: "689B", change: "+125%", direction: "up", pct: 41, color: "#06b6d4" },
-];
-
-const REFERENCE_TOP_MODELS_STACKED = {
-  dates: ["05/11", "05/12", "05/13", "05/14", "05/15", "05/16", "05/17"],
-  models: [
-    { name: "Others", daily: [2.2, 2.5, 2.1, 2.8, 2.4, 3.0, 2.7], color: "#64748b" },
-    { name: "Hy3 Preview", daily: [0.4, 0.5, 0.4, 0.6, 0.5, 0.7, 0.6], color: "#f59e0b" },
-    { name: "DeepSeek V4 Flash", daily: [0.3, 0.4, 0.3, 0.5, 0.4, 0.6, 0.5], color: "#6366f1" },
-    { name: "Claude Opus 4.7", daily: [0.3, 0.3, 0.3, 0.4, 0.3, 0.5, 0.4], color: "#8b5cf6" },
-    { name: "Claude Sonnet 4.6", daily: [0.3, 0.3, 0.3, 0.4, 0.3, 0.4, 0.4], color: "#a78bfa" },
-    { name: "Gemini 3 Flash", daily: [0.2, 0.3, 0.2, 0.3, 0.3, 0.4, 0.3], color: "#22c55e" },
-    { name: "Kimi K2.6", daily: [0.2, 0.2, 0.2, 0.3, 0.3, 0.3, 0.3], color: "#ef4444" },
-    { name: "DeepSeek V3.2", daily: [0.2, 0.2, 0.2, 0.3, 0.2, 0.3, 0.3], color: "#06b6d4" },
-    { name: "DeepSeek V4 Pro", daily: [0.2, 0.2, 0.2, 0.2, 0.2, 0.3, 0.2], color: "#7c3aed" },
-    { name: "Owl Alpha", daily: [0.1, 0.2, 0.1, 0.2, 0.2, 0.2, 0.2], color: "#c084fc" },
-  ],
-};
 
 const MODEL_FLOW_COLORS = {
   deepseek: "#3b82f6",
@@ -2596,6 +2569,11 @@ export default function DashboardPage() {
   const [trendRange, setTrendRange] = useState("7d");
   const [loadingDashboard, setLoadingDashboard] = useState(false);
   const [dashboardError, setDashboardError] = useState("");
+  const [marketRanks, setMarketRanks] = useState(null);
+  const [marketRanksLoading, setMarketRanksLoading] = useState(true);
+  const [flowApiRanks, setFlowApiRanks] = useState(null);
+  const [flowApiRanksPeriod, setFlowApiRanksPeriod] = useState("week");
+  const [flowApiRanksLoading, setFlowApiRanksLoading] = useState(true);
   const [greeting] = useState(() => {
     const h = new Date().getHours();
     if (h < 6) return "凌晨好";
@@ -2668,6 +2646,30 @@ export default function DashboardPage() {
     } catch {/* ignore */}
   }, [loadCustomer]);
 
+  /* Load market model ranks */
+  useEffect(() => {
+    let cancelled = false;
+    setMarketRanksLoading(true);
+    fetch("/api/market/model-rank")
+      .then((r) => r.json())
+      .then((data) => { if (!cancelled) setMarketRanks(data); })
+      .catch(() => { if (!cancelled) setMarketRanks({ dataSource: "error", models: [] }); })
+      .finally(() => { if (!cancelled) setMarketRanksLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  /* Load FlowAPI internal model ranks */
+  useEffect(() => {
+    let cancelled = false;
+    setFlowApiRanksLoading(true);
+    fetch(`/api/analytics/model-usage-rank?period=${flowApiRanksPeriod}`)
+      .then((r) => r.json())
+      .then((data) => { if (!cancelled) setFlowApiRanks(data); })
+      .catch(() => { if (!cancelled) setFlowApiRanks({ dataSource: "error", models: [] }); })
+      .finally(() => { if (!cancelled) setFlowApiRanksLoading(false); });
+    return () => { cancelled = true; };
+  }, [flowApiRanksPeriod]);
+
   /* Computed */
   const user = customer || { name: "用户", email: "", balance: 0, totalSpend: 0, apiKeys: [], calls: [] };
   const userName = user.name || "用户";
@@ -2693,11 +2695,6 @@ export default function DashboardPage() {
   const avgRequestCost = usage.calls.length
     ? usage.calls.reduce((sum, call) => sum + Number(call.cost || 0), 0) / usage.calls.length
     : 0;
-
-  const rankedModels = REFERENCE_MODEL_RANKING.map((m) => ({
-    ...m,
-    heatPct: m.pct,
-  })).sort((a, b) => b.heatPct - a.heatPct).map((m, i) => ({ ...m, rank: i + 1 }));
 
   const prediction = buildPredictionFromTrend(trendData.slice(-7), predictionMetric, baseBalance);
   const predictionData = prediction.data;
@@ -2727,40 +2724,13 @@ export default function DashboardPage() {
               <p>你的 AI Token 资产正在流动，FlowAPI 帮你看清每一次模型调用、每一笔消耗和未来额度需求。</p>
             </div>
             <div className="dash3-header-right">
-              <div className="dash3-brand-card dash3-brand-card-wordmark" aria-label="FlowAPI 品牌">
-                <div>
-                  <strong><span>Flow</span>API</strong>
-                  <span>AI Token Router / API 中转站</span>
-                  <p>统一 API 中转站 · 多模型 · Token 资产</p>
-                </div>
+              <div className="dash3-brand-gradient" aria-label="FlowAPI 品牌">
+                <strong className="dash3-brand-gradient-text">FlowAPI</strong>
+                <span className="dash3-brand-gradient-sub">AI Token Router · 统一 API 中转站 · 多模型 · Token 资产</span>
               </div>
               <span className="dash3-live-badge">
                 <span className="dash3-live-dot" /> 实时
               </span>
-              <button
-                className="dash3-icon-btn"
-                title="刷新"
-                onClick={() => {
-                  setTick((t) => t + 1);
-                  loadCustomer(user);
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-                  <path d="M3 10a7 7 0 0113.2-3.5M17 10a7 7 0 01-13.2 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  <path d="M17 4v3h-3M3 16v-3h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </button>
-              <button
-                className="dash3-refresh-btn"
-                type="button"
-                disabled={loadingDashboard}
-                onClick={() => {
-                  setTick((t) => t + 1);
-                  loadCustomer(user);
-                }}
-              >
-                {loadingDashboard ? "刷新中" : "刷新数据"}
-              </button>
             </div>
           </header>
 
@@ -2819,58 +2789,121 @@ export default function DashboardPage() {
           <section className="dash3-section">
             <SectionTitle
               title="模型热度参考"
-              subtitle="基于 FlowAPI 平台模型调用数据和热度指数，仅供选择模型时参考。"
-              right={<span className="dash3-section-hint">本周</span>}
+              subtitle="基于公开模型热度数据与 FlowAPI 平台调用数据，仅供选择模型时参考。"
+              right={marketRanks?.updatedAt ? (
+                <span className="dash3-section-hint">更新于 {new Date(marketRanks.updatedAt).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" })}</span>
+              ) : null}
             />
-            <div className="dash3-ranking-layout">
-              <div className="dash3-card">
-                <div className="dash3-card-subtitle">Top Models 调用热度</div>
-                <div className="dash3-topmodels-chart">
-                  <TopModelStackedBars data={REFERENCE_TOP_MODELS_STACKED} height={400} onTooltip={handleTooltip} theme={theme} />
+            {marketRanksLoading ? (
+              <div className="dash3-empty-chart"><strong>模型热度数据同步中</strong><span>正在从公开数据源获取最新模型热度...</span></div>
+            ) : marketRanks?.dataSource === "empty" || !marketRanks?.models?.length ? (
+              <div className="dash3-empty-chart"><strong>模型热度数据同步中</strong><span>暂无公开模型热度数据，请稍后刷新查看。</span></div>
+            ) : (
+              <div className="dash3-ranking-layout">
+                <div className="dash3-card dash3-card-table">
+                  <div className="dash3-card-subtitle">模型热度排行榜</div>
+                  <table className="dash3-ranking-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>模型</th>
+                        <th>Token</th>
+                        <th>热度趋势</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {marketRanks.models.slice(0, 9).map((m) => (
+                        <tr key={m.rank}>
+                          <td className="dash3-rank-num">{m.rank}</td>
+                          <td className="dash3-rank-name">
+                            <span className="model-name-cell">
+                              <ModelLogo model={m.model} provider={m.provider} size={24} />
+                              <span className="model-text">
+                                <strong className="model-name">{m.model}</strong>
+                                <small className="model-provider">{m.provider}</small>
+                              </span>
+                            </span>
+                          </td>
+                          <td><code>{m.tokens}</code></td>
+                          <td className={m.changePercent > 0 ? "dash3-trend-up" : m.changePercent < 0 ? "dash3-trend-down" : "dash3-trend-flat"}>
+                            {m.changePercent > 0 ? `↑${m.changePercent}%` : m.changePercent < 0 ? `↓${Math.abs(m.changePercent)}%` : "持平"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
+            )}
+            <p className="dash3-advice">模型热度参考数据来源：{marketRanks?.source || "OpenRouter"} · 每日更新 · 仅供选型参考，请优先依据自己的 Token 花费流向做决策。</p>
+          </section>
 
-              <div className="dash3-card dash3-card-table">
-                <div className="dash3-card-subtitle">模型热度排行榜</div>
-                <table className="dash3-ranking-table">
-                  <thead>
-                    <tr>
-                      <th>#</th>
-                      <th>模型</th>
-                      <th>Token</th>
-                      <th>热度趋势</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rankedModels.map((m) => (
-                      <tr key={m.rank}>
-                        <td className="dash3-rank-num">{m.rank}</td>
-                        <td className="dash3-rank-name">
-                          <span className="model-name-cell">
-                            <ModelLogo model={m.id || m.name} provider={m.provider} size={24} />
-                            <span className="model-text">
-                              <strong className="model-name">{m.name}</strong>
-                              <small className="model-provider">{m.provider || getModelProviderLabel(m.id || m.name)}</small>
-                            </span>
-                          </span>
-                          <Sparkline
-                            data={Array.from({ length: 10 }, (_, i) => m.heatPct + (Math.sin(i * 0.8 + m.rank) * 5))}
-                            color={m.direction === "up" ? "var(--dash-green)" : m.direction === "down" ? "var(--dash-red)" : "var(--dash-sub)"}
-                            height={18}
-                            width={48}
-                          />
-                        </td>
-                        <td><code>{m.tokens}</code></td>
-                        <td className={m.direction === "up" ? "dash3-trend-up" : m.direction === "down" ? "dash3-trend-down" : "dash3-trend-flat"}>
-                          {m.change} <TrendIcon direction={m.direction} />
-                        </td>
+          {/* ===== FlowAPI 用户调用排名 ===== */}
+          <section className="dash3-section">
+            <SectionTitle
+              title="FlowAPI 用户调用排名"
+              subtitle="基于 FlowAPI 用户真实调用数据，展示本站最常被使用的大模型。"
+              right={(
+                <div className="dash3-metric-tabs">
+                  {[
+                    { key: "today", label: "今日" },
+                    { key: "week", label: "本周" },
+                    { key: "month", label: "本月" },
+                  ].map((tab) => (
+                    <button key={tab.key} className={`dash3-metric-tab ${flowApiRanksPeriod === tab.key ? "active" : ""}`} onClick={() => setFlowApiRanksPeriod(tab.key)}>
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            />
+            {flowApiRanksLoading ? (
+              <div className="dash3-empty-chart"><strong>数据加载中</strong><span>正在获取 FlowAPI 站内调用统计...</span></div>
+            ) : flowApiRanks?.dataSource === "empty" || !flowApiRanks?.models?.length ? (
+              <div className="dash3-empty-chart"><strong>暂无调用数据</strong><span>开始使用 FlowAPI 后，这里将展示本站真实模型调用排名。</span></div>
+            ) : (
+              <div className="dash3-ranking-layout">
+                <div className="dash3-card dash3-card-table">
+                  <table className="dash3-ranking-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>模型</th>
+                        <th>请求次数</th>
+                        <th>Token</th>
+                        <th>消耗金额</th>
+                        <th>占比</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {flowApiRanks.models.slice(0, 9).map((m) => (
+                        <tr key={m.rank}>
+                          <td className="dash3-rank-num">{m.rank}</td>
+                          <td className="dash3-rank-name">
+                            <span className="model-name-cell">
+                              <ModelLogo model={m.model} provider={m.provider} size={24} />
+                              <span className="model-text">
+                                <strong className="model-name">{m.model}</strong>
+                                <small className="model-provider">{m.provider}</small>
+                              </span>
+                            </span>
+                          </td>
+                          <td className="dash3-rank-num">{m.requests.toLocaleString()} 次</td>
+                          <td><code>{formatCompactToken(m.tokens)} Tokens</code></td>
+                          <td><b>¥{m.costCny.toFixed(2)}</b></td>
+                          <td>{m.share}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-            <p className="dash3-advice">建议：模型热度只作为选型参考，优先看你自己的 Token 花费流向和最近调用流水。</p>
+            )}
+            <p className="dash3-advice">
+              {flowApiRanks?.dataSource === "real"
+                ? `FlowAPI 站内「${flowApiRanksPeriod === "today" ? "今日" : flowApiRanksPeriod === "week" ? "本周" : "本月"}」用户真实调用数据。`
+                : "完成调用后，FlowAPI 将自动统计站内用户真实模型使用排名。"}
+            </p>
           </section>
 
           <section className="dash3-section">

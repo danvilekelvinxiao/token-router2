@@ -2154,50 +2154,39 @@ pre {
 
 /* ===== FlowAPI precision polish: unified UI feedback pass ===== */
 
-.dash3-brand-card {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: center;
-  gap: 12px;
-  min-width: 300px;
-  padding: 14px 16px;
-  border: 1px solid var(--dash-border);
-  border-radius: 18px;
-  background:
-    linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(59, 130, 246, 0.04)),
-    var(--dash-card-bg);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
+/* Brand gradient: transparent background, animated gradient text */
+.dash3-brand-gradient {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 240px;
 }
 
-.dash3-brand-mark {
-  display: inline-flex;
-  width: 46px;
-  height: 46px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 15px;
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: #fff;
-  font-size: 22px;
+.dash3-brand-gradient-text {
+  display: inline-block;
+  font-size: 20px;
   font-weight: 950;
+  background: linear-gradient(135deg, #6366f1, #3b82f6, #8b5cf6, #6366f1);
+  background-size: 300% 300%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-x 4s ease infinite;
+  line-height: 1.2;
 }
 
-.dash3-brand-card strong {
+.dash3-brand-gradient-sub {
   display: block;
-  color: var(--dash-text);
-  font-size: 18px;
-  font-weight: 950;
-  line-height: 1.1;
-}
-
-.dash3-brand-card span,
-.dash3-brand-card p {
-  display: block;
-  margin: 4px 0 0;
   color: var(--dash-sub);
-  font-size: 12px;
-  line-height: 1.35;
-  font-weight: 800;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+@keyframes gradient-x {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
 .dash3-asset-card {
@@ -8774,21 +8763,21 @@ pre {
 
 .dash3-flow-row {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 76px 112px 66px 48px 54px;
+  grid-template-columns: 36px minmax(0, 1fr) 100px 110px 70px 56px 54px;
   align-items: center;
-  gap: 12px;
-  min-height: 76px;
-  padding: 15px 14px;
-  border-radius: 16px;
+  gap: 8px;
+  height: 68px;
+  padding: 0 12px;
+  border-radius: 10px;
   color: var(--dash-text);
   text-decoration: none;
   border: 1px solid transparent;
-  transition: background 0.16s ease, border-color 0.16s ease;
+  transition: background 0.16s ease;
   overflow: hidden;
 }
 .dash3-flow-row:hover {
   background: var(--dash-card-hover);
-  border-color: rgba(99,102,241,0.35);
+  border-color: var(--dash-border);
 }
 .dash3-flow-rank {
   width: 30px;
@@ -12053,7 +12042,6 @@ pre {
   color: var(--dash-text);
 }
 
-.dash3-refresh-btn,
 .dash3-ledger-toggle {
   min-height: 38px;
   padding: 0 14px;
@@ -12066,14 +12054,8 @@ pre {
   cursor: pointer;
 }
 
-.dash3-refresh-btn:hover,
 .dash3-ledger-toggle:hover {
   border-color: var(--dash-accent);
-}
-
-.dash3-refresh-btn:disabled {
-  cursor: wait;
-  opacity: 0.62;
 }
 
 .dash3-error-banner {
@@ -14374,4 +14356,91 @@ html {
 .dash-chart-container canvas,
 .dash-chart-container svg {
   width: 100% !important;
+}
+
+/* ===== LiveNumber: Digital value animation ===== */
+.live-number {
+  transition: color 0.35s ease;
+}
+
+.live-number-value {
+  display: inline-block;
+  transition: transform 0.35s ease;
+}
+
+.live-number-up .live-number-value {
+  color: var(--dash-green);
+  animation: live-number-bump-green 0.6s ease;
+}
+
+.live-number-down .live-number-value {
+  color: var(--dash-red);
+  animation: live-number-bump-red 0.6s ease;
+}
+
+@keyframes live-number-bump-green {
+  0% { transform: scale(1) translateY(0); }
+  30% { transform: scale(1.04) translateY(-2px); }
+  100% { transform: scale(1) translateY(0); }
+}
+
+@keyframes live-number-bump-red {
+  0% { transform: scale(1) translateY(0); }
+  30% { transform: scale(1.04) translateY(2px); }
+  100% { transform: scale(1) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-number-up .live-number-value,
+  .live-number-down .live-number-value {
+    animation: none;
+  }
+}
+
+/* ===== API Key actions inline ===== */
+.api-key-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.api-key-actions button {
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--dash-border);
+  background: var(--dash-card-bg);
+  color: var(--dash-text);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.api-key-actions button:hover {
+  background: var(--dash-card-hover);
+}
+
+/* ===== Data source status indicator ===== */
+.dash3-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dash3-source-badge.real {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--dash-green);
+}
+
+.dash3-source-badge.fallback {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--dash-yellow);
+}
+
+.dash3-source-badge.empty {
+  background: rgba(107, 114, 128, 0.1);
+  color: var(--dash-sub);
 }

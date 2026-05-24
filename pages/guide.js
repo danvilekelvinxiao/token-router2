@@ -31,8 +31,11 @@ function getStatus(key) {
 }
 
 function maskToken(token = "") {
-  if (token.length <= 14) return token;
-  return `${token.slice(0, 8)}********${token.slice(-6)}`;
+  if (!token || token.length <= 10) return "sk-******";
+  const prefix = token.startsWith("sk-") ? "sk-" : "";
+  const body = token.startsWith("sk-") ? token.slice(3) : token;
+  if (body.length <= 8) return `${prefix}******`;
+  return `${prefix}${body.slice(0, 4)}************${body.slice(-4)}`;
 }
 
 function computeExpiry(value, customDate = "") {
@@ -388,6 +391,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
   const [visibleTokens, setVisibleTokens] = useState({});
+  const [visibleTimers, setVisibleTimers] = useState({});
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState(null);
   const [openMoreKeyId, setOpenMoreKeyId] = useState(null);
@@ -628,9 +632,25 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
         </div>
         <div className={`api-primary-key-row ${primaryKey ? "" : "without-action"}`}>
           <strong>{primaryKey?.label || "尚未创建 API 密匙"}</strong>
-          <code>{primaryKey?.token || "sk-******"}</code>
+          <code>{visibleTokens[primaryKey?.id] ? primaryKey?.token : maskToken(primaryKey?.token || "")}</code>
           {primaryKey ? (
-            <button type="button" onClick={() => copyText(primaryKey.label, primaryKey.token)}>复制</button>
+            <div className="api-key-actions">
+              <button type="button" onClick={() => {
+                if (visibleTokens[primaryKey.id]) {
+                  clearTimeout(visibleTimers[primaryKey.id]);
+                  setVisibleTokens((t) => ({ ...t, [primaryKey.id]: false }));
+                } else {
+                  setVisibleTokens((t) => ({ ...t, [primaryKey.id]: true }));
+                  const timer = setTimeout(() => {
+                    setVisibleTokens((t) => ({ ...t, [primaryKey.id]: false }));
+                  }, 10000);
+                  setVisibleTimers((t) => ({ ...t, [primaryKey.id]: timer }));
+                }
+              }}>
+                {visibleTokens[primaryKey.id] ? "隐藏" : "显示"}
+              </button>
+              <button type="button" onClick={() => copyText(primaryKey.label, primaryKey.token)}>复制</button>
+            </div>
           ) : null}
           <span>{primaryKey?.lastUsedAt ? formatDate(primaryKey.lastUsedAt) : "未使用"}</span>
         </div>
@@ -694,7 +714,18 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
                   <td>
                     <span className="flow-token-pill">
                       <code>{isVisible ? key.token : maskToken(key.token)}</code>
-                      <button type="button" className="show" onClick={() => setVisibleTokens((tokens) => ({ ...tokens, [key.id]: !isVisible }))}>{isVisible ? "隐藏" : "显示"}</button>
+                      <button type="button" className="show" onClick={() => {
+                        if (isVisible) {
+                          clearTimeout(visibleTimers[key.id]);
+                          setVisibleTokens((tokens) => ({ ...tokens, [key.id]: false }));
+                        } else {
+                          setVisibleTokens((tokens) => ({ ...tokens, [key.id]: true }));
+                          const timer = setTimeout(() => {
+                            setVisibleTokens((tokens) => ({ ...tokens, [key.id]: false }));
+                          }, 10000);
+                          setVisibleTimers((t) => ({ ...t, [key.id]: timer }));
+                        }
+                      }}>{isVisible ? "隐藏" : "显示"}</button>
                       <button type="button" className="copy" onClick={() => copyText(key.label, key.token)}>复制</button>
                     </span>
                   </td>
