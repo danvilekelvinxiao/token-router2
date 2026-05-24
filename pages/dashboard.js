@@ -25,7 +25,7 @@ const MODEL_FLOW_COLORS = {
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
-function generateHeatmapWeeks(calls = []) {
+function generateMonthCalendar(calls, year, month) {
   const byDate = new Map();
   calls.forEach((call) => {
     const rawDate = call.createdAt ? new Date(call.createdAt) : null;
@@ -39,27 +39,42 @@ function generateHeatmapWeeks(calls = []) {
   });
 
   const maxTokens = Math.max(...Array.from(byDate.values()).map((item) => item.tokens), 0);
+
+  // Build calendar grid: 6 rows x 7 columns (Mon-Sun)
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const daysInMonth = lastDay.getDate();
+  // getDay: 0=Sun, 1=Mon... adjust so Mon=0
+  const startDow = firstDay.getDay();
+  const startCol = startDow === 0 ? 6 : startDow - 1; // Mon=0
+
   const weeks = [];
-  const now = new Date();
-  for (let w = 11; w >= 0; w--) {
+  let dayNum = 1;
+  for (let row = 0; row < 6; row++) {
     const week = [];
-    for (let d = 6; d >= 0; d--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - (w * 7 + d));
-      const key = date.toISOString().slice(0, 10);
-      const day = byDate.get(key) || { requests: 0, tokens: 0, spend: 0 };
-      const level = day.tokens > 0 && maxTokens > 0 ? Math.max(1, Math.ceil((day.tokens / maxTokens) * 4)) : 0;
-      week.push({
-        date: key,
-        level,
-        requests: day.requests,
-        tokens: day.tokens,
-        spend: Number(day.spend.toFixed(4)),
-      });
+    for (let col = 0; col < 7; col++) {
+      if ((row === 0 && col < startCol) || dayNum > daysInMonth) {
+        week.push(null);
+      } else {
+        const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
+        const day = byDate.get(dateStr) || { requests: 0, tokens: 0, spend: 0 };
+        const level = day.tokens > 0 && maxTokens > 0 ? Math.max(1, Math.ceil((day.tokens / maxTokens) * 4)) : 0;
+        week.push({
+          date: dateStr,
+          day: dayNum,
+          level,
+          requests: day.requests,
+          tokens: day.tokens,
+          spend: Number(day.spend.toFixed(4)),
+        });
+        dayNum++;
+      }
     }
     weeks.push(week);
+    if (dayNum > daysInMonth) break;
   }
-  return weeks;
+
+  return { weeks, label: `${year}年${month + 1}月`, maxTokens };
 }
 
 /* ===================================================================
@@ -473,41 +488,78 @@ function BarChart7Day({ data, valueKey, color = "#818cf8", height = 130, barW = 
   );
 }
 
-function HeatmapGrid({ weeks, size = 12, gap = 3, onTooltip, theme }) {
+function MonthCalendar({ calendar, onTooltip, theme }) {
+  if (!calendar) return null;
+  const { weeks } = calendar;
+  if (!weeks || !weeks.length) return null;
+
   const colors = ["#1e293b", "#1e3a5f", "#1e4a3f", "#25632d", "#388a34"];
   const lightColors = ["#e5e7eb", "#dbeafe", "#d1fae5", "#86efac", "#22c55e"];
   const cs = theme === "light" ? lightColors : colors;
+
+  const size = 28;
+  const gap = 4;
+  const cols = 7;
+  const rows = weeks.length;
+  const svgW = cols * (size + gap) - gap;
+  const svgH = rows * (size + gap) - gap;
+
+  const dayHeaders = ["一", "二", "三", "四", "五", "六", "日"];
+
   return (
-    <svg width={weeks.length * (size + gap)} height={7 * (size + gap)} style={{ display: "block" }}>
-      {weeks.map((week, wi) =>
-        week.map((day, di) => (
-          <rect
-            key={`${wi}-${di}`}
-            x={wi * (size + gap)}
-            y={di * (size + gap)}
-            width={size}
-            height={size}
-            rx="2"
-            fill={cs[day.level]}
-            opacity={day.level === 0 ? 0.25 : 0.85}
-            style={{ cursor: "pointer" }}
-            onMouseMove={(e) => {
-              onTooltip({
-                x: e.clientX + 14,
-                y: e.clientY - 10,
-                content: (
-                  <div>
-                    <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13, color: theme === "light" ? "#111827" : "#e5e5e7" }}>{day.date}</div>
-                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 12 }}>请求数：<b>{day.requests}</b></div>
-                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 12 }}>Token：<b>{day.tokens.toLocaleString()}</b></div>
-                    <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 12 }}>花费：<b>¥{Number(day.spend || 0).toFixed(2)}</b></div>
-                  </div>
-                ),
-              });
-            }}
-            onMouseLeave={() => onTooltip(null)}
-          />
-        ))
+    <svg width="100%" height={svgH + 24} viewBox={`0 0 ${svgW} ${svgH + 24}`} style={{ display: "block" }}>
+      {/* Day headers */}
+      {dayHeaders.map((label, ci) => (
+        <text
+          key={`h-${ci}`}
+          x={ci * (size + gap) + size / 2}
+          y={svgH + 18}
+          textAnchor="middle"
+          fill="var(--dash-sub)"
+          fontSize="11"
+          fontWeight="600"
+          fontFamily="inherit"
+        >
+          {label}
+        </text>
+      ))}
+      {weeks.map((week, ri) =>
+        week.map((day, ci) => {
+          if (!day) return <rect key={`e-${ri}-${ci}`} x={ci * (size + gap)} y={ri * (size + gap)} width={size} height={size} rx="4" fill="transparent" />;
+          const isToday = day.date === new Date().toISOString().slice(0, 10);
+          return (
+            <rect
+              key={day.date}
+              x={ci * (size + gap)}
+              y={ri * (size + gap)}
+              width={size}
+              height={size}
+              rx="4"
+              fill={cs[day.level]}
+              opacity={day.level === 0 ? 0.2 : 0.85}
+              stroke={isToday ? (theme === "light" ? "#6366f1" : "#818cf8") : "none"}
+              strokeWidth={isToday ? 1.5 : 0}
+              style={{ cursor: day.level > 0 ? "pointer" : "default", transition: "stroke 0.15s" }}
+              onMouseMove={(e) => {
+                if (day.level > 0) {
+                  onTooltip({
+                    x: e.clientX + 14,
+                    y: e.clientY - 10,
+                    content: (
+                      <div>
+                        <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13, color: theme === "light" ? "#111827" : "#e5e5e7" }}>{day.date}</div>
+                        <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 12 }}>请求数：<b>{day.requests}</b></div>
+                        <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 12 }}>Token：<b>{day.tokens.toLocaleString()}</b></div>
+                        <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af", fontSize: 12 }}>花费：<b>¥{Number(day.spend || 0).toFixed(2)}</b></div>
+                      </div>
+                    ),
+                  });
+                }
+              }}
+              onMouseLeave={() => onTooltip(null)}
+            />
+          );
+        })
       )}
     </svg>
   );
@@ -2630,6 +2682,8 @@ export default function DashboardPage() {
   const [flowApiRanks, setFlowApiRanks] = useState(null);
   const [flowApiRanksPeriod, setFlowApiRanksPeriod] = useState("week");
   const [flowApiRanksLoading, setFlowApiRanksLoading] = useState(true);
+  const [heatmapYear, setHeatmapYear] = useState(() => new Date().getFullYear());
+  const [heatmapMonth, setHeatmapMonth] = useState(() => new Date().getMonth());
   const [greeting] = useState(() => {
     const h = new Date().getHours();
     if (h < 6) return "凌晨好";
@@ -2737,7 +2791,7 @@ export default function DashboardPage() {
   const trendDays = trendRange === "90d" ? 90 : trendRange === "30d" ? 30 : 7;
   const trendData = buildTrendData(usage.calls, trendDays);
   const modelUsage = buildModelUsage(modelSpend.ranking);
-  const heatmapWeeks = generateHeatmapWeeks(usage.calls);
+  const heatmapCalendar = useMemo(() => generateMonthCalendar(usage.calls, heatmapYear, heatmapMonth), [usage.calls, heatmapYear, heatmapMonth]);
   const userTopModels = modelSpend.ranking.slice(0, 4).map((item) => ({
     name: item.model,
     id: item.model,
@@ -3026,9 +3080,28 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="dash3-card dash3-heatmap-card">
-                <div className="dash3-card-subtitle">活跃热力图</div>
+                <div className="dash3-card-subtitle" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>活跃热力图</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHeatmapMonth((m) => m === 0 ? (setHeatmapYear((y) => y - 1), 11) : m - 1);
+                      }}
+                      style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}
+                    >‹</button>
+                    <span style={{ fontSize: 13, fontWeight: 700, minWidth: 80, textAlign: "center" }}>{heatmapCalendar?.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHeatmapMonth((m) => m === 11 ? (setHeatmapYear((y) => y + 1), 0) : m + 1);
+                      }}
+                      style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}
+                    >›</button>
+                  </div>
+                </div>
                 <div className="dash3-heatmap-wrap">
-                  <HeatmapGrid weeks={heatmapWeeks} size={26} gap={5} onTooltip={handleTooltip} theme={theme} />
+                  <MonthCalendar calendar={heatmapCalendar} onTooltip={handleTooltip} theme={theme} />
                 </div>
                 <div className="dash3-heatmap-legend">
                   <span>少</span>
