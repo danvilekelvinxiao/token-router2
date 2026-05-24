@@ -8630,62 +8630,41 @@ pre {
 .dash3-flow-shell {
   border: 1px solid var(--dash-border);
   border-radius: 24px;
-  padding: 30px;
+  padding: 28px;
   background: var(--dash-card-bg);
 }
 .dash3-flow-kpis,
 .dash3-forecast-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 18px;
-  margin-bottom: 30px;
+  gap: 14px;
+  margin-bottom: 24px;
 }
 .dash3-flow-kpis div,
 .dash3-forecast-metrics div {
   border: 1px solid var(--dash-border);
-  border-radius: 16px;
-  padding: 22px 24px;
-  background: color-mix(in srgb, var(--dash-card-bg) 88%, var(--dash-border));
+  border-radius: 14px;
+  padding: 16px 20px;
+  background: var(--dash-card-bg);
 }
 .dash3-flow-kpis span,
 .dash3-forecast-metrics span {
   display: block;
   color: var(--dash-sub);
-  font-size: 13px;
-  font-weight: 800;
-  margin-bottom: 14px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 8px;
 }
 .dash3-flow-kpis strong,
 .dash3-forecast-metrics strong {
   display: block;
   color: var(--dash-text);
-  font-size: 25px;
+  font-size: 24px;
   line-height: 1.15;
-  font-weight: 950;
-  letter-spacing: -0.04em;
-  font-family: "SF Mono", "Fira Code", monospace;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  font-family: inherit;
   white-space: nowrap;
-}
-.dash3-flow-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(420px, 0.75fr);
-  gap: 28px;
-  align-items: stretch;
-}
-.dash3-flow-chart-card,
-.dash3-flow-ranking,
-.dash3-ledger-card {
-  border: 1px solid var(--dash-border);
-  border-radius: 20px;
-  background: color-mix(in srgb, var(--dash-card-bg) 94%, var(--dash-border));
-}
-.dash3-flow-chart-card {
-  padding: 28px;
-  overflow-x: auto;
-}
-.dash3-flow-svg {
-  min-width: 760px;
-  display: block;
 }
 .dash3-flow-ranking {
   padding: 24px;

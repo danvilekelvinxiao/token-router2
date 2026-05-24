@@ -2043,9 +2043,9 @@ function AssetOverviewSection({ overview, tick, onOpenAsset }) {
 function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
   const [activeIndex, setActiveIndex] = useState(null);
   const svgRef = useRef(null);
-  const width = 940;
-  const height = 390;
-  const margin = { top: 22, right: 22, bottom: 46, left: 72 };
+  const width = 720;
+  const height = 320;
+  const margin = { top: 28, right: 20, bottom: 44, left: 56 };
   const chartW = width - margin.left - margin.right;
   const chartH = height - margin.top - margin.bottom;
 
@@ -2060,9 +2060,10 @@ function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
 
   const totals = data.map((day) => day.models.reduce((sum, item) => sum + item[metric], 0));
   const maxTotal = Math.max(...totals, 1);
-  const barGap = 26;
-  const barW = Math.max(48, (chartW - barGap * (data.length - 1)) / data.length);
-  const axisColor = theme === "light" ? "rgba(17,24,39,0.16)" : "rgba(255,255,255,0.16)";
+  const barGap = 20;
+  const barW = Math.max(52, (chartW - barGap * (data.length - 1)) / data.length);
+  const axisColor = theme === "light" ? "rgba(17,24,39,0.14)" : "rgba(255,255,255,0.14)";
+  const gridColor = theme === "light" ? "rgba(17,24,39,0.06)" : "rgba(255,255,255,0.05)";
 
   const getX = (index) => margin.left + index * (barW + barGap);
   const getBarCenter = (index) => getX(index) + barW / 2;
@@ -2081,24 +2082,18 @@ function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
       y: event.clientY - 40,
       content: (
         <div className="dash3-flow-tooltip">
-          <strong>2026年{day.date.replace("/", "月")}日</strong>
+          <strong>{day.date}</strong>
           <div className="dash3-flow-tooltip-list">
-            {day.models.map((item) => (
+            {sorted.slice(0, 5).map((item) => (
               <div key={item.model} className="dash3-flow-tooltip-row">
-                <span><i style={{ background: item.color }} />{item.model}</span>
-                <b>¥{item.spend.toFixed(2)}</b>
-                <em>{formatCompactToken(item.tokens)} Tokens</em>
-                <em>{item.requests} 次</em>
+                <span><i style={{ background: item.color }} />{item.model.length > 16 ? item.model.slice(0, 14) + "…" : item.model}</span>
+                <b>{metric === "spend" ? `¥${item.spend.toFixed(2)}` : metric === "tokens" ? `${formatCompactToken(item.tokens)}` : `${item.requests} 次`}</b>
               </div>
             ))}
           </div>
           <div className="dash3-flow-tooltip-total">
-            <span>Total</span>
-            <b>¥{totalSpend.toFixed(2)}</b>
-            <em>{formatCompactToken(totalTokens)} Tokens</em>
-            <em>{totalRequests} 次</em>
+            <span>{metric === "spend" ? `总计 ¥${totalSpend.toFixed(2)}` : metric === "tokens" ? `总计 ${formatCompactToken(totalTokens)} Tokens` : `总计 ${totalRequests} 次`} · 主要 {mainModel}</span>
           </div>
-          <div className="dash3-flow-tooltip-main">主要模型 <b>{mainModel}</b></div>
         </div>
       ),
     });
@@ -2122,30 +2117,48 @@ function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
   };
 
   return (
-    <svg ref={svgRef} width="100%" height={height} viewBox={`0 0 ${width} ${height}`} className="dash3-flow-svg">
+    <svg ref={svgRef} width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", cursor: "crosshair" }}>
+      {/* Gradient for bars */}
+      <defs>
+        {data.length > 0 && data[0].models.map((item) => (
+          <linearGradient key={item.model} id={`flow-grad-${item.model.replace(/[^a-zA-Z0-9]/g, "")}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={item.color} stopOpacity="0.95" />
+            <stop offset="100%" stopColor={item.color} stopOpacity="0.6" />
+          </linearGradient>
+        ))}
+      </defs>
+
+      {/* Grid */}
       {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
         const y = margin.top + chartH - chartH * frac;
-        const label = formatFlowMetric(maxTotal * frac, metric).replace(" Tokens", "");
+        const val = maxTotal * frac;
+        const label = metric === "spend" ? `¥${val.toFixed(0)}` : metric === "tokens" ? formatCompactToken(val) : `${Math.round(val)}`;
         return (
           <g key={frac}>
-            <line x1={margin.left} y1={y} x2={width - margin.right} y2={y} stroke="var(--dash-border)" />
-            <text x={margin.left - 12} y={y + 4} textAnchor="end" fill="var(--dash-sub)" fontSize="12">{label}</text>
+            <line x1={margin.left} y1={y} x2={width - margin.right} y2={y} stroke={gridColor} strokeWidth="1" />
+            <text x={margin.left - 10} y={y + 4} textAnchor="end" fill="var(--dash-sub)" fontSize="11" fontWeight="600">{label}</text>
           </g>
         );
       })}
 
+      {/* Bars */}
       {data.map((day, index) => {
         let y = margin.top + chartH;
         const x = getX(index);
         const isActive = activeIndex === index;
+        const total = totals[index];
         return (
           <g key={day.date}>
+            {/* Active highlight background */}
             {isActive && (
-              <>
-                <rect x={x - 10} y={margin.top} width={barW + 20} height={chartH} rx="16" fill="rgba(99,102,241,0.08)" />
-                <line x1={getBarCenter(index)} y1={margin.top} x2={getBarCenter(index)} y2={margin.top + chartH} stroke={axisColor} strokeDasharray="4,4" />
-              </>
+              <rect
+                x={x - 8} y={margin.top}
+                width={barW + 16} height={chartH}
+                rx="12"
+                fill={theme === "light" ? "rgba(99,102,241,0.06)" : "rgba(99,102,241,0.1)"}
+              />
             )}
+            {/* Stacked segments */}
             {day.models.map((item) => {
               const h = Math.max(item[metric] > 0 ? 3 : 0, getBarHeight(item[metric]));
               y -= h;
@@ -2156,22 +2169,47 @@ function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
                   y={y}
                   width={barW}
                   height={h}
-                  rx="7"
-                  fill={item.color}
-                  opacity={isActive ? 1 : 0.88}
+                  rx={Math.min(5, h / 2)}
+                  fill={`url(#flow-grad-${item.model.replace(/[^a-zA-Z0-9]/g, "")})`}
+                  opacity={isActive ? 1 : 0.82}
+                  style={{ transition: "opacity 0.15s ease" }}
                 />
               );
             })}
-            <text x={getBarCenter(index)} y={height - 14} textAnchor="middle" fill="var(--dash-sub)" fontSize="13" fontWeight="700">{day.date}</text>
+            {/* Top value label on hover */}
+            {isActive && (
+              <text
+                x={getBarCenter(index)} y={margin.top - 6}
+                textAnchor="middle" fill="var(--dash-accent)" fontSize="12" fontWeight="900" fontFamily="inherit"
+              >
+                {metric === "spend" ? `¥${total.toFixed(1)}` : metric === "tokens" ? formatCompactToken(total) : `${total}`}
+              </text>
+            )}
+            {/* Vertical guide line */}
+            {isActive && (
+              <line
+                x1={getBarCenter(index)} y1={margin.top}
+                x2={getBarCenter(index)} y2={margin.top + chartH}
+                stroke={axisColor} strokeWidth="1" strokeDasharray="3,3"
+              />
+            )}
+            {/* Date label */}
+            <text
+              x={getBarCenter(index)} y={height - 12}
+              textAnchor="middle"
+              fill={isActive ? "var(--dash-accent)" : "var(--dash-sub)"}
+              fontSize={isActive ? 13 : 11}
+              fontWeight={isActive ? 800 : 500}
+              fontFamily="inherit"
+            >{day.date}</text>
           </g>
         );
       })}
 
+      {/* Interactive overlay */}
       <rect
-        x={margin.left}
-        y={margin.top}
-        width={chartW}
-        height={chartH}
+        x={margin.left} y={margin.top}
+        width={chartW} height={chartH}
         fill="transparent"
         onMouseMove={handleMove}
         onMouseLeave={() => { setActiveIndex(null); onTooltip(null); }}
