@@ -3077,11 +3077,14 @@ export default function DashboardPage() {
               {/* Left: Global market ranking */}
               <div className="dash3-card dash3-card-table">
                 <div className="dash3-card-subtitle">全球模型热度排行</div>
-                <div className="dash3-card-source-badge">{marketRanks?.source || "OpenRouter"} · 每日同步</div>
+                <div className="dash3-card-source-badge">
+                    {marketRanks?.source || "OpenRouter"}
+                    {marketRanks?.dataSource === "real" ? " · 实时数据" : marketRanks?.dataSource === "cached" ? " · 缓存数据" : " · 同步中"}
+                  </div>
                 {marketRanksLoading ? (
-                  <div className="dash3-empty-chart"><strong>数据同步中...</strong></div>
+                  <div className="dash3-empty-chart"><strong>正在从 OpenRouter 获取数据...</strong><span>全球模型热度数据实时读取中。</span></div>
                 ) : !marketRanks?.models?.length ? (
-                  <div className="dash3-empty-chart"><strong>数据同步中</strong><span>暂无公开模型热度数据。</span></div>
+                  <div className="dash3-empty-chart"><strong>全球模型热度数据同步中</strong><span>正在从 OpenRouter 获取实时排名，请稍后刷新查看。</span></div>
                 ) : (
                   <table className="dash3-ranking-table">
                     <thead>
@@ -3105,9 +3108,14 @@ export default function DashboardPage() {
                               </span>
                             </span>
                           </td>
-                          <td><code>{m.tokens}</code></td>
-                          <td className={m.changePercent > 0 ? "dash3-trend-up" : m.changePercent < 0 ? "dash3-trend-down" : "dash3-trend-flat"}>
-                            {m.changePercent > 0 ? `↑${m.changePercent}%` : m.changePercent < 0 ? `↓${Math.abs(m.changePercent)}%` : "持平"}
+                          <td><code>{m.tokens || "—"}</code></td>
+                          <td>
+                            {m.heatPct != null ? (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+                                <span style={{ width: `${Math.max(8, m.heatPct)}%`, maxWidth: 80, height: 6, borderRadius: 3, background: "var(--ds-primary)", display: "inline-block" }} />
+                                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--dash-sub)" }}>{m.heatPct}%</span>
+                              </span>
+                            ) : "—"}
                           </td>
                         </tr>
                       ))}
