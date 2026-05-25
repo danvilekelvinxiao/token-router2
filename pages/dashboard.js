@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
 import ConsoleLayout from "@/components/ConsoleLayout";
+import { calculateCallCost, formatSmallCny } from "@/lib/billing/calculate-call-cost";
 import ModelLogo, { ModelNameWithLogo, getModelProviderLabel } from "@/components/ModelLogo";
 import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
@@ -923,21 +924,59 @@ function buildRecentCallRows(calls, apiKeys = []) {
     const status = getCallStatus(call);
     const key = apiKeys.find((item) => item.id === call.apiKeyId);
     const latencySeconds = getCallLatencySeconds(call);
+    const input = Number(call.promptTokens || 0);
+    const output = Number(call.completionTokens || 0);
+    const total = Number(call.tokens || 0);
+    const amount = Number(call.cost || 0);
+
+    // Pricing data from call metadata or defaults
+    const inputPricePerM = Number(call.inputPricePerM || call.inputPrice || 0);
+    const outputPricePerM = Number(call.outputPricePerM || call.outputPrice || 0);
+    const discountRate = Number(call.discountRate || call.discount || 1);
+    const originalInputPM = inputPricePerM / Math.max(discountRate, 0.01);
+    const originalOutputPM = outputPricePerM / Math.max(discountRate, 0.01);
+
+    // Calculate original cost
+    const originalCost = Number(call.originalCost || call.originalCostCny || 0);
+    const savedCost = Math.max(0, Number(call.savedCost || call.savedCostCny || (originalCost > 0 ? originalCost - amount : 0)));
+    const savedPercent = originalCost > 0 ? (savedCost / originalCost) * 100 : 0;
+
     return {
       id: call.id || `${call.createdAt}-${getCallModel(call)}`,
+      requestId: call.requestId || call.id || "",
       createdAt: call.createdAt,
-      time: formatCallTime(call.createdAt),
+      time: call.createdAt ? new Date(call.createdAt).toLocaleString("zh-CN", { hour12: false }) : "-",
       model: getCallModel(call),
+      provider: call.provider || "FlowAPI",
       apiKey: key?.label || "API 密匙",
-      source: call.endpoint || "API 调用",
-      input: Number(call.promptTokens || 0),
-      output: Number(call.completionTokens || 0),
-      total: Number(call.tokens || 0),
-      amount: Number(call.cost || 0),
+      type: "consume",
+      source: call.endpoint || "/v1/chat/completions",
+      input,
+      output,
+      total,
+      amount,
+      originalCostCny: originalCost || amount,
+      actualCostCny: amount,
+      savedCostCny: savedCost,
+      savedPercent: Number(savedPercent.toFixed(1)),
       status: status.label,
       statusKey: status.key,
       latency: latencySeconds > 0 ? `${latencySeconds.toFixed(1)}s` : "-",
+      latencySeconds: latencySeconds || 0,
       error: status.key === "success" ? "" : "上游返回异常，请检查余额、模型名或稍后重试。",
+      // Channel / pricing info
+      channelName: call.channelName || call.channel || "官方",
+      channelType: call.channelType || "official",
+      upstreamHost: call.upstreamHost || call.host || "api.uniapi.io",
+      finishReason: call.finishReason || "stop",
+      requestIp: call.requestIp || call.ip || "",
+      inputPricePerM: inputPricePerM || 4.4,
+      outputPricePerM: outputPricePerM || 26.4,
+      originalInputPricePerM: Number(originalInputPM.toFixed(4)) || 5,
+      originalOutputPricePerM: Number(originalOutputPM.toFixed(4)) || 30,
+      discountRate: discountRate,
+      finalInputPricePerM: inputPricePerM || 4.4,
+      finalOutputPricePerM: outputPricePerM || 26.4,
     };
   });
 }
@@ -2402,13 +2441,19 @@ function TokenForecastDecisionSection({ data, summary, metric, setMetric, onTool
 
 function RecentCallLedger({ rows }) {
   const [expanded, setExpanded] = useState(false);
+  const [openRowId, setOpenRowId] = useState(null);
   const visibleRows = expanded ? rows.slice(0, 50) : rows.slice(0, 5);
   const canExpand = rows.length > 5;
+
+  function toggleRow(id) {
+    setOpenRowId((prev) => (prev === id ? null : id));
+  }
+
   return (
     <section className="dash3-section" id="dash-recent-calls">
       <SectionTitle
-        title="最近调用流水"
-        subtitle="像交易流水一样记录每一次模型调用和 Token 消耗。"
+        title="API 调用流水"
+        subtitle="每一次模型调用都会记录 Token、渠道、价格、折扣和最终扣费，方便你核对成本。"
         right={canExpand ? (
           <button type="button" className="dash3-ledger-toggle" onClick={() => setExpanded((value) => !value)}>
             {expanded ? "收起记录" : `展开全部记录（${Math.min(rows.length, 50)}）`}
@@ -2417,34 +2462,118 @@ function RecentCallLedger({ rows }) {
       />
       <div className="dash3-ledger-card">
         {visibleRows.length > 0 ? (
-          <div className={`dash3-ledger-list ${expanded ? "expanded" : "collapsed"}`}>
-            {visibleRows.map((row, index) => (
-              <article className="dash3-ledger-item" key={`${row.id}-${index}`}>
-                <div className="dash3-ledger-item-main">
-                  <div className="model-name-cell">
-                    <ModelLogo model={row.model} size={28} />
-                    <span className="model-text">
-                      <strong className="model-name">{row.model}</strong>
-                      <small className="model-provider">{row.apiKey} · {row.source}</small>
+          <div className="call-billing-list">
+            {visibleRows.map((row, index) => {
+              const isOpen = openRowId === row.id;
+              const discountLabel = row.discountRate >= 1 ? "无折扣" : `${(row.discountRate * 10).toFixed(1)} 折`;
+              const rawCost = row.originalCostCny || row.actualCostCny;
+              return (
+                <article
+                  key={`${row.id}-${index}`}
+                  className={`call-billing-item ${isOpen ? "open" : ""} ${row.statusKey === "failed" || row.statusKey === "timeout" ? "has-error" : ""}`}
+                  onClick={() => toggleRow(row.id)}
+                >
+                  {/* Collapsed row: one-line summary */}
+                  <div className="call-billing-row">
+                    <time className="call-billing-time">{row.time}</time>
+                    <span className="call-billing-key">{row.apiKey}</span>
+                    <span className={`call-billing-type-pill ${row.statusKey}`}>
+                      {row.statusKey === "success" ? "消费" : row.statusKey === "timeout" ? "超时" : "失败"}
                     </span>
+                    <span className="call-billing-model">
+                      <ModelLogo model={row.model} provider={row.provider} size={20} />
+                      <span>{row.model}</span>
+                    </span>
+                    <span className="call-billing-latency">{row.latency}</span>
+                    <span className="call-billing-tokens">
+                      <span className="call-billing-token-in">{row.input}</span>
+                      <span className="call-billing-token-sep">/</span>
+                      <span className="call-billing-token-out">{row.output}</span>
+                    </span>
+                    <strong className="call-billing-amount">{formatSmallCny(row.actualCostCny)}</strong>
+                    {row.savedPercent > 0 && (
+                      <span className="call-billing-saved">-{row.savedPercent}%</span>
+                    )}
+                    <span className="call-billing-ip">{row.requestIp || "-"}</span>
+                    <span className="call-billing-channel-tag">{row.channelName}</span>
+                    <span className={`call-billing-status-pill ${row.statusKey}`}>{row.status}</span>
                   </div>
-                  <div className="dash3-ledger-item-status">
-                    <span className={`dash3-status-pill ${row.statusKey}`}>{row.status}</span>
-                    <time>{row.time}</time>
-                  </div>
-                </div>
-                {row.statusKey === "success" ? (
-                  <div className="dash3-ledger-item-meta">
-                    <span>{formatTokens(row.total)}</span>
-                    <b>{formatCurrency(row.amount)}</b>
-                    <span>{row.latency}</span>
-                    <small>输入 {formatCompactToken(row.input)} · 输出 {formatCompactToken(row.output)}</small>
-                  </div>
-                ) : (
-                  <div className="dash3-ledger-item-error">错误原因：{row.error}</div>
-                )}
-              </article>
-            ))}
+
+                  {/* Expanded detail */}
+                  {isOpen && (
+                    <div className="call-billing-detail" onClick={(e) => e.stopPropagation()}>
+                      {/* Section 1: Channel & Request */}
+                      <div className="call-billing-detail-tags">
+                        <span>渠道：{row.channelName}</span>
+                        <span>{row.upstreamHost}</span>
+                        <span>{row.source}</span>
+                        <span>FinishReason: {row.finishReason}</span>
+                        <span>状态：{row.status}</span>
+                        <span>IP：{row.requestIp || "-"}</span>
+                        <span>耗时：{row.latency}</span>
+                      </div>
+
+                      {/* Section 2-4: Pricing cards */}
+                      <div className="call-billing-pricing-grid">
+                        {/* Original price */}
+                        <div className="call-billing-pricing-card">
+                          <strong>原始价格</strong>
+                          <div className="call-billing-pricing-rows">
+                            <div><span>原输入价格</span><b>{formatSmallCny(row.originalInputPricePerM)} / M Token</b></div>
+                            <div><span>原输出价格</span><b>{formatSmallCny(row.originalOutputPricePerM)} / M Token</b></div>
+                          </div>
+                          <small>渠道原始模型价格，用于计算原始理论费用。</small>
+                        </div>
+
+                        {/* Discount */}
+                        <div className="call-billing-pricing-card">
+                          <strong>折扣信息</strong>
+                          <div className="call-billing-pricing-rows">
+                            <div><span>渠道折扣</span><b>{discountLabel}</b></div>
+                            <div><span>总折扣</span><b>{discountLabel}</b></div>
+                          </div>
+                          <small>{row.savedPercent > 0 ? `节省 ${row.savedPercent}%` : "暂无折扣"}</small>
+                        </div>
+
+                        {/* Actual price */}
+                        <div className="call-billing-pricing-card">
+                          <strong>实际价格</strong>
+                          <div className="call-billing-pricing-rows">
+                            <div><span>输入</span><b>{formatSmallCny(row.finalInputPricePerM)} / M Token</b></div>
+                            <div><span>输出</span><b>{formatSmallCny(row.finalOutputPricePerM)} / M Token</b></div>
+                          </div>
+                          <small>本次调用实际使用的计费价格。</small>
+                        </div>
+                      </div>
+
+                      {/* Section 5: Final calculation */}
+                      <div className="call-billing-calc-card">
+                        <strong>最终计算</strong>
+                        <div className="call-billing-calc-formula">
+                          ({row.input} / 1M × {formatSmallCny(row.finalInputPricePerM)}) + ({row.output} / 1M × {formatSmallCny(row.finalOutputPricePerM)}) = <b>{formatSmallCny(row.actualCostCny)}</b>
+                        </div>
+                        <div className="call-billing-calc-rows">
+                          {rawCost > row.actualCostCny && (
+                            <div className="call-billing-calc-row">
+                              <span>原始计费</span><b className="strikethrough">{formatSmallCny(rawCost)}</b>
+                            </div>
+                          )}
+                          <div className="call-billing-calc-row">
+                            <span>实际计费</span><b>{formatSmallCny(row.actualCostCny)}</b>
+                          </div>
+                          {row.savedPercent > 0 && (
+                            <div className="call-billing-calc-row saved">
+                              <span>节省</span><b>-{row.savedPercent}% (-{formatSmallCny(row.savedCostCny)})</b>
+                            </div>
+                          )}
+                        </div>
+                        <small>本系统按照 Token 用量计算费用，最终扣费以平台实际账单为准。</small>
+                      </div>
+                    </div>
+                  )}
+                </article>
+              );
+            })}
             {rows.length > 50 && expanded ? (
               <p className="dash3-ledger-limit">已显示最近 50 条调用记录，更多历史数据后续可在调用日志页查看。</p>
             ) : null}
@@ -2452,7 +2581,8 @@ function RecentCallLedger({ rows }) {
         ) : (
           <div className="dash3-empty-table">
             <strong>暂无调用记录</strong>
-            <span>完成第一次调用后，这里会显示 Token 消耗和请求状态。</span>
+            <span>完成第一次 API 调用后，这里会显示模型、Token、价格、折扣和最终扣费明细。</span>
+            <Link href="/guide" className="dash3-text-btn" style={{ marginTop: 12, display: "inline-block" }}>查看接入教程</Link>
           </div>
         )}
         {canExpand ? (

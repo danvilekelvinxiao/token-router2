@@ -8983,56 +8983,353 @@ pre {
   padding: 34px;
 }
 .dash3-ledger-card {
-  padding: 28px;
+  padding: 24px;
 }
-.dash3-ledger-filters {
+
+/* ===== Call billing list ===== */
+.call-billing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.call-billing-item {
+  border: 1px solid var(--dash-border);
+  border-radius: 14px;
+  background: var(--dash-card-bg);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+.call-billing-item:hover {
+  border-color: rgba(99,102,241,0.3);
+}
+
+.call-billing-item.open {
+  border-color: var(--dash-accent);
+  box-shadow: 0 0 0 1px rgba(99,102,241,0.15);
+}
+
+.call-billing-item.has-error {
+  border-left: 3px solid var(--dash-red);
+}
+
+/* Collapsed row */
+.call-billing-row {
+  display: grid;
+  grid-template-columns: 140px 80px 48px minmax(0, 1.2fr) 52px 62px 100px 48px 120px 68px 56px;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 18px;
+  font-size: 13px;
+  min-height: 56px;
+  user-select: none;
+}
+
+.call-billing-time {
+  color: var(--dash-sub);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.call-billing-key {
+  color: var(--dash-sub);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-billing-type-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.call-billing-type-pill.success {
+  color: var(--dash-green);
+  background: rgba(34,197,94,0.1);
+}
+
+.call-billing-type-pill.failed {
+  color: var(--dash-red);
+  background: rgba(239,68,68,0.1);
+}
+
+.call-billing-type-pill.timeout {
+  color: var(--dash-yellow);
+  background: rgba(245,158,11,0.12);
+}
+
+.call-billing-model {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  color: var(--dash-text);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.call-billing-model span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-billing-latency {
+  color: var(--dash-sub);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.call-billing-tokens {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  justify-content: center;
+}
+
+.call-billing-token-in { color: var(--dash-green); font-weight: 700; }
+.call-billing-token-sep { color: var(--dash-sub); }
+.call-billing-token-out { color: var(--dash-accent); font-weight: 700; }
+
+.call-billing-amount {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--dash-text);
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.call-billing-saved {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--dash-green);
+  background: rgba(34,197,94,0.08);
+  padding: 2px 6px;
+  border-radius: 5px;
+  text-align: center;
+}
+
+.call-billing-ip {
+  font-size: 11px;
+  color: var(--dash-sub);
+  font-family: "SF Mono", monospace;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.call-billing-channel-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dash-accent);
+  background: rgba(99,102,241,0.08);
+  padding: 2px 8px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.call-billing-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.call-billing-status-pill.success {
+  color: var(--dash-green);
+  background: rgba(34,197,94,0.1);
+}
+
+.call-billing-status-pill.failed {
+  color: var(--dash-red);
+  background: rgba(239,68,68,0.1);
+}
+
+.call-billing-status-pill.timeout {
+  color: var(--dash-yellow);
+  background: rgba(245,158,11,0.12);
+}
+
+/* ===== Expanded billing detail ===== */
+.call-billing-detail {
+  border-top: 1px solid var(--dash-border);
+  padding: 18px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: call-detail-in 0.2s ease;
+}
+
+@keyframes call-detail-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Detail: channel tags */
+.call-billing-detail-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 24px;
+  gap: 8px;
 }
-.dash3-ledger-filters button {
-  min-height: 42px;
-  padding: 0 16px;
-  border-radius: 12px;
-  border: 1px solid var(--dash-border);
-  background: var(--dash-card-bg);
-  color: var(--dash-text);
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-}
-.dash3-ledger-filters button:hover {
-  border-color: var(--dash-accent);
-}
-.dash3-ledger-table-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-.dash3-ledger-table {
-  width: 100%;
-  min-width: 1080px;
-  border-collapse: collapse;
-}
-.dash3-ledger-table th,
-.dash3-ledger-table td {
-  padding: 18px 16px;
-  border-bottom: 1px solid var(--dash-border);
-  text-align: left;
-  color: var(--dash-text);
-  font-size: 14px;
-}
-.dash3-ledger-table th {
+
+.call-billing-detail-tags span {
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: var(--dash-card-hover);
   color: var(--dash-sub);
-  font-weight: 900;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--dash-border);
+}
+
+/* Detail: pricing cards grid */
+.call-billing-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.call-billing-pricing-card {
+  padding: 16px;
+  border: 1px solid var(--dash-border);
+  border-radius: 14px;
+  background: var(--dash-card-hover);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.call-billing-pricing-card > strong {
   font-size: 13px;
+  font-weight: 900;
+  color: var(--dash-text);
 }
-.dash3-ledger-table td {
-  font-weight: 700;
+
+.call-billing-pricing-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
-.dash3-ledger-table td:nth-child(n+5) {
+
+.call-billing-pricing-rows > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.call-billing-pricing-rows > div > span {
+  font-size: 12px;
+  color: var(--dash-sub);
+}
+
+.call-billing-pricing-rows > div > b {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--dash-text);
   font-family: "SF Mono", "Fira Code", monospace;
+  font-variant-numeric: tabular-nums;
 }
+
+.call-billing-pricing-card > small {
+  font-size: 11px;
+  color: var(--dash-sub);
+  line-height: 1.5;
+}
+
+/* Detail: final calculation card */
+.call-billing-calc-card {
+  padding: 18px;
+  border: 1px solid var(--dash-accent);
+  border-radius: 14px;
+  background: rgba(99,102,241,0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.call-billing-calc-card > strong {
+  font-size: 13px;
+  font-weight: 900;
+  color: var(--dash-accent);
+}
+
+.call-billing-calc-formula {
+  font-size: 13px;
+  color: var(--dash-sub);
+  font-family: "SF Mono", "Fira Code", monospace;
+  line-height: 1.7;
+  word-break: break-all;
+}
+
+.call-billing-calc-formula b {
+  color: var(--dash-accent);
+  font-size: 15px;
+}
+
+.call-billing-calc-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.call-billing-calc-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.call-billing-calc-row span {
+  font-size: 13px;
+  color: var(--dash-sub);
+}
+
+.call-billing-calc-row b {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--dash-text);
+  font-family: "SF Mono", monospace;
+}
+
+.call-billing-calc-row b.strikethrough {
+  text-decoration: line-through;
+  color: var(--dash-sub);
+  font-weight: 600;
+}
+
+.call-billing-calc-row.saved b {
+  color: var(--dash-green);
+}
+
+.call-billing-calc-card > small {
+  font-size: 11px;
+  color: var(--dash-sub);
+  font-style: italic;
+}
+
+/* ===== Status pills (keep existing) ===== */
 .dash3-status-pill {
   display: inline-flex;
   align-items: center;
@@ -9053,6 +9350,33 @@ pre {
 .dash3-status-pill.timeout {
   color: var(--dash-yellow);
   background: rgba(245,158,11,0.14);
+}
+
+/* ===== Responsive call billing ===== */
+@media (max-width: 1100px) {
+  .call-billing-row {
+    grid-template-columns: 100px 60px 42px minmax(0, 1fr) 44px 52px 80px 40px 90px 52px 48px;
+    gap: 6px;
+    padding: 12px 14px;
+    font-size: 11px;
+  }
+
+  .call-billing-pricing-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .call-billing-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    padding: 14px;
+  }
+
+  .call-billing-pricing-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .dash3-empty-chart,
 .dash3-empty-panel,
