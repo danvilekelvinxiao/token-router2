@@ -15,7 +15,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { email, password, invitationCode = "", purpose = "register", deviceId = "" } = req.body || {};
+  const { email, password, invitationCode = "", purpose = "register", deviceId = "", acceptedTerms, acceptedTermsAt, termsVersion, acceptedPrivacy, privacyVersion } = req.body || {};
   if (!email) {
     return res.status(400).json({ error: "邮箱不能为空" });
   }
@@ -32,6 +32,15 @@ export default async function handler(req, res) {
   if (purpose === "register" && (!password || password.length < 6)) {
     return res.status(400).json({ error: "密码至少 6 位" });
   }
+
+  // Store terms acceptance fields for later use when DB is ready
+  const termsMeta = acceptedTerms ? {
+    acceptedTerms: true,
+    acceptedTermsAt: acceptedTermsAt || new Date().toISOString(),
+    termsVersion: termsVersion || "2026-01-01",
+    acceptedPrivacy: !!acceptedPrivacy,
+    privacyVersion: privacyVersion || "2026-01-01",
+  } : null;
 
   const ip = getClientIp(req);
   const normalizedDeviceId = String(deviceId || req.headers["x-flowapi-device"] || "").slice(0, 80);
