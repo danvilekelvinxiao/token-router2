@@ -38,7 +38,7 @@ export default function AdminOverview() {
           name: ch.name,
           status: ch.status === "active" ? "正常" : "异常",
           latency: "-",
-          uptime: ch.status === "active" ? "99.9%" : "-",
+          uptime: ch.last_health_check_at ? "已检测" : "未检测",
         })));
       }
 
@@ -47,9 +47,9 @@ export default function AdminOverview() {
         if (logRes.ok) {
           const logData = await logRes.json();
           setStats([
-            { label: "今日调用", value: "-" },
-            { label: "今日 Token", value: "-" },
-            { label: "今日收入", value: "-" },
+            { label: "今日调用", value: String(logData.todayCount || logData.today || "—") },
+            { label: "今日 Token", value: logData.todayTokens ? String(Math.round(logData.todayTokens).toLocaleString()) : "—" },
+            { label: "今日收入", value: logData.todayRevenue ? `¥${Number(logData.todayRevenue).toFixed(2)}` : "—" },
             { label: "记录总数", value: String(logData.total || 0) },
           ]);
         }

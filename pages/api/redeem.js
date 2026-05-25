@@ -3,7 +3,9 @@ import { getCustomer, rechargeCustomer, logActivity } from "@/lib/customer-store
 import { assertCustomerOwner } from "@/lib/session";
 import { seedMockData } from "@/lib/redeem-codes";
 
-seedMockData();
+// Only seed mock data in development mode, never in production
+const ALLOW_MOCK_REDEEM_CODES = process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_REDEEM_MOCK !== "false";
+if (ALLOW_MOCK_REDEEM_CODES) seedMockData();
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
