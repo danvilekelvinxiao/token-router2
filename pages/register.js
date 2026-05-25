@@ -179,22 +179,19 @@ export default function RegisterPage() {
                 </div>
 
                 {/* Terms checkbox */}
-                <div className="terms-checkbox-row">
-                  <label className="terms-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={agreedTerms}
-                      onChange={(e) => setAgreedTerms(e.target.checked)}
-                      className="terms-checkbox-input"
-                    />
-                    <span className="terms-checkbox-text">
-                      我已阅读并同意
-                      <button type="button" className="terms-link-btn" onClick={() => setTermsModal(true)}>《FlowAPI 用户协议》</button>
-                      和
-                      <button type="button" className="terms-link-btn" onClick={() => setPrivacyModal(true)}>《FlowAPI 隐私政策》</button>
-                    </span>
-                  </label>
-                </div>
+                <label className={`terms-agreement-row ${agreedTerms ? "agreed" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={agreedTerms}
+                    onChange={(e) => setAgreedTerms(e.target.checked)}
+                  />
+                  <span className="terms-agreement-text">
+                    我已阅读并同意
+                    <button type="button" onClick={(e) => { e.preventDefault(); setTermsModal(true); }}>《FlowAPI 用户协议》</button>
+                    和
+                    <button type="button" onClick={(e) => { e.preventDefault(); setPrivacyModal(true); }}>《FlowAPI 隐私政策》</button>
+                  </span>
+                </label>
 
                 {error && (
                   <p style={{ color: "#ef4444", fontSize: 13, margin: "8px 0" }}>{error}</p>
