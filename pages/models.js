@@ -8,13 +8,38 @@ import { buildCcSwitchCodexConfig, buildCcSwitchConfigUrl } from "@/lib/cc-switc
 import ModelLogo from "@/components/ModelLogo";
 import { getModelProduct } from "@/lib/model-products";
 
-const providers = ["全部供应商", "OpenAI", "Anthropic", "Google", "DeepSeek", "Alibaba", "Moonshot", "Meta"];
+const providers = ["全部供应商", "UniAPI", "OpenAI", "Anthropic", "Google", "DeepSeek", "Alibaba", "Moonshot", "Meta"];
 const billingTypes = ["全部类型", "按量计费"];
 const tags = ["全部标签", "免费体验", "高性价比", "Coding 推荐", "长上下文", "图片/多模态", "高速响应", "中文", "写作", "代码", "推理", "低价", "长文本"];
 const codexPlusProduct = getModelProduct("codex-plus");
+const codexProProduct = getModelProduct("codex-pro");
+const codexLiteProduct = getModelProduct("codex-lite");
+const gpt55Product = getModelProduct("flowapi-gpt55");
+const gpt54ProProduct = getModelProduct("flowapi-gpt54-pro");
+const gpt54Product = getModelProduct("flowapi-gpt54");
+const claudeSonnetProduct = getModelProduct("flowapi-claude-sonnet");
+const claudeOpusProduct = getModelProduct("flowapi-claude-opus");
 const codexPlusModelId = codexPlusProduct?.publicModelId || "flowapi-codex-plus";
 const codexPlusAvailable = Boolean(codexPlusProduct?.isAvailable);
 const codexPlusActualModel = codexPlusProduct?.actualModelId || "gpt-5.5";
+
+function productModel(product, fallback = {}) {
+  return {
+    id: product?.publicModelId || fallback.id,
+    productId: product?.id || fallback.productId,
+    name: product?.displayName || fallback.name,
+    provider: product?.provider || fallback.provider || "UniAPI",
+    input: product?.isAvailable ? "按高级模型倍率计费" : "即将开放",
+    output: product?.isAvailable ? "按高级模型倍率计费" : "即将开放",
+    context: "按上游模型",
+    tags: fallback.tags || ["Coding 推荐"],
+    bestFor: product?.isAvailable
+      ? `${product.description}（底层供应商：UniAPI，上游：${product.actualModelId}）`
+      : `${product?.displayName || fallback.name} 上游未测试通过，当前仅展示入口，暂不允许创建 Key`,
+    rank: fallback.rank || 1,
+    isAvailable: Boolean(product?.isAvailable),
+  };
+}
 
 const freeModels = [
   { id: "deepseek-chat", productId: "deepseek-chat", name: "DeepSeek Chat", provider: "DeepSeek", context: "64K", speed: "高速响应", allowance: "注册赠送额度内可用", limit: "适合测试，不建议高并发生产", bestFor: "聊天、API 测试、简单 Coding", tags: ["免费体验", "新手推荐", "高性价比", "中文", "低价"], isAvailable: true },
@@ -30,21 +55,32 @@ const modelSections = [
     description: "适合 Claude Code、Codex、Cursor、自动化脚本和代码任务，优先推荐稳定、推理和代码能力更强的模型。",
     badge: "编程优先",
     models: [
-      { id: codexPlusModelId, productId: "codex-plus", name: "Codex Plus", provider: "OpenAI", input: "高级编程模型", output: "按 Codex Plus 倍率计费", context: "按上游模型", tags: ["代码", "Coding 推荐", "Codex", "Agent"], bestFor: codexPlusAvailable ? `代码生成、代码修复、Agent 编程任务（上游：${codexPlusActualModel}）` : "OpenAI Codex 上游未开通，当前仅展示入口，暂不允许创建 Key", rank: 1, isAvailable: codexPlusAvailable },
-      { id: "deepseek-reasoner", productId: "deepseek-reasoner", name: "DeepSeek Reasoner", provider: "DeepSeek", input: "¥3.9600 / 1M Tokens", output: "¥15.7680 / 1M Tokens", context: "64K", tags: ["推理", "代码", "Coding 推荐", "中文"], bestFor: "复杂推理、数学、编程和代码任务", rank: 2, isAvailable: true },
-      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", input: "即将开放", output: "即将开放", context: "128K", tags: ["推理", "代码", "低价", "Coding 推荐"], bestFor: "分析总结、结构化任务、代码辅助", rank: 3, isAvailable: false },
-      { id: "anthropic/claude-3.5-haiku", name: "Claude Haiku", provider: "Anthropic", input: "即将开放", output: "即将开放", context: "200K", tags: ["长文本", "写作", "推理", "Coding 推荐"], bestFor: "英文代码解释、长文阅读、轻量推理", rank: 4, isAvailable: false },
+      { id: codexPlusModelId, productId: "codex-plus", name: "Codex Plus", provider: "UniAPI", input: codexPlusAvailable ? "高级编程模型" : "即将开放", output: codexPlusAvailable ? "按 Codex Plus 倍率计费" : "即将开放", context: "按上游模型", tags: ["代码", "Coding 推荐", "Codex", "Agent"], bestFor: codexPlusAvailable ? `代码生成、代码修复、Agent 编程任务（供应商：UniAPI，上游：${codexPlusActualModel}）` : "UniAPI Codex 上游未测试通过，当前仅展示入口，暂不允许创建 Key", rank: 1, isAvailable: codexPlusAvailable },
+      productModel(codexProProduct, { id: "flowapi-codex-pro", productId: "codex-pro", name: "Codex Pro", tags: ["代码", "Coding 推荐", "Codex", "Agent"], rank: 2 }),
+      productModel(codexLiteProduct, { id: "flowapi-codex-lite", productId: "codex-lite", name: "Codex Lite", tags: ["代码", "低价", "轻量", "编程"], rank: 3 }),
+      { id: "deepseek-reasoner", productId: "deepseek-reasoner", name: "DeepSeek Reasoner", provider: "DeepSeek", input: "¥3.9600 / 1M Tokens", output: "¥15.7680 / 1M Tokens", context: "64K", tags: ["推理", "代码", "Coding 推荐", "中文"], bestFor: "复杂推理、数学、编程和代码任务", rank: 4, isAvailable: true },
     ],
   },
   {
     id: "chatgpt",
     title: "ChatGPT 模型",
     description: "适合习惯 ChatGPT 体验的用户，用于通用问答、总结、结构化输出和办公场景。",
-    badge: "OpenAI 系列",
+    badge: "UniAPI 上游",
     models: [
-      { id: "gpt-5", productId: "chatgpt-5", name: "ChatGPT-5", provider: "OpenAI", input: "即将开放", output: "即将开放", context: "待开放", tags: ["推理", "写作", "Agent"], bestFor: "高级 ChatGPT 系列模型入口，待真实上游接通后开放", rank: 1, isAvailable: false },
-      { id: "gpt-5.5", productId: "gpt-5.5", name: "GPT-5.5", provider: "OpenAI", input: "即将开放", output: "即将开放", context: "待开放", tags: ["推理", "代码", "长上下文"], bestFor: "复杂推理、专业代码、长上下文 Agent，待真实上游接通后开放", rank: 2, isAvailable: false },
-      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", input: "即将开放", output: "即将开放", context: "128K", tags: ["推理", "代码", "低价", "Coding 推荐"], bestFor: "高性价比 ChatGPT 类体验、总结和结构化任务", rank: 3, isAvailable: false },
+      productModel(gpt55Product, { id: "flowapi-gpt55", productId: "flowapi-gpt55", name: "GPT-5.5", tags: ["推理", "代码", "长上下文"], rank: 1 }),
+      productModel(gpt54ProProduct, { id: "flowapi-gpt54-pro", productId: "flowapi-gpt54-pro", name: "GPT-5.4 Pro", tags: ["推理", "代码", "长上下文"], rank: 2 }),
+      productModel(gpt54Product, { id: "flowapi-gpt54", productId: "flowapi-gpt54", name: "GPT-5.4", tags: ["推理", "写作", "Agent"], rank: 3 }),
+      { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", provider: "OpenAI", input: "即将开放", output: "即将开放", context: "128K", tags: ["推理", "代码", "低价", "Coding 推荐"], bestFor: "高性价比 ChatGPT 类体验、总结和结构化任务", rank: 4, isAvailable: false },
+    ],
+  },
+  {
+    id: "claude",
+    title: "Claude 模型",
+    description: "Anthropic Claude 系列模型，适合长文本理解、代码分析、复杂任务拆解和高质量写作。通过 UniAPI 聚合通道接入。",
+    badge: "UniAPI 上游",
+    models: [
+      productModel(claudeSonnetProduct, { id: "flowapi-claude-sonnet", productId: "flowapi-claude-sonnet", name: "Claude Sonnet", tags: ["长文本", "推理", "写作", "分析"], rank: 1 }),
+      productModel(claudeOpusProduct, { id: "flowapi-claude-opus", productId: "flowapi-claude-opus", name: "Claude Opus", tags: ["最强推理", "深度分析", "专业写作"], rank: 2 }),
     ],
   },
   {
