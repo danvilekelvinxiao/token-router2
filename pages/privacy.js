@@ -90,7 +90,7 @@ export default function PrivacyPage() {
             <h1>FlowAPI 隐私政策</h1>
             <div className="terms-page-intro">
               <p>
-                FlowAPI 平台（以下简称"我们"或"FlowAPI"）深知个人信息对您的重要性。本隐私政策旨在向您说明我们如何收集、使用、存储和保护您的个人信息，以及您享有的相关权利。请您在使用 FlowAPI 服务前仔细阅读本隐私政策。
+                FlowAPI 平台（以下简称&ldquo;我们&rdquo;或&ldquo;FlowAPI&rdquo;）深知个人信息对您的重要性。本隐私政策旨在向您说明我们如何收集、使用、存储和保护您的个人信息，以及您享有的相关权利。请您在使用 FlowAPI 服务前仔细阅读本隐私政策。
               </p>
               <p>
                 本隐私政策与您使用的 FlowAPI 服务密切相关。如您对本隐私政策有任何疑问，请通过平台提供的联系方式与我们联系。

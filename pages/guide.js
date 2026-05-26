@@ -600,7 +600,6 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
     }
     setDetailLoading(false);
   }
-  }
 
   if (!customer) {
     return (

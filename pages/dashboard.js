@@ -2925,6 +2925,7 @@ export default function DashboardPage() {
   }, [loadCustomer]);
 
   /* Load market model ranks */
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     let cancelled = false;
     setMarketRanksLoading(true);
@@ -2959,6 +2960,7 @@ export default function DashboardPage() {
   const trendDays = trendRange === "90d" ? 90 : trendRange === "30d" ? 30 : 7;
   const trendData = buildTrendData(usage.calls, trendDays);
   const modelUsage = buildModelUsage(modelSpend.ranking);
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const heatmapCalendar = useMemo(() => generateMonthCalendar(usage.calls, heatmapYear, heatmapMonth), [usage.calls, heatmapYear, heatmapMonth]);
   const userTopModels = modelSpend.ranking.slice(0, 4).map((item) => ({
     name: item.model,

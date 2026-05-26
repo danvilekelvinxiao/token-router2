@@ -89,6 +89,7 @@ export default function ModelsPage() {
   const isAdmin = customer?.role === "admin";
 
   useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
     try {
       const stored = localStorage.getItem("flowapi_customer");
       if (stored) setCustomer(JSON.parse(stored));
@@ -101,6 +102,7 @@ export default function ModelsPage() {
       })
       .catch(() => setError("模型广场加载失败"))
       .finally(() => setLoading(false));
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   const filtered = useMemo(() => {
