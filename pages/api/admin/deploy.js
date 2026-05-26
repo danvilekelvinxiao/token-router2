@@ -34,16 +34,16 @@ export default async function handler(req, res) {
     logs.push(gitOut.trim());
 
     logs.push("[2/4] npm install...");
-    execSync("npm install", {
+    execSync("npm install --prefer-offline --no-audit --no-fund", {
       cwd: "/var/www/flowapi",
-      timeout: 60000,
+      timeout: 120000,
       encoding: "utf8",
     });
 
     logs.push("[3/4] npm build...");
     execSync("npm run build", {
       cwd: "/var/www/flowapi",
-      timeout: 180000,
+      timeout: 300000,
       encoding: "utf8",
     });
 
