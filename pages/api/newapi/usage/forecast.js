@@ -7,11 +7,13 @@
 
 import { getNewApiUsage } from "@/lib/new-api/client";
 import { generateTokenForecast } from "@/lib/analytics/token-forecast";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+  if (!(await requireAdmin(req, res))) return;
 
   try {
     const { tokenId, days = "14" } = req.query;

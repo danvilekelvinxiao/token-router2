@@ -1,6 +1,6 @@
 import { MODEL_CATALOG } from "@/lib/models";
 import { findCustomerByToken } from "@/lib/customer-store";
-import { isPassthroughEnabled } from "@/lib/new-api/passthrough";
+import { isTokenWhitelisted } from "@/lib/new-api/passthrough";
 import { getUpstreamConfigs } from "@/lib/upstream";
 
 function setCors(res) {
@@ -38,8 +38,9 @@ export default async function handler(req, res) {
   const isLocalKey = !!(clientToken && await findCustomerByToken(clientToken));
 
   if (!isLocalKey) {
-    // Allow New API token passthrough when enabled
-    if (!isPassthroughEnabled()) {
+    // Only admin-whitelisted New API tokens may query upstream models.
+    // Unknown New API tokens must not bypass FlowAPI's local api_keys table.
+    if (!(clientToken && await isTokenWhitelisted(clientToken))) {
       return res.status(401).json({
         error: { message: "Invalid FlowAPI API Key", type: "invalid_api_key" },
       });
