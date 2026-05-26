@@ -181,7 +181,7 @@ function AccountMenu({ customer }) {
       }}>
         <div style={{
           width: 26, height: 26, borderRadius: "50%",
-          background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+          background: "var(--flow-brand-gradient)",
           display: "flex", alignItems: "center", justifyContent: "center",
           color: "#fff", fontSize: 13, fontWeight: 700,
         }}>
@@ -209,7 +209,7 @@ function AccountMenu({ customer }) {
         }}>
           <div style={{
             padding: "14px 16px",
-            background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+            background: "var(--flow-brand-gradient)",
           }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
               AI Flow 账户

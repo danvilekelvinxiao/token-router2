@@ -67,6 +67,26 @@ export default async function handler(req, res) {
           error: { message: error.message, type: "model_required" },
         });
       }
+      if (error?.code === "INVALID_NEW_API_TOKEN_FORMAT") {
+        return res.status(502).json({
+          code: "INVALID_NEW_API_TOKEN_FORMAT",
+          error: {
+            message: "New API 返回的令牌格式异常",
+            type: "invalid_new_api_token_format",
+          },
+          suggestion: "请检查 New API 创建 Token 接口是否返回完整 sk- 开头 API Key。",
+        });
+      }
+      if (error?.code === "NEW_API_TOKEN_CREATE_FAILED") {
+        return res.status(502).json({
+          code: "NEW_API_TOKEN_CREATE_FAILED",
+          error: {
+            message: "上游令牌创建失败，请稍后重试或联系管理员",
+            type: "new_api_token_create_failed",
+          },
+          suggestion: error?.message || "New API API Key 创建失败",
+        });
+      }
       return res.status(502).json({
         error: "API 密钥创建失败，请稍后重试或联系管理员。",
         suggestion: error?.message || "New API 令牌创建失败",

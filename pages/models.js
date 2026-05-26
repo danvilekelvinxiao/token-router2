@@ -3,37 +3,79 @@ import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
+import ModelCard from "@/components/ModelCard";
+import ProviderLogo from "@/components/model-market/ProviderLogo";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
 import { buildCcSwitchConfigUrl } from "@/lib/cc-switch";
-import ProviderLogo from "@/components/model-market/ProviderLogo";
-import { getModelProduct } from "@/lib/model-products";
 
 const CATEGORY_TABS = [
-  { key: "all", label: "全部" },
+  { key: "all", label: "全部模型" },
   { key: "newcomer", label: "新手推荐" },
   { key: "chatgpt", label: "ChatGPT" },
-  { key: "codex", label: "Codex 编程" },
-  { key: "claude", label: "Claude" },
+  { key: "codex", label: "Codex" },
   { key: "deepseek", label: "DeepSeek" },
+  { key: "claude", label: "Claude" },
+  { key: "gemini", label: "Gemini" },
   { key: "coming_soon", label: "即将开放" },
+];
+
+const CATEGORY_INTROS = {
+  all: {
+    title: "FlowAPI 大模型广场",
+    desc: "第一版只开放 ChatGPT、Codex、DeepSeek、Claude、Gemini 五个模型系列，用户只需要选择模型，不需要理解后台上游渠道。",
+  },
+  newcomer: {
+    title: "新手推荐",
+    desc: "建议先用 DeepSeek Chat / DeepSeek Reasoner 完成第一次调用；Codex Lite 仅在健康检查成功后开放给新手。",
+  },
+  chatgpt: {
+    title: "ChatGPT",
+    desc: "适合复杂问答、内容生成、方案规划和高质量推理任务。",
+  },
+  codex: {
+    title: "Codex 编程模型",
+    desc: "适合 CC-Switch、Cursor、Claude Code、Cline 等编程工具，用于代码生成、Bug 修复和项目重构。",
+  },
+  deepseek: {
+    title: "DeepSeek",
+    desc: "高性价比中文和代码模型，适合新手入门、日常对话、轻量编程和推理任务。",
+  },
+  claude: {
+    title: "Claude",
+    desc: "适合长文本理解、代码分析、复杂任务拆解和高质量写作。",
+  },
+  gemini: {
+    title: "Gemini",
+    desc: "适合多模态理解、快速响应、内容处理和通用 AI 任务。",
+  },
+  coming_soon: {
+    title: "即将开放",
+    desc: "这些模型已经进入 FlowAPI 商品规划，等上游渠道、价格和健康检查全部通过后再开放创建 API Key。",
+  },
+};
+
+const EXPIRY_OPTS = [
+  { value: "never", label: "永不过期" },
+  { value: "30d", label: "30 天" },
+  { value: "90d", label: "90 天" },
+  { value: "1y", label: "1 年" },
 ];
 
 function newcomerModels(models) {
   return models.filter((m) =>
-    m.isAvailable && ["deepseek-chat", "codex-lite", "deepseek-reasoner"].includes(m.id)
+    m.isAvailable && ["deepseek-chat", "deepseek-reasoner", "flowapi-codex-lite"].includes(m.publicModelId)
   );
 }
 
 export default function ModelsPage() {
   const [customer, setCustomer] = useState(null);
   const [models, setModels] = useState([]);
-  const [providers, setProviders] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
-  const [selProvider, setSelProvider] = useState("all");
 
   const [creating, setCreating] = useState("");
   const [showCreate, setShowCreate] = useState(null);
@@ -44,77 +86,107 @@ export default function ModelsPage() {
   const [toast, setToast] = useState("");
 
   const apiBaseUrl = getPublicApiBaseUrl();
+  const isAdmin = customer?.role === "admin";
 
-  /* Load data */
   useEffect(() => {
-    const stored = localStorage.getItem("flowapi_customer");
-    if (stored) try { setCustomer(JSON.parse(stored)); } catch {}
-
+    try {
+      const stored = localStorage.getItem("flowapi_customer");
+      if (stored) setCustomer(JSON.parse(stored));
+    } catch {}
     fetch("/api/models/market")
       .then((r) => r.json())
-      .then((data) => { setModels(data.models || []); setProviders(data.providers || []); })
+      .then((data) => {
+        setModels(data.models || []);
+        setCategories(data.categories || data.providers || []);
+      })
       .catch(() => setError("模型广场加载失败"))
       .finally(() => setLoading(false));
   }, []);
 
-  /* Filter */
   const filtered = useMemo(() => {
     let list = models;
     if (category === "newcomer") list = newcomerModels(models);
-    else if (category === "coming_soon") list = models.filter((m) => !m.isAvailable);
-    else if (category !== "all") list = models.filter((m) => m.category === category);
-    if (selProvider !== "all") list = list.filter((m) => m.providerId === selProvider);
+    else if (category === "coming_soon") list = list.filter((m) => m.status === "coming_soon");
+    else if (category !== "all") list = list.filter((m) => m.category === category);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
-      list = list.filter((m) => m.displayName.toLowerCase().includes(q) || m.publicModelId.toLowerCase().includes(q));
+      list = list.filter((m) =>
+        m.displayName.toLowerCase().includes(q) ||
+        m.publicModelId.toLowerCase().includes(q)
+      );
     }
     return list.sort((a, b) => (a.sortOrder || 99) - (b.sortOrder || 99));
-  }, [models, category, selProvider, search]);
+  }, [models, category, search]);
 
-  /* Provider list with real counts */
   const sidebar = useMemo(() => {
-    const all = [{ id: "all", name: "全部模型", count: models.length }];
-    providers.forEach((p) => { if (p.count > 0) all.push(p); });
-    return all;
-  }, [providers, models]);
+    const fallback = CATEGORY_TABS.map((item) => ({
+      id: item.key,
+      name: item.label,
+      count: item.key === "all" ? models.length : 0,
+    }));
+    return (categories.length ? categories : fallback).filter((item) => item.id === "all" || item.count > 0 || item.id === "coming_soon");
+  }, [categories, models.length]);
 
-  /* Create Key */
+  const intro = CATEGORY_INTROS[category] || CATEGORY_INTROS.all;
+
+  function showToast(msg) { setToast(msg); setTimeout(() => setToast(""), 2400); }
+
   async function doCreateKey() {
-    if (!customer) { showToast("请先登录"); return; }
-    setCreating(showCreate?.id);
+    if (!customer || !showCreate) { showToast("请先登录"); return null; }
+    setCreating(showCreate.id);
     try {
-      const product = getModelProduct(showCreate?.id);
+      if (!showCreate.isAvailable) { showToast("该模型暂未开放"); setCreating(""); return null; }
       const res = await fetch("/api/keys", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customerId: customer.id, modelId: product?.id || showCreate?.id, label: formLabel || `${showCreate?.displayName} Key` }),
+        body: JSON.stringify({
+          customerId: customer.id, modelId: showCreate.publicModelId || showCreate.id,
+          label: formLabel || `${showCreate.displayName} Key`,
+        }),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) { showToast(data?.error?.message || "创建失败"); return; }
+      if (!res.ok) { showToast(data?.error?.message || "创建失败"); return null; }
       const updated = data.customer || data;
+      const nextKey = data.createdKey || updated.apiKeys?.slice(-1)?.[0] || null;
       setCustomer(updated);
       localStorage.setItem("flowapi_customer", JSON.stringify(updated));
-      setCreatedKey(data.createdKey || updated.apiKeys?.slice(-1)?.[0] || null);
+      setCreatedKey(nextKey);
       setKeyReady(true);
-    } catch { showToast("网络异常"); }
-    setCreating("");
+      return nextKey;
+    } catch {
+      showToast("网络异常");
+      return null;
+    } finally {
+      setCreating("");
+    }
   }
 
   function openCcSwitch(key) {
     if (!key?.token) { showToast("没有可用的 API Key"); return; }
-    const model = showCreate?.publicModelId || showCreate?.id || "";
-    const url = buildCcSwitchConfigUrl({ apiKey: key.token, baseUrl: apiBaseUrl, model, name: "FlowAPI", displayName: showCreate?.displayName || model });
-    const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noreferrer";
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    const url = buildCcSwitchConfigUrl({
+      apiKey: key.token, baseUrl: apiBaseUrl,
+      model: showCreate?.publicModelId || "",
+      name: "FlowAPI", displayName: showCreate?.displayName || "",
+    });
+    window.open(url, "_blank", "noreferrer");
     showToast("已启动 CC-Switch");
   }
 
-  function copyText(label, text) { navigator.clipboard.writeText(text).then(() => showToast(`已复制 ${label}`)); }
-  function showToast(msg) { setToast(msg); setTimeout(() => setToast(""), 2000); }
+  function openCreateModal(m) {
+    if (!customer) { showToast("请先登录"); return; }
+    if (!m.isAvailable) { showToast("该模型暂未开放"); return; }
+    setShowCreate(m); setCreatedKey(null); setKeyReady(false);
+    setFormLabel(`${m.displayName} Key`); setFormExpiry("never");
+  }
+
+  function closeModal() { setShowCreate(null); setKeyReady(false); }
 
   return (
     <>
       <Head><title>大模型接入广场 - FlowAPI</title></Head>
-      <ConsoleLayout customer={customer || { name: "访客", email: "", id: "", balance: 0, apiKeys: [] }} currentPath="/models">
+      <ConsoleLayout
+        customer={customer || { name: "访客", email: "", id: "", balance: 0, apiKeys: [] }}
+        currentPath="/models"
+      >
         <div className="models-page-v2">
 
           {/* Hero */}
@@ -122,39 +194,37 @@ export default function ModelsPage() {
             <h1>大模型接入广场</h1>
             <p>选择模型，一键创建 API Key，并自动导入 CC-Switch / Cursor / Claude Code 等工具。</p>
             <div className="models-hero-actions">
-              <a href="https://github.com/farion1231/cc-switch/releases/tag/v3.15.0" target="_blank" rel="noreferrer" className="btn-secondary btn-small">下载 CC-Switch</a>
-              <Link href="/guide" className="btn-secondary btn-small">查看接入教程</Link>
+              <Link href="/guide" className="btn-secondary btn-small">帮助指南</Link>
+              <Link href="/dashboard" className="btn-secondary btn-small">我的 Key</Link>
+              {isAdmin && <Link href="/admin/models" className="btn-secondary btn-small">管理</Link>}
             </div>
           </div>
 
-          {/* Newcomer hint */}
+          {/* Newcomer */}
           <div className="models-newcomer-bar">
             <span>新手推荐：先下载 CC-Switch，再选择模型创建专属 API Key，最后一键导入使用。</span>
+            <a href="https://github.com/farion1231/cc-switch/releases/tag/v3.15.0"
+               target="_blank" rel="noreferrer" className="btn-secondary btn-small">下载 CC-Switch</a>
+            <Link href="/guide" className="btn-secondary btn-small">接入教程</Link>
           </div>
 
-          {/* Category tabs */}
-          <div className="models-category-tabs">
-            {CATEGORY_TABS.map((t) => (
-              <button key={t.key} type="button" className={category === t.key ? "active" : ""} onClick={() => { setCategory(t.key); setSelProvider("all"); }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Search */}
+          {/* Search + filter */}
           <div className="models-search-row">
-            <input type="text" className="models-search-input" placeholder="搜索模型名称，例如 GPT、Codex、Claude、DeepSeek" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <input type="text" className="models-search-input"
+                   placeholder="搜索模型名称，例如 GPT-5.5、Codex、Claude、DeepSeek、Gemini"
+                   value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
 
           {/* Layout */}
           <div className="models-layout-v2">
-            {/* Sidebar */}
             <aside className="models-provider-sidebar">
-              <div className="models-provider-sidebar-title">供应商</div>
+              <div className="models-provider-sidebar-title">模型系列</div>
               {sidebar.map((p) => (
-                <button key={p.id} type="button" className={`models-provider-item ${selProvider === p.id ? "active" : ""}`} onClick={() => setSelProvider(p.id)}>
+                <button key={p.id} type="button"
+                        className={`models-provider-item${category === p.id ? " active" : ""}`}
+                        onClick={() => setCategory(p.id)}>
                   <span className="models-provider-item-logo">
-                    <ProviderLogo providerId={p.id} size={20} variant="rounded" />
+                    <ProviderLogo providerId={getSeriesLogoId(p.id)} size={20} variant="rounded" />
                   </span>
                   <span className="models-provider-item-name">{p.name}</span>
                   <span className="models-provider-item-count">{p.count}</span>
@@ -162,37 +232,43 @@ export default function ModelsPage() {
               ))}
             </aside>
 
-            {/* Main */}
             <section className="models-main">
+              <div className="models-series-intro-card">
+                <div>
+                  <span className="models-page-kicker">Model Series</span>
+                  <h2>{intro.title}</h2>
+                  <p>{intro.desc}</p>
+                </div>
+                <span className="models-series-intro-count">{filtered.length} 个模型</span>
+              </div>
               {loading ? (
-                <div className="empty-state"><strong>加载中...</strong><p>正在获取模型数据。</p></div>
+                <div className="empty-state">
+                  <strong>加载中...</strong>
+                  <p>正在获取模型数据。</p>
+                </div>
               ) : error ? (
                 <div className="empty-state">
-                  <strong>{error}</strong><p>无法连接后端模型服务，请稍后重试。</p>
-                  <button type="button" className="btn-secondary btn-small" onClick={() => window.location.reload()}>重新加载</button>
+                  <strong>模型广场加载失败</strong>
+                  <p>无法连接后端模型服务，请稍后重试。</p>
+                  <button type="button" className="btn-secondary btn-small"
+                          onClick={() => window.location.reload()}>重新加载</button>
                 </div>
               ) : filtered.length === 0 ? (
                 <div className="empty-state">
                   <strong>{search ? "没有找到相关模型" : "暂无可用模型"}</strong>
-                  <p>{search ? "请尝试搜索 GPT、Codex、Claude、DeepSeek 等关键词。" : "管理员还没有配置可用模型。"}</p>
+                  <p>{search
+                    ? "请尝试搜索 GPT、Codex、Claude、DeepSeek 等关键词。"
+                    : "管理员还没有配置可用模型，请先在后台同步上游模型并完成健康检查。"}</p>
+                  {!search && isAdmin && (
+                    <Link href="/admin/models" className="btn-primary btn-small">前往配置</Link>
+                  )}
                 </div>
               ) : (
                 <div className="models-card-grid">
                   {filtered.map((m) => (
-                    <ModelCard
-                      key={m.id}
-                      model={m}
-                      onAccess={() => {
-                        if (!customer) { showToast("请先登录"); return; }
-                        if (!m.isAvailable) { showToast("该模型暂未开放"); return; }
-                        setShowCreate(m);
-                        setCreatedKey(null);
-                        setKeyReady(false);
-                        setFormLabel(`${m.displayName} Key`);
-                        setFormExpiry("never");
-                      }}
-                      creating={creating === m.id}
-                    />
+                    <ModelCard key={m.id} model={m} isAdmin={isAdmin}
+                               creating={creating === m.id}
+                               onAccess={() => openCreateModal(m)} />
                   ))}
                 </div>
               )}
@@ -202,56 +278,76 @@ export default function ModelsPage() {
 
         {/* Create Key Modal */}
         {showCreate && (
-          <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) { setShowCreate(null); setKeyReady(false); } }}>
+          <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) closeModal(); }}>
             <div className="modal">
               <div className="modal-header">
                 <h2>{keyReady ? "API Key 已创建" : `创建 ${showCreate.displayName} API Key`}</h2>
-                <button type="button" className="modal-close" onClick={() => { setShowCreate(null); setKeyReady(false); }}>×</button>
+                <button type="button" className="modal-close" onClick={closeModal}>×</button>
               </div>
+
               <div className="modal-body">
                 {keyReady && createdKey ? (
-                  <div style={{ textAlign: "center" }}>
-                    <span className="badge badge-success" style={{ marginBottom: 12, display: "inline-block" }}>创建成功</span>
-                    <p style={{ fontSize: 13, color: "var(--dash-sub)", marginBottom: 8 }}>API 地址</p>
-                    <code style={{ display: "block", padding: 10, borderRadius: 10, background: "var(--dash-card-hover)", border: "1px solid var(--dash-border)", fontSize: 13, marginBottom: 12 }}>{apiBaseUrl}</code>
-                    <p style={{ fontSize: 13, color: "var(--dash-sub)", marginBottom: 8 }}>API Key</p>
+                  <div className="models-key-result">
+                    <span className="badge badge-success">创建成功</span>
+                    <p className="models-key-result-label">API 地址</p>
+                    <code className="model-key-display">{apiBaseUrl}</code>
+                    <p className="models-key-result-label">API Key</p>
                     <code className="model-key-display">{createdKey.token}</code>
-                    <p style={{ fontSize: 13, color: "var(--dash-sub)", marginBottom: 8, marginTop: 12 }}>模型名称</p>
-                    <code style={{ display: "block", padding: 10, borderRadius: 10, background: "var(--dash-card-hover)", border: "1px solid var(--dash-border)", fontSize: 13 }}>{showCreate.publicModelId}</code>
-                    <p style={{ fontSize: 11, color: "#ef4444", marginTop: 10 }}>请立即复制，关闭后可能无法再次查看完整密钥。</p>
+                    <p className="models-key-result-label">模型名称</p>
+                    <code className="model-key-display">{showCreate.publicModelId}</code>
+                    <p className="models-key-result-warn">请立即复制，关闭后可能无法再次查看完整密钥。</p>
                   </div>
                 ) : (
                   <>
-                    <label style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 14 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--dash-sub)" }}>Key 名称</span>
-                      <input className="input" value={formLabel} onChange={(e) => setFormLabel(e.target.value)} placeholder={`${showCreate.displayName} Key`} />
-                    </label>
-                    <label style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 14 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "var(--dash-sub)" }}>有效期</span>
-                      <select className="models-filter-select" value={formExpiry} onChange={(e) => setFormExpiry(e.target.value)} style={{ width: "100%" }}>
-                        <option value="never">永不过期</option>
-                        <option value="30d">30 天</option>
-                        <option value="90d">90 天</option>
-                        <option value="1y">1 年</option>
+                    <div className="models-create-field">
+                      <span className="models-create-field-label">Key 名称</span>
+                      <input className="models-search-input" value={formLabel}
+                             onChange={(e) => setFormLabel(e.target.value)}
+                             placeholder={`${showCreate.displayName} Key`} />
+                    </div>
+                    <div className="models-create-field">
+                      <span className="models-create-field-label">有效期</span>
+                      <select className="models-filter-select" value={formExpiry}
+                              onChange={(e) => setFormExpiry(e.target.value)}>
+                        {EXPIRY_OPTS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
                       </select>
-                    </label>
-                    <div style={{ padding: 10, borderRadius: 10, background: "var(--dash-card-hover)", border: "1px solid var(--dash-border)", fontSize: 13, color: "var(--dash-sub)", marginBottom: 14 }}>
-                      绑定模型：<strong style={{ color: "var(--dash-text)" }}>{showCreate.displayName}</strong>
+                    </div>
+                    <div className="models-create-binding">
+                      绑定模型：<strong>{showCreate.displayName}</strong>{" "}
+                      ({showCreate.publicModelId})
                     </div>
                   </>
                 )}
               </div>
+
               <div className="modal-footer">
                 {keyReady && createdKey ? (
                   <>
-                    <button type="button" className="btn-primary btn-small" onClick={() => copyText("API Key", createdKey.token)}>复制 Key</button>
-                    <button type="button" className="btn-secondary btn-small" onClick={() => openCcSwitch(createdKey)}>导入 CC-Switch</button>
+                    <button type="button" className="btn-primary btn-small"
+                            onClick={() => navigator.clipboard.writeText(createdKey.token).then(() => showToast("已复制"))}>
+                      复制 Key
+                    </button>
+                    <button type="button" className="btn-secondary btn-small"
+                            onClick={() => openCcSwitch(createdKey)}>
+                      导入 CC-Switch
+                    </button>
                   </>
                 ) : (
                   <>
-                    <button type="button" className="btn-secondary btn-small" onClick={() => setShowCreate(null)}>取消</button>
-                    <button type="button" className="btn-primary btn-small" disabled={!!creating} onClick={doCreateKey}>{creating ? "创建中..." : "创建并复制"}</button>
-                    <button type="button" className="btn-secondary btn-small" disabled={!!creating} onClick={async () => { await doCreateKey(); if (createdKey) openCcSwitch(createdKey); }}>创建并导入 CC-Switch</button>
+                    <button type="button" className="btn-secondary btn-small" onClick={closeModal}>取消</button>
+                    <button type="button" className="btn-primary btn-small"
+                            disabled={!!creating} onClick={doCreateKey}>
+                      {creating ? "创建中..." : "创建并复制"}
+                    </button>
+                    <button type="button" className="btn-secondary btn-small" disabled={!!creating}
+                            onClick={async () => {
+                              const nextKey = await doCreateKey();
+                              if (nextKey) openCcSwitch(nextKey);
+                            }}>
+                      创建并导入 CC-Switch
+                    </button>
                   </>
                 )}
               </div>
@@ -259,62 +355,17 @@ export default function ModelsPage() {
           </div>
         )}
 
-        {/* Toast */}
         {toast && <div className="models-toast">{toast}</div>}
       </ConsoleLayout>
     </>
   );
 }
 
-/* ==================== ModelCard ==================== */
-function ModelCard({ model, onAccess, creating }) {
-  const avail = model.isAvailable;
-  const comingSoon = model.isComingSoon;
-  const badge = avail ? "badge-success" : comingSoon ? "badge-muted" : "badge-danger";
-
-  return (
-    <div className={`model-card-v2 ${!avail ? "unavailable" : ""}`}>
-      {/* Top */}
-      <div className="model-card-v2-top">
-        <ProviderLogo providerId={model.providerId} size={30} variant="rounded" />
-        <div className="model-card-v2-name-wrap">
-          <strong className="model-card-v2-name">{model.displayName}</strong>
-          <div className="model-card-v2-type-tags">
-            {(model.typeTags || []).slice(0, 3).map((t) => (<span key={t} className="tag">{t}</span>))}
-          </div>
-        </div>
-        <span className={`badge ${badge}`}>{model.statusLabel}</span>
-      </div>
-
-      {/* Description */}
-      <p className="model-card-v2-desc">{model.description}</p>
-
-      {/* Use case tags */}
-      <div className="model-card-v2-tags">
-        {(model.useCases || []).slice(0, 4).map((t) => (<span key={t} className="model-card-v2-tag-item">{t}</span>))}
-      </div>
-
-      {/* Pricing */}
-      {avail ? (
-        <div className="model-card-v2-pricing">
-          <div className="model-card-v2-price-row"><span>输入</span><b>¥{model.inputPrice} / M tokens</b></div>
-          <div className="model-card-v2-price-row"><span>输出</span><b>¥{model.outputPrice} / M tokens</b></div>
-        </div>
-      ) : (
-        <div className="model-card-v2-pricing">
-          <span style={{ fontSize: 12, color: "var(--dash-sub)" }}>价格待配置</span>
-        </div>
-      )}
-
-      {/* Actions */}
-      <div className="model-card-v2-actions">
-        <button type="button" className="btn-primary btn-small" disabled={!avail || !!creating} onClick={onAccess}>
-          {creating ? "创建中..." : avail ? "创建 API Key" : comingSoon ? "即将开放" : "暂不可用"}
-        </button>
-        <button type="button" className="btn-ghost btn-small" onClick={() => navigator.clipboard.writeText(model.publicModelId).then(() => {})}>
-          复制 ID
-        </button>
-      </div>
-    </div>
-  );
+function getSeriesLogoId(id) {
+  if (id === "chatgpt") return "openai";
+  if (id === "claude") return "anthropic";
+  if (id === "gemini") return "google";
+  if (id === "codex") return "codex";
+  if (id === "deepseek") return "deepseek";
+  return "openai";
 }

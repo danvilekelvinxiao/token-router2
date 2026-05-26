@@ -96,6 +96,47 @@ curl -sS http://127.0.0.1:3000/api/newapi/health | jq .
 
 ---
 
+## UniAPI 上游渠道
+
+UniAPI 可作为 New API 的 OpenAI 兼容上游，用于 Codex / GPT 系列模型。真实 `UNIAPI_API_KEY` 只能填写在服务器环境变量或 New API 渠道密钥配置中，不要写入前端代码、Git、日志或浏览器返回值。
+
+New API 渠道建议：
+
+| 配置项 | 值 |
+|------|------|
+| 渠道名称 | `UniAPI-Codex-GPT` |
+| 渠道类型 | OpenAI 兼容 |
+| API 地址 | `https://api.uniapi.io` |
+| API Key | `UNIAPI_API_KEY=请在服务器或 New API 后台填写真实 UniAPI Key` |
+| 分组 | `codex-plus,gpt-premium,default` |
+| 模型 | 以 UniAPI 实际模型列表为准 |
+
+FlowAPI 模型广场已预留：
+
+| FlowAPI Model ID | 上游模型 |
+|------|------|
+| `flowapi-codex-plus` | 默认 `gpt-5.3-codex`，可通过 `FLOWAPI_UNIAPI_CODEX_PLUS_ACTUAL_MODEL` 调整 |
+| `flowapi-codex-pro` | 默认 `gpt-5.3-codex`，可通过 `FLOWAPI_UNIAPI_CODEX_PRO_ACTUAL_MODEL` 调整 |
+| `flowapi-gpt55` | `gpt-5.5` |
+| `flowapi-gpt54-pro` | `gpt-5.4-pro` |
+| `flowapi-gpt54` | `gpt-5.4` |
+
+生产机环境变量示例：
+
+```bash
+UNIAPI_API_KEY=请在服务器或 New API 后台填写真实 UniAPI Key
+UNIAPI_MODELS=gpt-5.5,gpt-5.4-pro,gpt-5.4,gpt-5.3-codex,gpt-5.2-codex
+
+# 只有在 New API 渠道测试成功后再开启
+FLOWAPI_UNIAPI_CODEX_PLUS_AVAILABLE=true
+FLOWAPI_UNIAPI_CODEX_PLUS_ACTUAL_MODEL=gpt-5.3-codex
+FLOWAPI_UNIAPI_GPT55_AVAILABLE=true
+```
+
+管理员可调用 `/api/admin/create-uniapi-channel` 将服务器环境变量里的 UniAPI Key 提交到 New API 渠道。没有配置真实 Key 时，该接口只返回占位符提示，不会创建假渠道。
+
+---
+
 ## 本地校验脚本
 
 ```bash

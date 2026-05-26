@@ -1,4 +1,5 @@
 import { estimateCnyCost, getActualModelId, getCatalogModel, normalizeModelLookup } from "@/lib/models";
+import { getModelProduct } from "@/lib/model-products";
 import { smartSelectModel } from "@/lib/smart-router";
 import { finalizeReservedCallByToken, findCustomerByToken, getTemporaryCreditBalance, reserveBalanceByToken } from "@/lib/customer-store";
 import { acquireConcurrency, getClientIp, graylistKey, isGraylisted, rateLimit, releaseConcurrency, securityLog } from "@/lib/security";
@@ -26,6 +27,100 @@ function getClientToken(req) {
 function getPromptFromMessages(messages = []) {
   const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
   return typeof lastUserMessage?.content === "string" ? lastUserMessage.content : "";
+}
+
+function normalizeMessageContent(content) {
+  if (typeof content === "string") return content.trim();
+  if (Array.isArray(content)) {
+    return content
+      .map((item) => {
+        if (typeof item === "string") return item;
+        return item?.text || item?.content || item?.input_text || "";
+      })
+      .filter(Boolean)
+      .join("\n")
+      .trim();
+  }
+  if (content && typeof content === "object") {
+    return String(content.text || content.content || content.input_text || JSON.stringify(content)).trim();
+  }
+  return "";
+}
+
+function normalizeChatRole(role) {
+  if (["system", "assistant", "user", "tool"].includes(role)) return role;
+  if (role === "developer") return "system";
+  return "user";
+}
+
+function normalizeChatMessages(body = {}) {
+  const messages = [];
+  const instructions = normalizeMessageContent(body.instructions || body.system);
+
+  if (instructions) {
+    messages.push({ role: "system", content: instructions });
+  }
+
+  if (Array.isArray(body.messages)) {
+    for (const message of body.messages) {
+      const content = normalizeMessageContent(message?.content);
+      if (!content) continue;
+      messages.push({
+        role: normalizeChatRole(message?.role),
+        content,
+      });
+    }
+  } else if (Array.isArray(body.input)) {
+    for (const item of body.input) {
+      const content = normalizeMessageContent(item?.content || item?.text || item);
+      if (!content) continue;
+      messages.push({
+        role: normalizeChatRole(item?.role),
+        content,
+      });
+    }
+  } else {
+    const content = normalizeMessageContent(body.input || body.prompt || body.query);
+    if (content) {
+      messages.push({ role: "user", content });
+    }
+  }
+
+  if (!messages.some((message) => message.role === "user")) {
+    messages.push({ role: "user", content: "ping" });
+  }
+
+  return messages;
+}
+
+function normalizeChatRequestBody(body = {}, upstreamModelId) {
+  const normalized = {
+    ...body,
+    model: upstreamModelId,
+    messages: normalizeChatMessages(body),
+  };
+
+  delete normalized.input;
+  delete normalized.prompt;
+  delete normalized.query;
+  delete normalized.instructions;
+  delete normalized.system;
+
+  if (normalized.max_output_tokens && !normalized.max_tokens) {
+    normalized.max_tokens = Number(normalized.max_output_tokens) || 16;
+  }
+  delete normalized.max_output_tokens;
+
+  const requestedMaxTokens = Number(normalized.max_tokens);
+  if (!Number.isFinite(requestedMaxTokens) || requestedMaxTokens <= 0) {
+    normalized.max_tokens = 16;
+  }
+
+  if (!normalized.stream) {
+    delete normalized.stream_options;
+  }
+
+  return normalized;
 }
 
 function estimatePromptTokens(messages = []) {
@@ -56,6 +151,23 @@ function getProxyReferer(req) {
   const host = req.headers.host || "flowapi.fun";
   const protocol = host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https";
   return `${protocol}://${host.replace(/^api\./, "")}`;
+}
+
+function orderUpstreamsForFlowApiKey(routeDecision, upstreams) {
+  const candidates = routeDecision.fallbackChain && routeDecision.fallbackChain.length > 0
+    ? routeDecision.fallbackChain
+    : upstreams;
+  const routeOrdered = routeDecision.upstream
+    ? [routeDecision.upstream, ...candidates.filter((u) => u.name !== (routeDecision.upstream?.name))]
+    : candidates;
+  const newApi = routeOrdered.find((upstream) => upstream.name === "new-api");
+
+  if (!newApi) return routeOrdered;
+
+  // FlowAPI 本地余额是唯一商业账本。外部用户的 FlowAPI API Key
+  // 只能进入 New API 执行层，不能在 New API 失败后自动切到其他上游
+  // 形成“本地已校验但上游绕路”的账务和权限风险。
+  return [newApi];
 }
 
 export default async function handler(req, res) {
@@ -195,8 +307,9 @@ export default async function handler(req, res) {
     return sendApiError(res, 500, "UPSTREAM_NOT_CONFIGURED", "未配置上游 API", "FlowAPI 服务端暂未配置上游通道，请联系管理员处理。");
   }
 
-  const body = req.body || {};
-  const prompt = getPromptFromMessages(body.messages);
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const normalizedMessages = normalizeChatMessages(body);
+  const prompt = getPromptFromMessages(normalizedMessages);
   const boundPublicModel = customerMatch.apiKey.publicModelId || "";
   const boundActualModel = customerMatch.apiKey.actualModelId || boundPublicModel;
   const requestedModel = body.model && body.model !== "auto" ? normalizeModelLookup(body.model) : "";
@@ -223,10 +336,38 @@ export default async function handler(req, res) {
       "请在模型广场复制推荐的 Model ID，或使用 model: auto 让 FlowAPI 自动选择可用模型。"
     );
   }
+
   const selected = requestedManualModel ? catalogModel : smartSelectModel(prompt);
   const upstreamModelId = getActualModelId(selected);
-  const promptTokens = estimatePromptTokens(body.messages || []);
-  const reserveCost = estimateReserveCost(selected.modelId, body, promptTokens);
+
+  // Check model product availability
+  const modelProduct = getModelProduct(effectiveRequestedModel || selected.modelId);
+  if (modelProduct) {
+    if (!modelProduct.isAvailable) {
+      releaseConcurrency(concurrencyKey);
+      return sendApiError(
+        res,
+        403,
+        "MODEL_NOT_AVAILABLE",
+        "该模型上游暂未开放，请选择其他模型。",
+        `${modelProduct.displayName} 当前状态为"${modelProduct.statusLabel || '即将开放'}"，上游暂未开放调用。请在模型广场选择状态为"可用"的模型。`
+      );
+    }
+  }
+
+  if (!upstreamModelId || String(upstreamModelId).trim() === "") {
+    releaseConcurrency(concurrencyKey);
+    return sendApiError(
+      res,
+      500,
+      "MODEL_NOT_CONFIGURED",
+      "模型路由未配置",
+      "该模型的 actual_model_id 未设置，无法转发到上游。请联系管理员在后台配置。"
+    );
+  }
+  const upstreamBody = normalizeChatRequestBody(body, upstreamModelId);
+  const promptTokens = estimatePromptTokens(upstreamBody.messages || []);
+  const reserveCost = estimateReserveCost(selected.modelId, upstreamBody, promptTokens);
   const reserve = await reserveBalanceByToken(clientToken, reserveCost);
 
   if (reserve.error) {
@@ -238,11 +379,6 @@ export default async function handler(req, res) {
   const title = process.env.PROXY_TITLE || "FlowAPI";
 
   try {
-    const upstreamBody = {
-      ...body,
-      model: upstreamModelId,
-    };
-
     if (upstreamBody.stream) {
       upstreamBody.stream_options = {
         include_usage: true,
@@ -261,12 +397,7 @@ export default async function handler(req, res) {
     let lastUpstreamError = null;
 
     // Try upstreams in smart order: primary first, then fallback chain
-    const candidates = routeDecision.fallbackChain && routeDecision.fallbackChain.length > 0
-      ? routeDecision.fallbackChain
-      : upstreams;
-    const orderedUpstreams = routeDecision.upstream
-      ? [routeDecision.upstream, ...candidates.filter((u) => u.name !== (routeDecision.upstream?.name))]
-      : candidates;
+    const orderedUpstreams = orderUpstreamsForFlowApiKey(routeDecision, upstreams);
 
     for (const candidate of orderedUpstreams) {
       const headers = {
@@ -293,7 +424,7 @@ export default async function handler(req, res) {
         }
 
         lastUpstreamError = new Error(`${candidate.label} 返回 ${response.status}`);
-        const shouldTryNext = [401, 403, 404, 429].includes(response.status) || response.status >= 500;
+        const shouldTryNext = [400, 401, 403, 404, 429].includes(response.status) || response.status >= 500;
         if (shouldTryNext) continue;
 
         upstream = candidate;

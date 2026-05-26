@@ -87,7 +87,8 @@ export async function createNewApiToken(params: {
     throw new Error("NEW_API_ADMIN_TOKEN 或 NEW_API_KEY 未配置，无法创建真实 New API API Key");
   }
 
-  const name = String(params.name || "API 密匙").slice(0, 50);
+  const nameLimit = Number(process.env.NEW_API_TOKEN_NAME_MAX_LENGTH || 30);
+  const name = String(params.name || "API 密匙").slice(0, Math.max(12, Math.min(nameLimit, 30)));
   const group = params.group || NEW_API_DEFAULT_GROUP;
   const quota = params.quota || NEW_API_DEFAULT_QUOTA;
   const beforeCreate = Math.floor(Date.now() / 1000) - 5;
@@ -129,6 +130,12 @@ export async function createNewApiToken(params: {
   }
 
   key = String(key).trim();
+  if (!key) {
+    throw new Error("New API API Key 已创建，但返回的 Key 为空");
+  }
+  // New API v1.0.0-rc.6 returns the token secret body from /api/token/:id/key.
+  // The user-facing/runtime token is the same secret with New API's sk- prefix.
+  // Only normalize a secret returned by New API; never generate a local fallback.
   if (!key.startsWith("sk-")) {
     key = `sk-${key}`;
   }
@@ -176,9 +183,10 @@ export async function listNewApiTokens(
 export async function disableNewApiToken(
   tokenId: string,
 ): Promise<{ success: boolean }> {
+  const existing = await getNewApiTokenForUpdate(tokenId);
   const { ok } = await apiFetch("/api/token/", {
     method: "PUT",
-    body: JSON.stringify({ id: Number(tokenId), status: 2 }),
+    body: JSON.stringify({ ...existing, id: Number(tokenId), status: 2 }),
   });
   return { success: ok };
 }
@@ -186,11 +194,37 @@ export async function disableNewApiToken(
 export async function enableNewApiToken(
   tokenId: string,
 ): Promise<{ success: boolean }> {
+  const existing = await getNewApiTokenForUpdate(tokenId);
   const { ok } = await apiFetch("/api/token/", {
     method: "PUT",
-    body: JSON.stringify({ id: Number(tokenId), status: 1 }),
+    body: JSON.stringify({ ...existing, id: Number(tokenId), status: 1 }),
   });
   return { success: ok };
+}
+
+async function getNewApiTokenForUpdate(tokenId: string): Promise<Record<string, any>> {
+  const id = Number(tokenId);
+  const { ok, data } = await apiFetch(`/api/token/${id}`);
+  const token = ok ? (data?.token || data) : null;
+
+  if (!token || typeof token !== "object") {
+    return { id };
+  }
+
+  const payload: Record<string, any> = {
+    id,
+    name: token.name || "FlowAPI API Key",
+    expired_time: Number(token.expired_time ?? -1),
+    remain_quota: Number(token.remain_quota ?? NEW_API_DEFAULT_QUOTA),
+    unlimited_quota: Boolean(token.unlimited_quota ?? NEW_API_TOKEN_UNLIMITED),
+    model_limits_enabled: Boolean(token.model_limits_enabled),
+    model_limits: token.model_limits || "",
+    allow_ips: token.allow_ips || "",
+    group: token.group || NEW_API_DEFAULT_GROUP,
+    cross_group_retry: Boolean(token.cross_group_retry),
+  };
+
+  return payload;
 }
 
 export async function deleteNewApiToken(
