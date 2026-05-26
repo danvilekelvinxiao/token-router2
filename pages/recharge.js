@@ -23,29 +23,20 @@ const paymentMethods = [
 const addOnServices = [
   {
     id: "account_setup_assistance",
-    title: "ChatGPT / Codex 账号接入协助",
+    title: "Codex / ChatGPT 手机号验证",
     priceCny: 20,
     unit: "次",
-    description: "协助完成账号接入前检查、客户端安装、Base URL、API Key、模型配置、网络环境和常见登录问题排查。",
-    tags: ["人工协助", "一次服务", "适合小白"],
-    type: "fixed",
-  },
-  {
-    id: "plus_weekly_guidance",
-    title: "ChatGPT Plus 周套餐订阅协助",
-    priceCny: 45,
-    unit: "周",
-    description: "提供 ChatGPT Plus 订阅流程协助、使用建议、账号安全提醒和常见问题处理，具体订阅以官方平台规则为准。",
-    tags: ["周套餐", "订阅协助", "账号安全"],
+    description: "提供海外手机号验证支持，协助完成 Codex / ChatGPT 账号注册中的手机号验证步骤。一次购买，永久绑定。",
+    tags: ["手机号验证", "一次购买", "永久绑定"],
     type: "fixed",
   },
   {
     id: "plus_monthly_guidance",
-    title: "ChatGPT Plus 月套餐订阅协助",
+    title: "官方 ChatGPT Plus 激活",
     priceCny: 140,
     unit: "月",
-    description: "提供 ChatGPT Plus 官方订阅流程协助、使用建议、账号安全提醒和常见问题处理，适合长期使用用户。",
-    tags: ["月套餐", "订阅协助", "长期使用"],
+    description: "提供 ChatGPT Plus 官方订阅激活协助，包含账号注册、支付方式指导和使用建议。按月订阅，适合长期使用用户。",
+    tags: ["月套餐", "官方激活", "长期使用"],
     type: "fixed",
   },
   {
@@ -132,6 +123,10 @@ export default function RechargePage() {
   const [packageDetail, setPackageDetail] = useState(null);
   const [selectedAddOns, setSelectedAddOns] = useState([]);
   const [openrouterCredits, setOpenrouterCredits] = useState(5);
+  const [referral, setReferral] = useState(null);
+  const [commissionModal, setCommissionModal] = useState("");
+  const [commissionForm, setCommissionForm] = useState({ amountCny: "", method: "alipay", account: "", realName: "", remark: "" });
+  const [commissionMessage, setCommissionMessage] = useState("");
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -158,6 +153,8 @@ export default function RechargePage() {
     }
     const orderRes = await fetch(`/api/recharge?customerId=${c.id}`);
     if (orderRes.ok) { const data = await orderRes.json(); setOrders(data.orders || []); }
+    const referralRes = await fetch(`/api/referrals/me?customerId=${c.id}`);
+    if (referralRes.ok) setReferral(await referralRes.json());
   }
 
   useEffect(() => {
@@ -283,6 +280,34 @@ export default function RechargePage() {
 
   async function copyText(text) { await navigator.clipboard.writeText(text); setCopied(text); setTimeout(() => setCopied(""), 1500); }
 
+  async function submitCommissionAction(event) {
+    event.preventDefault();
+    setCommissionMessage("");
+    const endpoint = commissionModal === "convert" ? "/api/referrals/commission/convert" : "/api/referrals/withdraw";
+    const payload = commissionModal === "convert"
+      ? { amountCny: Number(commissionForm.amountCny) }
+      : {
+          amountCny: Number(commissionForm.amountCny),
+          method: commissionForm.method,
+          account: commissionForm.account,
+          realName: commissionForm.realName,
+          remark: commissionForm.remark,
+        };
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setCommissionMessage(data.error || "操作失败，请稍后重试");
+      return;
+    }
+    setCommissionMessage(commissionModal === "convert" ? `已成功使用 ¥${Number(payload.amountCny).toFixed(2)} 佣金兑换 FlowAPI 余额。` : "已提交提现申请，管理员审核后会处理。");
+    setCommissionForm({ amountCny: "", method: "alipay", account: "", realName: "", remark: "" });
+    refreshCustomer(customer);
+  }
+
   if (!customer) {
     return (
       <main className="landing-shell" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -396,7 +421,7 @@ export default function RechargePage() {
               {/* 4. Monthly packages */}
               <div className="recharge-section-card">
                 <div className="section-heading-row">
-                  <div><h2>月卡套餐</h2><p>购买区独立展示，已购权益以上方"我的订阅"为准。</p></div>
+                  <div><h2>月卡套餐</h2><p>购买区独立展示，已购权益以上方“我的订阅”为准。</p></div>
                   <span>每日额度 · 月度资源包</span>
                 </div>
                 <div className="recharge-package-grid monthly">
@@ -410,6 +435,12 @@ export default function RechargePage() {
 
             {/* ===== RIGHT: Order sidebar ===== */}
             <aside className="recharge-sidebar">
+              <CommissionAssetCard
+                referral={referral}
+                onConvert={() => { setCommissionModal("convert"); setCommissionMessage(""); }}
+                onWithdraw={() => { setCommissionModal("withdraw"); setCommissionMessage(""); }}
+              />
+
               {/* Order summary */}
               <div className="recharge-summary-card">
                 <h2>订单摘要</h2>
@@ -521,12 +552,65 @@ export default function RechargePage() {
         </div>
 
         {packageDetail ? <CardDetailModal open={Boolean(packageDetail)} onOpenChange={(open) => { if (!open) setPackageDetail(null); }} {...packageDetail} /> : null}
+        {commissionModal ? (
+          <div className="referral-modal-backdrop" role="presentation" onMouseDown={() => setCommissionModal("")}>
+            <form className="referral-action-modal" onSubmit={submitCommissionAction} onMouseDown={(event) => event.stopPropagation()}>
+              <button type="button" className="referral-modal-close" onClick={() => setCommissionModal("")}>×</button>
+              <span>{commissionModal === "convert" ? "佣金兑换" : "提现申请"}</span>
+              <h2>{commissionModal === "convert" ? "使用佣金购买 Token" : "申请提现"}</h2>
+              <p>
+                当前可提现佣金为 <strong>¥{Number(referral?.withdrawableCommissionCny || 0).toFixed(2)}</strong>。
+                {commissionModal === "convert" ? "确认使用佣金兑换 FlowAPI 余额 / Token 额度吗？" : "提现申请提交后，管理员审核通过后打款到你的支付宝或微信。"}
+              </p>
+              <label>
+                <span>{commissionModal === "convert" ? "使用金额" : "提现金额"}</span>
+                <input type="number" min="1" step="0.01" value={commissionForm.amountCny} onChange={(event) => setCommissionForm({ ...commissionForm, amountCny: event.target.value })} placeholder="输入金额" required />
+              </label>
+              {commissionModal === "withdraw" ? (
+                <>
+                  <label>
+                    <span>提现方式</span>
+                    <select value={commissionForm.method} onChange={(event) => setCommissionForm({ ...commissionForm, method: event.target.value })}>
+                      <option value="alipay">支付宝</option>
+                      <option value="wechat">微信</option>
+                    </select>
+                  </label>
+                  <label><span>收款账号</span><input value={commissionForm.account} onChange={(event) => setCommissionForm({ ...commissionForm, account: event.target.value })} placeholder="支付宝账号 / 微信号" required /></label>
+                  <label><span>收款姓名</span><input value={commissionForm.realName} onChange={(event) => setCommissionForm({ ...commissionForm, realName: event.target.value })} placeholder="用于人工核对" required /></label>
+                  <label><span>备注</span><input value={commissionForm.remark} onChange={(event) => setCommissionForm({ ...commissionForm, remark: event.target.value })} placeholder="可选" /></label>
+                  <small>最低提现金额：¥20。提现状态可在个人资料页查看。</small>
+                </>
+              ) : null}
+              {commissionMessage ? <p className={commissionMessage.includes("失败") || commissionMessage.includes("不足") ? "referral-error" : "referral-success"}>{commissionMessage}</p> : null}
+              <div className="referral-modal-actions">
+                <button type="button" className="btn-secondary" onClick={() => setCommissionModal("")}>取消</button>
+                <button type="submit" className="btn-primary">{commissionModal === "convert" ? "确认兑换" : "提交提现申请"}</button>
+              </div>
+            </form>
+          </div>
+        ) : null}
       </ConsoleLayout>
     </>
   );
 }
 
 /* ==================== Sub-components ==================== */
+
+function CommissionAssetCard({ referral, onConvert, onWithdraw }) {
+  const amount = Number(referral?.withdrawableCommissionCny || 0);
+  return (
+    <div className="recharge-summary-card recharge-commission-card">
+      <span>邀请返佣资产</span>
+      <h2>可提现佣金</h2>
+      <strong>¥{amount.toFixed(2)}</strong>
+      <p>你可以将佣金提现到支付宝 / 微信，也可以直接用佣金购买 Token。</p>
+      <div className="recharge-commission-actions">
+        <button type="button" className="btn-secondary" onClick={onConvert}>用佣金购买 Token</button>
+        <button type="button" className="btn-secondary" onClick={onWithdraw}>申请提现</button>
+      </div>
+    </div>
+  );
+}
 
 function PackageCard({ pkg, type, selected, onSelect, onDetail }) {
   const isMonthly = type === "monthly_subscription";
