@@ -11,6 +11,13 @@ function getPromptFromMessages(messages = []) {
   return typeof lastUserMessage?.content === "string" ? lastUserMessage.content : "";
 }
 
+function getRequestMeta(req) {
+  return {
+    ip: String(req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || req.socket?.remoteAddress || ""),
+    userAgent: String(req.headers["user-agent"] || ""),
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -28,15 +35,26 @@ export default async function handler(req, res) {
     return res.status(402).json({ error: "人民币余额不足，请先充值" });
   }
 
-  if (!process.env.OPENROUTER_API_KEY) {
-    return res.status(500).json({ error: "Missing OPENROUTER_API_KEY" });
-  }
-
   const body = req.body || {};
   const prompt = getPromptFromMessages(body.messages);
   const selected = body.model && body.model !== "auto"
     ? { modelId: body.model, name: body.model, provider: "Manual" }
     : selectModelForPrompt(prompt);
+
+  if (!process.env.OPENROUTER_API_KEY) {
+    recordCallByToken(clientToken, {
+      endpoint: "/v1/chat/completions",
+      requestedModel: body.model || "auto",
+      routedModel: selected.name,
+      provider: selected.provider,
+      status: 500,
+      promptTokens: 0,
+      completionTokens: 0,
+      cost: 0,
+      error: "Missing OPENROUTER_API_KEY",
+    });
+    return res.status(500).json({ error: "Missing OPENROUTER_API_KEY" });
+  }
 
   try {
     const upstreamResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -65,6 +83,7 @@ export default async function handler(req, res) {
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: data.usage?.completion_tokens || 0,
       cost,
+      ...getRequestMeta(req),
     });
 
     return res.status(upstreamResponse.status).json({
@@ -86,6 +105,7 @@ export default async function handler(req, res) {
       promptTokens: 0,
       completionTokens: 0,
       cost: 0,
+      ...getRequestMeta(req),
     });
 
     return res.status(502).json({ error: error.message || "Upstream request failed" });

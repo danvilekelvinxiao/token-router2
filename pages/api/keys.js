@@ -1,4 +1,4 @@
-import { createApiKey, getDashboard } from "@/lib/customer-store";
+import { createPublicApiKey, getDashboard } from "@/lib/customer-store";
 
 export default function handler(req, res) {
   if (req.method !== "POST") {
@@ -12,6 +12,13 @@ export default function handler(req, res) {
     return res.status(400).json({ error: "Missing customerId" });
   }
 
-  createApiKey(customerId, req.body?.label || "API Key");
-  return res.status(200).json(getDashboard(customerId));
+  const newApiKey = createPublicApiKey(customerId, req.body?.label || "API Key");
+  if (!newApiKey) {
+    return res.status(404).json({ error: "请先创建账号后再生成 API Key" });
+  }
+
+  return res.status(200).json({
+    customer: getDashboard(customerId),
+    newApiKey,
+  });
 }

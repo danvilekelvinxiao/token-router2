@@ -22,6 +22,13 @@ function normalizeTarget(target) {
   return String(target).replace(/^\/+/, "").trim();
 }
 
+function getRequestMeta(req) {
+  return {
+    ip: String(req.headers["x-forwarded-for"] || req.headers["x-real-ip"] || req.socket?.remoteAddress || ""),
+    userAgent: String(req.headers["user-agent"] || ""),
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -75,6 +82,8 @@ export default async function handler(req, res) {
 
     res.status(upstreamResponse.status);
     res.setHeader("Content-Type", upstreamResponse.headers.get("content-type") || "application/json");
+    res.setHeader("x-flowapi-proxy-target", target);
+    res.setHeader("x-flowapi-client-ip", getRequestMeta(req).ip);
 
     return res.send(text);
   } catch (error) {
