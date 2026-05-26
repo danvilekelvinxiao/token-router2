@@ -1,10 +1,11 @@
+import Link from "next/link";
 import ProviderLogo from "@/components/model-market/ProviderLogo";
 
 export default function ModelCard({ model, onAccess, creating, isAdmin }) {
   const avail = model.isAvailable;
   const comingSoon = model.isComingSoon;
   const badgeClass = avail ? "badge-success" : comingSoon ? "badge-muted" : "badge-danger";
-  const btnLabel = creating ? "创建中..." : avail ? "创建 API Key" : comingSoon ? "即将开放" : "暂不可用";
+  const btnLabel = creating ? "创建中..." : avail ? (model.primaryButtonText || "立即接入") : comingSoon ? "即将开放" : "暂不可用";
   const reason = comingSoon
     ? "上游检测中，即将开放"
     : !avail
@@ -25,9 +26,9 @@ export default function ModelCard({ model, onAccess, creating, isAdmin }) {
         </div>
         <span className={`badge ${badgeClass}`}>{model.statusLabel}</span>
         {isAdmin && (
-          <a href="/admin/models" className="btn-ghost btn-small" title="管理" style={{ fontSize: 10, padding: "2px 6px" }}>
+          <Link href="/admin/content" className="btn-ghost btn-small" title="管理" style={{ fontSize: 10, padding: "2px 6px" }}>
             管理
-          </a>
+          </Link>
         )}
       </div>
 
@@ -44,14 +45,14 @@ export default function ModelCard({ model, onAccess, creating, isAdmin }) {
       {avail && model.inputPrice != null ? (
         <div className="model-card-v2-pricing">
           <div className="model-card-v2-price-row">
-            <span>输入</span><b>¥{model.inputPrice} / M tokens</b>
+            <span>输入</span><b>¥{model.inputPrice} / M Token</b>
           </div>
           <div className="model-card-v2-price-row">
-            <span>输出</span><b>¥{model.outputPrice} / M tokens</b>
+            <span>输出</span><b>¥{model.outputPrice} / M Token</b>
           </div>
         </div>
       ) : (
-        <p className="model-card-v2-desc">价格待配置</p>
+        <p className="model-card-v2-desc">价格同步中</p>
       )}
 
       <div className="model-card-v2-actions">
@@ -61,7 +62,7 @@ export default function ModelCard({ model, onAccess, creating, isAdmin }) {
         </button>
         <button type="button" className="btn-ghost btn-small"
                 onClick={() => navigator.clipboard.writeText(model.publicModelId)}>
-          复制 ID
+          {model.copyModelButtonText || "复制 Model ID"}
         </button>
       </div>
 

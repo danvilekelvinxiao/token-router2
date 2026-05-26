@@ -42,17 +42,23 @@ export default async function handler(req, res) {
   }
 
   if (paymentMethod === "wechat" && !isWechatConfigured()) {
+    const created = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef: buildPurchaseRef(req.body) });
+    if (created.error) return res.status(400).json({ error: created.error });
     return res.status(200).json({
       ok: true,
       mode: "manual",
+      order: created.order,
       reason: "微信商户参数未配置完整，已切换到手动确认模式",
     });
   }
 
   if (paymentMethod === "alipay" && !isAlipayConfigured()) {
+    const created = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef: buildPurchaseRef(req.body) });
+    if (created.error) return res.status(400).json({ error: created.error });
     return res.status(200).json({
       ok: true,
       mode: "manual",
+      order: created.order,
       reason: "支付宝商户参数未配置完整，已切换到手动确认模式",
     });
   }

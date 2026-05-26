@@ -45,7 +45,7 @@ export default async function handler(req, res) {
       typeTags: getTypeTags(p),
       inputPrice: p.isAvailable ? getDisplayPrice(p, "input") : null,
       outputPrice: p.isAvailable ? getDisplayPrice(p, "output") : null,
-      billingUnit: "1M tokens",
+      billingUnit: "1M Token",
       isAvailable: Boolean(p.isAvailable),
       isComingSoon: Boolean(p.isComingSoon),
       status: p.isAvailable ? "available" : p.isComingSoon ? "coming_soon" : "unavailable",
@@ -122,7 +122,7 @@ function getTypeTags(p) {
 
 function getDisplayPrice(p, type) {
   const multiplier = Number(p.priceMultiplier || 1);
-  // Base prices in CNY/M tokens
+  // Base prices in CNY/M Token
   if (p.group?.includes("deepseek")) {
     return type === "input" ? (1.0 * multiplier).toFixed(1) : (2.0 * multiplier).toFixed(1);
   }

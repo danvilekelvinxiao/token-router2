@@ -1486,7 +1486,7 @@ function DashboardOperationsSection({ stats, trendData, trendRange, setTrendRang
               ))}
             </div>
           </div>
-          <p className="dash3-ops-desc">基于真实调用记录生成。</p>
+          <p className="dash3-ops-desc">基于真实调用日志生成，展示 Token 数与消耗金额变化。</p>
           <TokenTrendMiniChart data={trendData} onTooltip={onTooltip} theme={theme} />
           <div className="dash3-mini-legend"><span><i style={{ background: "#6366f1" }} />总 Token</span><span><i style={{ background: "#22c55e" }} />输入 Token</span><span><i style={{ background: "#06b6d4" }} />输出 Token</span><span><i style={{ background: "#f59e0b" }} />金额</span></div>
         </article>
@@ -3068,7 +3068,7 @@ export default function DashboardPage() {
           <section className="dash3-section">
             <SectionTitle
               title="全球模型热度参考"
-              subtitle="基于全球公开模型热度数据与 FlowAPI 站内真实调用数据，仅供选择模型时参考。"
+              subtitle="基于 OpenRouter 公开模型热度数据与 FlowAPI 站内真实调用数据，仅供选择模型时参考。"
               right={marketRanks?.updatedAt ? (
                 <span className="dash3-section-hint">全球数据更新于 {new Date(marketRanks.updatedAt).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" })}</span>
               ) : null}
@@ -3078,13 +3078,13 @@ export default function DashboardPage() {
               <div className="dash3-card dash3-card-table">
                 <div className="dash3-card-subtitle">全球模型热度排行</div>
                 <div className="dash3-card-source-badge">
-                    全球
+                    {marketRanks?.source || "OpenRouter"}
                     {marketRanks?.dataSource === "real" ? " · 实时数据" : marketRanks?.dataSource === "cached" ? " · 缓存数据" : " · 同步中"}
                   </div>
                 {marketRanksLoading ? (
-                  <div className="dash3-empty-chart"><strong>全球模型热度数据同步中</strong><span>正在从公开数据源获取最新模型热度，请稍后刷新查看。</span></div>
+                  <div className="dash3-empty-chart"><strong>正在从 OpenRouter 获取数据...</strong><span>全球模型热度数据实时读取中。</span></div>
                 ) : !marketRanks?.models?.length ? (
-                  <div className="dash3-empty-chart"><strong>全球模型热度数据同步中</strong><span>正在从公开数据源获取实时排名，请稍后刷新查看。</span></div>
+                  <div className="dash3-empty-chart"><strong>全球模型热度数据同步中</strong><span>正在从 OpenRouter 获取实时排名，请稍后刷新查看。</span></div>
                 ) : (
                   <table className="dash3-ranking-table">
                     <thead>
@@ -3181,6 +3181,9 @@ export default function DashboardPage() {
                 )}
               </div>
             </div>
+            <p className="dash3-advice">
+              全球数据来源：{marketRanks?.source || "OpenRouter"} · 站内数据基于 FlowAPI 用户真实调用 · 每日更新 · 仅供选型参考
+            </p>
           </section>
 
           <section className="dash3-section">

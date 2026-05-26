@@ -600,6 +600,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
     }
     setDetailLoading(false);
   }
+  }
 
   if (!customer) {
     return (
@@ -789,105 +790,6 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       </div>
 
       {message && <div className="api-toast">{message}</div>}
-
-      {/* Key Detail Drawer */}
-      {detailKey && (
-        <div className="key-detail-backdrop" onClick={() => setDetailKey(null)}>
-          <div className="key-detail-drawer" onClick={(e) => e.stopPropagation()}>
-            <button className="key-detail-close" onClick={() => setDetailKey(null)}>×</button>
-            {detailLoading ? (
-              <div style={{ padding: 40, textAlign: "center", color: "var(--dash-sub)" }}>加载中...</div>
-            ) : (detailData?.source === "empty") ? (
-              <div className="key-detail-empty">{detailData.message}</div>
-            ) : (detailData?.key) ? (
-              <div className="key-detail-body">
-                {/* Header */}
-                <div className="key-detail-header">
-                  <h2>API Key 使用详情</h2>
-                  <p>查看该密匙的 Token 消耗、调用模型、花费和最近请求记录。</p>
-                  <div className="key-detail-info">
-                    <div><span>名称</span><strong>{detailData.key.name}</strong></div>
-                    <div><span>Key</span><code>{detailData.key.maskedKey}</code></div>
-                    <div><span>状态</span><span className={`flow-status-pill ${detailData.key.status === "active" ? "success" : "danger"}`}>{detailData.key.status === "active" ? "已启用" : detailData.key.status === "disabled" ? "已禁用" : "已过期"}</span></div>
-                    <div><span>创建时间</span><span>{detailData.key.createdAt ? new Date(detailData.key.createdAt).toLocaleString("zh-CN") : "-"}</span></div>
-                    <div><span>最后调用</span><span>{detailData.key.lastUsedAt ? new Date(detailData.key.lastUsedAt).toLocaleString("zh-CN") : "从未调用"}</span></div>
-                    <div><span>所属分组</span><span>{detailData.key.group || "default"}</span></div>
-                  </div>
-                </div>
-
-                {/* Metric cards */}
-                {detailData.summary && (
-                  <div className="key-detail-metrics">
-                    <div><span>总消耗金额</span><strong>¥{detailData.summary.totalSpendCny}</strong></div>
-                    <div><span>总消耗 Token</span><strong>{detailData.summary.totalTokens >= 1e6 ? `${(detailData.summary.totalTokens/1e6).toFixed(2)}M` : detailData.summary.totalTokens >= 1e3 ? `${(detailData.summary.totalTokens/1e3).toFixed(1)}K` : detailData.summary.totalTokens} Token</strong></div>
-                    <div><span>总请求次数</span><strong>{detailData.summary.totalRequests} 次</strong></div>
-                    <div><span>成功率</span><strong>{detailData.summary.successRate}%</strong></div>
-                  </div>
-                )}
-
-                {/* Period usage */}
-                {detailData.periodUsage && (
-                  <div className="key-detail-section">
-                    <h3>时间维度消耗</h3>
-                    <div className="key-detail-periods">
-                      {["today", "week", "month"].map((p) => {
-                        const d = detailData.periodUsage[p];
-                        const labels = { today: "今日消耗", week: "本周消耗", month: "本月消耗" };
-                        return (
-                          <div key={p} className="key-detail-period-card">
-                            <span>{labels[p]}</span>
-                            <strong>¥{d.spendCny.toFixed(2)}</strong>
-                            <span>{d.tokens >= 1e3 ? `${(d.tokens/1e3).toFixed(1)}K` : d.tokens} Token</span>
-                            <span>{d.requests} 次请求</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Model ranking */}
-                {detailData.modelRanking?.length > 0 && (
-                  <div className="key-detail-section">
-                    <h3>模型消耗排行</h3>
-                    <div className="key-detail-model-list">
-                      <div className="key-detail-model-header">
-                        <span>#</span><span>模型</span><span className="text-right">请求</span><span className="text-right">Token</span><span className="text-right">花费</span><span className="text-right">占比</span>
-                      </div>
-                      {detailData.modelRanking.map((m) => (
-                        <div key={m.model} className="key-detail-model-row">
-                          <span>{m.rank}</span>
-                          <span className="key-detail-model-name">{m.model}<small>{m.provider}</small></span>
-                          <span className="text-right">{m.requests} 次</span>
-                          <span className="text-right">{m.tokens >= 1e3 ? `${(m.tokens/1e3).toFixed(1)}K` : m.tokens}</span>
-                          <span className="text-right">¥{m.spendCny.toFixed(2)}</span>
-                          <span className="text-right">{m.share}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Limits */}
-                {detailData.limits && (
-                  <div className="key-detail-section">
-                    <h3>额度与限制</h3>
-                    <div className="key-detail-limits">
-                      <div><span>剩余额度</span><strong>¥{detailData.limits.remainingBalanceCny.toFixed(2)}</strong></div>
-                      <div><span>总额度</span><strong>¥{detailData.limits.totalQuotaCny.toFixed(2)}</strong></div>
-                      <div><span>每日请求上限</span><strong>{detailData.limits.dailyRequestLimit ? `${detailData.limits.dailyRequestLimit} 次` : "不限"}</strong></div>
-                      <div><span>每日 Token 上限</span><strong>{detailData.limits.dailyTokenLimit ? `${(detailData.limits.dailyTokenLimit/1e3).toFixed(0)}K` : "不限"}</strong></div>
-                      <div><span>可调用模型</span><strong>{(detailData.limits.allowedModels || []).join(", ") || "不限"}</strong></div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="key-detail-empty">加载失败，请稍后重试。</div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Create/Edit Modal */}
       {modal && (
