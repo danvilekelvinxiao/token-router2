@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     logs.push(gitOut.trim());
 
     logs.push("[2/4] npm install...");
-    execSync("npm install --omit=dev", {
+    execSync("npm install", {
       cwd: "/var/www/flowapi",
       timeout: 60000,
       encoding: "utf8",
