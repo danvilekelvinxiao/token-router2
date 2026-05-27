@@ -125,6 +125,11 @@ async function fetchJson(url, options = {}) {
   return data;
 }
 
+function readBrowserStorage(key) {
+  if (typeof window === "undefined") return "";
+  return window.localStorage.getItem(key) || "";
+}
+
 function modelMatchesCategory(model, category) {
   const blob = [
     model.name,
@@ -246,9 +251,17 @@ export default function HomePage() {
   const [selectedCompare, setSelectedCompare] = useState([]);
   const [activeModel, setActiveModel] = useState(null);
   const [adminSnapshot, setAdminSnapshot] = useState(null);
-  const [currentCustomerId, setCurrentCustomerId] = useState("");
+  const [currentCustomerId, setCurrentCustomerId] = useState(() => readBrowserStorage("flowapi_customer_id"));
+  const [customerAccessToken, setCustomerAccessToken] = useState(() => {
+    const storedCustomerId = readBrowserStorage("flowapi_customer_id");
+    return storedCustomerId ? readBrowserStorage(`flowapi_customer_token_${storedCustomerId}`) : "";
+  });
+  const [adminToken, setAdminToken] = useState(() => readBrowserStorage("flowapi_admin_token"));
   const [customer, setCustomer] = useState(null);
-  const [savedApiKey, setSavedApiKey] = useState("");
+  const [savedApiKey, setSavedApiKey] = useState(() => {
+    const storedCustomerId = readBrowserStorage("flowapi_customer_id");
+    return storedCustomerId ? readBrowserStorage(`flowapi_api_key_${storedCustomerId}`) : "";
+  });
   const [copyLabel, setCopyLabel] = useState("");
   const [loadingModels, setLoadingModels] = useState(true);
   const [loadingCustomer, setLoadingCustomer] = useState(false);
@@ -286,11 +299,23 @@ export default function HomePage() {
     if (typeof window === "undefined") return;
     if (currentCustomerId) {
       window.localStorage.setItem("flowapi_customer_id", currentCustomerId);
+      if (customerAccessToken) {
+        window.localStorage.setItem(`flowapi_customer_token_${currentCustomerId}`, customerAccessToken);
+      }
       if (savedApiKey) {
         window.localStorage.setItem(`flowapi_api_key_${currentCustomerId}`, savedApiKey);
       }
     }
-  }, [currentCustomerId, savedApiKey]);
+  }, [currentCustomerId, customerAccessToken, savedApiKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (adminToken) {
+      window.localStorage.setItem("flowapi_admin_token", adminToken);
+    } else {
+      window.localStorage.removeItem("flowapi_admin_token");
+    }
+  }, [adminToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -328,9 +353,16 @@ export default function HomePage() {
         return;
       }
 
+      if (!customerAccessToken) {
+        setCustomer(null);
+        return;
+      }
+
       setLoadingCustomer(true);
       try {
-        const data = await fetchJson(`${localApiBase}/customer?customerId=${encodeURIComponent(currentCustomerId)}`);
+        const data = await fetchJson(`${localApiBase}/customer?customerId=${encodeURIComponent(currentCustomerId)}`, {
+          headers: { "x-flowapi-customer-token": customerAccessToken },
+        });
         if (!cancelled) {
           setCustomer(data.customer || null);
           if (data.customer?.apiKeys?.length && !savedApiKey) {
@@ -355,15 +387,22 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [currentCustomerId, savedApiKey]);
+  }, [currentCustomerId, customerAccessToken, savedApiKey]);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadAdmin() {
+      if (!adminToken) {
+        setAdminSnapshot(null);
+        return;
+      }
+
       setLoadingAdmin(true);
       try {
-        const data = await fetchJson("/api/admin");
+        const data = await fetchJson("/api/admin", {
+          headers: { "x-flowapi-admin-token": adminToken },
+        });
         if (!cancelled) {
           setAdminSnapshot(data);
           const firstCustomer = data.customers?.[0]?.id || "";
@@ -386,7 +425,7 @@ export default function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [adminTargetCustomer]);
+  }, [adminToken, adminTargetCustomer]);
 
   useEffect(() => {
     let cancelled = false;
@@ -465,7 +504,9 @@ export default function HomePage() {
 
   async function refreshCustomerData(nextCustomerId = currentCustomerId) {
     if (!nextCustomerId) return;
-    const data = await fetchJson(`${localApiBase}/customer?customerId=${encodeURIComponent(nextCustomerId)}`);
+    const data = await fetchJson(`${localApiBase}/customer?customerId=${encodeURIComponent(nextCustomerId)}`, {
+      headers: { "x-flowapi-customer-token": customerAccessToken },
+    });
     setCustomer(data.customer || null);
   }
 
@@ -483,8 +524,10 @@ export default function HomePage() {
     });
 
     const nextCustomerId = data.customer?.id || "";
+    const nextAccessToken = data.customer?.accessToken || "";
     setCustomer(data.customer || null);
     setCurrentCustomerId(nextCustomerId);
+    setCustomerAccessToken(nextAccessToken);
     setLoginForm({
       phone: payload.phone,
       company: payload.company,
@@ -508,8 +551,10 @@ export default function HomePage() {
     });
 
     const nextCustomerId = data.customer?.id || "";
+    const nextAccessToken = data.customer?.accessToken || "";
     setCustomer(data.customer || null);
     setCurrentCustomerId(nextCustomerId);
+    setCustomerAccessToken(nextAccessToken);
     if (nextCustomerId && !savedApiKey) {
       setSavedApiKey(window.localStorage.getItem(`flowapi_api_key_${nextCustomerId}`) || "");
     }
@@ -522,6 +567,7 @@ export default function HomePage() {
 
     const data = await fetchJson("/api/keys", {
       method: "POST",
+      headers: { "x-flowapi-customer-token": customerAccessToken },
       body: JSON.stringify({
         customerId: currentCustomerId,
         label: newKeyLabel.trim() || "主 API Key",
@@ -543,6 +589,7 @@ export default function HomePage() {
 
     const data = await fetchJson("/api/usage", {
       method: "POST",
+      headers: { "x-flowapi-customer-token": customerAccessToken },
       body: JSON.stringify({
         action: "recharge",
         customerId: currentCustomerId,
@@ -561,6 +608,7 @@ export default function HomePage() {
 
     const data = await fetchJson("/api/usage", {
       method: "POST",
+      headers: { "x-flowapi-customer-token": customerAccessToken },
       body: JSON.stringify({
         action: "redeemActivationCode",
         customerId: currentCustomerId,
@@ -574,7 +622,10 @@ export default function HomePage() {
   }
 
   async function refreshAdminSnapshot() {
-    const data = await fetchJson("/api/admin");
+    if (!adminToken) return;
+    const data = await fetchJson("/api/admin", {
+      headers: { "x-flowapi-admin-token": adminToken },
+    });
     setAdminSnapshot(data);
   }
 
@@ -1319,8 +1370,24 @@ export default function HomePage() {
           <SectionTitle
             eyebrow="管理员后台"
             title="用户、Key、充值、调用、风控一屏看清"
-            text="管理员可以看到真实用户、调用日志、充值记录和模型使用情况。"
+            text="管理员必须通过后台密钥验证后，才能查看真实用户、调用日志、充值记录和模型使用情况。"
           />
+          <div className="panel-box admin-auth-panel">
+            <div className="panel-head">
+              <h3>管理员验证</h3>
+              <span>{adminToken ? "已填写" : "未填写"}</span>
+            </div>
+            <label>
+              后台访问密钥
+              <input
+                type="password"
+                value={adminToken}
+                onChange={(event) => setAdminToken(event.target.value)}
+                placeholder="输入服务器配置的 ADMIN_API_TOKEN"
+              />
+            </label>
+            <p className="form-note">密钥只保存在当前浏览器，用于调用管理员接口；未配置时后台不会暴露真实数据。</p>
+          </div>
           <div className="stats-grid stats-grid-wide">
             <StatCard label="用户数" value={adminSnapshot ? formatTokens(adminTotals.users) : "暂无数据"} hint="真实账户" />
             <StatCard label="API Key" value={adminSnapshot ? formatTokens(adminTotals.apiKeys) : "暂无数据"} hint="已创建 Key" />
@@ -1406,6 +1473,7 @@ export default function HomePage() {
                   onClick={async () => {
                     const data = await fetchJson("/api/admin", {
                       method: "POST",
+                      headers: { "x-flowapi-admin-token": adminToken },
                       body: JSON.stringify({
                         action: "adjustBalance",
                         customerId: adminTargetCustomer || currentCustomerId,
@@ -1438,6 +1506,7 @@ export default function HomePage() {
                   onClick={async () => {
                     const data = await fetchJson("/api/admin", {
                       method: "POST",
+                      headers: { "x-flowapi-admin-token": adminToken },
                       body: JSON.stringify({
                         action: "createActivationCode",
                         amount: adminActivationAmount,

@@ -3,8 +3,13 @@ import {
   createActivationCode,
   getAdminSnapshot,
 } from "@/lib/customer-store";
+import { requireAdminAccess } from "@/lib/api-auth";
 
 export default function handler(req, res) {
+  if (!requireAdminAccess(req, res)) {
+    return;
+  }
+
   if (req.method === "GET") {
     return res.status(200).json(getAdminSnapshot());
   }

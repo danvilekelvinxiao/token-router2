@@ -1,4 +1,5 @@
 import { createPublicApiKey, getDashboard } from "@/lib/customer-store";
+import { requireCustomerAccess } from "@/lib/api-auth";
 
 export default function handler(req, res) {
   if (req.method !== "POST") {
@@ -8,8 +9,8 @@ export default function handler(req, res) {
 
   const customerId = req.body?.customerId;
 
-  if (!customerId) {
-    return res.status(400).json({ error: "Missing customerId" });
+  if (!requireCustomerAccess(req, res, customerId)) {
+    return;
   }
 
   const newApiKey = createPublicApiKey(customerId, req.body?.label || "API Key");

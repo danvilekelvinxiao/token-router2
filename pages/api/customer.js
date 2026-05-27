@@ -1,4 +1,5 @@
 import { getDashboard, loginCustomer } from "@/lib/customer-store";
+import { requireCustomerAccess } from "@/lib/api-auth";
 
 export default function handler(req, res) {
   if (req.method === "POST") {
@@ -19,7 +20,12 @@ export default function handler(req, res) {
   }
 
   if (req.method === "GET") {
-    const customer = getDashboard(req.query.customerId);
+    const customerId = req.query.customerId;
+    if (!requireCustomerAccess(req, res, customerId)) {
+      return;
+    }
+
+    const customer = getDashboard(customerId);
     return res.status(200).json({
       customer,
     });
