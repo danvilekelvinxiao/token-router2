@@ -1,182 +1,250 @@
-/**
- * /api/market/model-rank
- * Real-time model popularity data from OpenRouter public model rankings.
- * Uses in-memory cache with configurable TTL.
- * Falls back gracefully when OpenRouter is unreachable.
- */
+import { formatTokens } from "@/lib/model-format";
+
+const GLOBAL_ORIGIN = "https://openrouter.ai";
+const RANKINGS_URL = `${GLOBAL_ORIGIN}/rankings`;
+const MODELS_URL = `${GLOBAL_ORIGIN}/api/v1/models`;
+const FALLBACK_ACTION_ID = "40824635c5eb77626bdf6795ffbf382c0862b321e1";
+const CACHE_TTL_MS = Number(process.env.MARKET_RANK_CACHE_TTL_MS || 10 * 60 * 1000);
+const MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const SYNC_TIMEOUT_MS = Number(process.env.MARKET_RANK_SYNC_TIMEOUT_MS || 12000);
 
 let cachedRank = null;
-let lastFetchTime = 0;
-let lastFetchError = null;
-const CACHE_TTL_MS = Number(process.env.MARKET_RANK_CACHE_TTL_MS || 2 * 60 * 60 * 1000); // default 2h
+let cachedRankAt = 0;
+let cachedCatalog = null;
+let cachedCatalogAt = 0;
+let cachedActionId = null;
+let cachedActionAt = 0;
 
-async function fetchOpenRouterRankings() {
-  const errors = [];
+function isFresh(time, ttl) {
+  return Boolean(time) && Date.now() - time < ttl;
+}
 
-  // Try fetching OpenRouter model list — the free endpoint
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+function providerFromSlug(slug = "") {
+  const provider = String(slug || "").split("/")[0].toLowerCase() || "unknown";
+  return provider === "openrouter" ? "global" : provider;
+}
 
-    const res = await fetch("https://openrouter.ai/api/v1/models", {
-      headers: {
-        "Content-Type": "application/json",
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
+function stripProviderPrefix(name = "") {
+  return String(name || "").replace(/^[^:]+:\s*/, "").trim();
+}
 
-    if (!res.ok) {
-      errors.push(`OpenRouter returned ${res.status}`);
-      return { models: null, errors };
+function compactModelName(model = {}, slug = "") {
+  const byName = stripProviderPrefix(model.name);
+  if (byName) return byName;
+  return String(slug || model.id || "Unknown Model").split("/").pop() || "Unknown Model";
+}
+
+function parseServerActionPayload(text) {
+  const lines = String(text || "").split(/\r?\n/).filter(Boolean);
+
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const match = lines[index].match(/^\d+:(.*)$/s);
+    if (!match) continue;
+    if (match[1].startsWith("E{")) throw new Error("全球模型热度同步失败");
+
+    try {
+      return JSON.parse(match[1]);
+    } catch {
+      // Continue looking for the latest parseable payload line.
     }
-
-    const json = await res.json();
-    const rawModels = json.data || [];
-
-    if (!rawModels.length) {
-      errors.push("OpenRouter returned empty model list");
-      return { models: null, errors };
-    }
-
-    // Sort by daily token volume
-    const sorted = [...rawModels]
-      .filter((m) => m.name && m.id)
-      .sort((a, b) => {
-        const aVol = a.metrics?.tokens_per_day || a.usage?.tokens_per_day || 0;
-        const bVol = b.metrics?.tokens_per_day || b.usage?.tokens_per_day || 0;
-        return bVol - aVol;
-      });
-
-    // Build ranking with real metrics
-    const models = sorted.slice(0, 12).map((m, i) => {
-      const tokensPerDay = m.metrics?.tokens_per_day || m.usage?.tokens_per_day || 0;
-      const tokensPerWeek = m.metrics?.tokens_per_week || m.usage?.tokens_per_week || tokensPerDay * 7;
-      const pricing = m.pricing || {};
-      const promptPrice = parseFloat(pricing.prompt || 0);
-      const completionPrice = parseFloat(pricing.completion || 0);
-
-      return {
-        rank: i + 1,
-        model: m.name,
-        modelId: m.id,
-        provider: (m.id || "").split("/")[0] || "Unknown",
-        tokens: formatTokens(tokensPerDay),
-        tokensPerDay,
-        tokensPerWeek,
-        contextLength: m.context_length || 0,
-        pricing: {
-          prompt: promptPrice ? `$${promptPrice.toFixed(2)}/M` : null,
-          completion: completionPrice ? `$${completionPrice.toFixed(2)}/M` : null,
-        },
-        logo: detectLogoProvider(m.id || m.name || ""),
-      };
-    });
-
-    // Calculate real change percentages by comparing volumes
-    const withChange = models.map((m, i) => {
-      // For ranking position: top models get higher "heat" score
-      const heatPct = models.length > 0
-        ? Math.round(((models.length - i) / models.length) * 100)
-        : 0;
-      return { ...m, heatPct };
-    });
-
-    return { models: withChange, errors: null };
-  } catch (e) {
-    errors.push(e.name === "AbortError" ? "OpenRouter request timed out" : `OpenRouter error: ${e.message}`);
-    return { models: null, errors };
   }
+
+  throw new Error("全球模型热度响应无法解析");
 }
 
-function formatTokens(n) {
-  if (!n || n === 0) return "—";
-  if (n >= 1e12) return `${(n / 1e12).toFixed(2)}T`;
-  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(2)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(0)}K`;
-  return String(Math.round(n));
+async function fetchText(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
+  const response = await fetch(url, {
+    ...options,
+    signal: controller.signal,
+    headers: {
+      "user-agent": "Mozilla/5.0 (FlowAPI/1.0)",
+      accept: "text/plain, text/html, */*",
+      ...(options.headers || {}),
+    },
+  }).finally(() => clearTimeout(timeout));
+
+  if (!response.ok) throw new Error(`同步失败 (${response.status})`);
+  return response.text();
 }
 
-function detectLogoProvider(id) {
-  const lower = (id || "").toLowerCase();
-  if (lower.includes("deepseek")) return "deepseek";
-  if (lower.includes("claude") || lower.includes("anthropic")) return "anthropic";
-  if (lower.includes("gpt") || lower.includes("openai") || lower.includes("chatgpt")) return "openai";
-  if (lower.includes("gemini") || lower.includes("google")) return "google";
-  if (lower.includes("qwen")) return "qwen";
-  if (lower.includes("kimi") || lower.includes("moonshot")) return "moonshot";
-  if (lower.includes("minimax")) return "minimax";
-  if (lower.includes("llama") || lower.includes("meta")) return "meta";
-  if (lower.includes("mistral")) return "mistral";
-  if (lower.includes("cohere") || lower.includes("command")) return "cohere";
-  if (lower.includes("grok") || lower.includes("xai")) return "xai";
-  if (lower.includes("nova") || lower.includes("amazon")) return "other";
-  return "other";
+async function fetchJson(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
+  const response = await fetch(url, {
+    signal: controller.signal,
+    headers: {
+      "user-agent": "Mozilla/5.0 (FlowAPI/1.0)",
+      accept: "application/json",
+    },
+  }).finally(() => clearTimeout(timeout));
+
+  if (!response.ok) throw new Error(`同步失败 (${response.status})`);
+  return response.json();
+}
+
+async function getRankingsActionId() {
+  if (cachedActionId && isFresh(cachedActionAt, MODEL_CACHE_TTL_MS)) {
+    return cachedActionId;
+  }
+
+  try {
+    const html = await fetchText(RANKINGS_URL);
+    const scripts = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((match) => match[1]);
+
+    for (const src of scripts) {
+      const script = await fetchText(new URL(src, GLOBAL_ORIGIN).href);
+      const match = script.match(/createServerReference\("([a-f0-9]+)",[\s\S]*?"getModelRankingsCached"/);
+      if (match?.[1]) {
+        cachedActionId = match[1];
+        cachedActionAt = Date.now();
+        return match[1];
+      }
+    }
+  } catch {
+    // Use known action id as a best-effort sync path; never fabricate ranking rows.
+  }
+
+  cachedActionId = FALLBACK_ACTION_ID;
+  cachedActionAt = Date.now();
+  return FALLBACK_ACTION_ID;
+}
+
+async function getModelCatalog() {
+  if (cachedCatalog && isFresh(cachedCatalogAt, MODEL_CACHE_TTL_MS)) {
+    return cachedCatalog;
+  }
+
+  const json = await fetchJson(MODELS_URL);
+  const catalog = new Map();
+  const models = Array.isArray(json?.data) ? json.data : [];
+
+  for (const model of models) {
+    if (model?.canonical_slug) catalog.set(model.canonical_slug, model);
+    if (model?.id) catalog.set(model.id, model);
+  }
+
+  cachedCatalog = catalog;
+  cachedCatalogAt = Date.now();
+  return catalog;
+}
+
+async function fetchRankingRows() {
+  const actionId = await getRankingsActionId();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SYNC_TIMEOUT_MS);
+  const response = await fetch(RANKINGS_URL, {
+    method: "POST",
+    signal: controller.signal,
+    headers: {
+      "user-agent": "Mozilla/5.0 (FlowAPI/1.0)",
+      "content-type": "text/plain;charset=UTF-8",
+      accept: "text/x-component",
+      "Next-Action": actionId,
+    },
+    body: JSON.stringify(["week"]),
+  }).finally(() => clearTimeout(timeout));
+
+  if (!response.ok) throw new Error(`全球模型热度同步失败 (${response.status})`);
+  const payload = parseServerActionPayload(await response.text());
+  if (!Array.isArray(payload)) throw new Error("全球模型热度响应格式异常");
+  return payload;
+}
+
+function buildModels(rows, catalog) {
+  const grouped = new Map();
+
+  for (const row of rows) {
+    const slug = String(row.model_permaslug || row.variant_permaslug || "").trim();
+    if (!slug) continue;
+
+    const tokens =
+      Number(row.total_prompt_tokens || 0) +
+      Number(row.total_completion_tokens || 0) +
+      Number(row.total_native_tokens_reasoning || 0) +
+      Number(row.total_native_tokens_cached || 0);
+
+    if (!Number.isFinite(tokens) || tokens <= 0) continue;
+
+    const model = catalog.get(slug) || {};
+    const current = grouped.get(slug) || {
+      model: compactModelName(model, slug),
+      provider: providerFromSlug(model.id || slug),
+      logo: providerFromSlug(model.id || slug),
+      tokens: 0,
+      changePercent: null,
+      isNew: false,
+    };
+
+    current.tokens += tokens;
+
+    if (current.changePercent === null && row.change !== null && row.change !== undefined) {
+      const change = Number(row.change);
+      if (Number.isFinite(change)) current.changePercent = Math.round(change * 100);
+    }
+
+    grouped.set(slug, current);
+  }
+
+  return Array.from(grouped.values())
+    .sort((a, b) => b.tokens - a.tokens)
+    .slice(0, 20)
+    .map((item, index) => ({
+      ...item,
+      rank: index + 1,
+      tokensLabel: formatTokens(item.tokens),
+    }));
+}
+
+function emptyGlobalRank() {
+  return {
+    success: true,
+    source: "empty",
+    sourceLabel: "全球",
+    updatedAt: null,
+    status: "syncing",
+    models: [],
+    message: "全球模型热度数据同步中",
+  };
 }
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
-    return res.status(405).json({ error: "Method not allowed" });
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ success: false, error: "Method not allowed" });
   }
 
-  const now = Date.now();
-
-  // Admin force refresh (with secret)
-  if (req.query.refresh === "admin") {
-    const adminToken = req.headers["x-admin-token"] || req.headers["x-admin-secret"] || "";
-    if (adminToken && adminToken === process.env.ADMIN_SECRET) {
-      cachedRank = null;
-      lastFetchTime = 0;
-      lastFetchError = null;
-    }
-  }
-
-  // Return fresh cache
-  if (cachedRank && now - lastFetchTime < CACHE_TTL_MS) {
+  if (cachedRank && isFresh(cachedRankAt, CACHE_TTL_MS)) {
     return res.status(200).json(cachedRank);
   }
 
-  // Fetch fresh data
-  const { models, errors } = await fetchOpenRouterRankings();
+  try {
+    const [rows, catalog] = await Promise.all([
+      fetchRankingRows(),
+      getModelCatalog().catch(() => new Map()),
+    ]);
+    const models = buildModels(rows, catalog);
 
-  if (models && models.length > 0) {
+    if (!models.length) {
+      return res.status(200).json(emptyGlobalRank());
+    }
+
     cachedRank = {
-      source: "OpenRouter",
+      success: true,
+      source: "global",
+      sourceLabel: "全球",
       updatedAt: new Date().toISOString(),
-      period: "daily",
-      dataSource: "real",
+      status: "synced",
       models,
     };
-    lastFetchTime = now;
-    lastFetchError = null;
+    cachedRankAt = Date.now();
     return res.status(200).json(cachedRank);
-  }
+  } catch {
+    if (cachedRank) {
+      return res.status(200).json({ ...cachedRank, status: "cached" });
+    }
 
-  // Log the error
-  if (errors) {
-    console.warn("[market/model-rank] Fetch failed:", errors.join("; "));
-    lastFetchError = errors.join("; ");
+    return res.status(200).json(emptyGlobalRank());
   }
-
-  // Return stale cache if available
-  if (cachedRank) {
-    return res.status(200).json({
-      ...cachedRank,
-      dataSource: "cached",
-      stale: true,
-      staleSince: new Date(lastFetchTime).toISOString(),
-    });
-  }
-
-  // No data available
-  return res.status(200).json({
-    source: "OpenRouter",
-    updatedAt: new Date().toISOString(),
-    period: "daily",
-    dataSource: "empty",
-    models: [],
-    message: "全球模型热度数据同步中，请稍后再查看。",
-    _debug: process.env.NODE_ENV !== "production" ? { errors, lastFetchError } : undefined,
-  });
 }
