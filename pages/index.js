@@ -1,23 +1,46 @@
 import Head from "next/head";
 import { useEffect, useMemo, useState } from "react";
 import ModelLeaderboard from "@/components/dashboard/model-leaderboard";
+import ModelBrandIcon from "@/components/dashboard/model-brand-icon";
 import { formatTokens } from "@/lib/model-format";
 
 const apiBaseUrl = "https://api.flowapi.fun/v1";
 const localApiBase = "/api";
 
-const modelCategories = [
-  "推荐模型",
-  "高性价比",
-  "代码编程",
-  "中文写作",
-  "长文本",
-  "多模态",
-  "Claude 系列",
-  "GPT 系列",
-  "DeepSeek 系列",
-  "Gemini 系列",
-  "Qwen 系列",
+const fallbackModelCategories = [
+  { id: "all", label: "全部", slug: "all", keywords: [] },
+  { id: "recommended", label: "推荐", slug: "recommended", keywords: ["推荐", "新手"] },
+  { id: "deepseek", label: "DeepSeek", slug: "deepseek", keywords: ["deepseek"] },
+  { id: "gpt", label: "GPT", slug: "gpt", keywords: ["gpt", "openai"] },
+  { id: "claude", label: "Claude", slug: "claude", keywords: ["claude", "anthropic"] },
+  { id: "gemini", label: "Gemini", slug: "gemini", keywords: ["gemini", "google"] },
+  { id: "qwen", label: "Qwen", slug: "qwen", keywords: ["qwen", "alibaba"] },
+  { id: "low-cost", label: "低成本", slug: "low-cost", keywords: ["低成本", "高性价比"] },
+  { id: "coding", label: "代码编程", slug: "coding", keywords: ["代码", "编程", "code"] },
+  { id: "writing", label: "中文写作", slug: "writing", keywords: ["中文", "写作", "文案"] },
+  { id: "long-context", label: "长文本", slug: "long-context", keywords: ["长文本", "context"] },
+  { id: "multimodal", label: "多模态", slug: "multimodal", keywords: ["多模态", "vision"] },
+];
+
+const beginnerRecommendations = [
+  {
+    title: "中文日常任务",
+    modelName: "DeepSeek Chat",
+    modelId: "deepseek/deepseek-chat",
+    text: "适合中文问答、轻量代码、日常任务。",
+  },
+  {
+    title: "代码编程",
+    modelName: "Claude Sonnet / GPT",
+    modelId: "anthropic/claude-3.5-haiku",
+    text: "适合代码生成、调试、复杂任务。",
+  },
+  {
+    title: "低成本批量任务",
+    modelName: "Qwen / DeepSeek Flash",
+    modelId: "qwen/qwen3-32b",
+    text: "适合批量文案、低成本调用、轻量任务。",
+  },
 ];
 
 const callSteps = [
@@ -130,55 +153,109 @@ function readBrowserStorage(key) {
   return window.localStorage.getItem(key) || "";
 }
 
-function modelMatchesCategory(model, category) {
+function normalizeList(value) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string") {
+    return value.split(/[,，]/).map((item) => item.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function modelTextBlob(model) {
   const blob = [
     model.name,
     model.provider,
     model.modelId,
     model.actualModelId,
     model.bestFor,
+    model.useCase,
+    model.userType,
+    ...(model.tags || []),
+    ...(model.categories || []),
     ...(model.routeKeywords || []),
   ]
     .filter(Boolean)
     .join(" ")
     .toLowerCase();
 
-  switch (category) {
-    case "推荐模型":
-      return true;
-    case "高性价比":
-      return Number(model.inputPriceCny || 0) <= 6 || Number(model.outputPriceCny || 0) <= 12;
-    case "代码编程":
-      return /code|coding|编程|代码|agent|cursor|claude code|codex/i.test(blob);
-    case "中文写作":
-      return /中文|写作|文案|客服|办公|外贸|开发信|标题/i.test(blob);
-    case "长文本":
-      return /长文|长文本|context|推理|分析|论文|研究/i.test(blob);
-    case "多模态":
-      return /多模态|图片|视频|vision|multimodal/i.test(blob);
-    case "Claude 系列":
-      return /claude/i.test(blob);
-    case "GPT 系列":
-      return /gpt/i.test(blob);
-    case "DeepSeek 系列":
-      return /deepseek/i.test(blob);
-    case "Gemini 系列":
-      return /gemini/i.test(blob);
-    case "Qwen 系列":
-      return /qwen/i.test(blob);
-    default:
-      return true;
-  }
+  return blob;
+}
+
+function modelMatchesSearch(model, keyword) {
+  if (!keyword.trim()) return true;
+  return modelTextBlob(model).includes(keyword.trim().toLowerCase());
+}
+
+function modelMatchesCategory(model, category) {
+  const slug = category?.slug || category?.id || "all";
+  const label = category?.label || "";
+  const keywords = normalizeList(category?.keywords);
+  const modelCategories = normalizeList(model.categories);
+  const blob = modelTextBlob(model);
+
+  if (slug === "all" || label === "全部") return true;
+  if (slug === "recommended" || label === "推荐") return model.recommended === true || modelCategories.includes("recommended");
+  if (modelCategories.includes(slug)) return true;
+  if (keywords.some((keyword) => blob.includes(String(keyword).toLowerCase()))) return true;
+
+  return false;
 }
 
 function deriveModelLabels(model) {
-  const labels = [];
-  if (Number(model.inputPriceCny || 0) <= 6) labels.push("高性价比");
-  if (/中文|写作|文案|客服|办公/i.test(`${model.bestFor} ${model.provider}`)) labels.push("中文友好");
-  if (/code|coding|编程|代码|agent/i.test(`${model.bestFor} ${model.routeKeywords?.join(" ")}`)) labels.push("编程");
-  if (/claude|gpt|deepseek|gemini|qwen/i.test(`${model.provider} ${model.name}`)) labels.push("主流模型");
-  if (Number(model.quality || 0) >= 95) labels.push("推荐新手");
-  return Array.from(new Set(labels)).slice(0, 3);
+  const labels = normalizeList(model.tags);
+  if (!labels.length && model.recommended) labels.push("新手推荐");
+  if (!labels.length) labels.push("主流模型");
+  return Array.from(new Set(labels));
+}
+
+function formatModelPrice(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return "价格同步中";
+  }
+
+  return `${formatCny(numeric, 4)} / M Token`;
+}
+
+function buildCurlExample(modelId) {
+  return `curl ${apiBaseUrl}/chat/completions \\
+  -H "Authorization: Bearer 你的 API Key" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model":"${modelId}","messages":[{"role":"user","content":"你好"}]}'`;
+}
+
+function buildPythonExample(modelId) {
+  return `import requests
+
+response = requests.post(
+    "${apiBaseUrl}/chat/completions",
+    headers={
+        "Authorization": "Bearer 你的 API Key",
+        "Content-Type": "application/json",
+    },
+    json={
+        "model": "${modelId}",
+        "messages": [{"role": "user", "content": "你好"}],
+    },
+)
+
+print(response.json())`;
+}
+
+function buildJavaScriptExample(modelId) {
+  return `const response = await fetch("${apiBaseUrl}/chat/completions", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer 你的 API Key",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    model: "${modelId}",
+    messages: [{ role: "user", content: "你好" }],
+  }),
+});
+
+console.log(await response.json());`;
 }
 
 function buildDailySeries(calls) {
@@ -247,8 +324,10 @@ function AppButton({ children, variant = "primary", onClick, type = "button", di
 
 export default function HomePage() {
   const [models, setModels] = useState([]);
-  const [modelFilter, setModelFilter] = useState("推荐模型");
-  const [selectedCompare, setSelectedCompare] = useState([]);
+  const [contentCategories, setContentCategories] = useState(fallbackModelCategories);
+  const [modelFilter, setModelFilter] = useState("recommended");
+  const [modelSearch, setModelSearch] = useState("");
+  const [modelLoadError, setModelLoadError] = useState("");
   const [activeModel, setActiveModel] = useState(null);
   const [adminSnapshot, setAdminSnapshot] = useState(null);
   const [currentCustomerId, setCurrentCustomerId] = useState(() => readBrowserStorage("flowapi_customer_id"));
@@ -288,6 +367,9 @@ export default function HomePage() {
   const [adminAdjustReason, setAdminAdjustReason] = useState("运营调账");
   const [adminActivationAmount, setAdminActivationAmount] = useState("100");
   const [adminActivationNote, setAdminActivationNote] = useState("新手激活码");
+  const [adminContent, setAdminContent] = useState(null);
+  const [adminModelDraft, setAdminModelDraft] = useState(null);
+  const [adminContentStatus, setAdminContentStatus] = useState("");
   const [promptText, setPromptText] = useState(
     "请用中文解释 FlowAPI 的接入步骤，并推荐一个适合新手的模型。",
   );
@@ -322,14 +404,24 @@ export default function HomePage() {
 
     async function loadModels() {
       setLoadingModels(true);
+      setModelLoadError("");
       try {
-        const data = await fetchJson("/api/models");
+        const [modelData, categoryData] = await Promise.all([
+          fetchJson("/api/content/models"),
+          fetchJson("/api/content/model-categories"),
+        ]);
         if (!cancelled) {
-          setModels(data.models || []);
+          const nextModels = modelData.models || [];
+          const nextCategories = categoryData.categories?.length ? categoryData.categories : fallbackModelCategories;
+          setModels(nextModels);
+          setContentCategories(nextCategories);
+          setModelFilter(nextCategories.find((category) => category.slug === "recommended")?.slug || nextCategories[0]?.slug || "all");
         }
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setModels([]);
+          setContentCategories(fallbackModelCategories);
+          setModelLoadError(error.message || "模型数据同步中");
         }
       } finally {
         if (!cancelled) {
@@ -409,6 +501,13 @@ export default function HomePage() {
           if (!adminTargetCustomer && firstCustomer) {
             setAdminTargetCustomer(firstCustomer);
           }
+          const contentData = await fetchJson("/api/admin/content/models", {
+            headers: { "x-flowapi-admin-token": adminToken },
+          });
+          if (!cancelled) {
+            setAdminContent(contentData);
+            setAdminModelDraft((current) => current || contentData.models?.[0] || null);
+          }
         }
       } catch {
         if (!cancelled) {
@@ -477,13 +576,15 @@ export default function HomePage() {
   }, [rankPeriod]);
 
   const metrics = customer?.metrics || emptyDashboardMetrics;
+  const currentCategory = useMemo(() => {
+    return contentCategories.find((category) => category.slug === modelFilter || category.id === modelFilter) || contentCategories[0] || fallbackModelCategories[0];
+  }, [contentCategories, modelFilter]);
   const visibleModels = useMemo(() => {
-    return models.filter((model) => modelMatchesCategory(model, modelFilter));
-  }, [models, modelFilter]);
-  const compareModels = useMemo(
-    () => models.filter((model) => selectedCompare.includes(model.modelId)),
-    [models, selectedCompare],
-  );
+    return models
+      .filter((model) => model.listed !== false)
+      .filter((model) => modelMatchesCategory(model, currentCategory))
+      .filter((model) => modelMatchesSearch(model, modelSearch));
+  }, [models, currentCategory, modelSearch]);
   const dailySeries = useMemo(() => buildDailySeries(customer?.calls || []), [customer?.calls]);
   const callLogs = customer?.calls || [];
   const balanceEvents = customer?.balanceEvents || [];
@@ -629,6 +730,15 @@ export default function HomePage() {
     setAdminSnapshot(data);
   }
 
+  async function refreshAdminContent() {
+    if (!adminToken) return;
+    const data = await fetchJson("/api/admin/content/models", {
+      headers: { "x-flowapi-admin-token": adminToken },
+    });
+    setAdminContent(data);
+    setAdminModelDraft(data.models?.[0] || null);
+  }
+
   async function refreshRankboards(nextPeriod = rankPeriod) {
     setLoadingGlobalRank(true);
     setLoadingUsageRank(true);
@@ -661,6 +771,29 @@ export default function HomePage() {
       setLoadingGlobalRank(false);
       setLoadingUsageRank(false);
     }
+  }
+
+  async function refreshPublicContent() {
+    const [modelData, categoryData] = await Promise.all([
+      fetchJson("/api/content/models"),
+      fetchJson("/api/content/model-categories"),
+    ]);
+    setModels(modelData.models || []);
+    setContentCategories(categoryData.categories?.length ? categoryData.categories : fallbackModelCategories);
+  }
+
+  async function saveAdminModelDraft() {
+    if (!adminToken || !adminModelDraft) return;
+    setAdminContentStatus("正在保存模型配置...");
+    const data = await fetchJson("/api/admin/content/models", {
+      method: "POST",
+      headers: { "x-flowapi-admin-token": adminToken },
+      body: JSON.stringify({ model: adminModelDraft }),
+    });
+    setAdminContent(data);
+    setAdminModelDraft(data.models?.find((model) => model.id === adminModelDraft.id) || data.model || adminModelDraft);
+    await refreshPublicContent();
+    setAdminContentStatus("模型配置已保存，前台刷新后同步。");
   }
 
   async function runFirstCall() {
@@ -700,18 +833,6 @@ export default function HomePage() {
     } finally {
       setCallLoading(false);
     }
-  }
-
-  function toggleCompare(modelId) {
-    setSelectedCompare((prev) => {
-      if (prev.includes(modelId)) {
-        return prev.filter((item) => item !== modelId);
-      }
-      if (prev.length >= 3) {
-        return [...prev.slice(1), modelId];
-      }
-      return [...prev, modelId];
-    });
   }
 
   return (
@@ -769,7 +890,7 @@ export default function HomePage() {
               <span>Base URL: {apiBaseUrl}</span>
               <span>金额统一使用 ¥</span>
               <span>API Key 默认脱敏</span>
-              <span>无数据时不伪造 0K</span>
+              <span>无数据时显示空状态</span>
             </div>
           </div>
 
@@ -909,100 +1030,140 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="section-block" id="models">
-          <SectionTitle
-            eyebrow="大模型接入"
-            title="先选模型，再复制 Model ID"
-            text="默认展示推荐模型。用户可以筛选、对比、查看详情和直接复制模型名。"
-          />
-          <div className="chip-row">
-            {modelCategories.map((category) => (
-              <button
-                key={category}
-                type="button"
-                className={modelFilter === category ? "chip chip-active" : "chip"}
-                onClick={() => setModelFilter(category)}
-              >
-                {category}
-              </button>
+        <section className="section-block model-exchange-section" id="models">
+          <div className="model-access-hero">
+            <div className="model-access-copy">
+              <span className="section-kicker">大模型接入</span>
+              <h2>选择你的 AI 模型</h2>
+              <p>一个 FlowAPI Key，即可接入 DeepSeek、GPT、Claude、Gemini、Qwen 等主流模型。</p>
+              <div className="model-market-strip">
+                <span>AI Token 模型货架</span>
+                <strong>{loadingModels ? "同步中" : `${models.length} 个模型`}</strong>
+                <em>{visibleModels.length ? `当前展示 ${visibleModels.length} 个` : "等待选择"}</em>
+              </div>
+            </div>
+            <div className="model-access-actions">
+              <span>Base URL</span>
+              <code>{apiBaseUrl}</code>
+              <div className="button-row">
+                <button type="button" className="primary-button" onClick={() => copyText("Base URL", apiBaseUrl)}>
+                  复制 Base URL
+                </button>
+                <a className="secondary-button" href="#api">创建 API Key</a>
+                <a className="secondary-button" href="#docs">查看接入教程</a>
+              </div>
+            </div>
+          </div>
+
+          <div className="model-recommend-grid">
+            <div className="model-recommend-title">
+              <span>新手推荐</span>
+              <h3>不知道选哪个？</h3>
+              <p>先按用途选，不需要理解复杂参数；复制 Model ID 后去创建 API Key 即可开始。</p>
+            </div>
+            {beginnerRecommendations.map((item) => (
+              <article className="model-recommend-card" key={item.title}>
+                <span>{item.title}</span>
+                <strong>{item.modelName}</strong>
+                <p>{item.text}</p>
+                <div className="button-row">
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => {
+                      const matched = models.find((model) => model.modelId === item.modelId || model.name.includes(item.modelName.split(" ")[0]));
+                      if (matched) setActiveModel(matched);
+                    }}
+                  >
+                    使用推荐模型
+                  </button>
+                  <button type="button" className="secondary-button" onClick={() => copyText("Model ID", item.modelId)}>
+                    复制 Model ID
+                  </button>
+                </div>
+              </article>
             ))}
           </div>
 
-          {selectedCompare.length > 0 && compareModels.length > 0 && (
-            <div className="compare-panel">
-              <div className="compare-head">
-                <h3>模型对比</h3>
-                <span>已选 {compareModels.length} 个模型</span>
-              </div>
-              <div className="compare-table-wrap">
-                <table className="compare-table">
-                  <thead>
-                    <tr>
-                      <th>模型</th>
-                      <th>Provider</th>
-                      <th>输入价格</th>
-                      <th>输出价格</th>
-                      <th>推荐场景</th>
-                      <th>新手友好</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {compareModels.map((model) => (
-                      <tr key={model.modelId}>
-                        <td>{model.name}</td>
-                        <td>{model.provider}</td>
-                        <td>{formatCny(model.inputPriceCny)}/M Token</td>
-                        <td>{formatCny(model.outputPriceCny)}/M Token</td>
-                        <td>{model.bestFor || "暂无数据"}</td>
-                        <td>{Number(model.quality || 0) >= 92 ? "是" : "一般"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          <div className="model-filter-panel">
+            <label className="model-search-box">
+              <span>搜索模型</span>
+              <input
+                value={modelSearch}
+                onChange={(event) => setModelSearch(event.target.value)}
+                placeholder="搜索模型名称 / Provider / Model ID"
+              />
+            </label>
+            <div className="chip-row model-category-row">
+              {contentCategories.map((category) => (
+                <button
+                  key={category.id || category.slug}
+                  type="button"
+                  className={modelFilter === (category.slug || category.id) ? "chip chip-active" : "chip"}
+                  onClick={() => setModelFilter(category.slug || category.id)}
+                >
+                  {category.label}
+                </button>
+              ))}
             </div>
-          )}
+          </div>
 
-          <div className="model-grid">
-            {loadingModels && (
-              <div className="empty-block full-span">模型数据同步中...</div>
+          <div className="model-shelf-grid">
+            {loadingModels && Array.from({ length: 6 }).map((_, index) => (
+              <div className="model-shelf-card model-skeleton" key={index}>
+                <span />
+                <strong />
+                <p />
+                <p />
+              </div>
+            ))}
+
+            {!loadingModels && modelLoadError && (
+              <div className="empty-block full-span">模型数据同步中<br />请稍后刷新，或联系管理员检查模型配置。</div>
             )}
-            {!loadingModels && visibleModels.map((model) => {
+
+            {!loadingModels && !modelLoadError && !visibleModels.length && (
+              <div className="empty-block full-span">暂无可用模型<br />管理员上架模型后将在这里展示。</div>
+            )}
+
+            {!loadingModels && !modelLoadError && visibleModels.map((model) => {
               const labels = deriveModelLabels(model);
-              const selected = selectedCompare.includes(model.modelId);
+              const visibleLabels = labels.slice(0, 3);
+              const moreLabels = labels.length - visibleLabels.length;
+
               return (
-                <article className="model-card" key={model.modelId}>
-                  <div className="model-topline">
+                <article className={model.recommended ? "model-shelf-card is-recommended" : "model-shelf-card"} key={model.modelId}>
+                  <div className="model-card-head">
+                    <ModelBrandIcon brand={model.logo || model.provider} label={model.name} title={model.provider} />
                     <div>
-                      <span className="model-logo">{(model.name || model.provider || "?").slice(0, 1)}</span>
                       <h3>{model.name}</h3>
+                      <span>by {model.provider}</span>
                     </div>
-                    <label className="model-select">
-                      <input
-                        type="checkbox"
-                        checked={selected}
-                        onChange={() => toggleCompare(model.modelId)}
-                      />
-                      对比
-                    </label>
                   </div>
-                  <p>{model.provider} · {model.bestFor || "暂无适用场景"}</p>
-                  <div className="model-meta">
-                    <span>Model ID：{model.modelId}</span>
-                    <span>输入 {formatCny(model.inputPriceCny)}/M Token</span>
-                    <span>输出 {formatCny(model.outputPriceCny)}/M Token</span>
+                  <div className="model-id-box">
+                    <span>Model ID</span>
+                    <code>{model.modelId}</code>
+                    <button type="button" onClick={() => copyText("Model ID", model.modelId)}>复制</button>
+                  </div>
+                  <div className="model-price-grid">
+                    <div>
+                      <span>输入</span>
+                      <strong>{formatModelPrice(model.inputPriceCny)}</strong>
+                    </div>
+                    <div>
+                      <span>输出</span>
+                      <strong>{formatModelPrice(model.outputPriceCny)}</strong>
+                    </div>
                   </div>
                   <div className="model-tags">
-                    {labels.map((label) => (
-                      <span key={label}>{label}</span>
-                    ))}
+                    {visibleLabels.map((label) => <span key={label}>{label}</span>)}
+                    {moreLabels > 0 && <span>+{moreLabels}</span>}
                   </div>
-                  <div className="model-actions">
-                    <button type="button" className="secondary-button" onClick={() => copyText("Model ID", model.modelId)}>
-                      复制 Model ID
-                    </button>
+                  <p>{model.useCase || model.bestFor || "适用场景同步中。"}</p>
+                  <div className="model-card-actions">
+                    <a className="primary-button" href={model.primaryButtonHref || "#api"}>{model.primaryButtonText || "立即接入"}</a>
                     <button type="button" className="secondary-button" onClick={() => setActiveModel(model)}>
-                      查看详情
+                      {model.secondaryButtonText || "查看详情"}
                     </button>
                   </div>
                 </article>
@@ -1010,16 +1171,16 @@ export default function HomePage() {
             })}
           </div>
 
-          <div className="newbie-panel">
+          <div className="model-onboarding-panel">
             <div>
-              <h3>不知道选哪个？</h3>
-              <p>中文日常任务优先选 DeepSeek，代码任务优先选 Claude 或 GPT，批量低成本任务优先选 Qwen 或 DeepSeek。</p>
+              <span>接入闭环</span>
+              <h3>三步完成接入</h3>
+              <p>创建 API Key、复制 Model ID、使用 Base URL 调用。页面里所有关键字段都可以直接复制。</p>
             </div>
-            <div className="newbie-actions">
-              <button type="button" className="primary-button" onClick={() => setModelFilter("推荐模型")}>
-                直接使用推荐配置
-              </button>
-              <a className="secondary-button" href="#api">去创建 API Key</a>
+            <div className="onboarding-steps">
+              <a href="#api"><strong>1</strong><span>创建 API Key</span></a>
+              <button type="button" onClick={() => selectedDetail?.modelId && copyText("Model ID", selectedDetail.modelId)}><strong>2</strong><span>复制 Model ID</span></button>
+              <button type="button" onClick={() => selectedDetail?.modelId && copyText("CURL 示例", buildCurlExample(selectedDetail.modelId))}><strong>3</strong><span>复制 CURL 示例</span></button>
             </div>
           </div>
         </section>
@@ -1099,7 +1260,7 @@ export default function HomePage() {
           <SectionTitle
             eyebrow="数据面板"
             title="真实调用、真实 Token、真实扣费"
-            text="如果没有真实数据，就直接显示空状态，不伪造 0K 和 ¥0.00。"
+            text="如果没有真实数据，就直接显示空状态，不用数字假装真实。"
           />
           <div className="stats-grid stats-grid-wide">
             <StatCard label="当前余额" value={customer ? formatCny(customer.balance) : "暂无数据"} hint="实时余额" />
@@ -1388,6 +1549,84 @@ export default function HomePage() {
             </label>
             <p className="form-note">密钥只保存在当前浏览器，用于调用管理员接口；未配置时后台不会暴露真实数据。</p>
           </div>
+
+          <div className="panel-box content-admin-panel">
+            <div className="panel-head">
+              <h3>前台内容管理</h3>
+              <span>{adminContent?.models?.length ? `${adminContent.models.length} 个模型配置` : "等待验证"}</span>
+            </div>
+            <p className="form-note">这里编辑模型名称、Provider、Model ID、价格、标签、用途、排序、推荐和上架状态；保存后前台通过 /api/content/models 读取。</p>
+            <div className="content-admin-grid">
+              <label>
+                选择模型
+                <select
+                  value={adminModelDraft?.id || ""}
+                  onChange={(event) => {
+                    const model = adminContent?.models?.find((item) => item.id === event.target.value);
+                    setAdminModelDraft(model || null);
+                  }}
+                >
+                  {(adminContent?.models || []).map((model) => (
+                    <option key={model.id} value={model.id}>{model.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                模型名称
+                <input value={adminModelDraft?.name || ""} onChange={(event) => setAdminModelDraft((prev) => ({ ...(prev || {}), name: event.target.value }))} />
+              </label>
+              <label>
+                Provider
+                <input value={adminModelDraft?.provider || ""} onChange={(event) => setAdminModelDraft((prev) => ({ ...(prev || {}), provider: event.target.value }))} />
+              </label>
+              <label>
+                Model ID
+                <input value={adminModelDraft?.modelId || ""} onChange={(event) => setAdminModelDraft((prev) => ({ ...(prev || {}), modelId: event.target.value }))} />
+              </label>
+              <label>
+                输入价格（¥ / M Token）
+                <input value={adminModelDraft?.inputPriceCny ?? ""} onChange={(event) => setAdminModelDraft((prev) => ({ ...(prev || {}), inputPriceCny: event.target.value }))} />
+              </label>
+              <label>
+                输出价格（¥ / M Token）
+                <input value={adminModelDraft?.outputPriceCny ?? ""} onChange={(event) => setAdminModelDraft((prev) => ({ ...(prev || {}), outputPriceCny: event.target.value }))} />
+              </label>
+              <label>
+                标签（逗号分隔）
+                <input value={normalizeList(adminModelDraft?.tags).join("，")} onChange={(event) => setAdminModelDraft((prev) => ({ ...(prev || {}), tags: normalizeList(event.target.value) }))} />
+              </label>
+              <label>
+                分类 slug（逗号分隔）
+                <input value={normalizeList(adminModelDraft?.categories).join("，")} onChange={(event) => setAdminModelDraft((prev) => ({ ...(prev || {}), categories: normalizeList(event.target.value) }))} />
+              </label>
+              <label>
+                排序
+                <input value={adminModelDraft?.sort ?? ""} onChange={(event) => setAdminModelDraft((prev) => ({ ...(prev || {}), sort: event.target.value }))} />
+              </label>
+              <label className="content-admin-wide">
+                用途说明
+                <textarea value={adminModelDraft?.useCase || ""} onChange={(event) => setAdminModelDraft((prev) => ({ ...(prev || {}), useCase: event.target.value, bestFor: event.target.value }))} />
+              </label>
+              <label className="switch-row">
+                <input type="checkbox" checked={adminModelDraft?.recommended === true} onChange={(event) => setAdminModelDraft((prev) => ({ ...(prev || {}), recommended: event.target.checked }))} />
+                推荐模型
+              </label>
+              <label className="switch-row">
+                <input type="checkbox" checked={adminModelDraft?.listed !== false} onChange={(event) => setAdminModelDraft((prev) => ({ ...(prev || {}), listed: event.target.checked }))} />
+                前台上架
+              </label>
+            </div>
+            <div className="button-row">
+              <button type="button" className="primary-button" onClick={saveAdminModelDraft} disabled={!adminToken || !adminModelDraft}>
+                保存模型配置
+              </button>
+              <button type="button" className="secondary-button" onClick={refreshAdminContent} disabled={!adminToken}>
+                刷新内容配置
+              </button>
+            </div>
+            {adminContentStatus && <p className="form-note">{adminContentStatus}</p>}
+          </div>
+
           <div className="stats-grid stats-grid-wide">
             <StatCard label="用户数" value={adminSnapshot ? formatTokens(adminTotals.users) : "暂无数据"} hint="真实账户" />
             <StatCard label="API Key" value={adminSnapshot ? formatTokens(adminTotals.apiKeys) : "暂无数据"} hint="已创建 Key" />
@@ -1541,42 +1780,77 @@ export default function HomePage() {
           </div>
         </section>
 
-        {selectedDetail && (
-          <section className="section-block">
-            <div className="detail-panel">
+        {activeModel && (
+          <div className="model-modal-backdrop" role="presentation" onClick={() => setActiveModel(null)}>
+            <section className="model-detail-modal" role="dialog" aria-modal="true" aria-labelledby="model-detail-title" onClick={(event) => event.stopPropagation()}>
               <div className="detail-head">
-                <div>
-                  <span>模型详情</span>
-                  <h2>{selectedDetail.name}</h2>
+                <div className="model-card-head">
+                  <ModelBrandIcon brand={activeModel.logo || activeModel.provider} label={activeModel.name} title={activeModel.provider} />
+                  <div>
+                    <span>模型详情</span>
+                    <h2 id="model-detail-title">{activeModel.name}</h2>
+                    <p>by {activeModel.provider}</p>
+                  </div>
                 </div>
                 <button type="button" className="secondary-button" onClick={() => setActiveModel(null)}>
                   关闭
                 </button>
               </div>
-              <div className="detail-grid">
-                <div className="panel-box">
-                  <h3>模型介绍</h3>
-                  <p>{selectedDetail.bestFor || "暂无数据"}</p>
-                  <div className="inline-tags">
-                    <span>{selectedDetail.provider}</span>
-                    <span>{selectedDetail.modelId}</span>
-                  </div>
+
+              <div className="detail-quick-copy">
+                <div>
+                  <span>Model ID</span>
+                  <code>{activeModel.modelId}</code>
+                  <button type="button" onClick={() => copyText("Model ID", activeModel.modelId)}>复制 Model ID</button>
                 </div>
-                <div className="panel-box">
-                  <h3>调用示例</h3>
-                  <pre className="code-block">{`curl ${apiBaseUrl}/chat/completions \\
-  -H "Authorization: Bearer ${currentKey || "sk-xxxx"}" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "model": "${selectedDetail.modelId}",
-    "messages": [
-      {"role": "user", "content": "写一封跨境电商开发信"}
-    ]
-  }'`}</pre>
+                <div>
+                  <span>Base URL</span>
+                  <code>{apiBaseUrl}</code>
+                  <button type="button" onClick={() => copyText("Base URL", apiBaseUrl)}>复制 Base URL</button>
                 </div>
               </div>
-            </div>
-          </section>
+
+              <div className="detail-grid">
+                <div className="panel-box">
+                  <h3>适合场景</h3>
+                  <p>{activeModel.useCase || activeModel.bestFor || "暂无数据"}</p>
+                  <h3>不适合场景</h3>
+                  <p>{activeModel.unsuitableFor || "暂无数据"}</p>
+                  <h3>推荐用户类型</h3>
+                  <p>{activeModel.userType || "需要快速接入 AI API 的用户。"}</p>
+                </div>
+                <div className="panel-box">
+                  <h3>价格说明</h3>
+                  <div className="field-list">
+                    <div><span>输入价格</span><strong>{formatModelPrice(activeModel.inputPriceCny)}</strong></div>
+                    <div><span>输出价格</span><strong>{formatModelPrice(activeModel.outputPriceCny)}</strong></div>
+                    <div><span>计价单位</span><strong>M Token</strong></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="detail-code-grid">
+                {[
+                  ["CURL 示例", buildCurlExample(activeModel.modelId)],
+                  ["Python 示例", buildPythonExample(activeModel.modelId)],
+                  ["JavaScript 示例", buildJavaScriptExample(activeModel.modelId)],
+                ].map(([title, code]) => (
+                  <div className="panel-box" key={title}>
+                    <div className="panel-head">
+                      <h3>{title}</h3>
+                      <button type="button" className="secondary-button" onClick={() => copyText(title, code)}>复制</button>
+                    </div>
+                    <pre className="code-block">{code}</pre>
+                  </div>
+                ))}
+              </div>
+
+              <div className="detail-actions">
+                <a className="primary-button" href="#api" onClick={() => setActiveModel(null)}>去创建 API Key</a>
+                <a className="secondary-button" href="#docs" onClick={() => setActiveModel(null)}>查看帮助指南</a>
+              </div>
+            </section>
+          </div>
         )}
 
         <footer className="site-footer">
