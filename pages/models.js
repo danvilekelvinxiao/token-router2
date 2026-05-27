@@ -437,8 +437,8 @@ function ModelMarketCard({ model, showPrice, onCopy, onDetails }) {
       </div>
 
       <div className="models-card-actions">
-        <button type="button" className="models-market-primary" onClick={onCopy}>复制 Model ID</button>
-        <Link className="models-market-secondary" href={`/guide?model=${encodeURIComponent(model.modelId || "")}`}>立即接入</Link>
+        <Link className="models-market-primary" href={`/guide?model=${encodeURIComponent(model.modelId || "")}`}>立即接入</Link>
+        <button type="button" className="models-market-secondary" onClick={onCopy}>复制 Model ID</button>
         <button type="button" className="models-market-ghost" onClick={onDetails}>查看详情</button>
       </div>
     </article>
