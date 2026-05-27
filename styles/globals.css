@@ -84,6 +84,38 @@
   --page-warning-sub: #a16207;
 }
 
+/* Unified FlowAPI animated brand wordmark */
+.flowapi-brand-gradient {
+  display: inline-block;
+  background: linear-gradient(90deg, #6d5dfc, #8b5cf6, #22d3ee, #6d5dfc);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  font-weight: 950;
+  line-height: inherit;
+}
+
+.flowapi-brand-gradient-sm { font-size: .95em; }
+.flowapi-brand-gradient-md { font-size: 1em; }
+.flowapi-brand-gradient-lg { font-size: 1.15em; }
+.flowapi-brand-gradient-xl { font-size: 1.28em; }
+
+.flowapi-brand-gradient.is-animated {
+  animation: flowapiGradient 4.5s linear infinite;
+}
+
+@keyframes flowapiGradient {
+  to { background-position: 200% center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flowapi-brand-gradient.is-animated {
+    animation: none !important;
+  }
+}
+
 /* Wallet / plan progress visualization */
 .wallet-progress-card {
   width: 100%;
@@ -97,16 +129,14 @@
     var(--page-card-bg, rgba(15, 23, 42, 0.72));
   box-shadow: 0 18px 54px rgba(2, 6, 23, 0.12);
   color: var(--page-heading, #e5e7eb);
-  cursor: pointer;
+  cursor: default;
   overflow: hidden;
   position: relative;
   transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
 
 .wallet-progress-card:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--page-accent, #6366f1) 46%, transparent);
-  box-shadow: 0 22px 64px rgba(59, 130, 246, 0.16);
+  border-color: color-mix(in srgb, var(--page-accent, #6366f1) 34%, transparent);
 }
 
 .wallet-card-head,
@@ -197,16 +227,28 @@
 
 .wallet-summary-stat {
   min-width: 0;
-  padding: 16px;
+  position: relative;
+  padding: 18px;
   border-radius: 18px;
   border: 1px solid rgba(99, 102, 241, .16);
   background: color-mix(in srgb, var(--page-card-bg, #0f172a) 84%, rgba(34, 211, 238, .12));
-  transition: background .2s ease, border-color .2s ease;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  transition: background .2s ease, border-color .2s ease, transform .2s ease, box-shadow .2s ease;
 }
 
-.wallet-summary-stat:hover {
+.wallet-summary-stat.is-clickable {
+  cursor: pointer;
+}
+
+.wallet-summary-stat.is-clickable:hover,
+.wallet-summary-stat.is-clickable:focus-visible {
+  transform: translateY(-2px);
   border-color: rgba(34, 211, 238, .34);
   background: color-mix(in srgb, var(--page-card-bg, #0f172a) 76%, rgba(34, 211, 238, .18));
+  box-shadow: 0 14px 38px rgba(59, 130, 246, .12);
+  outline: none;
 }
 
 .wallet-summary-stat span,
@@ -222,13 +264,31 @@
 .wallet-summary-stat strong {
   display: block;
   min-width: 0;
-  margin-top: 8px;
+  margin-top: 10px;
   color: var(--page-heading, #e5e7eb);
-  font-size: clamp(18px, 2vw, 24px);
+  font-size: clamp(30px, 3.3vw, 46px);
   font-weight: 950;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
   overflow-wrap: anywhere;
+}
+
+.wallet-summary-stat.tone-primary strong {
+  background: linear-gradient(135deg, #8b5cf6, #22d3ee);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  font-size: clamp(36px, 4vw, 56px);
+}
+
+.wallet-summary-stat.tone-token strong { color: #14b8a6; }
+.wallet-summary-stat.tone-saving strong { color: #16a34a; }
+.wallet-summary-stat.tone-warning strong { color: #f97316; }
+
+.wallet-summary-stat.is-text-value strong {
+  font-size: clamp(22px, 2.4vw, 32px);
+  line-height: 1.18;
 }
 
 .wallet-summary-stat small {
@@ -238,8 +298,35 @@
   font-size: 12px;
 }
 
+.wallet-summary-stat em {
+  display: inline-flex;
+  margin-top: 12px;
+  color: var(--page-accent, #6366f1);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
 .wallet-progress-wrap {
   margin-top: 22px;
+}
+
+.wallet-progress-click-target {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wallet-progress-click-target:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--page-accent, #6366f1) 62%, transparent);
+  outline-offset: 6px;
+  border-radius: 14px;
 }
 
 .wallet-progress-topline {
@@ -738,12 +825,18 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
   flex: none;
+  width: 320px;
+  min-height: 44px;
   padding: 4px;
   border-radius: 999px;
   background: color-mix(in srgb, var(--page-soft-bg, #111827) 80%, rgba(148, 163, 184, .18));
 }
 
 .wallet-priority-switch button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
   min-height: 36px;
   border: 0;
   border-radius: 999px;
@@ -755,6 +848,7 @@
   font-size: 12px;
   font-weight: 900;
   white-space: nowrap;
+  transition: background .18s ease, color .18s ease, box-shadow .18s ease;
 }
 
 .wallet-priority-switch button.active {
@@ -1478,7 +1572,15 @@
   .wallet-pool-preview,
   .admin-membership-grid {
     width: 100%;
+  }
+
+  .wallet-pool-preview,
+  .admin-membership-grid {
     grid-template-columns: 1fr;
+  }
+
+  .wallet-priority-switch {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .free-models-hero,
@@ -9126,6 +9228,23 @@ pre {
   color: var(--dash-muted);
 }
 
+.api-management-model-choice-grid {
+  max-height: 390px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.api-management-model-choice-grid button {
+  min-height: 148px;
+}
+
+.api-model-card-title {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
 .api-model-choice-grid code {
   display: block;
   min-width: 0;
@@ -9526,6 +9645,81 @@ pre {
 .api-expiry-field {
   display: grid;
   gap: 10px;
+}
+
+.api-key-default-limit {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--flow-brand-c, #7c3aed) 20%, var(--dash-border, #e5e7eb));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--flow-brand-c, #7c3aed) 8%, var(--dash-card-bg, #fff));
+}
+
+.api-key-default-limit strong {
+  color: var(--dash-text, var(--page-heading));
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.api-key-default-limit small {
+  color: var(--dash-sub, var(--page-sub));
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.api-key-success-panel {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+  border: 1px solid color-mix(in srgb, var(--flow-brand-cyan, #22d3ee) 26%, var(--dash-border, #e5e7eb));
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 92% 0%, rgba(34, 211, 238, .16), transparent 32%),
+    color-mix(in srgb, var(--flow-brand-c, #7c3aed) 7%, var(--dash-card-bg, #fff));
+}
+
+.api-key-success-panel span {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: rgba(34, 197, 94, .12);
+  color: #16a34a;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.api-key-success-panel strong {
+  color: var(--dash-text, var(--page-heading));
+  font: 900 22px "SF Mono", "Fira Code", monospace;
+  word-break: break-all;
+}
+
+.api-key-success-panel p {
+  margin: 0;
+  color: var(--dash-sub, var(--page-sub));
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.api-key-success-panel > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.api-modal .api-action {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0 15px;
+  text-decoration: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
 }
 
 .api-expiry-field > span {
@@ -14577,8 +14771,8 @@ pre {
 }
 
 .dash3-shell .dash3-asset-card {
-  min-height: 202px;
-  padding: 28px;
+  min-height: 188px;
+  padding: 24px;
 }
 
 .dash3-shell .dash3-asset-card span {
@@ -14588,7 +14782,7 @@ pre {
 }
 
 .dash3-shell .dash3-asset-card .dash3-metric-number {
-  font-size: clamp(38px, 3vw, 48px);
+  font-size: clamp(34px, 2.7vw, 44px);
   font-weight: 760;
   letter-spacing: -0.035em;
 }
@@ -14617,6 +14811,7 @@ pre {
 }
 
 .dash3-shell .dash3-asset-card-primary {
+  min-height: 214px;
   background:
     radial-gradient(circle at 18% 10%, rgba(34, 211, 238, 0.18), transparent 34%),
     linear-gradient(135deg, rgba(99, 102, 241, 0.16), rgba(34, 211, 238, 0.08)),
@@ -17096,6 +17291,56 @@ html {
 
 .dash3-shell .dash3-asset-overview-grid {
   grid-template-columns: minmax(260px, 1.2fr) repeat(4, minmax(190px, 1fr));
+  align-items: stretch;
+}
+
+.dash3-shell .dash3-asset-overview-grid .dash3-asset-card,
+.dash3-shell .dash3-asset-overview-grid .savings-card {
+  height: 236px;
+  min-height: 188px;
+  max-height: 236px;
+  padding: 24px;
+  overflow: hidden;
+}
+
+.dash3-shell .dash3-asset-overview-grid .dash3-asset-card-primary {
+  min-height: 236px;
+}
+
+.dash3-shell .dash3-asset-overview-grid .dash3-asset-card .dash3-metric-number {
+  font-size: clamp(34px, 2.7vw, 44px);
+}
+
+.dash3-shell .dash3-asset-overview-grid .dash3-asset-card-primary .dash3-metric-number {
+  font-size: clamp(44px, 4vw, 56px);
+}
+
+.dash3-shell .dash3-asset-overview-grid .savings-card-value {
+  font-size: clamp(32px, 2.7vw, 42px);
+}
+
+.dash3-shell .dash3-asset-overview-grid .dash3-asset-empty-value,
+.dash3-shell .dash3-asset-overview-grid .savings-card.is-empty .savings-card-value {
+  color: var(--dash-sub, var(--page-sub));
+  font-size: clamp(24px, 2vw, 30px);
+  letter-spacing: 0;
+  line-height: 1.15;
+}
+
+.dash3-shell .dash3-asset-overview-grid .dash3-asset-card p {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.dash3-shell .dash3-asset-overview-grid .dash3-asset-card p b {
+  font-size: 16px;
+}
+
+.dash3-shell .dash3-asset-overview-grid .dash3-gift-credit {
+  margin-top: 10px;
+  padding: 7px 10px;
+  font-size: 12px;
 }
 
 .savings-drawer-backdrop {

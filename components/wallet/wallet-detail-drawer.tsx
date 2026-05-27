@@ -39,6 +39,7 @@ type WalletDetailDrawerProps = {
   onClose: () => void;
   data?: WalletSummaryData | null;
   loading?: boolean;
+  focusTitle?: string;
 };
 
 function Row({ label, value }: { label: string; value: ReactNode }) {
@@ -50,7 +51,7 @@ function Row({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export default function WalletDetailDrawer({ open, onClose, data, loading = false }: WalletDetailDrawerProps) {
+export default function WalletDetailDrawer({ open, onClose, data, loading = false, focusTitle = "钱包与套餐详情" }: WalletDetailDrawerProps) {
   if (!open) return null;
 
   const wallet = data?.wallet || {};
@@ -69,7 +70,7 @@ export default function WalletDetailDrawer({ open, onClose, data, loading = fals
         <button type="button" className="wallet-drawer-close" onClick={onClose}>×</button>
         <div className="wallet-detail-head">
           <span>WALLET DETAIL</span>
-          <h2>钱包与套餐详情</h2>
+          <h2>{focusTitle}</h2>
           <p>查看当前余额、套餐周期、最近充值、消费记录和余额变动。</p>
         </div>
 

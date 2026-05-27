@@ -1,6 +1,7 @@
 import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import ModelLogo from "@/components/ModelLogo";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
@@ -32,6 +33,19 @@ function formatToken(value) {
   return `${number.toLocaleString("zh-CN")} Token`;
 }
 
+function pricePerMLabel(value) {
+  const number = Number(value || 0);
+  if (!Number.isFinite(number) || number <= 0) return "价格同步中";
+  return `¥${number.toFixed(number % 1 === 0 ? 0 : 2)} / M Token`;
+}
+
+function modelPriceSummary(model = {}) {
+  const input = Number(model.flowapiInputPricePerM || model.inputPricePerM || 0);
+  const output = Number(model.flowapiOutputPricePerM || model.outputPricePerM || 0);
+  if (!input && !output) return "价格同步中";
+  return `输入 ${pricePerMLabel(input)} · 输出 ${pricePerMLabel(output)}`;
+}
+
 function keyStatus(key = {}) {
   if (key.disabledAt) return { label: "已禁用", tone: "danger" };
   if (key.expiresAt && new Date(key.expiresAt) < new Date()) return { label: "已过期", tone: "danger" };
@@ -40,13 +54,19 @@ function keyStatus(key = {}) {
 
 function normalizeModel(model = {}) {
   return {
+    ...model,
     id: model.id || model.modelId || model.displayName,
     displayName: model.displayName || model.name || "Unknown Model",
     modelId: model.modelId || model.publicModelId || "",
     provider: model.provider || "FlowAPI",
     description: model.description || "模型介绍同步中。",
     enabled: model.enabled !== false,
+    tags: Array.isArray(model.tags) ? model.tags : [],
+    recommended: Boolean(model.recommended || model.isRecommended),
     isMemberOnly: Boolean(model.isMemberOnly),
+    memberLevelRequired: model.memberLevelRequired || null,
+    flowapiInputPricePerM: model.flowapiInputPricePerM || model.inputPricePerM || null,
+    flowapiOutputPricePerM: model.flowapiOutputPricePerM || model.outputPricePerM || null,
     primaryButtonHref: model.primaryButtonHref || "/api-management",
   };
 }
@@ -55,9 +75,13 @@ export default function ApiManagementPage() {
   const [customer, setCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState([]);
+  const [membership, setMembership] = useState(null);
   const [query, setQuery] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
   const [creating, setCreating] = useState(false);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({ label: "", modelId: "", expiresAt: "never", customDate: "" });
+  const [createdKey, setCreatedKey] = useState(null);
   const [toast, setToast] = useState("");
   const [detail, setDetail] = useState(null);
   const [usageLoading, setUsageLoading] = useState(false);
@@ -75,13 +99,16 @@ export default function ApiManagementPage() {
     Promise.all([
       fetch(`/api/customer?customerId=${localCustomer.id}`).then((res) => res.ok ? res.json() : localCustomer),
       fetch("/api/content/models").then((res) => res.ok ? res.json() : { data: [] }),
-    ]).then(([freshCustomer, modelJson]) => {
+      fetch("/api/user/wallet-summary").then((res) => res.ok ? res.json() : null).catch(() => null),
+    ]).then(([freshCustomer, modelJson, walletJson]) => {
       if (cancelled) return;
       setCustomer(freshCustomer);
       localStorage.setItem("flowapi_customer", JSON.stringify(freshCustomer));
       const list = (modelJson.data || modelJson.models || []).map(normalizeModel).filter((model) => model.enabled);
       setModels(list);
       setSelectedModelId((current) => current || list[0]?.modelId || "");
+      setCreateForm((current) => ({ ...current, modelId: current.modelId || list[0]?.modelId || "" }));
+      setMembership(walletJson?.membership || null);
     }).catch(() => {
       if (!cancelled) setToast("数据同步中，请稍后刷新。");
     }).finally(() => {
@@ -92,6 +119,7 @@ export default function ApiManagementPage() {
 
   const apiKeys = useMemo(() => customer?.apiKeys || [], [customer?.apiKeys]);
   const selectedModel = useMemo(() => models.find((model) => model.modelId === selectedModelId) || models[0] || null, [models, selectedModelId]);
+  const isBlackGoldMember = membership?.status === "active" && membership?.level === "black_gold";
   const filteredKeys = useMemo(() => {
     const text = query.trim().toLowerCase();
     if (!text) return apiKeys;
@@ -117,8 +145,56 @@ export default function ApiManagementPage() {
     localStorage.setItem("flowapi_customer", JSON.stringify(data));
   }
 
+  function openCreateModal(model = selectedModel) {
+    if (!model?.modelId) {
+      showToast("模型配置同步中，请稍后再试");
+      return;
+    }
+    setSelectedModelId(model.modelId);
+    setCreateForm((current) => ({
+      ...current,
+      label: current.label || `${model.displayName} Key`,
+      modelId: model.modelId,
+      expiresAt: current.expiresAt || "never",
+    }));
+    setCreatedKey(null);
+    setCreateModalOpen(true);
+  }
+
+  function canSelectModel(model) {
+    return Boolean(model?.modelId) && (!model.isMemberOnly || isBlackGoldMember);
+  }
+
+  function selectCreateModel(model) {
+    if (!canSelectModel(model)) {
+      showToast("该模型为黑金会员专属，开通会员后即可选择");
+      return;
+    }
+    setSelectedModelId(model.modelId);
+    setCreateForm((current) => ({
+      ...current,
+      modelId: model.modelId,
+      label: current.label && current.label !== `${selectedModel?.displayName || ""} Key` ? current.label : `${model.displayName} Key`,
+    }));
+  }
+
+  function resolveCreateExpiresAt() {
+    if (createForm.expiresAt === "never") return null;
+    if (createForm.expiresAt === "custom") return createForm.customDate || null;
+    const days = createForm.expiresAt === "30d" ? 30 : createForm.expiresAt === "90d" ? 90 : createForm.expiresAt === "1y" ? 365 : 0;
+    if (!days) return null;
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    return date.toISOString();
+  }
+
   async function createKey() {
-    if (!selectedModel?.modelId || creating) return;
+    const model = models.find((item) => item.modelId === createForm.modelId) || selectedModel;
+    if (!model?.modelId || creating) return;
+    if (!canSelectModel(model)) {
+      showToast("该模型为黑金会员专属，开通会员后即可选择");
+      return;
+    }
     setCreating(true);
     try {
       const res = await fetch("/api/keys", {
@@ -126,9 +202,9 @@ export default function ApiManagementPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerId: customer.id,
-          modelId: selectedModel.modelId,
-          label: `${selectedModel.displayName} Key`,
-          expiresAt: null,
+          modelId: model.modelId,
+          label: createForm.label.trim() || `${model.displayName} Key`,
+          expiresAt: resolveCreateExpiresAt(),
         }),
       });
       const data = await res.json();
@@ -136,6 +212,7 @@ export default function ApiManagementPage() {
       const updated = data.customer || data;
       setCustomer(updated);
       localStorage.setItem("flowapi_customer", JSON.stringify(updated));
+      setCreatedKey(data.createdKey || null);
       showToast("API Key 已创建，请立即复制保存");
     } catch (error) {
       showToast(error.message || "创建失败，请稍后重试");
@@ -258,7 +335,7 @@ export default function ApiManagementPage() {
           <section className="api-management-hero">
             <div>
               <span>API KEY CONSOLE</span>
-              <h1>API 管理</h1>
+              <h1><FlowApiBrandText /> API 管理</h1>
               <p>先选模型，再创建专属 API Key。复制 Base URL、API Key 和 Model ID 后即可接入 CC-Switch、Cherry Studio、Chatbox 或代码项目。</p>
             </div>
             <Link href="/models">去选择大模型</Link>
@@ -289,7 +366,7 @@ export default function ApiManagementPage() {
                 <h2>选择模型创建 API Key</h2>
                 <p>每个 Key 绑定一个模型，后续账单、扣费来源和调用记录更容易看懂。</p>
               </div>
-              <button type="button" className="btn-primary" disabled={!selectedModel || creating || loading} onClick={createKey}>{creating ? "创建中..." : "创建 API Key"}</button>
+              <button type="button" className="btn-primary" disabled={!selectedModel || loading} onClick={() => openCreateModal(selectedModel)}>创建 API Key</button>
             </div>
             <div className="api-management-model-grid">
               {models.slice(0, 8).map((model) => (
@@ -349,12 +426,115 @@ export default function ApiManagementPage() {
               <div className="api-management-empty">
                 <strong>暂无 API Key</strong>
                 <p>先选择一个模型并创建 API Key。完成真实调用后，这里会展示每个 Key 的 Token 消耗和扣费来源。</p>
-                <button type="button" onClick={createKey} disabled={!selectedModel || creating}>{creating ? "创建中..." : "创建第一个 API Key"}</button>
+                <button type="button" onClick={() => openCreateModal(selectedModel)} disabled={!selectedModel}>创建第一个 API Key</button>
               </div>
             ) : null}
           </section>
         </main>
       </ConsoleLayout>
+
+      {createModalOpen ? (
+        <div className="api-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setCreateModalOpen(false); }}>
+          <div className="api-modal api-management-create-modal">
+            <header>
+              <div>
+                <span>创建 API Key</span>
+                <h2>{createdKey ? "API Key 创建成功" : "创建新的 API Key"}</h2>
+              </div>
+              <button type="button" onClick={() => setCreateModalOpen(false)}>×</button>
+            </header>
+
+            {createdKey ? (
+              <div className="api-modal-body api-create-success-body">
+                <div className="api-key-success-panel">
+                  <span>创建成功</span>
+                  <strong>{maskToken(createdKey.token)}</strong>
+                  <p>完整 API Key 只在复制时使用，请妥善保存，不要公开发到群聊、论坛或截图中。</p>
+                  <div>
+                    <button type="button" className="api-action primary" onClick={() => copyText(createdKey.token, "API Key 已复制")}>复制 API Key</button>
+                    <Link href="/help" className="api-action">前往接入教程</Link>
+                    <Link href="/models" className="api-action">选择模型</Link>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="api-modal-body">
+                  <label>名称
+                    <input
+                      value={createForm.label}
+                      onChange={(event) => setCreateForm((value) => ({ ...value, label: event.target.value }))}
+                      placeholder="例如：我的第一个 API Key"
+                      autoFocus
+                    />
+                  </label>
+
+                  <div className="api-model-choice-field">
+                    <span>选择可调用模型</span>
+                    <div className="api-model-choice-grid api-management-model-choice-grid">
+                      {models.map((model) => {
+                        const disabled = !canSelectModel(model);
+                        return (
+                          <button
+                            key={model.id}
+                            type="button"
+                            className={`${createForm.modelId === model.modelId ? "active" : ""} ${disabled ? "disabled" : ""}`}
+                            aria-disabled={disabled}
+                            onClick={() => selectCreateModel(model)}
+                          >
+                            <span className="api-model-card-head">
+                              <span className="api-model-card-title">
+                                <ModelLogo model={model.displayName} provider={model.provider} size={26} />
+                                <strong title={model.displayName}>{model.displayName}</strong>
+                              </span>
+                              <em>{disabled ? "黑金会员专属" : createForm.modelId === model.modelId ? "已选择" : model.recommended ? "推荐" : "可用"}</em>
+                            </span>
+                            <code title={model.modelId}>{model.modelId || "同步中"}</code>
+                            <small>{model.provider} · {modelPriceSummary(model)}</small>
+                            {model.tags?.length ? <small>{model.tags.slice(0, 3).join(" · ")}</small> : null}
+                          </button>
+                        );
+                      })}
+                      {!models.length ? <div className="api-management-empty-text">模型配置同步中，请稍后刷新或到大模型接入页查看。</div> : null}
+                    </div>
+                  </div>
+
+                  <div className="api-expiry-field">
+                    <span>额度 / 限制设置</span>
+                    <div className="api-key-default-limit">
+                      <strong>无限额度 / 按账户余额扣费</strong>
+                      <small>后续调用会按照你的钱包优先级扣费，API Key 本身不单独锁死额度。</small>
+                    </div>
+                  </div>
+
+                  <div className="api-expiry-field">
+                    <span>过期时间</span>
+                    <div className="api-expiry-grid">
+                      {[["never","永不过期","长期稳定使用"],["30d","30 天","短期测试"],["90d","90 天","季度项目"],["1y","1 年","年度使用"],["custom","自定义日期","指定到期日"]].map(([value, title, desc]) => (
+                        <button key={value} type="button" className={`${createForm.expiresAt === value ? "active" : ""} ${value === "custom" ? "wide" : ""}`} onClick={() => setCreateForm((current) => ({ ...current, expiresAt: value }))}>
+                          <strong>{title}</strong><small>{desc}</small>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {createForm.expiresAt === "custom" ? (
+                    <label>自定义日期
+                      <input type="date" min={new Date().toISOString().slice(0, 10)} value={createForm.customDate} onChange={(event) => setCreateForm((value) => ({ ...value, customDate: event.target.value }))} />
+                    </label>
+                  ) : null}
+                </div>
+                <footer>
+                  <button type="button" className="api-action" onClick={() => setCreateModalOpen(false)}>取消</button>
+                  <button type="button" className="api-action primary" disabled={creating || !createForm.label.trim() || !createForm.modelId} onClick={createKey}>
+                    {creating ? "创建中..." : "创建 API Key"}
+                  </button>
+                </footer>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
 
       <CardDetailModal open={Boolean(detail)} onClose={() => setDetail(null)} {...(detail || {})} actions={usageLoading ? null : <Link href="/help">查看接入教程</Link>} />
       {toast ? <div className="models-toast-v3">{toast}</div> : null}

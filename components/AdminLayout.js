@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const adminMenuItems = [
@@ -55,7 +56,7 @@ function AdminAccessState({ title, description }) {
   return (
     <main className="landing-shell admin-access-shell">
       <div className="admin-access-card">
-        <span>FlowAPI Admin</span>
+        <span><FlowApiBrandText text="FlowAPI Admin" size="sm" /></span>
         <h1>{title}</h1>
         <p>{description}</p>
         <div className="admin-access-actions">
@@ -95,7 +96,7 @@ export default function AdminLayout({ currentPath, children }) {
       <nav className="landing-nav" style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 120 }}>
         <div className="landing-nav-inner">
           <Link className="landing-logo" href="/" aria-label="FlowAPI">
-            <span>Flow</span>API
+            <FlowApiBrandText />
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: "var(--dash-accent)", background: "var(--dash-card-bg)", border: "1px solid var(--dash-border)", padding: "4px 10px", borderRadius: 6 }}>管理员</span>

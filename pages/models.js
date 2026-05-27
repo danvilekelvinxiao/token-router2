@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import ModelLogo from "@/components/ModelLogo";
 import { formatTokens } from "@/lib/model-format";
@@ -372,10 +373,10 @@ export default function ModelsPage() {
             <section className="models-market-recommend">
               <div className="models-section-head">
                 <div>
-                  <span className="models-market-kicker">FlowAPI Live Top 5</span>
-                  <h2>FlowAPI 最受欢迎 Top 5 大模型</h2>
+                  <span className="models-market-kicker"><FlowApiBrandText size="sm" /> Live Top 5</span>
+                  <h2><FlowApiBrandText /> 最受欢迎 Top 5 大模型</h2>
                 </div>
-                <p>基于 FlowAPI 用户真实调用数据实时更新，只展示已有调用记录的模型。</p>
+                <p>基于 <FlowApiBrandText size="sm" /> 用户真实调用数据实时更新，只展示已有调用记录的模型。</p>
               </div>
               <PopularModelsTop5
                 items={popularModels}
@@ -502,7 +503,7 @@ function PopularModelsTop5({ items, loading, source, updatedAt, models, onCopy, 
         <div className="models-popular-status">{statusText}</div>
         <div className="models-popular-empty">
           <strong>暂无站内模型调用数据</strong>
-          <p>完成真实调用后，这里会实时展示 FlowAPI 网站最受欢迎的前 5 名大模型。</p>
+          <p>完成真实调用后，这里会实时展示 <FlowApiBrandText size="sm" /> 网站最受欢迎的前 5 名大模型。</p>
         </div>
       </div>
     );

@@ -2,6 +2,7 @@ import Head from "next/head";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "next-themes";
+import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import { calculateCallCost, formatSmallCny } from "@/lib/billing/calculate-call-cost";
 import ModelLogo, { ModelNameWithLogo, getModelProviderLabel } from "@/components/ModelLogo";
@@ -2023,7 +2024,7 @@ function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, saving
     <section className="dash3-section dash3-asset-overview-section">
       <SectionTitle
         title="AI Token 资产总览"
-        subtitle="查看你的余额、今日消耗、本周消耗和最近一次调用。"
+        subtitle="查看你的余额、消耗、调用和成本优势。"
         right={<span className="dash3-live-badge"><span className="dash3-live-dot" /> Live</span>}
       />
       <div className="dash3-asset-overview-grid">
@@ -2050,7 +2051,7 @@ function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, saving
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenAsset("today"); } }}
         >
           <span>今日消耗</span>
-          <strong>{hasTodayUsage ? <MetricValueInline prefix="¥" value={<FlashValue value={overview.todaySpend.toFixed(2)} tick={tick} />} /> : "暂无数据"}</strong>
+          <strong className={!hasTodayUsage ? "dash3-asset-empty-value" : ""}>{hasTodayUsage ? <MetricValueInline prefix="¥" value={<FlashValue value={overview.todaySpend.toFixed(2)} tick={tick} />} /> : "暂无数据"}</strong>
           <p><b>{hasTodayUsage ? formatTokens(overview.todayTokens) : "完成今日调用后显示"}</b></p>
           <em className="dash3-asset-card-hint">查看详情</em>
         </article>
@@ -2062,7 +2063,7 @@ function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, saving
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenAsset("week"); } }}
         >
           <span>本周消耗</span>
-          <strong>{hasWeekUsage ? <MetricValueInline prefix="¥" value={<FlashValue value={overview.weekSpend.toFixed(2)} tick={tick} />} /> : "暂无数据"}</strong>
+          <strong className={!hasWeekUsage ? "dash3-asset-empty-value" : ""}>{hasWeekUsage ? <MetricValueInline prefix="¥" value={<FlashValue value={overview.weekSpend.toFixed(2)} tick={tick} />} /> : "暂无数据"}</strong>
           <p><b>{hasWeekUsage ? formatTokens(overview.weekTokens) : "完成本周调用后显示"}</b></p>
           <em className="dash3-asset-card-hint">查看详情</em>
         </article>
@@ -3093,11 +3094,11 @@ export default function DashboardPage() {
           <header className="dash3-header">
             <div>
               <h1>{greeting}，{userName}</h1>
-              <p>你的 AI Token 资产正在流动，FlowAPI 帮你看清每一次模型调用、每一笔消耗和未来额度需求。</p>
+              <p>你的 AI Token 资产正在流动，<FlowApiBrandText size="sm" /> 帮你看清每一次模型调用、每一笔消耗和未来额度需求。</p>
             </div>
             <div className="dash3-header-right">
               <div className="dash3-brand-gradient" aria-label="FlowAPI 品牌">
-                <strong className="dash3-brand-gradient-text">FlowAPI</strong>
+                <strong className="dash3-brand-gradient-text"><FlowApiBrandText size="xl" /></strong>
                 <span className="dash3-brand-gradient-sub">AI Token Router · 统一 API 中转站 · 多模型 · Token 资产</span>
               </div>
               <span className="dash3-live-badge">

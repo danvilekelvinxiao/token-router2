@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { useRef, useState } from "react";
+import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ThemeToggle from "@/components/ThemeToggle";
 
 function IconDashboard() {
@@ -270,7 +271,7 @@ export default function ConsoleLayout({ customer, currentPath, children, content
       <nav className="landing-nav flow-console-nav">
         <div className="landing-nav-inner flow-console-nav-inner">
           <Link className="landing-logo" href="/" aria-label="返回 FlowAPI 首页">
-            <span>Flow</span>API
+            <FlowApiBrandText />
           </Link>
           <div className="flow-console-nav-actions">
             <ThemeToggle />
