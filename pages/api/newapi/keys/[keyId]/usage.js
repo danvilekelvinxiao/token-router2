@@ -1,61 +1,72 @@
 /**
  * GET /api/newapi/keys/:keyId/usage
  * Returns per-key usage analytics: metrics, trends, model ranking, call records.
- * Phase 1: mock data with realistic structure. Ready for real New API integration.
  */
-import { getCustomer } from "@/lib/customer-store";
-import { assertCustomerOwner } from "@/lib/session";
+import { getDashboard } from "@/lib/customer-store";
+import { requireCustomerSession } from "@/lib/session";
 
 function maskToken(token = "") {
   if (token.length <= 14) return token;
   return `${token.slice(0, 8)}${"*".repeat(token.length - 14)}${token.slice(-6)}`;
 }
 
-function makeDate(daysAgo) {
-  const d = new Date();
-  d.setDate(d.getDate() - daysAgo);
-  return d.toISOString();
+function normalizeCall(call = {}) {
+  const inputTokens = Number(call.promptTokens || call.inputTokens || 0);
+  const outputTokens = Number(call.completionTokens || call.outputTokens || 0);
+  const totalTokens = Number(call.tokens || call.totalTokens || inputTokens + outputTokens || 0);
+  const statusCode = Number(call.status || 0);
+  return {
+    id: call.id,
+    createdAt: call.createdAt,
+    model: call.requestedModel || call.routedModel || call.model || "unknown",
+    provider: call.provider || "FlowAPI",
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    costCny: Number(call.cost || call.costCny || 0),
+    status: statusCode >= 200 && statusCode < 300 ? "success" : statusCode ? "failed" : "unknown",
+    requestIp: call.requestIp || "",
+    deductionBreakdown: Array.isArray(call.deductionBreakdown) ? call.deductionBreakdown : [],
+  };
 }
 
-function mockTrend(days) {
-  return Array.from({ length: days }, (_, i) => {
-    const input = Math.floor(Math.random() * 8000) + 2000;
-    const output = Math.floor(Math.random() * 12000) + 3000;
-    return {
-      date: new Date(Date.now() - (days - 1 - i) * 86400000).toISOString().slice(0, 10),
-      inputTokens: input,
-      outputTokens: output,
-      totalTokens: input + output,
-      spendCny: Number(((input + output) / 1_000_000 * 5.5).toFixed(6)),
-    };
+function buildTrend(calls = []) {
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(Date.now() - (6 - index) * 86400000).toISOString().slice(0, 10);
+    return { date, inputTokens: 0, outputTokens: 0, totalTokens: 0, spendCny: 0 };
   });
+  const byDate = new Map(days.map((item) => [item.date, item]));
+  calls.forEach((call) => {
+    const date = String(call.createdAt || "").slice(0, 10);
+    const item = byDate.get(date);
+    if (!item) return;
+    item.inputTokens += call.inputTokens;
+    item.outputTokens += call.outputTokens;
+    item.totalTokens += call.totalTokens;
+    item.spendCny = Number((item.spendCny + call.costCny).toFixed(6));
+  });
+  return days;
 }
 
-const MOCK_MODELS = [
-  { rank: 1, model: "DeepSeek V4 Flash", provider: "DeepSeek", requests: 240, tokens: 680000, spendCny: 8.2, share: 44 },
-  { rank: 2, model: "Claude Sonnet 4.6", provider: "Anthropic", requests: 88, tokens: 320000, spendCny: 6.4, share: 34 },
-  { rank: 3, model: "GPT-5.3-Codex", provider: "OpenAI", requests: 52, tokens: 156000, spendCny: 3.12, share: 17 },
-  { rank: 4, model: "GPT-5.5", provider: "OpenAI", requests: 12, tokens: 24000, spendCny: 0.92, share: 5 },
-];
-
-const MOCK_CALLS = Array.from({ length: 8 }, (_, i) => ({
-  id: `call_mock_${i}`,
-  createdAt: new Date(Date.now() - i * 3600000 * (i + 1)).toISOString(),
-  model: MOCK_MODELS[i % 4].model,
-  provider: MOCK_MODELS[i % 4].provider,
-  inputTokens: Math.floor(Math.random() * 2000) + 100,
-  outputTokens: Math.floor(Math.random() * 3000) + 200,
-  totalTokens: 0,
-  costCny: Number((Math.random() * 0.05 + 0.001).toFixed(6)),
-  latencyMs: Math.floor(Math.random() * 2000) + 400,
-  status: i === 2 ? "failed" : "success",
-  requestIp: "47.238.81.210",
-  originalInputPricePerM: 5,
-  originalOutputPricePerM: 30,
-  discountRate: 0.88,
-  finalInputPricePerM: 4.4,
-  finalOutputPricePerM: 26.4,
-})).map((c) => ({ ...c, totalTokens: c.inputTokens + c.outputTokens }));
+function buildModelRanking(calls = []) {
+  const map = new Map();
+  calls.forEach((call) => {
+    const key = call.model || "unknown";
+    const current = map.get(key) || { model: key, provider: call.provider || "FlowAPI", requests: 0, tokens: 0, spendCny: 0 };
+    current.requests += 1;
+    current.tokens += call.totalTokens;
+    current.spendCny = Number((current.spendCny + call.costCny).toFixed(6));
+    map.set(key, current);
+  });
+  const totalTokens = calls.reduce((sum, call) => sum + call.totalTokens, 0);
+  return [...map.values()]
+    .sort((a, b) => b.tokens - a.tokens)
+    .map((item, index) => ({
+      ...item,
+      rank: index + 1,
+      share: totalTokens > 0 ? Number(((item.tokens / totalTokens) * 100).toFixed(1)) : 0,
+    }));
+}
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -64,8 +75,9 @@ export default async function handler(req, res) {
   if (!keyId) return res.status(400).json({ error: "缺少 keyId" });
 
   try {
-    // Find the key in customer store
-    const customer = await getCustomer("cus_admin");
+    const session = requireCustomerSession(req, res);
+    if (!session) return;
+    const customer = await getDashboard(session.customerId);
     const apiKeys = customer?.apiKeys || [];
     const key = apiKeys.find((k) => k.id === keyId);
     if (!key) {
@@ -77,48 +89,90 @@ export default async function handler(req, res) {
       });
     }
 
-    const totalRequests = 428;
-    const successCount = 425;
-    const totalTokens = 1280000;
-    const totalSpend = 18.64;
+    const calls = (customer?.calls || [])
+      .filter((call) => call.apiKeyId === key.id)
+      .map(normalizeCall)
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+
+    if (!calls.length) {
+      return res.status(200).json({
+        success: true,
+        source: "empty",
+        message: "暂无真实调用记录",
+        key: {
+          id: key.id,
+          name: key.label || "默认 API Key",
+          maskedKey: maskToken(key.token),
+          status: key.disabledAt ? "disabled" : (key.expiresAt && new Date(key.expiresAt) < new Date() ? "expired" : "active"),
+          group: key.modelGroup || "default",
+          createdAt: key.createdAt || new Date().toISOString(),
+          lastUsedAt: key.lastUsedAt || null,
+          expiresAt: key.expiresAt || null,
+          modelDisplayName: key.modelDisplayName || "",
+          publicModelId: key.publicModelId || "",
+        },
+        summary: null,
+        periodUsage: null,
+        limits: null,
+        trends: [],
+        modelRanking: [],
+        recentCalls: [],
+      });
+    }
+
+    const totalRequests = calls.length;
+    const successCount = calls.filter((call) => call.status === "success").length;
+    const totalTokens = calls.reduce((sum, call) => sum + call.totalTokens, 0);
+    const totalSpend = calls.reduce((sum, call) => sum + call.costCny, 0);
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const startOfWeek = Date.now() - 6 * 86400000;
+    const startOfMonth = Date.now() - 29 * 86400000;
+    const inRange = (call, start) => new Date(call.createdAt || 0).getTime() >= start;
+    const summarize = (items) => ({
+      spendCny: Number(items.reduce((sum, call) => sum + call.costCny, 0).toFixed(6)),
+      tokens: items.reduce((sum, call) => sum + call.totalTokens, 0),
+      requests: items.length,
+    });
 
     return res.status(200).json({
       success: true,
-      source: "mock",
+      source: "real",
       key: {
         id: key.id,
-        name: key.label || "默认 API 密匙",
+        name: key.label || "默认 API Key",
         maskedKey: maskToken(key.token),
         status: key.disabledAt ? "disabled" : (key.expiresAt && new Date(key.expiresAt) < new Date() ? "expired" : "active"),
         group: key.modelGroup || "default",
         createdAt: key.createdAt || new Date().toISOString(),
-        lastUsedAt: makeDate(0),
+        lastUsedAt: key.lastUsedAt || calls[0]?.createdAt || null,
         expiresAt: key.expiresAt || null,
+        modelDisplayName: key.modelDisplayName || "",
+        publicModelId: key.publicModelId || "",
       },
       summary: {
-        totalSpendCny: totalSpend,
+        totalSpendCny: Number(totalSpend.toFixed(6)),
         totalTokens,
         totalRequests,
         successRate: Number(((successCount / totalRequests) * 100).toFixed(1)),
-        avgLatencyMs: 820,
+        avgLatencyMs: null,
       },
       periodUsage: {
-        today: { spendCny: 0.86, tokens: 29200, requests: 47 },
-        week: { spendCny: 6.42, tokens: 218000, requests: 392 },
-        month: { spendCny: 28.60, tokens: 1020000, requests: 1846 },
+        today: summarize(calls.filter((call) => String(call.createdAt || "").slice(0, 10) === todayKey)),
+        week: summarize(calls.filter((call) => inRange(call, startOfWeek))),
+        month: summarize(calls.filter((call) => inRange(call, startOfMonth))),
       },
       limits: {
-        remainingBalanceCny: 20,
-        totalQuotaCny: 100,
+        remainingBalanceCny: Number(customer?.balance || 0),
+        totalQuotaCny: null,
         dailyRequestLimit: null,
         dailyTokenLimit: null,
         rpm: null,
         tpm: null,
-        allowedModels: ["deepseek/deepseek-chat", "deepseek-reasoner"],
+        allowedModels: key.allowedModels || [],
       },
-      trends: mockTrend(7),
-      modelRanking: MOCK_MODELS,
-      recentCalls: MOCK_CALLS,
+      trends: buildTrend(calls),
+      modelRanking: buildModelRanking(calls),
+      recentCalls: calls.slice(0, 20),
     });
   } catch (e) {
     return res.status(500).json({ success: false, error: e.message });

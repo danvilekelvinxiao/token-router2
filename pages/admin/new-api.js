@@ -20,8 +20,8 @@ const NAV_CARDS = [
   },
   {
     key: "tokens",
-    title: "令牌管理",
-    desc: "查看和管理用户 API 令牌，调整额度、分组与模型限制。",
+    title: "API Key 管理",
+    desc: "查看和管理用户 API Key，调整额度、分组与模型限制。",
     href: "/newapi-admin/token",
     icon: "🔑",
   },
@@ -66,7 +66,7 @@ export default function AdminNewApiPage() {
         <div className="admin-page-header">
           <h1>New API 管理</h1>
           <p className="admin-page-sub">
-            New API 是 FlowAPI 的上游中转核心，渠道配置、上游模型、令牌和日志属于管理员功能，请谨慎操作。
+            New API 是 FlowAPI 的上游中转核心，渠道配置、上游模型、API Key 和日志属于管理员功能，请谨慎操作。
           </p>
         </div>
 

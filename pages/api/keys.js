@@ -21,7 +21,7 @@ export default async function handler(req, res) {
       if (!modelId) {
         return res.status(400).json({
           error: {
-            message: "请先选择要使用的模型，再创建 API 密钥。",
+            message: "请先选择要使用的模型，再创建 API Key。",
             type: "model_required",
           },
         });
@@ -71,7 +71,7 @@ export default async function handler(req, res) {
         return res.status(502).json({
           code: "INVALID_NEW_API_TOKEN_FORMAT",
           error: {
-            message: "New API 返回的令牌格式异常",
+            message: "New API 返回的 API Key 格式异常",
             type: "invalid_new_api_token_format",
           },
           suggestion: "请检查 New API 创建 Token 接口是否返回完整 sk- 开头 API Key。",
@@ -81,22 +81,22 @@ export default async function handler(req, res) {
         return res.status(502).json({
           code: "NEW_API_TOKEN_CREATE_FAILED",
           error: {
-            message: "上游令牌创建失败，请稍后重试或联系管理员",
+            message: "上游 API Key 创建失败，请稍后重试或联系管理员",
             type: "new_api_token_create_failed",
           },
           suggestion: error?.message || "New API API Key 创建失败",
         });
       }
       return res.status(502).json({
-        error: "API 密钥创建失败，请稍后重试或联系管理员。",
-        suggestion: error?.message || "New API 令牌创建失败",
+        error: "API Key 创建失败，请稍后重试或联系管理员。",
+        suggestion: error?.message || "New API API Key 创建失败",
       });
     }
   }
 
   const keyId = req.body?.keyId;
   if (!keyId) {
-    return res.status(400).json({ error: "缺少 API 密匙 ID" });
+    return res.status(400).json({ error: "缺少 API Key ID" });
   }
 
   if (req.method === "PATCH") {
@@ -105,11 +105,11 @@ export default async function handler(req, res) {
       expiresAt: req.body?.expiresAt,
       disabled: req.body?.disabled,
     });
-    if (!customer) return res.status(404).json({ error: "API 密匙不存在" });
+    if (!customer) return res.status(404).json({ error: "API Key 不存在" });
     return res.status(200).json(customer);
   }
 
   const customer = await deleteApiKey(customerId, keyId);
-  if (!customer) return res.status(404).json({ error: "API 密匙不存在" });
+  if (!customer) return res.status(404).json({ error: "API Key 不存在" });
   return res.status(200).json(customer);
 }

@@ -959,7 +959,7 @@ function buildRecentCallRows(calls, apiKeys = []) {
       time: call.createdAt ? new Date(call.createdAt).toLocaleString("zh-CN", { hour12: false }) : "-",
       model: getCallModel(call),
       provider: call.provider || "FlowAPI",
-      apiKey: key?.label || "API 密匙",
+      apiKey: key?.label || "API Key",
       type: "consume",
       source: call.endpoint || "/v1/chat/completions",
       input,
@@ -1656,7 +1656,7 @@ function buildMetricDetail(metricKey, { stats, trendData, modelUsage, recentRows
     },
     requests: {
       title: "请求次数详情",
-      description: "查看成功请求、失败请求、错误率和 API 密匙来源分布。",
+      description: "查看成功请求、失败请求、错误率和 API Key 来源分布。",
       rows: [
         { label: "今日请求次数", value: `${stats.todayRequests} 次` },
         { label: "本月请求次数", value: `${stats.monthRequests} 次` },
@@ -1803,7 +1803,7 @@ function OnboardingChecklist({ customer, usage }) {
       done: false,
     },
     {
-      title: "创建 API 密匙",
+      title: "创建 API Key",
       desc: "这是你调用模型和记录消耗的专属凭证。",
       href: "/guide#api-keys-section",
       status: hasApiKey ? "已创建" : "待创建",
@@ -1845,7 +1845,7 @@ function OnboardingChecklist({ customer, usage }) {
         <div>
           <span className="dash3-section-hint">新手闭环</span>
           <h2>{hasCalls ? "你的首次调用闭环已跑通" : "先跑通第一次 API 调用"}</h2>
-          <p>按这个顺序完成：下载工具 → 创建密匙 → 选择模型 → 测试调用 → 查看消耗 → 充值续用。</p>
+          <p>按这个顺序完成：下载工具 → 创建 API Key → 选择模型 → 测试调用 → 查看消耗 → 充值续用。</p>
         </div>
         <div className="dash3-onboarding-progress" aria-label={`新手任务完成度 ${percent}%`}>
           <strong>{percent}%</strong>
@@ -2016,6 +2016,9 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
 
 function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, savingsLoading, savingsPeriod, onOpenSavings }) {
   const savingsSummary = savingsData?.summary;
+  const hasCallableEstimate = Number(overview.callableTokens || 0) > 0;
+  const hasTodayUsage = Number(overview.todaySpend || 0) > 0 || Number(overview.todayTokens || 0) > 0;
+  const hasWeekUsage = Number(overview.weekSpend || 0) > 0 || Number(overview.weekTokens || 0) > 0;
   return (
     <section className="dash3-section dash3-asset-overview-section">
       <SectionTitle
@@ -2033,7 +2036,7 @@ function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, saving
         >
           <span>当前余额</span>
           <strong><MetricValueInline prefix="¥" value={overview.balance.toFixed(2)} /></strong>
-          <p>约可调用 <b>{formatTokens(overview.callableTokens)}</b></p>
+          <p>约可调用 <b>{hasCallableEstimate ? formatTokens(overview.callableTokens) : "完成调用后估算"}</b></p>
           <p className="dash3-gift-credit" title="赠送额度仅当日有效，调用模型时优先消耗赠送额度，用完后再消耗充值余额。">
             赠送额度：<b>¥{Number(overview.giftBalance || 0).toFixed(2)}</b> 今日有效，优先使用
           </p>
@@ -2047,8 +2050,8 @@ function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, saving
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenAsset("today"); } }}
         >
           <span>今日消耗</span>
-          <strong><MetricValueInline prefix="¥" value={<FlashValue value={overview.todaySpend.toFixed(2)} tick={tick} />} /></strong>
-          <p><b>{formatTokens(overview.todayTokens)}</b></p>
+          <strong>{hasTodayUsage ? <MetricValueInline prefix="¥" value={<FlashValue value={overview.todaySpend.toFixed(2)} tick={tick} />} /> : "暂无数据"}</strong>
+          <p><b>{hasTodayUsage ? formatTokens(overview.todayTokens) : "完成今日调用后显示"}</b></p>
           <em className="dash3-asset-card-hint">查看详情</em>
         </article>
         <article
@@ -2059,8 +2062,8 @@ function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, saving
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenAsset("week"); } }}
         >
           <span>本周消耗</span>
-          <strong><MetricValueInline prefix="¥" value={<FlashValue value={overview.weekSpend.toFixed(2)} tick={tick} />} /></strong>
-          <p><b>{formatTokens(overview.weekTokens)}</b></p>
+          <strong>{hasWeekUsage ? <MetricValueInline prefix="¥" value={<FlashValue value={overview.weekSpend.toFixed(2)} tick={tick} />} /> : "暂无数据"}</strong>
+          <p><b>{hasWeekUsage ? formatTokens(overview.weekTokens) : "完成本周调用后显示"}</b></p>
           <em className="dash3-asset-card-hint">查看详情</em>
         </article>
         <article
@@ -2326,7 +2329,7 @@ function TokenSpendFlowSection({ flow, ranking, metric, setMetric, onTooltip, th
           {ranking.length === 0 ? (
             <div className="dash3-empty-list">
               <strong>还没有模型消费排行</strong>
-              <span>使用 API 密匙发起一次调用后，系统会按模型自动汇总金额、Token 和请求次数。</span>
+              <span>使用 API Key 发起一次调用后，系统会按模型自动汇总金额、Token 和请求次数。</span>
             </div>
           ) : (
             <div className="dash3-model-ranking-list">
@@ -2625,7 +2628,7 @@ function RecentCallLedger({ rows }) {
           <div className="dash3-empty-table">
             <strong>暂无调用记录</strong>
             <span>完成第一次 API 调用后，这里会显示模型、Token、价格、折扣和最终扣费明细。</span>
-            <Link href="/guide" className="dash3-text-btn" style={{ marginTop: 12, display: "inline-block" }}>查看接入教程</Link>
+            <Link href="/help" className="dash3-text-btn" style={{ marginTop: 12, display: "inline-block" }}>查看接入教程</Link>
           </div>
         )}
         {canExpand ? (
@@ -3105,6 +3108,22 @@ export default function DashboardPage() {
 
           {dashboardError ? <div className="dash3-error-banner">{dashboardError}</div> : null}
 
+          <AssetOverviewSection
+            overview={usage.overview}
+            tick={tick}
+            savingsData={savingsData}
+            savingsLoading={savingsLoading}
+            savingsPeriod={savingsPeriod}
+            onOpenSavings={() => setSavingsOpen(true)}
+            onOpenAsset={(assetKey) => setDetailModal(buildAssetOverviewDetail(assetKey, {
+              overview: usage.overview,
+              trendData,
+              recentRows: recentCallRows,
+              onTooltip: handleTooltip,
+              theme,
+            }))}
+          />
+
           <WalletProgressCard
             mode="dashboard"
             loading={walletLoading}
@@ -3127,22 +3146,6 @@ export default function DashboardPage() {
           />
 
           <OnboardingChecklist customer={customer} usage={usage} />
-
-          <AssetOverviewSection
-            overview={usage.overview}
-            tick={tick}
-            savingsData={savingsData}
-            savingsLoading={savingsLoading}
-            savingsPeriod={savingsPeriod}
-            onOpenSavings={() => setSavingsOpen(true)}
-            onOpenAsset={(assetKey) => setDetailModal(buildAssetOverviewDetail(assetKey, {
-              overview: usage.overview,
-              trendData,
-              recentRows: recentCallRows,
-              onTooltip: handleTooltip,
-              theme,
-            }))}
-          />
 
           <DashboardOperationsSection
             stats={dashboardStats}
@@ -3331,7 +3334,7 @@ export default function DashboardPage() {
         open={Boolean(detailModal)}
         onClose={() => setDetailModal(null)}
         {...(detailModal || {})}
-        actions={<Link href="/guide">去 API 管理</Link>}
+        actions={<Link href="/api-management">去 API 管理</Link>}
       />
     </>
   );

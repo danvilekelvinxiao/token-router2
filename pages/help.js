@@ -41,14 +41,14 @@ function ParamsCard({ title, value, copyLabel, isKey, placeholder }) {
       <div className="help-param-head">
         <span>{title}</span>
         {isKey && !value ? (
-          <Link href="/guide" className="help-go-btn">去创建 API 密匙</Link>
+          <Link href="/api-management" className="help-go-btn">去创建 API Key</Link>
         ) : (
           <CopyButton value={value} label={copyLabel || "复制"} />
         )}
       </div>
       <div className="help-param-value">
         {isKey && !value ? (
-          <span className="help-placeholder">{placeholder || "请先前往 API 管理页面创建 API 密匙"}</span>
+          <span className="help-placeholder">{placeholder || "请先前往 API 管理页面创建 API Key"}</span>
         ) : (
           <code>{value}</code>
         )}
@@ -79,7 +79,7 @@ function DeepSeekGuideSection({ customer }) {
       <h4 className="help-params-title">接入参数</h4>
       <div className="help-params">
         <ParamsCard title="Base URL" value={API_BASE_URL} copyLabel="复制" />
-        <ParamsCard title="API 密匙" value={primaryKey?.token || ""} copyLabel="复制 API 密匙" isKey />
+        <ParamsCard title="API Key" value={primaryKey?.token || ""} copyLabel="复制 API Key" isKey />
         <ParamsCard title="Model" value="deepseek-chat" copyLabel="复制模型名" />
       </div>
 
@@ -87,14 +87,14 @@ function DeepSeekGuideSection({ customer }) {
         <h4>使用提示</h4>
         <ul>
           <li>Base URL 固定填写：<code>{API_BASE_URL}</code></li>
-          <li>API 密匙使用你在 FlowAPI 创建的密匙</li>
+          <li>API Key 使用你在 FlowAPI 创建的 Key</li>
           <li>模型名填写：<code>deepseek-chat</code></li>
-          <li>如果连接失败，先检查 API 密匙是否复制完整，再检查模型名是否填错</li>
+          <li>如果连接失败，先检查 API Key 是否复制完整，再检查模型名是否填错</li>
         </ul>
       </div>
 
       <div className="help-guide-btns">
-        <Link href="/guide" className="help-plaza-btn">去 API 管理创建密匙</Link>
+        <Link href="/api-management" className="help-plaza-btn">去 API 管理创建 Key</Link>
         <Link href="/help#preflight-check" className="help-ghost-btn">查看接入前检查</Link>
       </div>
     </section>
@@ -123,7 +123,7 @@ function ChatGPTGuideSection({ customer }) {
       <h4 className="help-params-title">接入参数</h4>
       <div className="help-params">
         <ParamsCard title="Base URL" value={API_BASE_URL} copyLabel="复制" />
-        <ParamsCard title="API 密匙" value={primaryKey?.token || ""} copyLabel="复制 API 密匙" isKey />
+        <ParamsCard title="API Key" value={primaryKey?.token || ""} copyLabel="复制 API Key" isKey />
         <ParamsCard title="Model" value={CHATGPT_MODEL} copyLabel="复制模型名" />
       </div>
 
@@ -131,14 +131,14 @@ function ChatGPTGuideSection({ customer }) {
         <h4>使用提示</h4>
         <ul>
           <li>客户端 Base URL 改为：<code>{API_BASE_URL}</code></li>
-          <li>API 密匙填写 FlowAPI 创建的密匙</li>
+          <li>API Key 填写 FlowAPI 创建的 Key</li>
           <li>模型名填写平台支持的 OpenAI 模型名</li>
-          <li>如果客户端原本支持 OpenAI API，一般只需要替换 Base URL 和 API 密匙</li>
+          <li>如果客户端原本支持 OpenAI API，一般只需要替换 Base URL 和 API Key</li>
         </ul>
       </div>
 
       <div className="help-guide-btns">
-        <Link href="/guide" className="help-plaza-btn">去 API 管理创建密匙</Link>
+        <Link href="/api-management" className="help-plaza-btn">去 API 管理创建 Key</Link>
         <Link href="/models" className="help-ghost-btn">进入大模型广场</Link>
       </div>
     </section>
@@ -152,7 +152,7 @@ function ManualConfigSection({ customer }) {
 
   const params = [
     { title: "Base URL", value: API_BASE_URL, copyLabel: "复制" },
-    { title: "API 密匙", value: primaryKey?.token || "", copyLabel: "复制 API 密匙", isKey: true },
+    { title: "API Key", value: primaryKey?.token || "", copyLabel: "复制 API Key", isKey: true },
     { title: "模型", value: DEFAULT_MODEL, copyLabel: "复制模型名" },
   ];
 
@@ -191,7 +191,7 @@ function ManualConfigSection({ customer }) {
 /* ==================== Curl Content ==================== */
 
 function CurlReferenceContent() {
-  const apiKeyPlaceholder = "你生成的 API 密匙";
+  const apiKeyPlaceholder = "你生成的 API Key";
   const modelPlaceholder = "你想使用的模型";
 
   const standardCurl = `curl ${API_BASE_URL}/chat/completions \\
@@ -221,7 +221,7 @@ function CurlReferenceContent() {
       <div className="help-curl-notes">
         <p><strong>只需要改两个地方：</strong></p>
         <ol>
-          <li>把“<span className="help-curl-red-inline">{apiKeyPlaceholder}</span>”换成你在 FlowAPI 创建的 <strong>API 密匙</strong></li>
+          <li>把“<span className="help-curl-red-inline">{apiKeyPlaceholder}</span>”换成你在 FlowAPI 创建的 <strong>API Key</strong></li>
           <li>把“<span className="help-curl-red-inline">{modelPlaceholder}</span>”修改成模型名比如 <code>{DEFAULT_MODEL}</code></li>
         </ol>
         <p className="help-curl-fixed">Base URL 固定使用：<code>{API_BASE_URL}</code>，不需要修改。</p>
@@ -239,13 +239,13 @@ const preflightLeft = [
     tip: "填错时通常会出现 404、400 或客户端提示连接失败。",
   },
   {
-    icon: "🔑", title: "API 密匙",
-    desc: "使用控制台创建的 API 密匙，复制时不要带空格和换行。",
+    icon: "🔑", title: "API Key",
+    desc: "使用控制台创建的 API Key，复制时不要带空格和换行。",
     tip: "填错时优先看 401。",
   },
   {
     icon: "📦", title: "模型与分组",
-    desc: "确认目标模型在「大模型接入」中可见，并且当前密匙分组允许调用。",
+    desc: "确认目标模型在「大模型接入」中可见，并且当前 Key 分组允许调用。",
     tip: "分组不匹配时优先看 403。",
   },
   {
@@ -264,7 +264,7 @@ const preflightRight = [
   {
     icon: "🔐", title: "Authorization",
     code: "Bearer sk-...",
-    desc: "OpenAI 兼容工具通常只需要填 API 密匙，工具会自动生成 Bearer Header。",
+    desc: "OpenAI 兼容工具通常只需要填 API Key，工具会自动生成 Bearer Header。",
   },
   {
     icon: "📋", title: "Model",
@@ -326,15 +326,15 @@ function PreflightCheckSection() {
 /* ==================== Section: Failed Call Checklist ==================== */
 
 const failedCallSteps = [
-  { title: "先看 code", desc: "FlowAPI 返回的 code 会直接告诉你是密匙、余额、限流还是上游问题。" },
+  { title: "先看 code", desc: "FlowAPI 返回的 code 会直接告诉你是 API Key、余额、限流还是上游问题。" },
   { title: "再看 suggestion", desc: "接口会返回中文排查建议，小白用户优先照着 suggestion 操作。" },
-  { title: "回到 API 管理页测试", desc: "用“一键测试 API 密匙”确认当前密匙是否能真实调用成功。" },
-  { title: "仍失败再联系客服", desc: "带上 code、suggestion、API 密匙名称和调用时间，排查会更快。" },
+  { title: "回到 API 管理页检查", desc: "确认当前 API Key 是否已启用、是否绑定了正确模型，并复制完整 Key。" },
+  { title: "仍失败再联系客服", desc: "带上 code、suggestion、API Key 名称和调用时间，排查会更快。" },
 ];
 
 const structuredApiErrors = [
-  { code: "MISSING_API_KEY", reason: "没有提供 API 密匙", fix: "检查 Authorization 是否为 Bearer sk-...，不要只填 Base URL。", href: "/guide" },
-  { code: "INVALID_API_KEY", reason: "API 密匙不存在、被禁用或已过期", fix: "回到 API 管理页复制完整 API 密匙，必要时创建新的密匙。", href: "/guide" },
+  { code: "MISSING_API_KEY", reason: "没有提供 API Key", fix: "检查 Authorization 是否为 Bearer sk-...，不要只填 Base URL。", href: "/api-management" },
+  { code: "INVALID_API_KEY", reason: "API Key 不存在、被禁用或已过期", fix: "回到 API 管理页复制完整 API Key，必要时创建新的 Key。", href: "/api-management" },
   { code: "INSUFFICIENT_BALANCE", reason: "账户余额不足", fix: "先充值，再重新发起调用。", href: "/recharge" },
   { code: "API_KEY_RATE_LIMITED", reason: "请求太频繁", fix: "降低并发或等待一会儿再试，高峰期建议加重试机制。", href: "/help#preflight-check" },
   { code: "UPSTREAM_NOT_CONFIGURED", reason: "上游接口还没有配置好", fix: "这是平台配置问题，请联系 FlowAPI 管理员处理。", href: "/help#failed-call-checklist" },
@@ -373,9 +373,9 @@ function FailedCallChecklistSection() {
       <div className="help-failure-action">
         <div>
           <strong>新手最快验证方式</strong>
-          <p>进入 API 管理页，使用默认 API 密匙点击“一键测试 API 密匙”。如果这里成功，说明 FlowAPI 账户和密匙可用。</p>
+          <p>进入 API 管理页，确认 API Key 已启用，并复制 Base URL、API Key、Model ID 三个参数。如果这里有真实调用记录，说明 FlowAPI 账户和 Key 可用。</p>
         </div>
-        <Link href="/guide">去 API 管理页测试</Link>
+        <Link href="/api-management">去 API 管理页</Link>
       </div>
     </section>
   );
@@ -384,8 +384,8 @@ function FailedCallChecklistSection() {
 /* ==================== Section: Error Codes ==================== */
 
 const errorCodes = [
-  { code: "401", title: "Unauthorized — API 密匙无效或未提供", desc: "检查 Authorization 请求头是否正确。确认 API 密匙是否已过期或被禁用。确认 Base URL 是否正确。" },
-  { code: "403", title: "Forbidden — 无权访问", desc: "确认你的账户余额是否充足。检查 API 密匙是否有权限访问该模型。某些模型可能需要额外授权。" },
+  { code: "401", title: "Unauthorized — API Key 无效或未提供", desc: "检查 Authorization 请求头是否正确。确认 API Key 是否已过期或被禁用。确认 Base URL 是否正确。" },
+  { code: "403", title: "Forbidden — 无权访问", desc: "确认你的账户余额是否充足。检查 API Key 是否有权限访问该模型。某些模型可能需要额外授权。" },
   { code: "429", title: "请求频率过高", desc: "降低并发请求数量。可以实现重试逻辑，等待几秒后再次请求。如果持续出现，联系客服提升限额。" },
   { code: "400", title: "Bad Request — 请求格式错误", desc: "检查请求体 JSON 格式是否正确。确认 model 字段的模型名拼写正确。确认 messages 数组格式符合规范。" },
   { code: "413", title: "Payload Too Large — 请求体过大", desc: "减小 prompt 或上下文长度。分块发送过长的文本内容。使用更小分辨率的图片。" },

@@ -106,7 +106,7 @@ const iconMap = {
 const menuItems = [
   { key: "dashboard", label: "数据面板", href: "/dashboard", desc: "Token 消耗与资产总览" },
   { key: "wallet", label: "充值", href: "/recharge", desc: "充值 Token" },
-  { key: "guide", label: "API 管理", href: "/guide", desc: "创建和管理 API 密匙" },
+  { key: "key", label: "API 管理", href: "/api-management", desc: "创建和管理 API Key" },
   { key: "models", label: "大模型接入", href: "/models", desc: "查看模型与模型 ID" },
   { key: "help", label: "帮助指南", href: "/help", desc: "配置教程与常见问题" },
   { key: "user", label: "个人资料", href: "/profile", desc: "编辑个人资料" },

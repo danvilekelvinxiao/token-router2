@@ -22,16 +22,16 @@ FlowAPI 把用户请求转发到 **New API（One API）**，由 New API 再调�
 1. 在服务器安装 [New API / One API](https://github.com/Calcium-Ion/new-api)（Docker 或二进制）。
 2. 打开 New API 控制台，完成：
    - **渠道**：添加 OpenAI 兼容 / Claude / DeepSeek 等，并启用模型。
-   - **令牌**：新建一个 **系统中转用** 的 `sk-` 令牌（额度给足或设为无限）。
+   - **API Key**：新建一个 **系统中转用** 的 `sk-` API Key（额度给足或设为无限）。
    - **用户 / 分组**：记下默认分组名（一般是 `default`）。
-3. 在 New API **个人设置 → 系统访问令牌**（或 API 信息）复制 **管理员 Access Token**（用于 `/api/token/`、`/api/log/` 等管理接口）。
+3. 在 New API **个人设置 → 系统访问 Token**（或 API 信息）复制 **管理员 Access Token**（用于 `/api/token/`、`/api/log/` 等管理接口）。
 
 记下：
 
 | 名称 | 示例 |
 |------|------|
 | New API 地址 | `https://newapi.你的域名.com` 或同机 `http://127.0.0.1:3001` |
-| 中转用 sk 令牌 | `sk-xxxxxxxx` |
+| 中转用 sk API Key | `sk-xxxxxxxx` |
 | 管理员 Token | 一长串，请求头 `Authorization: Bearer ...` |
 
 ---
@@ -43,7 +43,7 @@ FlowAPI 把用户请求转发到 **New API（One API）**，由 New API 再调�
 ```bash
 # —— New API 中转（必填才能走 New API 渠道）——
 NEW_API_BASE_URL=https://newapi.你的域名.com
-NEW_API_KEY=sk-你的中转令牌
+NEW_API_KEY=sk-你的中转 API Key
 NEW_API_ADMIN_TOKEN=你的管理员AccessToken
 
 # 可选：新用户在 New API 侧默认分组与赠送额度（内部额度单位，非人民币）
@@ -91,14 +91,14 @@ curl -sS http://127.0.0.1:3000/api/newapi/health | jq .
 |------|------|
 | 后台显示「管理员 Token 未配置」 | 设置 `NEW_API_ADMIN_TOKEN` 并 `pm2 restart flowapi --update-env` |
 | `/api/health` 里 upstream 失败 | 检查 `NEW_API_BASE_URL`、`NEW_API_KEY`，以及服务器能否访问 New API |
-| 用户 401 | 用的是 FlowAPI 控制台里的 API 密匙，不是 New API 的 sk（除非走直通逻辑） |
+| 用户 401 | 用的是 FlowAPI 控制台里的 API Key，不是 New API 的 sk（除非走直通逻辑） |
 | 模型不存在 | 在 New API 渠道里启用对应模型，并与 FlowAPI 模型广场 ID 一致 |
 
 ---
 
 ## UniAPI 上游渠道
 
-UniAPI 可作为 New API 的 OpenAI 兼容上游，用于 Codex / GPT 系列模型。真实 `UNIAPI_API_KEY` 只能填写在服务器环境变量或 New API 渠道密钥配置中，不要写入前端代码、Git、日志或浏览器返回值。
+UniAPI 可作为 New API 的 OpenAI 兼容上游，用于 Codex / GPT 系列模型。真实 `UNIAPI_API_KEY` 只能填写在服务器环境变量或 New API 渠道 API Key 配置中，不要写入前端代码、Git、日志或浏览器返回值。
 
 New API 渠道建议：
 

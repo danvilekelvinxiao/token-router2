@@ -84,6 +84,17 @@ export default function WalletProgressCard({
   }), [expiresAt, planStatus, remaining, totalQuotaCny]);
   const membership = data?.membership;
   const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
+  const hasPlan = planStatus === "active" && Number(totalQuotaCny || 0) > 0;
+  const usedTotalLabel = hasPlan ? `${formatWalletCny(usedQuotaCny)} / ${formatWalletCny(totalQuotaCny)}` : "普通余额钱包";
+  const progressTitle = hasPlan ? "当前使用进度" : "普通余额可用";
+  const planTimeline = hasPlan
+    ? `兑换 ${startedAt ? formatWalletDate(startedAt) : "暂无记录"} · 到期 ${formatWalletDate(expiresAt)}${remainingDays !== null && remainingDays !== undefined ? ` · 剩余 ${remainingDays} 天` : ""}`
+    : "暂无套餐到期时间，余额按实际模型调用扣费。";
+  const tokenRemainingLabel = remainingTokens
+    ? formatWalletTokens(remainingTokens)
+    : hasPlan && totalTokens
+      ? formatWalletTokens(remainingTokens)
+      : "按实际余额折算";
 
   useEffect(() => {
     if (data?.billingPreference?.priorityMode) {
@@ -164,16 +175,16 @@ export default function WalletProgressCard({
 
         <div className="wallet-summary-grid">
           <WalletSummaryStat label={mode === "recharge" ? "当前余额" : "总剩余额度"} value={Number(remaining || 0)} prefix="¥" decimals={2} note={remaining <= 0 ? "建议充值" : "可继续调用"} />
-          <WalletSummaryStat label="已用 / 总量" value={`${formatWalletCny(usedQuotaCny)} / ${totalQuotaCny > 0 ? formatWalletCny(totalQuotaCny) : "暂无套餐"}`} />
+          <WalletSummaryStat label={hasPlan ? "已用 / 总量" : "计费模式"} value={usedTotalLabel} note={hasPlan ? "当前套餐周期" : "无套餐时按余额扣费"} />
           <WalletSummaryStat label="最近到期" value={formatWalletDate(expiresAt)} />
         </div>
 
         <div className="wallet-progress-wrap">
           <div className="wallet-progress-topline">
-            <span>当前使用进度</span>
-            <strong><LiveNumber value={progress} suffix="%" decimals={1} /></strong>
+            <span>{progressTitle}</span>
+            <strong>{hasPlan ? <LiveNumber value={progress} suffix="%" decimals={1} /> : "暂无套餐进度"}</strong>
           </div>
-          <WalletProgressBar progressPercent={progress} tone={status.tone} />
+          <WalletProgressBar progressPercent={hasPlan ? progress : 0} tone={hasPlan ? status.tone : "none"} />
         </div>
 
         <div className="wallet-billing-preference" onClick={(event) => event.stopPropagation()}>
@@ -209,14 +220,11 @@ export default function WalletProgressCard({
             <span>当前套餐</span>
             <h3>{planName || "普通余额钱包"}</h3>
             <p>{planAmountCny ? formatWalletCny(planAmountCny) : "按实际余额调用"} · <b className={`wallet-plan-state tone-${status.tone}`}>{planStatus === "expired" ? "已到期" : planStatus === "active" ? "生效中" : "暂无套餐"}</b></p>
-            <small>
-              兑换 {startedAt ? formatWalletDate(startedAt) : "暂无记录"} · 到期 {formatWalletDate(expiresAt)}
-              {remainingDays !== null && remainingDays !== undefined ? ` · 剩余 ${remainingDays} 天` : ""}
-            </small>
+            <small>{planTimeline}</small>
           </div>
           <div className="wallet-plan-right">
-            <span>使用进度</span>
-            <strong>{formatWalletCny(usedQuotaCny)} / {totalQuotaCny > 0 ? formatWalletCny(totalQuotaCny) : "暂无套餐"}</strong>
+            <span>{hasPlan ? "使用进度" : "可用余额"}</span>
+            <strong>{usedTotalLabel}</strong>
             <b><LiveNumber value={Number(remaining || 0)} prefix="¥" decimals={2} /></b>
             <small>剩余额度</small>
           </div>
@@ -224,7 +232,7 @@ export default function WalletProgressCard({
 
         <div className="wallet-token-row">
           <span>已用 Token：{formatWalletTokens(usedTokens)}</span>
-          <span>剩余 Token：{remainingTokens ? formatWalletTokens(remainingTokens) : totalTokens ? formatWalletTokens(remainingTokens) : "按实际余额折算"}</span>
+          <span>剩余 Token：{tokenRemainingLabel}</span>
         </div>
 
         {wallets.length ? (

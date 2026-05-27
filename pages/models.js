@@ -69,6 +69,20 @@ function priceLabel(value) {
   return `¥${Number(value).toFixed(Number(value) % 1 === 0 ? 0 : 2)} / M Token`;
 }
 
+function discountLabel(model) {
+  const officialInput = Number(model.officialInputPricePerM || 0);
+  const officialOutput = Number(model.officialOutputPricePerM || 0);
+  const flowInput = Number(model.flowapiInputPricePerM || model.inputPricePerM || 0);
+  const flowOutput = Number(model.flowapiOutputPricePerM || model.outputPricePerM || 0);
+  const officialTotal = officialInput + officialOutput;
+  const flowTotal = flowInput + flowOutput;
+  if (!officialTotal || !flowTotal) return "官方价格同步中";
+  const ratio = flowTotal / officialTotal;
+  const discount = Math.max(0, Math.min(99, Math.round((1 - ratio) * 100)));
+  if (discount <= 0) return "与官方价格持平";
+  return `相比官方约省 ${discount}%`;
+}
+
 function numberLabel(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return "暂无数据";
@@ -567,6 +581,7 @@ function ModelMarketCard({ model, showPrice, onCopy, onDetails, isMember = false
   const secondaryText = model.secondaryButtonText || "复制 Model ID";
   const secondaryHref = model.secondaryButtonHref;
   const lockedForMember = model.isMemberOnly && !isMember;
+  const discountText = discountLabel(model);
   const guardedCopy = () => {
     if (lockedForMember) {
       onMemberRequired?.();
@@ -587,14 +602,19 @@ function ModelMarketCard({ model, showPrice, onCopy, onDetails, isMember = false
         {model.isFreeModel ? <span className="models-free-badge">免费模型</span> : null}
       </div>
 
+      <div className="models-price-grid">
+        <div><span>输入价格</span><strong>{showPrice ? priceLabel(model.flowapiInputPricePerM || model.inputPricePerM) : "价格同步中"}</strong></div>
+        <div><span>输出价格</span><strong>{showPrice ? priceLabel(model.flowapiOutputPricePerM || model.outputPricePerM) : "价格同步中"}</strong></div>
+      </div>
+
+      <div className="models-discount-strip">
+        <span>{discountText}</span>
+        <small>官方：输入 {priceLabel(model.officialInputPricePerM)} · 输出 {priceLabel(model.officialOutputPricePerM)}</small>
+      </div>
+
       <div className="models-model-id">
         <span>Model ID</span>
         <button type="button" onClick={guardedCopy} title="复制 Model ID">{model.modelId || "同步中"}</button>
-      </div>
-
-      <div className="models-price-grid">
-        <div><span>输入</span><strong>{showPrice ? priceLabel(model.inputPricePerM) : "价格同步中"}</strong></div>
-        <div><span>输出</span><strong>{showPrice ? priceLabel(model.outputPricePerM) : "价格同步中"}</strong></div>
       </div>
 
       <p className="models-card-desc">{model.description || "模型用途同步中。"}</p>

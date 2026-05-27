@@ -79,6 +79,7 @@ const rechargeTrustItems = [
 ];
 
 const TAOBAO_SHOP_URL = "https://e.tb.cn/h.R0y11RtMIOB7A40?tk=P4j75IXMHgi";
+const QQ_GROUP_NUMBER = "217637139";
 
 const statusMap = {
   pending: { label: "待确认", color: "#f59e0b", bg: "#fffbeb" },
@@ -534,6 +535,8 @@ export default function RechargePage() {
                 {paying ? "正在处理..." : orderSummary.typeLabel === "余额充值" ? "继续支付" : orderSummary.typeLabel === "周畅用包" ? "立即购买" : "立即订阅"}
               </button>
               <p className="recharge-sidebar-note">一般 10 秒内到账，异常订单可凭订单号联系客服处理。</p>
+
+              <RechargeSupportCard copied={copied} onCopy={copyText} />
             </aside>
           </div>
         ) : (
@@ -576,6 +579,7 @@ export default function RechargePage() {
                 </div>
                 <button type="button" className="btn-secondary recharge-pay-button" onClick={() => setStep("choose")}>返回修改订单</button>
               </div>
+              <RechargeSupportCard copied={copied} onCopy={copyText} />
             </aside>
           </div>
         )}
@@ -627,6 +631,32 @@ export default function RechargePage() {
         ) : null}
       </ConsoleLayout>
     </>
+  );
+}
+
+function RechargeSupportCard({ copied, onCopy }) {
+  return (
+    <div className="recharge-summary-card recharge-support-card">
+      <span>人工兜底支持</span>
+      <h2>充值遇到问题可联系我</h2>
+      <p>支付未到账、激活码异常、套餐开通失败，都可以把订单号发到群里处理。</p>
+      <div className="recharge-support-grid">
+        <div>
+          <strong>QQ 群</strong>
+          <code>{QQ_GROUP_NUMBER}</code>
+          <button type="button" onClick={() => onCopy(QQ_GROUP_NUMBER)}>{copied === QQ_GROUP_NUMBER ? "已复制" : "复制群号"}</button>
+        </div>
+        <div>
+          <strong>微信群</strong>
+          <code>添加微信后邀请入群</code>
+          <button type="button" onClick={() => onCopy("请在 QQ 群联系 FlowAPI 管理员拉你进微信群")}>{copied.includes("微信群") ? "已复制" : "复制说明"}</button>
+        </div>
+      </div>
+      <div className="recharge-support-qr">
+        <Image src="/images/qq-group-qr.png" alt="FlowAPI QQ 群二维码" width={148} height={148} />
+        <small>扫码加入 QQ 群，充值异常和 API 配置问题都可以在群里问。</small>
+      </div>
+    </div>
   );
 }
 
