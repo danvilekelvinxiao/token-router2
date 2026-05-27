@@ -16486,6 +16486,7 @@ html {
     align-items: flex-start;
     gap: 4px;
   }
+}
 
 /* ===== Terms / Privacy Pages ===== */
 .terms-page-container {
@@ -16615,7 +16616,6 @@ html {
 .terms-agreement-text button:hover {
   color: #4f46e5;
   text-decoration: underline;
-}
 }
 
 /* ===== Terms / Privacy Modal ===== */
@@ -16755,6 +16755,7 @@ html {
     align-items: flex-end;
     padding: 0;
   }
+}
 
 /* ══════════════════════════════════════════════════════════════
    FLOWAPI UNIFIED DESIGN SYSTEM
@@ -18087,5 +18088,4 @@ body {
     left: 14px;
     text-align: center;
   }
-}
 }
