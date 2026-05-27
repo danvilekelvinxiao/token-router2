@@ -4,7 +4,7 @@ import AdminLayout from "@/components/AdminLayout";
 
 const TABS = [
   { key: "models", label: "大模型配置" },
-  { key: "categories", label: "模型分类" },
+  { key: "modelCategories", label: "模型分类" },
   { key: "home", label: "首页配置" },
   { key: "addonServices", label: "附加服务" },
   { key: "actions", label: "按钮配置" },
@@ -16,14 +16,31 @@ const MODEL_FIELDS = [
   { key: "displayName", label: "模型名称", type: "text" },
   { key: "provider", label: "Provider", type: "text" },
   { key: "modelId", label: "Model ID", type: "text" },
+  { key: "logo", label: "Logo / Provider Key", type: "text" },
   { key: "description", label: "描述", type: "textarea" },
+  { key: "detailDescription", label: "详情介绍", type: "textarea" },
   { key: "inputPricePerM", label: "输入价格 ¥/M", type: "number" },
   { key: "outputPricePerM", label: "输出价格 ¥/M", type: "number" },
+  { key: "baseUrl", label: "Base URL", type: "text" },
+  { key: "primaryButtonText", label: "主按钮文字", type: "text" },
+  { key: "primaryButtonHref", label: "主按钮跳转", type: "text" },
+  { key: "secondaryButtonText", label: "次按钮文字", type: "text" },
+  { key: "secondaryButtonHref", label: "次按钮跳转", type: "text" },
   { key: "sortOrder", label: "排序", type: "number" },
+  { key: "showPrice", label: "显示价格", type: "checkbox" },
   { key: "enabled", label: "上架", type: "checkbox" },
   { key: "isRecommended", label: "推荐", type: "checkbox" },
   { key: "pinned", label: "置顶", type: "checkbox" },
   { key: "isBeginnerFriendly", label: "新手友好", type: "checkbox" },
+];
+
+const CATEGORY_FIELDS = [
+  { key: "id", label: "分类 ID", type: "text" },
+  { key: "name", label: "分类名称", type: "text" },
+  { key: "slug", label: "Slug", type: "text" },
+  { key: "description", label: "描述", type: "textarea" },
+  { key: "sortOrder", label: "排序", type: "number" },
+  { key: "enabled", label: "启用", type: "checkbox" },
 ];
 
 export default function AdminContentPage() {
@@ -52,7 +69,12 @@ export default function AdminContentPage() {
 
   function openEdit(item) {
     setEditing(item?.id || "new");
-    setForm(item ? { ...item } : { displayName: "", provider: "", modelId: "", description: "", sortOrder: 99, enabled: true, isRecommended: false, pinned: false, categories: ["all"], tags: [] });
+    setForm(item ? { ...item } : { displayName: "", provider: "", modelId: "", description: "", sortOrder: 99, enabled: true, showPrice: true, isRecommended: false, pinned: false, categories: ["all"], tags: [] });
+  }
+
+  function openCategoryEdit(item) {
+    setEditing(item?.id || "new");
+    setForm(item ? { ...item } : { id: "", name: "", slug: "", description: "", sortOrder: 99, enabled: true });
   }
 
   async function saveEdit() {
@@ -121,8 +143,8 @@ export default function AdminContentPage() {
                   <td><strong>{m.displayName}</strong></td>
                   <td>{m.provider}</td>
                   <td><code>{m.modelId}</code></td>
-                  <td>¥{m.inputPricePerM}</td>
-                  <td>¥{m.outputPricePerM}</td>
+                  <td>{Number(m.inputPricePerM) > 0 ? `¥${m.inputPricePerM}` : "价格同步中"}</td>
+                  <td>{Number(m.outputPricePerM) > 0 ? `¥${m.outputPricePerM}` : "价格同步中"}</td>
                   <td><span style={{ color: m.isRecommended ? "#16a34a" : "#9ca3af" }}>{m.isRecommended ? "★" : "—"}</span></td>
                   <td><span style={{ color: m.enabled ? "#16a34a" : "#ef4444" }}>{m.enabled ? "已上架" : "已下架"}</span></td>
                   <td className="redeem-row-actions">
@@ -143,21 +165,32 @@ export default function AdminContentPage() {
   function renderCategories() {
     const list = data || [];
     return (
-      <div className="redeem-table-wrap">
-        <table className="redeem-table">
-          <thead><tr><th>ID</th><th>名称</th><th>排序</th><th>启用</th><th>操作</th></tr></thead>
-          <tbody>
-            {list.map((c) => (
-              <tr key={c.id}>
-                <td><code>{c.id}</code></td>
-                <td>{c.name}</td>
-                <td>{c.sortOrder}</td>
-                <td><span style={{ color: c.enabled ? "#16a34a" : "#ef4444" }}>{c.enabled ? "启用" : "禁用"}</span></td>
-                <td><button onClick={() => toggleItem(c.id)}>{c.enabled ? "禁用" : "启用"}</button></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div>
+        <div style={{ marginBottom: 16 }}>
+          <button className="redeem-btn primary" onClick={() => openCategoryEdit(null)}>新增分类</button>
+        </div>
+        <div className="redeem-table-wrap">
+          <table className="redeem-table">
+            <thead><tr><th>ID</th><th>名称</th><th>Slug</th><th>排序</th><th>启用</th><th>操作</th></tr></thead>
+            <tbody>
+              {list.map((c) => (
+                <tr key={c.id}>
+                  <td><code>{c.id}</code></td>
+                  <td>{c.name}</td>
+                  <td><code>{c.slug || c.id}</code></td>
+                  <td>{c.sortOrder}</td>
+                  <td><span style={{ color: c.enabled ? "#16a34a" : "#ef4444" }}>{c.enabled ? "启用" : "禁用"}</span></td>
+                  <td className="redeem-row-actions">
+                    <button onClick={() => openCategoryEdit(c)}>编辑</button>
+                    <button onClick={() => toggleItem(c.id)}>{c.enabled ? "禁用" : "启用"}</button>
+                    <button className="danger" onClick={() => deleteItem(c.id)}>删除</button>
+                  </td>
+                </tr>
+              ))}
+              {list.length === 0 && <tr><td colSpan={6} style={{ textAlign: "center", padding: 32 }}>暂无分类</td></tr>}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   }
@@ -266,7 +299,7 @@ export default function AdminContentPage() {
 
   const tabRenderers = {
     models: renderModelTable,
-    categories: renderCategories,
+    modelCategories: renderCategories,
     home: renderHomeConfig,
     addonServices: renderAddonServices,
     actions: renderActions,
@@ -301,7 +334,7 @@ export default function AdminContentPage() {
           {/* Edit modal */}
           {editing && tab === "models" && (
             <div className="redeem-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setEditing(null); }}>
-              <div className="redeem-modal" style={{ maxWidth: 560 }}>
+              <div className="redeem-modal" style={{ maxWidth: 720 }}>
                 <header>
                   <h2>{editing === "new" ? "新增模型" : "编辑模型"}</h2>
                   <button onClick={() => setEditing(null)}>×</button>
@@ -322,19 +355,80 @@ export default function AdminContentPage() {
                         {f.type === "textarea" ? (
                           <textarea rows={3} value={form[f.key] || ""} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
                         ) : (
-                          <input type={f.type} value={form[f.key] ?? ""} onChange={(e) => setForm({ ...form, [f.key]: f.type === "number" ? Number(e.target.value) || 0 : e.target.value })} />
+                          <input type={f.type} value={form[f.key] ?? ""} onChange={(e) => setForm({ ...form, [f.key]: f.type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value })} />
                         )}
                       </label>
                     );
                   })}
                   <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                    分类 (逗号分隔，使用分类 ID / slug)
+                    <input value={(form.categories || []).join(", ")} onChange={(e) => setForm({ ...form, categories: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
                     标签 (逗号分隔)
                     <input value={(form.tags || []).join(", ")} onChange={(e) => setForm({ ...form, tags: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                    适合场景 (逗号分隔)
+                    <input value={(form.useCases || []).join(", ")} onChange={(e) => setForm({ ...form, useCases: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                    不适合场景 (逗号分隔)
+                    <input value={(form.notRecommendedFor || []).join(", ")} onChange={(e) => setForm({ ...form, notRecommendedFor: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                    推荐用户类型 (逗号分隔)
+                    <input value={(form.recommendedUserTypes || []).join(", ")} onChange={(e) => setForm({ ...form, recommendedUserTypes: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
                   </label>
                   <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
                     CURL 示例
                     <textarea rows={3} value={form.curlExample || ""} onChange={(e) => setForm({ ...form, curlExample: e.target.value })} />
                   </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                    Python 示例
+                    <textarea rows={3} value={form.pythonExample || ""} onChange={(e) => setForm({ ...form, pythonExample: e.target.value })} />
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                    JavaScript 示例
+                    <textarea rows={3} value={form.javascriptExample || ""} onChange={(e) => setForm({ ...form, javascriptExample: e.target.value })} />
+                  </label>
+                </div>
+                <footer>
+                  <button className="redeem-btn" onClick={() => setEditing(null)}>取消</button>
+                  <button className="redeem-btn primary" onClick={saveEdit}>保存</button>
+                </footer>
+              </div>
+            </div>
+          )}
+
+          {editing && tab === "modelCategories" && (
+            <div className="redeem-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setEditing(null); }}>
+              <div className="redeem-modal" style={{ maxWidth: 560 }}>
+                <header>
+                  <h2>{editing === "new" ? "新增模型分类" : "编辑模型分类"}</h2>
+                  <button onClick={() => setEditing(null)}>×</button>
+                </header>
+                <div className="redeem-modal-body">
+                  {CATEGORY_FIELDS.map((f) => {
+                    if (f.type === "checkbox") {
+                      return (
+                        <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                          <input type="checkbox" checked={!!form[f.key]} onChange={(e) => setForm({ ...form, [f.key]: e.target.checked })} />
+                          {f.label}
+                        </label>
+                      );
+                    }
+                    return (
+                      <label key={f.key} style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
+                        {f.label}
+                        {f.type === "textarea" ? (
+                          <textarea rows={3} value={form[f.key] || ""} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
+                        ) : (
+                          <input type={f.type} value={form[f.key] ?? ""} onChange={(e) => setForm({ ...form, [f.key]: f.type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value })} disabled={f.key === "id" && editing !== "new"} />
+                        )}
+                      </label>
+                    );
+                  })}
                 </div>
                 <footer>
                   <button className="redeem-btn" onClick={() => setEditing(null)}>取消</button>
