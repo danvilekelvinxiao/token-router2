@@ -6,6 +6,7 @@
 
 import { getNewApiUsage } from "@/lib/new-api/client";
 import { formatTokens } from "@/lib/model-format";
+import { getPublicModelProvider } from "@/lib/public-model-provider";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -89,7 +90,11 @@ export default async function handler(req, res) {
       const modelMap = new Map();
       items.forEach((row) => {
         const model = row.model || row.routedModel || row.requestedModel || "Unknown";
-        const provider = row.provider || detectProviderFromModel(model);
+        const provider = getPublicModelProvider({
+          displayName: model,
+          modelId: model,
+          provider: row.provider || detectProviderFromModel(model),
+        });
         if (!modelMap.has(model)) {
           modelMap.set(model, {
             model,

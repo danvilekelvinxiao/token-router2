@@ -77,7 +77,7 @@ export default async function handler(req, res) {
     });
 
     // Find most used model
-    let mainModel = "DeepSeek Chat";
+    let mainModel = "DeepSeek V4 Flash";
     let maxCount = 0;
     modelCounts.forEach((count, model) => {
       if (count > maxCount) {

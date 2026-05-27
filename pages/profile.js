@@ -4,6 +4,11 @@ import { useRouter } from "next/router";
 import { useCallback, useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal from "@/components/CardDetailModal";
+import SavingsCard from "@/components/analytics/savings-card";
+import SavingsDetailDrawer from "@/components/analytics/savings-detail-drawer";
+import UserBadges from "@/components/profile/user-badges";
+import UserBadgeDrawer from "@/components/profile/user-badge-drawer";
+import WalletProgressCard from "@/components/wallet/wallet-progress-card";
 
 const ANNOUNCEMENTS = [
   {
@@ -129,6 +134,15 @@ export default function ProfilePage() {
   const [referralModal, setReferralModal] = useState("");
   const [referralForm, setReferralForm] = useState({ amountCny: "", method: "alipay", account: "", realName: "", remark: "" });
   const [referralMessage, setReferralMessage] = useState("");
+  const [savingsData, setSavingsData] = useState(null);
+  const [savingsLoading, setSavingsLoading] = useState(true);
+  const [savingsOpen, setSavingsOpen] = useState(false);
+  const [savingsPeriod, setSavingsPeriod] = useState("all");
+  const [badgesData, setBadgesData] = useState(null);
+  const [badgesLoading, setBadgesLoading] = useState(true);
+  const [badgesOpen, setBadgesOpen] = useState(false);
+  const [walletData, setWalletData] = useState(null);
+  const [walletLoading, setWalletLoading] = useState(true);
 
   const refreshProfile = useCallback(async (c) => {
     if (!c) {
@@ -194,6 +208,42 @@ export default function ProfilePage() {
     if (!customer?.id) return;
     queueMicrotask(() => refreshReferral(customer));
   }, [customer, refreshReferral]);
+
+  useEffect(() => {
+    if (!customer?.id) return undefined;
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) setSavingsLoading(true); });
+    fetch(`/api/analytics/savings?period=${savingsPeriod}`)
+      .then((res) => res.json())
+      .then((data) => { if (!cancelled) setSavingsData(data); })
+      .catch(() => { if (!cancelled) setSavingsData({ source: "empty", summary: null, modelSavings: [], callSavings: [] }); })
+      .finally(() => { if (!cancelled) setSavingsLoading(false); });
+    return () => { cancelled = true; };
+  }, [customer?.id, savingsPeriod]);
+
+  useEffect(() => {
+    if (!customer?.id) return undefined;
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) setBadgesLoading(true); });
+    fetch("/api/profile/badges")
+      .then((res) => res.json())
+      .then((data) => { if (!cancelled) setBadgesData(data); })
+      .catch(() => { if (!cancelled) setBadgesData({ source: "empty", summary: { totalBadges: 0 }, displayBadges: [], allBadges: [] }); })
+      .finally(() => { if (!cancelled) setBadgesLoading(false); });
+    return () => { cancelled = true; };
+  }, [customer?.id]);
+
+  useEffect(() => {
+    if (!customer?.id) return undefined;
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) setWalletLoading(true); });
+    fetch("/api/user/wallet-summary")
+      .then((res) => res.json())
+      .then((data) => { if (!cancelled) setWalletData(data); })
+      .catch(() => { if (!cancelled) setWalletData({ source: "empty", wallet: null, plan: null }); })
+      .finally(() => { if (!cancelled) setWalletLoading(false); });
+    return () => { cancelled = true; };
+  }, [customer?.id, customer?.balance, customer?.calls?.length]);
 
   async function handleSave(e) {
     e.preventDefault();
@@ -287,7 +337,7 @@ export default function ProfilePage() {
       <ConsoleLayout customer={customer} currentPath="/profile">
 
         {/* ===== Profile Header ===== */}
-        <div style={{ display: "flex", alignItems: "center", gap: 20, marginBottom: 32 }}>
+        <div className="profile-user-hero">
           <div style={{
             width: 72, height: 72, borderRadius: 20,
             background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
@@ -311,9 +361,39 @@ export default function ProfilePage() {
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--page-success-text)" }} />
                 已验证
               </span>
+              {walletData?.membership?.status === "active" ? (
+                <span className="profile-membership-badge">FLOWAPI 黑金会员</span>
+              ) : null}
             </div>
           </div>
+          <UserBadges
+            badges={badgesData?.displayBadges || []}
+            total={Number(badgesData?.summary?.totalBadges || 0)}
+            loading={badgesLoading}
+            onOpen={() => setBadgesOpen(true)}
+          />
         </div>
+
+        <WalletProgressCard
+          mode="profile"
+          loading={walletLoading}
+          empty={!walletLoading && walletData?.source === "empty"}
+          balanceCny={Number(walletData?.wallet?.balanceCny ?? customer.balance ?? 0)}
+          totalQuotaCny={Number(walletData?.wallet?.totalQuotaCny || 0)}
+          usedQuotaCny={Number(walletData?.wallet?.usedQuotaCny || 0)}
+          remainingQuotaCny={Number(walletData?.wallet?.remainingQuotaCny ?? walletData?.wallet?.balanceCny ?? customer.balance ?? 0)}
+          totalTokens={walletData?.token?.totalTokens}
+          usedTokens={walletData?.token?.usedTokens}
+          remainingTokens={walletData?.token?.remainingTokens}
+          planName={walletData?.plan?.planName}
+          planAmountCny={walletData?.plan?.planAmountCny}
+          planStatus={walletData?.plan?.status || "none"}
+          startedAt={walletData?.plan?.startedAt}
+          expiresAt={walletData?.plan?.expiresAt}
+          remainingDays={walletData?.plan?.remainingDays}
+          progressPercent={Number(walletData?.wallet?.progressPercent || 0)}
+          data={walletData}
+        />
 
         {/* ===== Two-column layout ===== */}
         <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 20, marginBottom: 32 }}>
@@ -322,7 +402,7 @@ export default function ProfilePage() {
           <div style={{ display: "grid", gap: 20, alignContent: "start" }}>
 
             {/* Stats Row */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14 }}>
               {[
                 { label: "账户余额", value: `¥ ${Number(customer.balance).toFixed(2)}`, accent: "#6366f1" },
                 { label: "累计消耗", value: `¥ ${Number(customer.totalSpend).toFixed(2)}`, accent: "#8b5cf6" },
@@ -338,6 +418,16 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ))}
+              <SavingsCard
+                title="累计节省金额"
+                amount={savingsData?.summary?.savedAmountCny}
+                subtitle="你在 FlowAPI 的成本优势"
+                description="相比官方直连价格，FlowAPI 已为你累计节省的模型调用成本。"
+                loading={savingsLoading}
+                source={savingsData?.source}
+                rankText={savingsData?.savingRank ? `节省排名：前 ${Number(savingsData.savingRank.percentileTop || 0)}%，超过平台 ${Number(savingsData.savingRank.beatsUsersPercent || 0)}% 的用户` : "排名数据生成中"}
+                onClick={() => setSavingsOpen(true)}
+              />
             </div>
 
             {/* Edit Form */}
@@ -578,6 +668,20 @@ export default function ProfilePage() {
             </form>
           </div>
         ) : null}
+        <SavingsDetailDrawer
+          open={savingsOpen}
+          onClose={() => setSavingsOpen(false)}
+          data={savingsData}
+          loading={savingsLoading}
+          period={savingsPeriod}
+          onPeriodChange={setSavingsPeriod}
+        />
+        <UserBadgeDrawer
+          open={badgesOpen}
+          onClose={() => setBadgesOpen(false)}
+          badges={badgesData?.allBadges || []}
+          summary={badgesData?.summary}
+        />
       </ConsoleLayout>
     </>
   );

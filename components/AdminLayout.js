@@ -13,6 +13,7 @@ const adminMenuItems = [
   { key: "logs", label: "调用日志", href: "/admin/logs", icon: IconLogs },
   { key: "announcements", label: "系统公告管理", href: "/admin/announcements", icon: IconAnnouncements },
   { key: "referrals", label: "邀请返佣管理", href: "/admin/referrals", icon: IconReferrals },
+  { key: "membership", label: "会员管理", href: "/admin/membership", icon: IconBilling },
   { key: "settings", label: "系统设置", href: "/admin/settings", icon: IconSettings },
   { key: "recharges", label: "充值审核", href: "/admin/recharges", icon: IconRecharges },
   { key: "newapi", label: "New API 管理", href: "/admin/new-api", icon: IconNewApi },

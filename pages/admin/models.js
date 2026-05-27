@@ -349,7 +349,7 @@ export default function AdminModelsPage() {
                 <tr><td><code>UNIAPI_API_KEY</code></td><td>UniAPI API Key（服务器端，不暴露前端）</td></tr>
                 <tr><td><code>FLOWAPI_CLAUDE_SONNET_ACTUAL_MODEL</code></td><td>Claude Sonnet 上游模型 ID</td></tr>
                 <tr><td><code>FLOWAPI_CLAUDE_OPUS_ACTUAL_MODEL</code></td><td>Claude Opus 上游模型 ID</td></tr>
-                <tr><td><code>FLOWAPI_UNIAPI_CODEX_PLUS_AVAILABLE</code></td><td>开放 Codex Plus</td></tr>
+                <tr><td><code>FLOWAPI_UNIAPI_CODEX_PLUS_AVAILABLE</code></td><td>开放 GPT-5.3-Codex</td></tr>
                 <tr><td><code>FLOWAPI_UNIAPI_GPT55_AVAILABLE</code></td><td>开放 GPT-5.5</td></tr>
               </tbody>
             </table>

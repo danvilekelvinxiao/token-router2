@@ -9,6 +9,9 @@ import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import ExportExcelButton from "@/components/ExportExcelButton";
 import ModelLeaderboard from "@/components/dashboard/model-leaderboard";
+import SavingsCard from "@/components/analytics/savings-card";
+import SavingsDetailDrawer from "@/components/analytics/savings-detail-drawer";
+import WalletProgressCard from "@/components/wallet/wallet-progress-card";
 import { generateTokenForecast } from "@/lib/analytics/token-forecast";
 
 /* ===================================================================
@@ -197,7 +200,7 @@ function StackedDailyBars({ daily, models, dailyDates, height = 140, barWidth = 
 }
 
 function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip, theme }) {
-  const { pastDates, pastValues, futureDates, futureValues, pastCosts = [], futureCosts = [], primaryModel = "DeepSeek Chat" } = data;
+  const { pastDates, pastValues, futureDates, futureValues, pastCosts = [], futureCosts = [], primaryModel = "DeepSeek V4 Flash" } = data;
   const allDates = useMemo(() => [...pastDates, ...futureDates], [pastDates, futureDates]);
   const allValues = useMemo(() => [...pastValues, ...futureValues], [pastValues, futureValues]);
   const maxV = Math.max(...allValues, 1);
@@ -733,6 +736,13 @@ function formatCurrency(value) {
   return `¥${Number(value || 0).toFixed(2)}`;
 }
 
+function savingsPeriodText(period) {
+  if (period === "7d") return "近 7 天估算";
+  if (period === "month") return "本月估算";
+  if (period === "all") return "累计估算";
+  return "近 30 天估算";
+}
+
 function formatFlowMetric(value, metric) {
   if (metric === "spend") return `¥${value.toFixed(2)}`;
   if (metric === "tokens") return `${formatCompactToken(value)} Tokens`;
@@ -971,13 +981,15 @@ function buildRecentCallRows(calls, apiKeys = []) {
       upstreamHost: call.upstreamHost || call.host || "api.uniapi.io",
       finishReason: call.finishReason || "stop",
       requestIp: call.requestIp || call.ip || "",
-      inputPricePerM: inputPricePerM || 4.4,
-      outputPricePerM: outputPricePerM || 26.4,
-      originalInputPricePerM: Number(originalInputPM.toFixed(4)) || 5,
-      originalOutputPricePerM: Number(originalOutputPM.toFixed(4)) || 30,
+      inputPricePerM: inputPricePerM || null,
+      outputPricePerM: outputPricePerM || null,
+      originalInputPricePerM: Number(originalInputPM.toFixed(4)) || null,
+      originalOutputPricePerM: Number(originalOutputPM.toFixed(4)) || null,
       discountRate: discountRate,
-      finalInputPricePerM: inputPricePerM || 4.4,
-      finalOutputPricePerM: outputPricePerM || 26.4,
+      finalInputPricePerM: inputPricePerM || null,
+      finalOutputPricePerM: outputPricePerM || null,
+      deductionBreakdown: Array.isArray(call.deductionBreakdown) ? call.deductionBreakdown : [],
+      deductionSource: call.deductionSource || "",
     };
   });
 }
@@ -1121,7 +1133,7 @@ function buildPredictionFromTrend(trendData, metric, balance) {
       futureValues,
       futureCosts: tokenForecast.map((tokens) => Number((Number(tokens || 0) * costPerToken).toFixed(4))),
       unit: metricConfig.unit,
-      primaryModel: "DeepSeek Chat",
+      primaryModel: "DeepSeek V4 Flash",
     },
     summary: {
       weekTokens,
@@ -2002,7 +2014,8 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
   };
 }
 
-function AssetOverviewSection({ overview, tick, onOpenAsset }) {
+function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, savingsLoading, savingsPeriod, onOpenSavings }) {
+  const savingsSummary = savingsData?.summary;
   return (
     <section className="dash3-section dash3-asset-overview-section">
       <SectionTitle
@@ -2075,6 +2088,16 @@ function AssetOverviewSection({ overview, tick, onOpenAsset }) {
           )}
           <em className="dash3-asset-card-hint">查看详情</em>
         </article>
+        <SavingsCard
+          title="为你节省"
+          amount={savingsSummary?.savedAmountCny}
+          subtitle={savingsPeriodText(savingsPeriod)}
+          description="相比官方直连价格，FlowAPI 已为你节省的模型调用成本。"
+          loading={savingsLoading}
+          source={savingsData?.source}
+          rankText={savingsData?.savingRank ? `节省排名：前 ${Number(savingsData.savingRank.percentileTop || 0)}%` : ""}
+          onClick={onOpenSavings}
+        />
       </div>
     </section>
   );
@@ -2468,6 +2491,14 @@ function RecentCallLedger({ rows }) {
               const isOpen = openRowId === row.id;
               const discountLabel = row.discountRate >= 1 ? "无折扣" : `${(row.discountRate * 10).toFixed(1)} 折`;
               const rawCost = row.originalCostCny || row.actualCostCny;
+              const deductionLabel = Array.isArray(row.deductionBreakdown) && row.deductionBreakdown.length
+                ? row.deductionBreakdown.map((item) => {
+                    const name = item.walletName || item.walletType || "额度";
+                    const tokenText = Number(item.tokensDeducted || 0) > 0 ? ` ${formatCompactToken(item.tokensDeducted)} Token` : "";
+                    const moneyText = Number(item.amountCnyDeducted || 0) > 0 ? ` ${formatSmallCny(item.amountCnyDeducted)}` : "";
+                    return `${name}${tokenText || moneyText}`;
+                  }).join(" · ")
+                : row.deductionSource || "扣费来源同步中";
               return (
                 <article
                   key={`${row.id}-${index}`}
@@ -2491,6 +2522,7 @@ function RecentCallLedger({ rows }) {
                       <span className="call-billing-token-sep">/</span>
                       <span className="call-billing-token-out">{row.output}</span>
                     </span>
+                    <span className="call-billing-official">{row.hasSavingPricing ? formatSmallCny(row.originalCostCny) : "官方价格同步中"}</span>
                     <strong className="call-billing-amount">{formatSmallCny(row.actualCostCny)}</strong>
                     {row.savedPercent > 0 && (
                       <span className="call-billing-saved">-{row.savedPercent}%</span>
@@ -2498,6 +2530,7 @@ function RecentCallLedger({ rows }) {
                     <span className="call-billing-ip">{row.requestIp || "-"}</span>
                     <span className="call-billing-channel-tag">{row.channelName}</span>
                     <span className={`call-billing-status-pill ${row.statusKey}`}>{row.status}</span>
+                    <span className="call-billing-deduction">{deductionLabel}</span>
                   </div>
 
                   {/* Expanded detail */}
@@ -2549,9 +2582,14 @@ function RecentCallLedger({ rows }) {
 
                       {/* Section 5: Final calculation */}
                       <div className="call-billing-calc-card">
-                        <strong>最终计算</strong>
+                        <strong>本次调用费用计算</strong>
+                        {row.hasSavingPricing ? (
+                          <div className="call-billing-calc-formula">
+                            官方预估：({row.input} / 1M × {formatSmallCny(row.originalInputPricePerM)}) + ({row.output} / 1M × {formatSmallCny(row.originalOutputPricePerM)}) = <b>{formatSmallCny(row.originalCostCny)}</b>
+                          </div>
+                        ) : null}
                         <div className="call-billing-calc-formula">
-                          ({row.input} / 1M × {formatSmallCny(row.finalInputPricePerM)}) + ({row.output} / 1M × {formatSmallCny(row.finalOutputPricePerM)}) = <b>{formatSmallCny(row.actualCostCny)}</b>
+                          FlowAPI 实际：({row.input} / 1M × {formatSmallCny(row.finalInputPricePerM)}) + ({row.output} / 1M × {formatSmallCny(row.finalOutputPricePerM)}) = <b>{formatSmallCny(row.actualCostCny)}</b>
                         </div>
                         <div className="call-billing-calc-rows">
                           {rawCost > row.actualCostCny && (
@@ -2567,6 +2605,10 @@ function RecentCallLedger({ rows }) {
                               <span>节省</span><b>-{row.savedPercent}% (-{formatSmallCny(row.savedCostCny)})</b>
                             </div>
                           )}
+                        </div>
+                        <div className="call-billing-deduction-box">
+                          <span>本次扣费来源</span>
+                          <b>{deductionLabel}</b>
                         </div>
                         <small>本系统按照 Token 用量计算费用，最终扣费以平台实际账单为准。</small>
                       </div>
@@ -2851,6 +2893,12 @@ export default function DashboardPage() {
   const [flowApiRanks, setFlowApiRanks] = useState(null);
   const [flowApiRanksPeriod, setFlowApiRanksPeriod] = useState("week");
   const [flowApiRanksLoading, setFlowApiRanksLoading] = useState(true);
+  const [savingsPeriod, setSavingsPeriod] = useState("30d");
+  const [savingsData, setSavingsData] = useState(null);
+  const [savingsLoading, setSavingsLoading] = useState(true);
+  const [savingsOpen, setSavingsOpen] = useState(false);
+  const [walletData, setWalletData] = useState(null);
+  const [walletLoading, setWalletLoading] = useState(true);
   const [heatmapYear, setHeatmapYear] = useState(() => new Date().getFullYear());
   const [heatmapMonth, setHeatmapMonth] = useState(() => new Date().getMonth());
   const [greeting] = useState(() => {
@@ -2950,13 +2998,53 @@ export default function DashboardPage() {
     return () => { cancelled = true; };
   }, [flowApiRanksPeriod]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setSavingsLoading(true);
+    fetch(`/api/analytics/savings?period=${savingsPeriod}`)
+      .then((r) => r.json())
+      .then((data) => { if (!cancelled) setSavingsData(data); })
+      .catch(() => { if (!cancelled) setSavingsData({ source: "empty", summary: null, modelSavings: [], callSavings: [] }); })
+      .finally(() => { if (!cancelled) setSavingsLoading(false); });
+    return () => { cancelled = true; };
+  }, [savingsPeriod]);
+
+  useEffect(() => {
+    if (!customer?.id) return undefined;
+    let cancelled = false;
+    setWalletLoading(true);
+    fetch("/api/user/wallet-summary")
+      .then((r) => r.json())
+      .then((data) => { if (!cancelled) setWalletData(data); })
+      .catch(() => { if (!cancelled) setWalletData({ source: "empty", wallet: null, plan: null }); })
+      .finally(() => { if (!cancelled) setWalletLoading(false); });
+    return () => { cancelled = true; };
+  }, [customer?.id, customer?.balance, customer?.calls?.length]);
+
   /* Computed */
   const user = customer || { name: "用户", email: "", balance: 0, totalSpend: 0, apiKeys: [], calls: [] };
   const userName = user.name || "用户";
   const baseBalance = Number(user.balance) || 0;
   const usage = buildDashboardUsage(user);
   const modelSpend = buildModelSpendData(usage.calls);
-  const recentCallRows = buildRecentCallRows(usage.calls, user.apiKeys || []);
+  const savingsByCallId = new Map((savingsData?.callSavings || []).map((item) => [item.id, item]));
+  const recentCallRows = buildRecentCallRows(usage.calls, user.apiKeys || []).map((row) => {
+    const saving = savingsByCallId.get(row.id);
+    if (!saving) return row;
+    return {
+      ...row,
+      provider: saving.provider || row.provider,
+      originalCostCny: Number(saving.officialCostCny || 0),
+      actualCostCny: Number(saving.actualCostCny || row.actualCostCny || 0),
+      savedCostCny: Number(saving.savedAmountCny || 0),
+      savedPercent: Number(saving.savedPercent || 0),
+      originalInputPricePerM: saving.officialInputPricePerM,
+      originalOutputPricePerM: saving.officialOutputPricePerM,
+      finalInputPricePerM: saving.flowapiInputPricePerM,
+      finalOutputPricePerM: saving.flowapiOutputPricePerM,
+      hasSavingPricing: true,
+    };
+  });
   const dashboardStats = buildDashboardStats(user, usage.calls);
   const trendDays = trendRange === "90d" ? 90 : trendRange === "30d" ? 30 : 7;
   const trendData = buildTrendData(usage.calls, trendDays);
@@ -3017,11 +3105,36 @@ export default function DashboardPage() {
 
           {dashboardError ? <div className="dash3-error-banner">{dashboardError}</div> : null}
 
+          <WalletProgressCard
+            mode="dashboard"
+            loading={walletLoading}
+            empty={!walletLoading && walletData?.source === "empty"}
+            balanceCny={Number(walletData?.wallet?.balanceCny ?? user.balance ?? 0)}
+            totalQuotaCny={Number(walletData?.wallet?.totalQuotaCny || 0)}
+            usedQuotaCny={Number(walletData?.wallet?.usedQuotaCny || 0)}
+            remainingQuotaCny={Number(walletData?.wallet?.remainingQuotaCny ?? walletData?.wallet?.balanceCny ?? user.balance ?? 0)}
+            totalTokens={walletData?.token?.totalTokens}
+            usedTokens={walletData?.token?.usedTokens}
+            remainingTokens={walletData?.token?.remainingTokens}
+            planName={walletData?.plan?.planName}
+            planAmountCny={walletData?.plan?.planAmountCny}
+            planStatus={walletData?.plan?.status || "none"}
+            startedAt={walletData?.plan?.startedAt}
+            expiresAt={walletData?.plan?.expiresAt}
+            remainingDays={walletData?.plan?.remainingDays}
+            progressPercent={Number(walletData?.wallet?.progressPercent || 0)}
+            data={walletData}
+          />
+
           <OnboardingChecklist customer={customer} usage={usage} />
 
           <AssetOverviewSection
             overview={usage.overview}
             tick={tick}
+            savingsData={savingsData}
+            savingsLoading={savingsLoading}
+            savingsPeriod={savingsPeriod}
+            onOpenSavings={() => setSavingsOpen(true)}
             onOpenAsset={(assetKey) => setDetailModal(buildAssetOverviewDetail(assetKey, {
               overview: usage.overview,
               trendData,
@@ -3066,6 +3179,15 @@ export default function DashboardPage() {
           />
 
           <RecentCallLedger rows={recentCallRows} />
+
+          <SavingsDetailDrawer
+            open={savingsOpen}
+            onClose={() => setSavingsOpen(false)}
+            data={savingsData}
+            loading={savingsLoading}
+            period={savingsPeriod}
+            onPeriodChange={setSavingsPeriod}
+          />
 
           {/* ===== 全球模型热度排行 + FlowAPI 站内模型用量排行 ===== */}
           <section className="dash3-section">

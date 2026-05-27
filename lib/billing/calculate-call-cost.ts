@@ -52,17 +52,15 @@ export function calculateCallCost({
  * >= 0.01: 2-4 decimal places
  * < 0.01: up to 6 decimal places (no scientific notation)
  */
-export function formatSmallCny(value: number): string {
-  if (!Number.isFinite(value) || value === 0) return "¥0.00";
-  if (value >= 1) return `¥${value.toFixed(2)}`;
-  if (value >= 0.01) {
-    // Show at least 2, up to 4 decimals for clarity
-    const s = value.toFixed(4);
-    return `¥${s.replace(/0+$/, "").replace(/\.$/, ".00")}`;
-  }
-  // Small amounts: up to 6 decimal places
-  const fixed = value.toFixed(6);
-  return `¥${fixed}`;
+export function formatSmallCny(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "暂无数据";
+  if (!Number.isFinite(value)) return "暂无数据";
+  if (value === 0) return "¥0";
+  const sign = value < 0 ? "-" : "";
+  const abs = Math.abs(value);
+  if (abs >= 1) return `${sign}¥${abs.toFixed(2)}`;
+  if (abs >= 0.01) return `${sign}¥${abs.toFixed(2)}`;
+  return `${sign}¥${abs.toFixed(6)}`;
 }
 
 /**

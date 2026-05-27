@@ -2,6 +2,7 @@ import { loginCustomer } from "@/lib/customer-store";
 import { getClientIp, graylistKey, isGraylisted, rateLimit, securityLog } from "@/lib/security";
 import { logActivity } from "@/lib/customer-store";
 import { setCustomerSession } from "@/lib/session";
+import { claimDailyBonus, getUserMembership } from "@/lib/membership/store";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -53,6 +54,9 @@ export default async function handler(req, res) {
     ip,
     userAgent: req.headers["user-agent"] || "",
   });
+  if (getUserMembership(result.id)?.status === "active") {
+    await claimDailyBonus(result.id);
+  }
 
   const sessionToken = setCustomerSession(res, result);
   return res.status(200).json({ customer: { ...result, sessionToken } });

@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import { useEffect, useMemo, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
+import WalletProgressCard from "@/components/wallet/wallet-progress-card";
 
 const amounts = [
   { value: 20, label: "¥20", desc: "体验测试" },
@@ -127,6 +128,8 @@ export default function RechargePage() {
   const [commissionModal, setCommissionModal] = useState("");
   const [commissionForm, setCommissionForm] = useState({ amountCny: "", method: "alipay", account: "", realName: "", remark: "" });
   const [commissionMessage, setCommissionMessage] = useState("");
+  const [walletData, setWalletData] = useState(null);
+  const [walletLoading, setWalletLoading] = useState(true);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -156,6 +159,18 @@ export default function RechargePage() {
     const referralRes = await fetch(`/api/referrals/me?customerId=${c.id}`);
     if (referralRes.ok) setReferral(await referralRes.json());
   }
+
+  useEffect(() => {
+    if (!customer?.id) return undefined;
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) setWalletLoading(true); });
+    fetch("/api/user/wallet-summary")
+      .then((res) => res.json())
+      .then((data) => { if (!cancelled) setWalletData(data); })
+      .catch(() => { if (!cancelled) setWalletData({ source: "empty", wallet: null, plan: null }); })
+      .finally(() => { if (!cancelled) setWalletLoading(false); });
+    return () => { cancelled = true; };
+  }, [customer?.id, customer?.balance, orders.length]);
 
   useEffect(() => {
     if (step !== "pay" || paymentMethod === "taobao_code" || manualFallback || !submittedOrder?.id || submittedOrder.status === "approved") return undefined;
@@ -333,6 +348,27 @@ export default function RechargePage() {
             <span>人民币充值</span><span>套餐可选</span><span>异常订单人工兜底</span>
           </div>
         </div>
+
+        <WalletProgressCard
+          mode="recharge"
+          loading={walletLoading}
+          empty={!walletLoading && walletData?.source === "empty"}
+          balanceCny={Number(walletData?.wallet?.balanceCny ?? customer.balance ?? 0)}
+          totalQuotaCny={Number(walletData?.wallet?.totalQuotaCny || 0)}
+          usedQuotaCny={Number(walletData?.wallet?.usedQuotaCny || 0)}
+          remainingQuotaCny={Number(walletData?.wallet?.remainingQuotaCny ?? walletData?.wallet?.balanceCny ?? customer.balance ?? 0)}
+          totalTokens={walletData?.token?.totalTokens}
+          usedTokens={walletData?.token?.usedTokens}
+          remainingTokens={walletData?.token?.remainingTokens}
+          planName={walletData?.plan?.planName}
+          planAmountCny={walletData?.plan?.planAmountCny}
+          planStatus={walletData?.plan?.status || "none"}
+          startedAt={walletData?.plan?.startedAt}
+          expiresAt={walletData?.plan?.expiresAt}
+          remainingDays={walletData?.plan?.remainingDays}
+          progressPercent={Number(walletData?.wallet?.progressPercent || 0)}
+          data={walletData}
+        />
 
         {step === "choose" ? (
           <div className="recharge-layout">

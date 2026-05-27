@@ -32,9 +32,9 @@ function mockTrend(days) {
 }
 
 const MOCK_MODELS = [
-  { rank: 1, model: "DeepSeek Chat", provider: "DeepSeek", requests: 240, tokens: 680000, spendCny: 8.2, share: 44 },
-  { rank: 2, model: "Claude Sonnet", provider: "Anthropic", requests: 88, tokens: 320000, spendCny: 6.4, share: 34 },
-  { rank: 3, model: "Codex Plus", provider: "UniAPI", requests: 52, tokens: 156000, spendCny: 3.12, share: 17 },
+  { rank: 1, model: "DeepSeek V4 Flash", provider: "DeepSeek", requests: 240, tokens: 680000, spendCny: 8.2, share: 44 },
+  { rank: 2, model: "Claude Sonnet 4.6", provider: "Anthropic", requests: 88, tokens: 320000, spendCny: 6.4, share: 34 },
+  { rank: 3, model: "GPT-5.3-Codex", provider: "OpenAI", requests: 52, tokens: 156000, spendCny: 3.12, share: 17 },
   { rank: 4, model: "GPT-5.5", provider: "OpenAI", requests: 12, tokens: 24000, spendCny: 0.92, share: 5 },
 ];
 

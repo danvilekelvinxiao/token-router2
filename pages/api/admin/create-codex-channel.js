@@ -74,7 +74,7 @@ export default async function handler(req, res) {
       channel: "OpenAI-Codex",
       group: "codex-plus",
       models,
-      message: "OpenAI-Codex 渠道已提交到 New API。请在 New API 后台执行渠道测试，测试成功后再开启 Codex Plus。",
+      message: "OpenAI-Codex 渠道已提交到 New API。请在 New API 后台执行渠道测试，测试成功后再开启 GPT-5.3-Codex。",
     });
   } catch (error) {
     return res.status(502).json({

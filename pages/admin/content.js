@@ -13,6 +13,7 @@ const TABS = [
 ];
 
 const MODEL_FIELDS = [
+  { key: "id", label: "内容 ID", type: "text", help: "新增时可填写，保存后用于后台识别。不要和其他模型重复。" },
   { key: "displayName", label: "模型名称", type: "text" },
   { key: "provider", label: "Provider", type: "text" },
   { key: "modelId", label: "Model ID", type: "text" },
@@ -21,17 +22,55 @@ const MODEL_FIELDS = [
   { key: "detailDescription", label: "详情介绍", type: "textarea" },
   { key: "inputPricePerM", label: "输入价格 ¥/M", type: "number" },
   { key: "outputPricePerM", label: "输出价格 ¥/M", type: "number" },
+  { key: "officialInputPricePerM", label: "官方输入价格 ¥/M Token", type: "number" },
+  { key: "officialOutputPricePerM", label: "官方输出价格 ¥/M Token", type: "number" },
+  { key: "flowapiInputPricePerM", label: "FlowAPI 输入价格 ¥/M Token", type: "number" },
+  { key: "flowapiOutputPricePerM", label: "FlowAPI 输出价格 ¥/M Token", type: "number" },
+  { key: "priceUpdatedAt", label: "价格更新时间", type: "text" },
+  { key: "priceNote", label: "价格备注", type: "textarea" },
+  { key: "memberLevelRequired", label: "需要会员等级", type: "text" },
+  { key: "memberDailyFreeLimitTokens", label: "会员每日免费额度 Token", type: "number" },
+  { key: "nonMemberPrompt", label: "非会员提示文案", type: "textarea" },
   { key: "baseUrl", label: "Base URL", type: "text" },
   { key: "primaryButtonText", label: "主按钮文字", type: "text" },
   { key: "primaryButtonHref", label: "主按钮跳转", type: "text" },
   { key: "secondaryButtonText", label: "次按钮文字", type: "text" },
   { key: "secondaryButtonHref", label: "次按钮跳转", type: "text" },
   { key: "sortOrder", label: "排序", type: "number" },
-  { key: "showPrice", label: "显示价格", type: "checkbox" },
-  { key: "enabled", label: "上架", type: "checkbox" },
-  { key: "isRecommended", label: "推荐", type: "checkbox" },
-  { key: "pinned", label: "置顶", type: "checkbox" },
-  { key: "isBeginnerFriendly", label: "新手友好", type: "checkbox" },
+];
+
+const MODEL_BOOLEAN_FIELDS = [
+  { key: "enabled", label: "上架展示" },
+  { key: "showPrice", label: "显示价格" },
+  { key: "includeInSavings", label: "参与节省计算" },
+  { key: "isRecommended", label: "推荐模型" },
+  { key: "pinned", label: "置顶排序" },
+  { key: "isBeginnerFriendly", label: "新手友好" },
+  { key: "isHighValue", label: "高价值模型" },
+  { key: "isCodeModel", label: "代码模型" },
+  { key: "isChineseFriendly", label: "中文友好" },
+  { key: "isLongContext", label: "长文本" },
+  { key: "isMultimodal", label: "多模态" },
+  { key: "showOnHome", label: "首页展示" },
+  { key: "showInBeginnerGuide", label: "新手指南展示" },
+  { key: "isMemberOnly", label: "黑金会员专属" },
+  { key: "isFreeModel", label: "免费模型" },
+  { key: "isFreeForMember", label: "会员免费调用" },
+  { key: "visibleToNonMember", label: "非会员可见" },
+];
+
+const MODEL_ARRAY_FIELDS = [
+  { key: "categories", label: "分类", hint: "使用分类 ID / slug，逗号分隔，例如 recommended, gpt, code-programming" },
+  { key: "tags", label: "卡片标签", hint: "最多建议 3-5 个，逗号分隔" },
+  { key: "useCases", label: "适合场景", hint: "逗号分隔" },
+  { key: "notRecommendedFor", label: "不适合场景", hint: "逗号分隔" },
+  { key: "recommendedUserTypes", label: "推荐用户类型", hint: "逗号分隔" },
+];
+
+const MODEL_CODE_FIELDS = [
+  { key: "curlExample", label: "CURL 示例" },
+  { key: "pythonExample", label: "Python 示例" },
+  { key: "javascriptExample", label: "JavaScript 示例" },
 ];
 
 const CATEGORY_FIELDS = [
@@ -69,7 +108,47 @@ export default function AdminContentPage() {
 
   function openEdit(item) {
     setEditing(item?.id || "new");
-    setForm(item ? { ...item } : { displayName: "", provider: "", modelId: "", description: "", sortOrder: 99, enabled: true, showPrice: true, isRecommended: false, pinned: false, categories: ["all"], tags: [] });
+    setForm(item ? { ...item } : {
+      id: "",
+      displayName: "",
+      provider: "",
+      modelId: "",
+      logo: "",
+      description: "",
+      detailDescription: "",
+      inputPricePerM: "",
+      outputPricePerM: "",
+      officialInputPricePerM: "",
+      officialOutputPricePerM: "",
+      flowapiInputPricePerM: "",
+      flowapiOutputPricePerM: "",
+      priceUpdatedAt: "",
+      priceNote: "",
+      memberLevelRequired: "",
+      memberDailyFreeLimitTokens: "",
+      nonMemberPrompt: "该模型为 FLOWAPI 黑金会员专属模型，开通会员后即可使用。",
+      baseUrl: "https://api.flowapi.fun/v1",
+      primaryButtonText: "立即接入",
+      primaryButtonHref: "",
+      secondaryButtonText: "复制 Model ID",
+      secondaryButtonHref: "",
+      sortOrder: 99,
+      enabled: true,
+      showPrice: true,
+      includeInSavings: false,
+      isMemberOnly: false,
+      isFreeModel: false,
+      isFreeForMember: false,
+      visibleToNonMember: true,
+      isRecommended: false,
+      pinned: false,
+      isBeginnerFriendly: false,
+      categories: ["all"],
+      tags: [],
+      useCases: [],
+      notRecommendedFor: [],
+      recommendedUserTypes: [],
+    });
   }
 
   function openCategoryEdit(item) {
@@ -118,8 +197,10 @@ export default function AdminContentPage() {
     const list = data || [];
     return (
       <div>
-        <div style={{ marginBottom: 16 }}>
+        <div className="content-admin-toolbar">
           <button className="redeem-btn primary" onClick={() => openEdit(null)}>新增模型</button>
+          <a className="redeem-btn" href="/models" target="_blank" rel="noreferrer">打开前台模型页</a>
+          <span>保存后前台刷新立即同步。价格为空时前台显示“价格同步中”。</span>
         </div>
         <div className="redeem-table-wrap">
           <table className="redeem-table">
@@ -140,7 +221,10 @@ export default function AdminContentPage() {
               {list.map((m) => (
                 <tr key={m.id}>
                   <td>{m.sortOrder}</td>
-                  <td><strong>{m.displayName}</strong></td>
+                  <td>
+                    <strong>{m.displayName}</strong>
+                    <small className="content-table-sub">{(m.tags || []).slice(0, 3).join(" / ")}</small>
+                  </td>
                   <td>{m.provider}</td>
                   <td><code>{m.modelId}</code></td>
                   <td>{Number(m.inputPricePerM) > 0 ? `¥${m.inputPricePerM}` : "价格同步中"}</td>
@@ -307,6 +391,123 @@ export default function AdminContentPage() {
     pageSettings: renderPageSettings,
   };
 
+  function updateField(key, value) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function parseList(value) {
+    return value.split(",").map((item) => item.trim()).filter(Boolean);
+  }
+
+  function renderModelField(field) {
+    const disabled = field.key === "id" && editing !== "new";
+    return (
+      <label key={field.key} className="content-editor-field">
+        <span>{field.label}</span>
+        {field.type === "textarea" ? (
+          <textarea rows={field.key === "detailDescription" ? 5 : 3} value={form[field.key] || ""} onChange={(event) => updateField(field.key, event.target.value)} />
+        ) : (
+          <input
+            type={field.type}
+            value={form[field.key] ?? ""}
+            disabled={disabled}
+            onChange={(event) => updateField(field.key, field.type === "number" ? (event.target.value === "" ? "" : Number(event.target.value)) : event.target.value)}
+          />
+        )}
+        {field.help ? <small>{field.help}</small> : null}
+      </label>
+    );
+  }
+
+  function renderModelEditor() {
+    const tags = Array.isArray(form.tags) ? form.tags : [];
+    const inputPrice = Number(form.flowapiInputPricePerM || form.inputPricePerM);
+    const outputPrice = Number(form.flowapiOutputPricePerM || form.outputPricePerM);
+    const officialInputPrice = Number(form.officialInputPricePerM);
+    const officialOutputPrice = Number(form.officialOutputPricePerM);
+    return (
+      <div className="content-model-editor">
+        <section className="content-editor-main">
+          <div className="content-editor-section">
+            <h3>卡片基础信息</h3>
+            <div className="content-editor-grid">
+              {MODEL_FIELDS.slice(0, 5).map(renderModelField)}
+            </div>
+          </div>
+
+          <div className="content-editor-section">
+            <h3>卡片文案与价格</h3>
+            <div className="content-editor-grid">
+              {MODEL_FIELDS.slice(5, 18).map(renderModelField)}
+            </div>
+          </div>
+
+          <div className="content-editor-section">
+            <h3>按钮与排序</h3>
+            <div className="content-editor-grid">
+              {MODEL_FIELDS.slice(18).map(renderModelField)}
+            </div>
+          </div>
+
+          <div className="content-editor-section">
+            <h3>分类、标签和适用人群</h3>
+            <div className="content-editor-grid">
+              {MODEL_ARRAY_FIELDS.map((field) => (
+                <label key={field.key} className="content-editor-field">
+                  <span>{field.label}</span>
+                  <input value={(form[field.key] || []).join(", ")} onChange={(event) => updateField(field.key, parseList(event.target.value))} />
+                  <small>{field.hint}</small>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="content-editor-section">
+            <h3>卡片能力开关</h3>
+            <div className="content-switch-grid">
+              {MODEL_BOOLEAN_FIELDS.map((field) => (
+                <label key={field.key}>
+                  <input type="checkbox" checked={!!form[field.key]} onChange={(event) => updateField(field.key, event.target.checked)} />
+                  <span>{field.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="content-editor-section">
+            <h3>详情弹窗示例代码</h3>
+            <div className="content-editor-grid single">
+              {MODEL_CODE_FIELDS.map((field) => (
+                <label key={field.key} className="content-editor-field">
+                  <span>{field.label}</span>
+                  <textarea rows={4} value={form[field.key] || ""} onChange={(event) => updateField(field.key, event.target.value)} />
+                </label>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <aside className="content-model-preview">
+          <span>前台卡片预览</span>
+          <h3>{form.displayName || "模型名称"}</h3>
+          <p>by {form.provider || "Provider"}</p>
+          <code>{form.modelId || "Model ID 同步中"}</code>
+          <div>
+            <strong>{Number.isFinite(inputPrice) && inputPrice > 0 ? `输入 ¥${inputPrice} / M Token` : "输入价格同步中"}</strong>
+            <strong>{Number.isFinite(outputPrice) && outputPrice > 0 ? `输出 ¥${outputPrice} / M Token` : "输出价格同步中"}</strong>
+            <strong>{Number.isFinite(officialInputPrice) && officialInputPrice > 0 && Number.isFinite(officialOutputPrice) && officialOutputPrice > 0 ? "已配置官方价格，可参与节省计算" : "官方价格同步中，暂不参与节省计算"}</strong>
+          </div>
+          <p>{form.description || "卡片简介会展示在这里。"}</p>
+          <div className="content-preview-tags">
+            {tags.slice(0, 5).map((tag) => <em key={tag}>{tag}</em>)}
+            {!tags.length ? <em>标签预览</em> : null}
+          </div>
+          <small>{form.enabled ? "当前状态：前台展示" : "当前状态：前台隐藏"}</small>
+        </aside>
+      </div>
+    );
+  }
+
   return (
     <>
       <Head><title>前台内容管理 - FlowAPI Admin</title></Head>
@@ -334,64 +535,13 @@ export default function AdminContentPage() {
           {/* Edit modal */}
           {editing && tab === "models" && (
             <div className="redeem-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setEditing(null); }}>
-              <div className="redeem-modal" style={{ maxWidth: 720 }}>
+              <div className="redeem-modal content-model-modal">
                 <header>
                   <h2>{editing === "new" ? "新增模型" : "编辑模型"}</h2>
                   <button onClick={() => setEditing(null)}>×</button>
                 </header>
                 <div className="redeem-modal-body">
-                  {MODEL_FIELDS.map((f) => {
-                    if (f.type === "checkbox") {
-                      return (
-                        <label key={f.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                          <input type="checkbox" checked={!!form[f.key]} onChange={(e) => setForm({ ...form, [f.key]: e.target.checked })} />
-                          {f.label}
-                        </label>
-                      );
-                    }
-                    return (
-                      <label key={f.key} style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-                        {f.label}
-                        {f.type === "textarea" ? (
-                          <textarea rows={3} value={form[f.key] || ""} onChange={(e) => setForm({ ...form, [f.key]: e.target.value })} />
-                        ) : (
-                          <input type={f.type} value={form[f.key] ?? ""} onChange={(e) => setForm({ ...form, [f.key]: f.type === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value })} />
-                        )}
-                      </label>
-                    );
-                  })}
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-                    分类 (逗号分隔，使用分类 ID / slug)
-                    <input value={(form.categories || []).join(", ")} onChange={(e) => setForm({ ...form, categories: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
-                  </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-                    标签 (逗号分隔)
-                    <input value={(form.tags || []).join(", ")} onChange={(e) => setForm({ ...form, tags: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
-                  </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-                    适合场景 (逗号分隔)
-                    <input value={(form.useCases || []).join(", ")} onChange={(e) => setForm({ ...form, useCases: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
-                  </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-                    不适合场景 (逗号分隔)
-                    <input value={(form.notRecommendedFor || []).join(", ")} onChange={(e) => setForm({ ...form, notRecommendedFor: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
-                  </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-                    推荐用户类型 (逗号分隔)
-                    <input value={(form.recommendedUserTypes || []).join(", ")} onChange={(e) => setForm({ ...form, recommendedUserTypes: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
-                  </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-                    CURL 示例
-                    <textarea rows={3} value={form.curlExample || ""} onChange={(e) => setForm({ ...form, curlExample: e.target.value })} />
-                  </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-                    Python 示例
-                    <textarea rows={3} value={form.pythonExample || ""} onChange={(e) => setForm({ ...form, pythonExample: e.target.value })} />
-                  </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13 }}>
-                    JavaScript 示例
-                    <textarea rows={3} value={form.javascriptExample || ""} onChange={(e) => setForm({ ...form, javascriptExample: e.target.value })} />
-                  </label>
+                  {renderModelEditor()}
                 </div>
                 <footer>
                   <button className="redeem-btn" onClick={() => setEditing(null)}>取消</button>

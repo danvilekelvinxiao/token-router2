@@ -6,6 +6,8 @@ import { acquireConcurrency, getClientIp, graylistKey, isGraylisted, rateLimit, 
 import { getUpstreamConfigs, getUpstreamSuggestion, sendApiError } from "@/lib/upstream";
 import { selectUpstream, STRATEGY } from "@/lib/smart-router";
 import { isTokenWhitelisted, logPassthroughCall } from "@/lib/new-api/passthrough";
+import { userCanUseMemberModel } from "@/lib/membership/store";
+import { getContent } from "@/lib/content-cms";
 import { Readable } from "stream";
 
 function setCors(res) {
@@ -121,6 +123,17 @@ function normalizeChatRequestBody(body = {}, upstreamModelId) {
   }
 
   return normalized;
+}
+
+function findContentModelForMemberAccess(modelId = "", product = null) {
+  const keys = [modelId, product?.id, product?.publicModelId, product?.displayName]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+  return getContent("models").find((model) => {
+    return [model.id, model.modelId, model.publicModelId, model.displayName]
+      .filter(Boolean)
+      .some((value) => keys.includes(String(value).toLowerCase()));
+  }) || null;
 }
 
 function estimatePromptTokens(messages = []) {
@@ -343,6 +356,17 @@ export default async function handler(req, res) {
   // Check model product availability
   const modelProduct = getModelProduct(effectiveRequestedModel || selected.modelId);
   if (modelProduct) {
+    const contentModel = findContentModelForMemberAccess(effectiveRequestedModel || selected.modelId, modelProduct);
+    if (contentModel?.isMemberOnly && !userCanUseMemberModel(customerMatch.customer.id, contentModel)) {
+      releaseConcurrency(concurrencyKey);
+      return sendApiError(
+        res,
+        403,
+        "MEMBER_MODEL_REQUIRED",
+        "该模型为 FLOWAPI 黑金会员专属模型",
+        "开通 FLOWAPI 黑金会员后即可使用会员专属模型；也可以先在大模型接入页选择普通模型。"
+      );
+    }
     if (!modelProduct.isAvailable) {
       releaseConcurrency(concurrencyKey);
       return sendApiError(

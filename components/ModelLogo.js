@@ -9,6 +9,7 @@ import Moonshot from "@lobehub/icons/es/Moonshot";
 import OpenAI from "@lobehub/icons/es/OpenAI";
 import Qwen from "@lobehub/icons/es/Qwen";
 import { getModelBrand, getModelBrandInitial, getModelBrandLabel } from "@/lib/models/brand";
+import { getPublicModelProvider } from "@/lib/public-model-provider";
 
 const PROVIDER_LOGOS = {
   openai: { label: "OpenAI", Logo: OpenAI },
@@ -28,7 +29,7 @@ export function getModelProvider(model = "", provider = "") {
 }
 
 export function getModelProviderLabel(model = "", provider = "") {
-  return getModelBrandLabel(model, provider);
+  return getPublicModelProvider({ displayName: model, provider });
 }
 
 export default function ModelLogo({ model = "", provider = "", size = 24, className = "" }) {
@@ -59,7 +60,7 @@ export function ModelNameWithLogo({ model = "", provider = "", size = 24, classN
       <ModelLogo model={model} provider={provider} size={size} />
       <span className="model-text">
         <strong className="model-name">{model || "Unknown Model"}</strong>
-        <small className="model-provider">{provider || getModelProviderLabel(model)}</small>
+        <small className="model-provider">{getModelProviderLabel(model, provider)}</small>
       </span>
     </span>
   );

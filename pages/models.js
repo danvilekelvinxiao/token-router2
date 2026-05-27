@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import ModelLogo from "@/components/ModelLogo";
+import { formatTokens } from "@/lib/model-format";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
+import { sanitizePublicModelProvider } from "@/lib/public-model-provider";
 
 const DEFAULT_CATEGORIES = [
   { id: "all", name: "全部" },
@@ -21,41 +23,19 @@ const DEFAULT_CATEGORIES = [
   { id: "multimodal", name: "多模态" },
 ];
 
-const RECOMMEND_SCENES = [
-  {
-    id: "daily",
-    title: "中文日常任务",
-    match: (model) => model.categories.includes("deepseek") || model.categories.includes("chinese-writing") || model.isBeginnerFriendly,
-    fallback: "DeepSeek Chat",
-    scene: "适合中文问答、轻量代码、日常任务。",
-  },
-  {
-    id: "code",
-    title: "代码编程",
-    match: (model) => model.categories.includes("code-programming") || /claude|gpt|codex/i.test(`${model.displayName} ${model.modelId}`),
-    fallback: "Claude Sonnet / GPT",
-    scene: "适合代码生成、调试、复杂任务。",
-  },
-  {
-    id: "batch",
-    title: "低成本批量任务",
-    match: (model) => model.categories.includes("low-cost") || /qwen|flash|deepseek/i.test(`${model.displayName} ${model.modelId}`),
-    fallback: "Qwen / DeepSeek Flash",
-    scene: "适合批量文案、低成本调用、轻量任务。",
-  },
-];
-
 function isAdminCustomer(customer) {
   const email = String(customer?.email || "").toLowerCase();
   return Boolean(customer?.role === "admin" || customer?.isAdmin || customer?.id === "cus_admin" || email === "xiaoyijie@flowapi.fun");
 }
 
 function normalizeModel(model) {
+  const publicModel = sanitizePublicModelProvider(model);
   return {
     ...model,
     id: model.id || model.modelId || model.displayName,
     displayName: model.displayName || model.name || "Unknown Model",
-    provider: model.provider || model.providerName || "FlowAPI",
+    provider: publicModel.provider || "FlowAPI",
+    providerName: publicModel.provider || "FlowAPI",
     modelId: model.modelId || model.publicModelId || "",
     categories: Array.isArray(model.categories) ? model.categories : ["all"],
     tags: Array.isArray(model.tags) ? model.tags : [],
@@ -63,8 +43,19 @@ function normalizeModel(model) {
     notRecommendedFor: Array.isArray(model.notRecommendedFor) ? model.notRecommendedFor : [],
     recommendedUserTypes: Array.isArray(model.recommendedUserTypes) ? model.recommendedUserTypes : [],
     baseUrl: model.baseUrl || getPublicApiBaseUrl(),
+    primaryButtonText: model.primaryButtonText || "立即接入",
+    primaryButtonHref: model.primaryButtonHref || "/api-management",
+    secondaryButtonText: model.secondaryButtonText || "复制 Model ID",
+    secondaryButtonHref: model.secondaryButtonHref || "",
     sortOrder: Number(model.sortOrder || 99),
     enabled: model.enabled !== false,
+    isMemberOnly: Boolean(model.isMemberOnly),
+    memberLevelRequired: model.memberLevelRequired || null,
+    isFreeModel: Boolean(model.isFreeModel),
+    isFreeForMember: Boolean(model.isFreeForMember),
+    memberDailyFreeLimitTokens: Number(model.memberDailyFreeLimitTokens || 0),
+    visibleToNonMember: model.visibleToNonMember !== false,
+    nonMemberPrompt: model.nonMemberPrompt || "该模型为 FLOWAPI 黑金会员专属模型，开通会员后即可使用。",
   };
 }
 
@@ -76,6 +67,63 @@ function hasRealPrice(value) {
 function priceLabel(value) {
   if (!hasRealPrice(value)) return "价格同步中";
   return `¥${Number(value).toFixed(Number(value) % 1 === 0 ? 0 : 2)} / M Token`;
+}
+
+function numberLabel(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "暂无数据";
+  return number.toLocaleString("zh-CN");
+}
+
+function cnyLabel(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "暂无数据";
+  return `¥${number.toFixed(2)}`;
+}
+
+function percentLabel(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return "占比同步中";
+  return `${number.toFixed(1)}%`;
+}
+
+function normalizeMatchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[\s_:-]+/g, "")
+    .trim();
+}
+
+function findCmsModelForUsage(rankItem, cmsModels) {
+  const candidates = [
+    rankItem?.model,
+    rankItem?.modelId,
+    rankItem?.publicModelId,
+    rankItem?.routedModel,
+    rankItem?.requestedModel,
+  ].map(normalizeMatchText).filter(Boolean);
+
+  if (!candidates.length) return null;
+
+  return cmsModels.find((model) => {
+    const values = [
+      model.displayName,
+      model.modelId,
+      model.publicModelId,
+      model.id,
+    ].map(normalizeMatchText).filter(Boolean);
+
+    return values.some((value) => candidates.some((candidate) => value === candidate || value.includes(candidate) || candidate.includes(value)));
+  }) || null;
+}
+
+function trendLabel(item) {
+  if (item?.isNew) return { text: "new", className: "new" };
+  const number = Number(item?.changePercent);
+  if (!Number.isFinite(number)) return null;
+  if (number > 0) return { text: `↑${Math.abs(number)}%`, className: "up" };
+  if (number < 0) return { text: `↓${Math.abs(number)}%`, className: "down" };
+  return { text: "→0%", className: "flat" };
 }
 
 function generateCurl(model, apiBaseUrl) {
@@ -120,6 +168,13 @@ function generateJavaScript(model, apiBaseUrl) {
 console.log(await response.json());`;
 }
 
+function modelHref(href, model) {
+  const target = href || "/api-management";
+  if (!model?.modelId) return target;
+  if (target.includes("?")) return `${target}&model=${encodeURIComponent(model.modelId)}`;
+  return `${target}?model=${encodeURIComponent(model.modelId)}`;
+}
+
 export default function ModelsPage() {
   const [customer, setCustomer] = useState(null);
   const [models, setModels] = useState([]);
@@ -131,6 +186,11 @@ export default function ModelsPage() {
   const [category, setCategory] = useState("recommended");
   const [selectedModel, setSelectedModel] = useState(null);
   const [toast, setToast] = useState("");
+  const [popularModels, setPopularModels] = useState([]);
+  const [popularSource, setPopularSource] = useState("loading");
+  const [popularUpdatedAt, setPopularUpdatedAt] = useState(null);
+  const [popularLoading, setPopularLoading] = useState(true);
+  const [membership, setMembership] = useState(null);
 
   const apiBaseUrl = getPublicApiBaseUrl();
   const isAdmin = isAdminCustomer(customer);
@@ -178,6 +238,52 @@ export default function ModelsPage() {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
+  useEffect(() => {
+    if (!customer?.id) return undefined;
+    let cancelled = false;
+    fetch("/api/user/wallet-summary")
+      .then((res) => res.ok ? res.json() : null)
+      .then((json) => { if (!cancelled) setMembership(json?.membership || null); })
+      .catch(() => { if (!cancelled) setMembership(null); });
+    return () => { cancelled = true; };
+  }, [customer?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPopularModels({ silent = false } = {}) {
+      if (!silent) setPopularLoading(true);
+      try {
+        const response = await fetch("/api/analytics/model-usage-rank?period=week", { cache: "no-store" });
+        const json = await response.json();
+        if (cancelled) return;
+
+        const rows = response.ok && json?.success && json?.source === "real" && Array.isArray(json.models)
+          ? json.models.filter((item) => Number(item?.tokens) > 0).slice(0, 5)
+          : [];
+
+        setPopularModels(rows);
+        setPopularSource(rows.length ? "real" : "empty");
+        setPopularUpdatedAt(json?.updatedAt || null);
+      } catch {
+        if (!cancelled) {
+          setPopularModels([]);
+          setPopularSource("empty");
+          setPopularUpdatedAt(null);
+        }
+      } finally {
+        if (!cancelled) setPopularLoading(false);
+      }
+    }
+
+    loadPopularModels();
+    const timer = window.setInterval(() => loadPopularModels({ silent: true }), 60000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
   const moduleEnabled = (key) => {
     const item = pageSettings.find((setting) => setting.page === "models" && setting.moduleKey === key);
     return item ? item.enabled !== false : true;
@@ -210,13 +316,6 @@ export default function ModelsPage() {
       })
       .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || a.sortOrder - b.sortOrder);
   }, [models, category, search]);
-
-  const recommendations = useMemo(() => {
-    return RECOMMEND_SCENES.map((scene) => {
-      const model = models.find((item) => scene.match(item)) || models.find((item) => item.isRecommended) || null;
-      return { ...scene, model };
-    });
-  }, [models]);
 
   function showToast(message) {
     setToast(message);
@@ -255,46 +354,24 @@ export default function ModelsPage() {
         currentPath="/models"
       >
         <main className="models-market-page">
-          <section className="models-market-hero">
-            <div className="models-market-hero-copy">
-              <span className="models-market-kicker">AI Token Market</span>
-              <h1>选择你的 AI 模型</h1>
-              <p>一个 FlowAPI Key，即可接入 DeepSeek、GPT、Claude、Gemini、Qwen 等主流模型。</p>
-              <div className="models-market-actions">
-                <button type="button" className="models-market-primary" onClick={() => copyText(apiBaseUrl, "Base URL 已复制")}>复制 Base URL</button>
-                <Link className="models-market-secondary" href="/guide">创建 API Key</Link>
-                <Link className="models-market-secondary" href="/help">查看接入教程</Link>
-              </div>
-            </div>
-            <div className="models-market-base-card">
-              <span>Base URL</span>
-              <code>{apiBaseUrl}</code>
-              <button type="button" onClick={() => copyText(apiBaseUrl, "Base URL 已复制")}>复制</button>
-            </div>
-          </section>
-
           {moduleEnabled("show-recommend") && (
             <section className="models-market-recommend">
               <div className="models-section-head">
                 <div>
-                  <span className="models-market-kicker">Beginner Picks</span>
-                  <h2>不知道选哪个？</h2>
+                  <span className="models-market-kicker">FlowAPI Live Top 5</span>
+                  <h2>FlowAPI 最受欢迎 Top 5 大模型</h2>
                 </div>
-                <p>先按用途选一个模型，复制 Model ID，再去创建 API Key。</p>
+                <p>基于 FlowAPI 用户真实调用数据实时更新，只展示已有调用记录的模型。</p>
               </div>
-              <div className="models-recommend-grid">
-                {recommendations.map((item) => (
-                  <article key={item.id} className="models-recommend-card">
-                    <span>{item.title}</span>
-                    <h3>{item.model?.displayName || item.fallback}</h3>
-                    <p>{item.scene}</p>
-                    <div>
-                      <button type="button" onClick={() => item.model ? focusModel(item.model) : setSearch(item.fallback)}>使用推荐模型</button>
-                      <button type="button" onClick={() => copyText(item.model?.modelId, "Model ID 已复制")} disabled={!item.model?.modelId}>复制 Model ID</button>
-                    </div>
-                  </article>
-                ))}
-              </div>
+              <PopularModelsTop5
+                items={popularModels}
+                loading={popularLoading}
+                source={popularSource}
+                updatedAt={popularUpdatedAt}
+                models={models}
+                onCopy={copyText}
+                onFocus={focusModel}
+              />
             </section>
           )}
 
@@ -309,6 +386,7 @@ export default function ModelsPage() {
             </div>
             {moduleEnabled("show-categories") && (
               <div className="models-category-strip" aria-label="模型分类">
+                <Link href="/free-models" className="models-free-market-link">免费模型广场</Link>
                 {visibleCategories.map((item) => (
                   <button
                     key={item.id}
@@ -359,31 +437,14 @@ export default function ModelsPage() {
                     key={model.id}
                     model={model}
                     showPrice={moduleEnabled("show-price")}
+                    isMember={membership?.status === "active" && membership?.level === "black_gold"}
+                    onMemberRequired={() => showToast(model.nonMemberPrompt || "该模型为 FLOWAPI 黑金会员专属模型")}
                     onCopy={() => copyText(model.modelId, "Model ID 已复制")}
                     onDetails={() => setSelectedModel(model)}
                   />
                 ))}
               </div>
             )}
-          </section>
-
-          <section className="models-onboarding-steps">
-            <div>
-              <span className="models-market-kicker">Start in 3 steps</span>
-              <h2>三步完成接入</h2>
-            </div>
-            <div className="models-steps-grid">
-              <div><b>1</b><strong>创建 API Key</strong><span>进入 API 管理生成你的专属 Key。</span></div>
-              <div><b>2</b><strong>复制 Model ID</strong><span>从模型卡片或详情弹窗复制模型名。</span></div>
-              <div><b>3</b><strong>使用 Base URL 调用</strong><span>在客户端填入 Base URL、API Key 和 Model ID。</span></div>
-            </div>
-            <div className="models-market-actions">
-              <Link className="models-market-primary" href="/guide">创建 API Key</Link>
-              <Link className="models-market-secondary" href="/help">查看帮助指南</Link>
-              {showCurlExamples && (
-                <button type="button" className="models-market-secondary" onClick={() => copyText(generateCurl(models[0], apiBaseUrl), "CURL 示例已复制")}>复制 CURL 示例</button>
-              )}
-            </div>
           </section>
 
         </main>
@@ -405,11 +466,116 @@ export default function ModelsPage() {
   );
 }
 
-function ModelMarketCard({ model, showPrice, onCopy, onDetails }) {
+function PopularModelsTop5({ items, loading, source, updatedAt, models, onCopy, onFocus }) {
+  const statusText = source === "real"
+    ? `FlowAPI · 实时数据${updatedAt ? ` · ${new Date(updatedAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}` : ""}`
+    : "FlowAPI · 数据同步中";
+
+  if (loading) {
+    return (
+      <div className="models-popular-panel">
+        <div className="models-popular-status">{statusText}</div>
+        <div className="models-popular-grid">
+          {Array.from({ length: 5 }).map((_, index) => <div key={index} className="models-popular-skeleton" />)}
+        </div>
+      </div>
+    );
+  }
+
+  if (!items.length) {
+    return (
+      <div className="models-popular-panel">
+        <div className="models-popular-status">{statusText}</div>
+        <div className="models-popular-empty">
+          <strong>暂无站内模型调用数据</strong>
+          <p>完成真实调用后，这里会实时展示 FlowAPI 网站最受欢迎的前 5 名大模型。</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="models-popular-panel">
+      <div className="models-popular-status">{statusText}</div>
+      <div className="models-popular-grid">
+        {items.map((item) => {
+          const cmsModel = findCmsModelForUsage(item, models);
+          return (
+            <PopularModelCard
+              key={`${item.rank}-${item.model}`}
+              item={item}
+              cmsModel={cmsModel}
+              onCopy={onCopy}
+              onFocus={onFocus}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PopularModelCard({ item, cmsModel, onCopy, onFocus }) {
+  const trend = trendLabel(item);
+  const displayName = cmsModel?.displayName || item.model;
+  const provider = cmsModel?.provider || item.provider || "FlowAPI";
+  const tokenText = item.tokensLabel || formatTokens(item.tokens);
+  const hasModelId = Boolean(cmsModel?.modelId);
+  const shareText = percentLabel(item.share);
+
+  return (
+    <article className={`models-popular-card rank-${item.rank <= 3 ? item.rank : "normal"}`}>
+      <div className="models-popular-rank">#{item.rank}</div>
+      <div className="models-popular-logo">
+        <ModelLogo model={displayName} provider={provider} size={42} />
+      </div>
+      <div className="models-popular-main">
+        <div className="models-popular-title-row">
+          <h3>{displayName}</h3>
+          {trend ? <span className={`models-popular-trend ${trend.className}`}>{trend.text}</span> : null}
+        </div>
+        <p>by {provider}</p>
+        <div className="models-popular-desc">{cmsModel?.description || "站内真实调用热度上升中的模型，详细用途可进入模型货架查看。"}</div>
+      </div>
+      <div className="models-popular-metrics" title={`Token：${tokenText} Token\n请求次数：${numberLabel(item.requests)} 次\n消耗金额：${cnyLabel(item.costCny)}\n占比：${shareText}`}>
+        <strong>{tokenText} Token</strong>
+        <span>{numberLabel(item.requests)} 次调用 · {shareText}</span>
+      </div>
+      <div className="models-popular-actions">
+        {cmsModel ? (
+          <button type="button" className="models-market-primary" onClick={() => onFocus(cmsModel)}>立即接入</button>
+        ) : (
+          <button type="button" className="models-market-secondary" onClick={() => onFocus({ displayName: item.model, modelId: item.model, id: item.model })}>查看模型货架</button>
+        )}
+        <button
+          type="button"
+          className="models-market-secondary"
+          onClick={() => onCopy(cmsModel?.modelId, "Model ID 已复制")}
+          disabled={!hasModelId}
+        >
+          复制 Model ID
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function ModelMarketCard({ model, showPrice, onCopy, onDetails, isMember = false, onMemberRequired }) {
   const tags = (model.tags || []).slice(0, 3);
   const moreTags = Math.max(0, (model.tags || []).length - tags.length);
+  const primaryText = model.primaryButtonText || "立即接入";
+  const secondaryText = model.secondaryButtonText || "复制 Model ID";
+  const secondaryHref = model.secondaryButtonHref;
+  const lockedForMember = model.isMemberOnly && !isMember;
+  const guardedCopy = () => {
+    if (lockedForMember) {
+      onMemberRequired?.();
+      return;
+    }
+    onCopy();
+  };
   return (
-    <article id={`model-${model.id}`} className={`models-market-card${model.isRecommended ? " recommended" : ""}`}>
+    <article id={`model-${model.id}`} className={`models-market-card${model.isRecommended ? " recommended" : ""}${model.isMemberOnly ? " member-only" : ""}`}>
       <div className="models-card-topline">
         <ModelLogo model={model.displayName} provider={model.provider || model.logo} size={42} />
         <div>
@@ -417,11 +583,13 @@ function ModelMarketCard({ model, showPrice, onCopy, onDetails }) {
           <p>by {model.provider}</p>
         </div>
         {model.isBeginnerFriendly ? <span className="models-newbie-badge">新手推荐</span> : null}
+        {model.isMemberOnly ? <span className="models-member-badge">黑金会员专属</span> : null}
+        {model.isFreeModel ? <span className="models-free-badge">免费模型</span> : null}
       </div>
 
       <div className="models-model-id">
         <span>Model ID</span>
-        <button type="button" onClick={onCopy} title="复制 Model ID">{model.modelId || "同步中"}</button>
+        <button type="button" onClick={guardedCopy} title="复制 Model ID">{model.modelId || "同步中"}</button>
       </div>
 
       <div className="models-price-grid">
@@ -437,8 +605,16 @@ function ModelMarketCard({ model, showPrice, onCopy, onDetails }) {
       </div>
 
       <div className="models-card-actions">
-        <Link className="models-market-primary" href={`/guide?model=${encodeURIComponent(model.modelId || "")}`}>立即接入</Link>
-        <button type="button" className="models-market-secondary" onClick={onCopy}>复制 Model ID</button>
+        {lockedForMember ? (
+          <Link className="models-market-primary" href="/recharge">开通黑金会员</Link>
+        ) : (
+          <Link className="models-market-primary" href={modelHref(model.primaryButtonHref, model)}>{primaryText}</Link>
+        )}
+        {secondaryHref ? (
+          lockedForMember ? <button type="button" className="models-market-secondary" onClick={onMemberRequired}>查看普通模型</button> : <Link className="models-market-secondary" href={modelHref(secondaryHref, model)}>{secondaryText}</Link>
+        ) : (
+          <button type="button" className="models-market-secondary" onClick={guardedCopy}>{secondaryText}</button>
+        )}
         <button type="button" className="models-market-ghost" onClick={onDetails}>查看详情</button>
       </div>
     </article>
@@ -520,8 +696,7 @@ function ModelDetailModal({ model, apiBaseUrl, curlExample, showCurlExamples, on
         </div>
 
         <footer>
-          <Link className="models-market-primary" href="/guide">去创建 API Key</Link>
-          <Link className="models-market-secondary" href="/help">查看帮助指南</Link>
+          <Link className="models-market-primary" href={modelHref(model.primaryButtonHref, model)}>{model.primaryButtonText || "去创建 API Key"}</Link>
           {showCurlExamples && (
             <button type="button" className="models-market-secondary" onClick={() => onCopy(curlExample, "CURL 示例已复制")}>复制 CURL 示例</button>
           )}

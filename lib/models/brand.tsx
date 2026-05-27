@@ -26,6 +26,7 @@ const FALLBACK = { label: "通用模型", shortLabel: "O", bg: "#6B7280", fg: "#
 
 function detectProvider(model = "", provider = ""): string {
   const m = `${provider} ${model}`.toLowerCase();
+  if (m.includes("codex")) return "openai";
   if (m.includes("chatgpt")) return "openai";
   if (m.includes("通义千问")) return "qwen";
   if (m.includes("讯飞")) return "spark";

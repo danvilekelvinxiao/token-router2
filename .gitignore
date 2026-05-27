@@ -20,6 +20,9 @@
 # production
 /build
 
+# local runtime data / CMS edits
+/data/
+
 # misc
 .DS_Store
 *.pem
