@@ -8,6 +8,7 @@ import ModelLogo, { ModelNameWithLogo, getModelProviderLabel } from "@/component
 import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import ExportExcelButton from "@/components/ExportExcelButton";
+import ModelLeaderboard from "@/components/dashboard/model-leaderboard";
 import { generateTokenForecast } from "@/lib/analytics/token-forecast";
 
 /* ===================================================================
@@ -3066,126 +3067,33 @@ export default function DashboardPage() {
 
           <RecentCallLedger rows={recentCallRows} />
 
-          {/* ===== 全球模型热度参考 + 网站模型热度参考 ===== */}
+          {/* ===== 全球模型热度排行 + FlowAPI 站内模型用量排行 ===== */}
           <section className="dash3-section">
-            <SectionTitle
-              title="全球模型热度参考"
-              subtitle="基于 OpenRouter 公开模型热度数据与 FlowAPI 站内真实调用数据，仅供选择模型时参考。"
-              right={marketRanks?.updatedAt ? (
-                <span className="dash3-section-hint">全球数据更新于 {new Date(marketRanks.updatedAt).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" })}</span>
-              ) : null}
-            />
-            <div className="dash3-dual-ranking-grid">
-              {/* Left: Global market ranking */}
-              <div className="dash3-card dash3-card-table">
-                <div className="dash3-card-subtitle">全球模型热度排行</div>
-                <div className="dash3-card-source-badge">
-                    {marketRanks?.source || "OpenRouter"}
-                    {marketRanks?.dataSource === "real" ? " · 实时数据" : marketRanks?.dataSource === "cached" ? " · 缓存数据" : " · 同步中"}
-                  </div>
-                {marketRanksLoading ? (
-                  <div className="dash3-empty-chart"><strong>正在从 OpenRouter 获取数据...</strong><span>全球模型热度数据实时读取中。</span></div>
-                ) : !marketRanks?.models?.length ? (
-                  <div className="dash3-empty-chart"><strong>全球模型热度数据同步中</strong><span>正在从 OpenRouter 获取实时排名，请稍后刷新查看。</span></div>
-                ) : (
-                  <table className="dash3-ranking-table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>模型</th>
-                        <th>Token</th>
-                        <th>趋势</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {marketRanks.models.slice(0, 9).map((m) => (
-                        <tr key={m.rank}>
-                          <td className="dash3-rank-num">{m.rank}</td>
-                          <td className="dash3-rank-name">
-                            <span className="model-name-cell">
-                              <ModelLogo model={m.model} provider={m.provider} size={22} />
-                              <span className="model-text">
-                                <strong className="model-name">{m.model}</strong>
-                                <small className="model-provider">{m.provider}</small>
-                              </span>
-                            </span>
-                          </td>
-                          <td><code>{m.tokens || "—"}</code></td>
-                          <td>
-                            {m.heatPct != null ? (
-                              <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                                <span style={{ width: `${Math.max(8, m.heatPct)}%`, maxWidth: 80, height: 6, borderRadius: 3, background: "var(--ds-primary)", display: "inline-block" }} />
-                                <span style={{ fontSize: 11, fontWeight: 700, color: "var(--dash-sub)" }}>{m.heatPct}%</span>
-                              </span>
-                            ) : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+            <div className="model-leaderboard-stack">
+              <ModelLeaderboard
+                title="全球模型热度排行"
+                subtitle="基于全球公开模型热度数据，仅供选择模型时参考。"
+                sourceLabel={marketRanks?.status === "synced" ? "全球 · 实时数据" : marketRanks?.status === "cached" ? "全球 · 最近同步数据" : "全球 · 同步中"}
+                updatedAt={marketRanks?.updatedAt}
+                items={marketRanks?.models || []}
+                loading={marketRanksLoading}
+                emptyText="全球模型热度数据同步中"
+              />
 
-              {/* Right: FlowAPI website ranking */}
-              <div className="dash3-card dash3-card-table">
-                <div className="dash3-card-subtitle">网站模型热度排行</div>
-                <div className="dash3-card-source-badge">
-                  FlowAPI 站内真实调用
-                  <span className="dash3-metric-tabs" style={{ marginLeft: 12 }}>
-                    {[
-                      { key: "today", label: "今日" },
-                      { key: "week", label: "本周" },
-                      { key: "month", label: "本月" },
-                    ].map((tab) => (
-                      <button key={tab.key} className={`dash3-metric-tab ${flowApiRanksPeriod === tab.key ? "active" : ""}`} onClick={() => setFlowApiRanksPeriod(tab.key)} style={{ padding: "1px 8px", fontSize: 11 }}>
-                        {tab.label}
-                      </button>
-                    ))}
-                  </span>
-                </div>
-                {flowApiRanksLoading ? (
-                  <div className="dash3-empty-chart"><strong>数据加载中...</strong></div>
-                ) : !flowApiRanks?.models?.length ? (
-                  <div className="dash3-empty-chart"><strong>暂无调用数据</strong><span>开始使用后将自动生成。</span></div>
-                ) : (
-                  <table className="dash3-ranking-table">
-                    <thead>
-                      <tr>
-                        <th>#</th>
-                        <th>模型</th>
-                        <th>请求次数</th>
-                        <th>Token</th>
-                        <th>金额</th>
-                        <th>占比</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {flowApiRanks.models.slice(0, 9).map((m) => (
-                        <tr key={m.rank}>
-                          <td className="dash3-rank-num">{m.rank}</td>
-                          <td className="dash3-rank-name">
-                            <span className="model-name-cell">
-                              <ModelLogo model={m.model} provider={m.provider} size={22} />
-                              <span className="model-text">
-                                <strong className="model-name">{m.model}</strong>
-                                <small className="model-provider">{m.provider}</small>
-                              </span>
-                            </span>
-                          </td>
-                          <td className="dash3-rank-num">{m.requests.toLocaleString()}</td>
-                          <td><code>{formatCompactToken(m.tokens)}</code></td>
-                          <td><b>¥{m.costCny.toFixed(2)}</b></td>
-                          <td>{m.share}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
+              <ModelLeaderboard
+                title="FlowAPI 站内模型用量排行"
+                subtitle="基于 FlowAPI 用户真实调用数据，展示本站最常被使用的大模型。"
+                sourceLabel="FlowAPI · 实时数据"
+                updatedAt={flowApiRanks?.updatedAt}
+                items={flowApiRanks?.models || []}
+                loading={flowApiRanksLoading}
+                emptyText="暂无站内模型调用数据"
+                emptyDescription="完成真实调用后，这里会展示 FlowAPI 用户最常使用的模型。"
+                period={flowApiRanksPeriod}
+                onPeriodChange={setFlowApiRanksPeriod}
+                showTooltip
+              />
             </div>
-            <p className="dash3-advice">
-              全球数据来源：{marketRanks?.source || "OpenRouter"} · 站内数据基于 FlowAPI 用户真实调用 · 每日更新 · 仅供选型参考
-            </p>
           </section>
 
           <section className="dash3-section">
@@ -3215,7 +3123,7 @@ export default function DashboardPage() {
 
                 <p className="dash3-portrait-summary-text">
                   {usage.hasCalls
-                    ? "这里会根据你的真实调用记录展示常用模型、消耗模型和活跃趋势，方便你判断 Token 花在哪里。"
+                    ? "你的常用模型、消耗模型和活跃趋势已基于真实调用记录生成。"
                     : "完成第一次 API 调用后，这里会自动生成你的 AI 使用画像和模型消耗建议。"}
                 </p>
 
