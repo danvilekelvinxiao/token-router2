@@ -161,6 +161,52 @@ function normalizeList(value) {
   return [];
 }
 
+function normalizeContentCategory(category = {}) {
+  const slug = category.slug || category.id || "all";
+
+  return {
+    ...category,
+    id: category.id || slug,
+    slug,
+    label: category.label || category.name || slug,
+    sort: category.sort ?? category.sortOrder ?? 0,
+    enabled: category.enabled !== false,
+    keywords: normalizeList(category.keywords),
+  };
+}
+
+function normalizeContentModel(model = {}) {
+  const modelId = model.modelId || model.actualModelId || model.id || "";
+  const useCases = normalizeList(model.useCases);
+  const notRecommendedFor = normalizeList(model.notRecommendedFor);
+  const recommendedUserTypes = normalizeList(model.recommendedUserTypes);
+  const inputPrice = model.inputPriceCny ?? model.inputPricePerM;
+  const outputPrice = model.outputPriceCny ?? model.outputPricePerM;
+
+  return {
+    ...model,
+    id: model.id || model.key || modelId,
+    name: model.name || model.displayName || modelId || "模型数据同步中",
+    provider: model.provider || "未知 Provider",
+    modelId,
+    logo: model.logo || model.provider,
+    inputPriceCny: inputPrice,
+    outputPriceCny: outputPrice,
+    tags: normalizeList(model.tags),
+    categories: normalizeList(model.categories),
+    useCase: model.useCase || model.description || useCases.join("、"),
+    bestFor: model.bestFor || model.description || useCases.join("、"),
+    unsuitableFor: model.unsuitableFor || notRecommendedFor.join("、") || "暂无明确限制，建议先小额测试。",
+    userType: model.userType || recommendedUserTypes.join("、") || "需要快速接入 AI API 的用户。",
+    listed: model.listed ?? model.enabled ?? true,
+    recommended: model.recommended ?? model.isRecommended ?? model.pinned ?? false,
+    primaryButtonText: model.primaryButtonText || "立即接入",
+    primaryButtonHref: model.primaryButtonHref || "#api",
+    secondaryButtonText: model.secondaryButtonText || "查看详情",
+    sort: model.sort ?? model.sortOrder ?? 0,
+  };
+}
+
 function modelTextBlob(model) {
   const blob = [
     model.name,
@@ -411,8 +457,11 @@ export default function HomePage() {
           fetchJson("/api/content/model-categories"),
         ]);
         if (!cancelled) {
-          const nextModels = modelData.models || [];
-          const nextCategories = categoryData.categories?.length ? categoryData.categories : fallbackModelCategories;
+          const nextModels = (modelData.models || modelData.data || []).map(normalizeContentModel);
+          const nextCategories = (categoryData.categories?.length ? categoryData.categories : categoryData.data?.length ? categoryData.data : fallbackModelCategories)
+            .map(normalizeContentCategory)
+            .filter((category) => category.enabled !== false)
+            .sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0));
           setModels(nextModels);
           setContentCategories(nextCategories);
           setModelFilter(nextCategories.find((category) => category.slug === "recommended")?.slug || nextCategories[0]?.slug || "all");
@@ -778,8 +827,11 @@ export default function HomePage() {
       fetchJson("/api/content/models"),
       fetchJson("/api/content/model-categories"),
     ]);
-    setModels(modelData.models || []);
-    setContentCategories(categoryData.categories?.length ? categoryData.categories : fallbackModelCategories);
+    setModels((modelData.models || modelData.data || []).map(normalizeContentModel));
+    setContentCategories((categoryData.categories?.length ? categoryData.categories : categoryData.data?.length ? categoryData.data : fallbackModelCategories)
+      .map(normalizeContentCategory)
+      .filter((category) => category.enabled !== false)
+      .sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0)));
   }
 
   async function saveAdminModelDraft() {
