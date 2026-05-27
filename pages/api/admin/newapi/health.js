@@ -3,6 +3,8 @@
  * Admin-only: checks connectivity to the upstream New API service.
  */
 
+import { requireAdmin } from "@/lib/admin-auth";
+
 const NEW_API_ADMIN_URL =
   process.env.NEW_API_ADMIN_URL ||
   process.env.NEW_API_BASE_URL ||
@@ -12,6 +14,7 @@ export default async function handler(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
+  if (!(await requireAdmin(req, res))) return;
 
   const url = NEW_API_ADMIN_URL.replace(/\/+$/, "");
 

@@ -21,7 +21,7 @@ const NEW_API_DEFAULT_QUOTA = Number(
   process.env.NEW_API_DEFAULT_QUOTA || 500000,
 );
 const NEW_API_TOKEN_UNLIMITED =
-  process.env.NEW_API_TOKEN_UNLIMITED !== "false";
+  process.env.NEW_API_TOKEN_UNLIMITED === "true";
 
 let _adminValid: boolean | null = null;
 

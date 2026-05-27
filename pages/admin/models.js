@@ -22,9 +22,10 @@ export default function AdminModelsPage() {
   const [toast, setToast] = useState("");
   const [syncResult, setSyncResult] = useState(null);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  function showToast(msg) {
+    setToast(msg);
+    setTimeout(() => setToast(""), 3000);
+  }
 
   async function loadData() {
     setLoading(true);
@@ -43,6 +44,11 @@ export default function AdminModelsPage() {
     }
     setLoading(false);
   }
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadData();
+  }, []);
 
   async function syncUniApi() {
     setSyncing(true);
@@ -125,11 +131,6 @@ export default function AdminModelsPage() {
       await healthCheckModel(p.id, p.actualModelId);
     }
     showToast("全部健康检查完成");
-  }
-
-  function showToast(msg) {
-    setToast(msg);
-    setTimeout(() => setToast(""), 3000);
   }
 
   const statusStyle = (p) => {

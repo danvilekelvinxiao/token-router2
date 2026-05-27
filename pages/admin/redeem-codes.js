@@ -93,6 +93,7 @@ export default function RedeemCodesPage() {
     setLoading(false);
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadData(); }, [filterStatus, filterSource]);
 
   async function handleCreate() {
