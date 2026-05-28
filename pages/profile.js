@@ -4,10 +4,10 @@ import { useRouter } from "next/router";
 import { useCallback, useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal from "@/components/CardDetailModal";
-import SavingsCard from "@/components/analytics/savings-card";
 import SavingsDetailDrawer from "@/components/analytics/savings-detail-drawer";
 import UserBadges from "@/components/profile/user-badges";
 import UserBadgeDrawer from "@/components/profile/user-badge-drawer";
+import LiveNumber from "@/components/ui/live-number";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
 
 const ANNOUNCEMENTS = [
@@ -94,6 +94,12 @@ function formatRelativeUpdate(value) {
 
 function formatMoney(value) {
   return `¥${Number(value || 0).toFixed(2)}`;
+}
+
+function formatCompactCount(value) {
+  const number = Number(value || 0);
+  if (number >= 10000) return `${(number / 10000).toFixed(number >= 100000 ? 0 : 1)} 万`;
+  return String(number);
 }
 
 function formatDate(value) {
@@ -285,6 +291,40 @@ export default function ProfilePage() {
     .filter((item) => item.status === "已发布" || item.status === "进行中")
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.publishedAt) - new Date(a.publishedAt));
   const ranking = assetRanking || buildLocalRanking(customer);
+  const balanceCny = Number(customer.balance || 0);
+  const totalSpendCny = Number(customer.totalSpend || 0);
+  const savingsAmountCny = savingsData?.summary?.savedAmountCny;
+  const hasSavingsData = savingsData?.source === "real" && savingsAmountCny !== null && savingsAmountCny !== undefined;
+  const profileStats = [
+    {
+      key: "balance",
+      label: "账户余额",
+      value: <LiveNumber value={balanceCny} prefix="¥" decimals={2} />,
+      note: balanceCny > 0 ? "可用于模型调用与套餐扣费" : "充值后即可开始调用模型",
+      tone: "primary",
+    },
+    {
+      key: "spend",
+      label: "累计消耗",
+      value: <LiveNumber value={totalSpendCny} prefix="¥" decimals={2} />,
+      note: totalSpendCny > 0 ? "来自真实模型调用扣费" : "完成调用后自动累计",
+      tone: "violet",
+    },
+    {
+      key: "calls",
+      label: "调用次数",
+      value: <><LiveNumber value={formatCompactCount(calls.length)} /><span>次</span></>,
+      note: calls.length > 0 ? "已记录在调用流水中" : "完成首次 API 调用后显示",
+      tone: "green",
+    },
+    {
+      key: "keys",
+      label: "API 密匙",
+      value: <><LiveNumber value={apiKeys.length} /><span>个</span></>,
+      note: apiKeys.length > 0 ? "默认脱敏保护，可随时管理" : "创建 API Key 后开始接入",
+      tone: "slate",
+    },
+  ];
 
   async function copyQqGroup() {
     await navigator.clipboard.writeText("217637139");
@@ -396,39 +436,44 @@ export default function ProfilePage() {
         />
 
         {/* ===== Two-column layout ===== */}
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 340px", gap: 20, marginBottom: 32 }}>
+        <div className="profile-main-grid">
 
           {/* ---- Left ---- */}
           <div style={{ display: "grid", gap: 20, alignContent: "start" }}>
 
             {/* Stats Row */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 14 }}>
-              {[
-                { label: "账户余额", value: `¥ ${Number(customer.balance).toFixed(2)}`, accent: "#6366f1" },
-                { label: "累计消耗", value: `¥ ${Number(customer.totalSpend).toFixed(2)}`, accent: "#8b5cf6" },
-                { label: "调用次数", value: `${calls.length} 次`, accent: "#059669" },
-                { label: "API 密匙", value: `${apiKeys.length} 个`, accent: "var(--page-heading)" },
-              ].map((s) => (
-                <div key={s.label} style={{
-                  background: "var(--page-card-bg)", border: "1px solid var(--page-card-border)", borderRadius: 14, padding: "18px 20px",
-                }}>
-                  <div style={{ fontSize: 12, color: "var(--page-subtle)", fontWeight: 600 }}>{s.label}</div>
-                  <div style={{ fontSize: 20, fontWeight: 900, color: s.accent, marginTop: 6, letterSpacing: "-0.02em" }}>
-                    {s.value}
-                  </div>
+            <section className="profile-asset-overview" aria-label="账户资产概览">
+              <div className="profile-asset-overview-head">
+                <div>
+                  <span>账户资产</span>
+                  <h2>余额、消耗与接入概览</h2>
                 </div>
-              ))}
-              <SavingsCard
-                title="累计节省金额"
-                amount={savingsData?.summary?.savedAmountCny}
-                subtitle="你在 FlowAPI 的成本优势"
-                description="相比官方直连价格，FlowAPI 已为你累计节省的模型调用成本。"
-                loading={savingsLoading}
-                source={savingsData?.source}
-                rankText={savingsData?.savingRank ? `节省排名：前 ${Number(savingsData.savingRank.percentileTop || 0)}%，超过平台 ${Number(savingsData.savingRank.beatsUsersPercent || 0)}% 的用户` : "排名数据生成中"}
-                onClick={() => setSavingsOpen(true)}
-              />
-            </div>
+                <em>真实数据同步</em>
+              </div>
+              <div className="profile-asset-metric-grid">
+                {profileStats.map((item) => (
+                  <article key={item.key} className={`profile-asset-metric tone-${item.tone}`}>
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                    <p>{item.note}</p>
+                  </article>
+                ))}
+              </div>
+              <button type="button" className="profile-savings-strip" onClick={() => setSavingsOpen(true)}>
+                <div className="profile-savings-copy">
+                  <span>成本优势</span>
+                  <strong>累计节省金额</strong>
+                  <p>{hasSavingsData ? "根据真实调用、官方价格和 FlowAPI 实际价格计算。" : "完成真实模型调用后，系统会自动计算节省金额。"}</p>
+                </div>
+                <div className="profile-savings-value">
+                  <b className={hasSavingsData ? "" : "empty"}>
+                    {savingsLoading ? "同步中" : hasSavingsData ? <LiveNumber value={Number(savingsAmountCny || 0)} prefix="¥" decimals={2} /> : "暂无数据"}
+                  </b>
+                  <small>{savingsData?.savingRank ? `节省排名前 ${Number(savingsData.savingRank.percentileTop || 0)}%` : "排名数据生成中"}</small>
+                </div>
+                <span className="profile-savings-action">查看详情</span>
+              </button>
+            </section>
 
             {/* Edit Form */}
             <div style={{ background: "var(--page-card-bg)", border: "1px solid var(--page-card-border)", borderRadius: 16, padding: "24px" }}>
