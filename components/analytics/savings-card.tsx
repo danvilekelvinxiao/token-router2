@@ -1,4 +1,5 @@
 import LiveNumber from "@/components/ui/live-number";
+import MiniMetricChart, { type MiniMetricChartPoint } from "@/components/charts/mini-metric-chart";
 import { formatSmallCny } from "@/lib/analytics/savings";
 
 type SavingsCardProps = {
@@ -9,6 +10,7 @@ type SavingsCardProps = {
   loading?: boolean;
   source?: string;
   rankText?: string;
+  chartData?: MiniMetricChartPoint[];
   onClick: () => void;
 };
 
@@ -20,6 +22,7 @@ export default function SavingsCard({
   loading = false,
   source = "empty",
   rankText = "",
+  chartData = [],
   onClick,
 }: SavingsCardProps) {
   const hasRealData = source === "real" && amount !== null && amount !== undefined;
@@ -47,6 +50,14 @@ export default function SavingsCard({
       </strong>
       {rankText ? <p className="savings-card-rank">{rankText}</p> : null}
       <p>{hasRealData ? description : "完成真实模型调用后，系统会根据官方价格和 FlowAPI 实际价格为你计算节省金额。"}</p>
+      <MiniMetricChart
+        data={chartData}
+        type="area"
+        color="green"
+        valueFormatter={(value) => `¥${Number(value || 0).toFixed(2)}`}
+        height={62}
+        emptyText="节省趋势同步中"
+      />
       <small>点击查看详情</small>
     </article>
   );

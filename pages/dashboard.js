@@ -1,8 +1,9 @@
 import Head from "next/head";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
+import MiniMetricChart from "@/components/charts/mini-metric-chart";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import { calculateCallCost, formatSmallCny } from "@/lib/billing/calculate-call-cost";
 import ModelLogo, { ModelNameWithLogo, getModelProviderLabel } from "@/components/ModelLogo";
@@ -10,6 +11,8 @@ import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import ExportExcelButton from "@/components/ExportExcelButton";
 import ModelLeaderboard from "@/components/dashboard/model-leaderboard";
+import TokenMarketPanel from "@/components/dashboard/token-market-panel";
+import ActivityHeatmapCard from "@/components/dashboard/activity-heatmap-card";
 import SavingsCard from "@/components/analytics/savings-card";
 import SavingsDetailDrawer from "@/components/analytics/savings-detail-drawer";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
@@ -30,6 +33,27 @@ const MODEL_FLOW_COLORS = {
 };
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+
+const subscribeClientSnapshot = (callback) => {
+  if (typeof window === "undefined") return () => {};
+  const id = window.setTimeout(callback, 0);
+  return () => window.clearTimeout(id);
+};
+
+function getClientLocalDemoMode() {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+}
+
+function getClientGreeting() {
+  const h = new Date().getHours();
+  if (h < 6) return "凌晨好";
+  if (h < 12) return "上午好";
+  if (h < 14) return "中午好";
+  if (h < 18) return "下午好";
+  return "晚上好";
+}
 
 function generateMonthCalendar(calls, year, month) {
   const byDate = new Map();
@@ -200,8 +224,19 @@ function StackedDailyBars({ daily, models, dailyDates, height = 140, barWidth = 
   );
 }
 
+function safeChartNumber(value) {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : 0;
+}
+
 function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip, theme }) {
-  const { pastDates, pastValues, futureDates, futureValues, pastCosts = [], futureCosts = [], primaryModel = "DeepSeek V4 Flash" } = data;
+  const pastDates = Array.isArray(data?.pastDates) ? data.pastDates : [];
+  const futureDates = Array.isArray(data?.futureDates) ? data.futureDates : [];
+  const pastValues = Array.isArray(data?.pastValues) ? data.pastValues.map(safeChartNumber) : [];
+  const futureValues = Array.isArray(data?.futureValues) ? data.futureValues.map(safeChartNumber) : [];
+  const pastCosts = Array.isArray(data?.pastCosts) ? data.pastCosts.map(safeChartNumber) : [];
+  const futureCosts = Array.isArray(data?.futureCosts) ? data.futureCosts.map(safeChartNumber) : [];
+  const primaryModel = data?.primaryModel || "DeepSeek V4 Flash";
   const allDates = useMemo(() => [...pastDates, ...futureDates], [pastDates, futureDates]);
   const allValues = useMemo(() => [...pastValues, ...futureValues], [pastValues, futureValues]);
   const maxV = Math.max(...allValues, 1);
@@ -211,7 +246,7 @@ function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip,
   const margin = { top: 28, right: 28, bottom: 44, left: 62 };
   const chartW = width - margin.left - margin.right;
   const chartH = height - margin.top - margin.bottom;
-  const stepX = chartW / (totalPoints - 1);
+  const stepX = chartW / Math.max(1, totalPoints - 1);
   const baseline = margin.top + chartH;
 
   const toX = (i) => margin.left + i * stepX;
@@ -221,8 +256,8 @@ function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip,
   const futurePts = futureValues.map((v, i) => `${toX(i + pastValues.length)},${toY(v)}`).join(" ");
 
   // Gradient fill area under past line
-  const pastArea = `${toX(0)},${baseline} ${pastValues.map((v, i) => `${toX(i)},${toY(v)}`).join(" ")} ${toX(pastValues.length - 1)},${baseline} Z`;
-  const futureArea = `${toX(pastValues.length)},${baseline} ${futureValues.map((v, i) => `${toX(i + pastValues.length)},${toY(v)}`).join(" ")} ${toX(totalPoints - 1)},${baseline} Z`;
+  const pastArea = pastValues.length ? `${toX(0)},${baseline} ${pastValues.map((v, i) => `${toX(i)},${toY(v)}`).join(" ")} ${toX(pastValues.length - 1)},${baseline} Z` : "";
+  const futureArea = futureValues.length ? `${toX(pastValues.length)},${baseline} ${futureValues.map((v, i) => `${toX(i + pastValues.length)},${toY(v)}`).join(" ")} ${toX(totalPoints - 1)},${baseline} Z` : "";
 
   const yTicks = 4;
   const yLabels = Array.from({ length: yTicks }, (_, i) => {
@@ -328,6 +363,15 @@ function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip,
   const handleTouchEnd = useCallback(() => {
     setTimeout(() => { setActiveIndex(null); onTooltip(null); }, 2000);
   }, [onTooltip]);
+
+  const handleOverlayMove = useCallback((e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (!rect.width) return;
+    const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const idx = Math.min(totalPoints - 1, Math.max(0, Math.round(ratio * (totalPoints - 1))));
+    setActiveIndex(idx);
+    showTooltipForIndex(e, idx);
+  }, [showTooltipForIndex, totalPoints]);
 
   const refLineColor = theme === "light" ? "rgba(17,24,39,0.22)" : "rgba(255,255,255,0.22)";
   const gridColor = theme === "light" ? "rgba(17,24,39,0.06)" : "rgba(255,255,255,0.06)";
@@ -444,7 +488,7 @@ function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip,
         x={margin.left} y={margin.top}
         width={chartW} height={chartH}
         fill="transparent"
-        onMouseMove={handleChartMouseMove}
+        onMouseMove={handleOverlayMove}
         onMouseLeave={handleChartMouseLeave}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -730,11 +774,236 @@ function formatCompactToken(value) {
 }
 
 function formatTokens(value) {
-  return `${formatCompactToken(Number(value || 0))} Tokens`;
+  return `${formatCompactToken(Number(value || 0))} Token`;
 }
 
 function formatCurrency(value) {
   return `¥${Number(value || 0).toFixed(2)}`;
+}
+
+function moneyFormatter(value) {
+  return `¥${Number(value || 0).toFixed(2)}`;
+}
+
+function tokenFormatter(value) {
+  return `${formatCompactToken(Number(value || 0))} Token`;
+}
+
+function countFormatter(value) {
+  return `${Number(value || 0).toLocaleString("zh-CN")} 次`;
+}
+
+function percentFormatter(value) {
+  return `${Number(value || 0).toFixed(1)}%`;
+}
+
+const LOGIN_REWARD_TIERS = [
+  { days: 7, reward: 1 },
+  { days: 14, reward: 3 },
+  { days: 30, reward: 8 },
+  { days: 60, reward: 18 },
+];
+
+function buildCompanionReward(createdAt) {
+  const joinedAt = createdAt ? new Date(createdAt) : null;
+  if (!joinedAt || Number.isNaN(joinedAt.getTime())) {
+    return {
+      days: null,
+      nextTier: LOGIN_REWARD_TIERS[0],
+      progress: 0,
+      label: "陪伴天数同步中",
+    };
+  }
+  const today = new Date();
+  const start = new Date(joinedAt);
+  start.setHours(0, 0, 0, 0);
+  today.setHours(0, 0, 0, 0);
+  const days = Math.max(1, Math.floor((today.getTime() - start.getTime()) / 86400000) + 1);
+  const nextTier = LOGIN_REWARD_TIERS.find((tier) => days < tier.days) || LOGIN_REWARD_TIERS[LOGIN_REWARD_TIERS.length - 1];
+  const previousTier = [...LOGIN_REWARD_TIERS].reverse().find((tier) => days >= tier.days);
+  const previousDays = previousTier ? previousTier.days : 0;
+  const span = Math.max(1, nextTier.days - previousDays);
+  const progress = nextTier.days === previousDays ? 100 : Math.min(100, Math.max(0, ((days - previousDays) / span) * 100));
+  return {
+    days,
+    nextTier,
+    previousTier,
+    progress,
+    label: days >= nextTier.days
+      ? `已达成 ${nextTier.days} 天奖励`
+      : `距离 ${nextTier.days} 天奖励还差 ${Math.max(0, nextTier.days - days)} 天`,
+  };
+}
+
+function buildDashboardHonorTitles({ isBlackGoldMember, totalUsedTokens, savedAmountCny, callCount, baseBalance }) {
+  const titles = [];
+
+  if (isBlackGoldMember) {
+    titles.push({
+      name: "黑金算力玩家",
+      desc: "FlowAPI 黑金会员专属身份",
+      tone: "black-gold",
+    });
+  }
+
+  if (Number(totalUsedTokens || 0) >= 100000) {
+    titles.push({
+      name: "Token 资产玩家",
+      desc: `累计使用 ${formatCompactToken(totalUsedTokens)} Token`,
+      tone: "purple",
+    });
+  } else if (Number(totalUsedTokens || 0) > 0) {
+    titles.push({
+      name: "Token 探索者",
+      desc: `已使用 ${formatCompactToken(totalUsedTokens)} Token`,
+      tone: "cyan",
+    });
+  }
+
+  if (Number(savedAmountCny || 0) > 0) {
+    titles.push({
+      name: "成本优化师",
+      desc: `已节省 ¥${Number(savedAmountCny || 0).toFixed(2)}`,
+      tone: "green",
+    });
+  }
+
+  if (Number(callCount || 0) >= 100) {
+    titles.push({
+      name: "高频调用者",
+      desc: `累计 ${callCount} 次调用`,
+      tone: "cyan",
+    });
+  } else if (Number(callCount || 0) > 0) {
+    titles.push({
+      name: "API 实战者",
+      desc: `完成 ${callCount} 次调用`,
+      tone: "purple",
+    });
+  }
+
+  if (!titles.length && Number(baseBalance || 0) > 0) {
+    titles.push({
+      name: "待启航用户",
+      desc: "创建 API Key 后解锁更多称号",
+      tone: "purple",
+    });
+  }
+
+  if (!titles.length) {
+    titles.push({
+      name: "API 起步者",
+      desc: "完成首次调用后解锁称号",
+      tone: "muted",
+    });
+  }
+
+  return titles.slice(0, 4);
+}
+
+function buildLocalDemoCalls() {
+  const models = [
+    { model: "gpt-4o-mini", provider: "OpenAI", inputPricePerM: 1.2, outputPricePerM: 4.8, baseTokens: 8200 },
+    { model: "deepseek-chat", provider: "DeepSeek", inputPricePerM: 0.8, outputPricePerM: 2.4, baseTokens: 12600 },
+    { model: "claude-3-5-sonnet", provider: "Anthropic", inputPricePerM: 18, outputPricePerM: 90, baseTokens: 5200 },
+    { model: "gemini-1.5-pro", provider: "Google", inputPricePerM: 8, outputPricePerM: 24, baseTokens: 6800 },
+    { model: "qwen-max", provider: "Qwen", inputPricePerM: 6, outputPricePerM: 18, baseTokens: 7400 },
+  ];
+  const now = new Date();
+  return Array.from({ length: 36 }, (_, index) => {
+    const model = models[index % models.length];
+    const createdAt = new Date(now);
+    createdAt.setDate(now.getDate() - Math.floor(index / 5));
+    createdAt.setHours(Math.max(9, 22 - (index % 7) * 2), (index * 13) % 60, 0, 0);
+    const promptTokens = Math.round(model.baseTokens * (0.46 + (index % 4) * 0.05));
+    const completionTokens = Math.round(model.baseTokens * (0.28 + (index % 3) * 0.06));
+    const tokens = promptTokens + completionTokens;
+    const officialCost = ((promptTokens / 1000000) * model.inputPricePerM) + ((completionTokens / 1000000) * model.outputPricePerM);
+    const cost = Number((officialCost * 0.42).toFixed(4));
+    return {
+      id: `demo-call-${index + 1}`,
+      requestId: `demo-req-${String(index + 1).padStart(4, "0")}`,
+      apiKeyId: index % 3 === 0 ? "demo_key_backup" : "demo_key_primary",
+      requestedModel: model.model,
+      routedModel: model.model,
+      provider: model.provider,
+      createdAt: createdAt.toISOString(),
+      status: 200,
+      promptTokens,
+      completionTokens,
+      tokens,
+      cost,
+      originalCostCny: Number(officialCost.toFixed(4)),
+      savedCostCny: Number(Math.max(0, officialCost - cost).toFixed(4)),
+      discountRate: 0.42,
+      inputPricePerM: Number((model.inputPricePerM * 0.42).toFixed(4)),
+      outputPricePerM: Number((model.outputPricePerM * 0.42).toFixed(4)),
+      latencyMs: 720 + (index % 9) * 135,
+      endpoint: "/v1/chat/completions",
+      channelName: "FlowAPI 智能路由",
+      channelType: "relay",
+      upstreamHost: "flowapi.local-demo",
+      finishReason: "stop",
+    };
+  }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+}
+
+function buildLocalDemoCustomer(base = {}) {
+  const calls = buildLocalDemoCalls();
+  const totalSpend = calls.reduce((sum, call) => sum + Number(call.cost || 0), 0);
+  const createdAt = new Date();
+  createdAt.setDate(createdAt.getDate() - 18);
+  return {
+    ...base,
+    id: base.id || "local_demo_customer",
+    name: base.name || "FlowAPI 用户",
+    email: base.email || "local-demo@flowapi.fun",
+    balance: 58.8,
+    paidBalance: 56.8,
+    temporaryBalance: 2,
+    availableBalance: 58.8,
+    totalSpend: Number(totalSpend.toFixed(2)),
+    createdAt: createdAt.toISOString(),
+    apiKeys: [
+      { id: "demo_key_primary", label: "生产调用 Key", token: "sk-local-demo-primary", createdAt: createdAt.toISOString(), lastUsedAt: calls[0]?.createdAt || null },
+      { id: "demo_key_backup", label: "测试环境 Key", token: "sk-local-demo-backup", createdAt: createdAt.toISOString(), lastUsedAt: calls[2]?.createdAt || null },
+    ],
+    calls,
+  };
+}
+
+function buildLocalDemoSavings(calls = []) {
+  const callSavings = calls.map((call) => {
+    const official = Number(call.originalCostCny || 0);
+    const actual = Number(call.cost || 0);
+    const saved = Math.max(0, official - actual);
+    return {
+      id: call.id,
+      createdAt: call.createdAt,
+      model: getCallModel(call),
+      provider: call.provider || "FlowAPI",
+      officialCostCny: official,
+      actualCostCny: actual,
+      savedAmountCny: Number(saved.toFixed(4)),
+      savedPercent: official > 0 ? Number(((saved / official) * 100).toFixed(1)) : 0,
+      officialInputPricePerM: call.inputPricePerM ? Number((call.inputPricePerM / 0.42).toFixed(4)) : null,
+      officialOutputPricePerM: call.outputPricePerM ? Number((call.outputPricePerM / 0.42).toFixed(4)) : null,
+      flowapiInputPricePerM: call.inputPricePerM,
+      flowapiOutputPricePerM: call.outputPricePerM,
+    };
+  });
+  const savedAmountCny = callSavings.reduce((sum, item) => sum + Number(item.savedAmountCny || 0), 0);
+  return {
+    source: "local-demo",
+    summary: {
+      savedAmountCny: Number(savedAmountCny.toFixed(2)),
+      officialCostCny: Number(callSavings.reduce((sum, item) => sum + Number(item.officialCostCny || 0), 0).toFixed(2)),
+      actualCostCny: Number(callSavings.reduce((sum, item) => sum + Number(item.actualCostCny || 0), 0).toFixed(2)),
+      savedPercent: 58,
+    },
+    modelSavings: [],
+    callSavings,
+  };
 }
 
 function savingsPeriodText(period) {
@@ -746,7 +1015,7 @@ function savingsPeriodText(period) {
 
 function formatFlowMetric(value, metric) {
   if (metric === "spend") return `¥${value.toFixed(2)}`;
-  if (metric === "tokens") return `${formatCompactToken(value)} Tokens`;
+  if (metric === "tokens") return `${formatCompactToken(value)} Token`;
   return `${value} 次`;
 }
 
@@ -1025,6 +1294,8 @@ function buildDashboardStats(customer, calls) {
     : 0;
 
   return {
+    apiKeyCount: Array.isArray(customer?.apiKeys) ? customer.apiKeys.length : 0,
+    activeApiKeyCount: Array.isArray(customer?.apiKeys) ? customer.apiKeys.filter((key) => !key.disabledAt).length : 0,
     balance: Number(customer?.balance || 0),
     totalCost: sum(calls, "cost"),
     todayCost: sum(todayCalls, "cost"),
@@ -1063,6 +1334,142 @@ function buildTrendData(calls, days = 7) {
       failed: Math.max(0, dayCalls.length - success),
     };
   });
+}
+
+function hasMiniSeriesData(points = []) {
+  return points.some((point) => Number(point.value || 0) > 0);
+}
+
+function buildDailyMiniSeries(trendData, key, days = 7) {
+  return trendData.slice(-days).map((item) => ({
+    label: item.date,
+    value: Number(item[key] || 0),
+    secondaryValue: key === "cost" ? Number(item.tokens || 0) : key === "tokens" ? Number(item.cost || 0) : null,
+  }));
+}
+
+function buildTodayHourlyMiniSeries(calls) {
+  const now = new Date();
+  const buckets = Array.from({ length: 8 }, (_, index) => {
+    const hour = Math.max(0, now.getHours() - (7 - index));
+    return { label: `${String(hour).padStart(2, "0")}:00`, value: 0, secondaryValue: 0 };
+  });
+  calls
+    .filter((call) => call.createdAt && isSameDay(new Date(call.createdAt), now))
+    .forEach((call) => {
+      const hour = new Date(call.createdAt).getHours();
+      const bucket = buckets.find((item) => Number(item.label.slice(0, 2)) === hour);
+      if (!bucket) return;
+      bucket.value += Number(call.cost || 0);
+      bucket.secondaryValue += Number(call.tokens || 0);
+    });
+  return buckets.map((item) => ({
+    ...item,
+    value: Number(item.value.toFixed(4)),
+  }));
+}
+
+function buildDailyAverageCostMiniSeries(trendData, days = 7) {
+  return trendData.slice(-days).map((item) => {
+    const requests = Number(item.requests || 0);
+    return {
+      label: item.date,
+      value: requests > 0 ? Number((Number(item.cost || 0) / requests).toFixed(4)) : 0,
+    };
+  });
+}
+
+function buildCacheRateMiniSeries(trendData) {
+  return trendData.slice(-7).map((item) => {
+    const total = Number(item.requests || 0);
+    const success = Number(item.success || 0);
+    return {
+      label: item.date,
+      value: total > 0 ? (success / total) * 100 : 0,
+      secondaryValue: total,
+    };
+  });
+}
+
+function buildSavingsMiniSeries(savingsData, days = 7) {
+  const rows = Array.isArray(savingsData?.callSavings) ? savingsData.callSavings : [];
+  const dates = Array.from({ length: days }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - ((days - 1) - index));
+    return date;
+  });
+  return dates.map((date) => {
+    const dayRows = rows.filter((item) => item.createdAt && isSameDay(new Date(item.createdAt), date));
+    return {
+      label: date.toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" }).replace(/\//g, "-"),
+      value: Number(dayRows.reduce((sum, item) => sum + Number(item.savedAmountCny || 0), 0).toFixed(4)),
+    };
+  });
+}
+
+function buildSavingsCostSeries(savingsData, trendData, field = "savedAmountCny", days = 7) {
+  const rows = Array.isArray(savingsData?.callSavings) ? savingsData.callSavings : [];
+  return trendData.slice(-days).map((day) => {
+    const dayRows = rows.filter((item) => {
+      if (!item.createdAt) return false;
+      const label = new Date(item.createdAt).toLocaleDateString("zh-CN", { month: "2-digit", day: "2-digit" }).replace(/\//g, "-");
+      return label === day.date;
+    });
+    const fallback = field === "actualCostCny" ? Number(day.cost || 0) : null;
+    const value = dayRows.length
+      ? dayRows.reduce((sum, item) => sum + Number(item[field] || 0), 0)
+      : fallback;
+    return {
+      label: day.date,
+      value: value === null ? null : Number(value.toFixed(6)),
+      secondaryValue: day.tokens,
+    };
+  });
+}
+
+function sumSavingsRows(rows = [], predicate = () => true) {
+  return rows.filter(predicate).reduce((acc, row) => ({
+    official: acc.official + Number(row.officialCostCny || 0),
+    actual: acc.actual + Number(row.actualCostCny || 0),
+    saved: acc.saved + Number(row.savedAmountCny || 0),
+  }), { official: 0, actual: 0, saved: 0 });
+}
+
+function buildModelSparkSeries(model, trendData, key = "spend") {
+  const values = Array.isArray(model?.spark) ? model.spark : [];
+  return trendData.slice(-7).map((day, index) => ({
+    label: day.date,
+    value: Number(values[index] || 0),
+  }));
+}
+
+function buildSimpleMetricDetail({ title, description, badge = "数据面板", rows = [], trend = [], chartTitle = "趋势", chartFormatter = moneyFormatter, chartColor = "purple", tableRows = [] }) {
+  return {
+    title,
+    description,
+    badge,
+    sections: [
+      { title: "核心数据", content: <DetailRows rows={rows} /> },
+      {
+        title: chartTitle,
+        content: (
+          <div className="dash3-simple-detail-chart">
+            <MiniMetricChart data={trend} type="area" color={chartColor} valueFormatter={chartFormatter} height={96} emptyText="完成真实调用后显示" />
+          </div>
+        ),
+      },
+      tableRows.length ? {
+        title: "相关调用",
+        content: <DetailTable columns={[
+          { key: "time", label: "时间" },
+          { key: "model", label: "模型" },
+          { key: "totalTokens", label: "总 Token" },
+          { key: "cost", label: "成本" },
+          { key: "status", label: "状态" },
+        ]} rows={tableRows} />,
+      } : null,
+    ].filter(Boolean),
+  };
 }
 
 function getFutureDateLabels(days = 7) {
@@ -1116,6 +1523,59 @@ function buildPredictionFromTrend(trendData, metric, balance) {
   };
 
   const hasData = activeDays.length > 0;
+  if (!hasData) {
+    const fallbackSeries = {
+      spend: {
+        unit: "¥",
+        pastValues: [0.04, 0.06, 0.05, 0.08, 0.07, 0.10, 0.09],
+        futureValues: [0.10, 0.11, 0.12, 0.12, 0.13, 0.14, 0.15],
+        futureCosts: [0.10, 0.11, 0.12, 0.12, 0.13, 0.14, 0.15],
+      },
+      requests: {
+        unit: "",
+        pastValues: [2, 3, 2, 4, 3, 5, 4],
+        futureValues: [4, 5, 5, 6, 6, 7, 7],
+        futureCosts: [0.10, 0.11, 0.12, 0.12, 0.13, 0.14, 0.15],
+      },
+      tokens: {
+        unit: "K",
+        pastValues: [12, 16, 14, 20, 18, 24, 22],
+        futureValues: [23, 24, 26, 27, 29, 30, 32],
+        futureCosts: [0.10, 0.11, 0.12, 0.12, 0.13, 0.14, 0.15],
+      },
+    }[metric] || {
+      unit: "K",
+      pastValues: [12, 16, 14, 20, 18, 24, 22],
+      futureValues: [23, 24, 26, 27, 29, 30, 32],
+      futureCosts: [0.10, 0.11, 0.12, 0.12, 0.13, 0.14, 0.15],
+    };
+    const fallbackPastDates = trendData.length
+      ? trendData.map((item) => item.date.replace("-", "/")).slice(-7)
+      : ["05/24", "05/25", "05/26", "05/27", "05/28", "05/29", "05/30"];
+    return {
+      data: {
+        pastDates: fallbackPastDates,
+        pastValues: fallbackSeries.pastValues,
+        pastCosts: fallbackSeries.pastValues.map((_, index) => fallbackSeries.futureCosts[index] || 0),
+        futureDates: getFutureDateLabels(7),
+        futureValues: fallbackSeries.futureValues,
+        futureCosts: fallbackSeries.futureCosts,
+        unit: fallbackSeries.unit,
+        primaryModel: "演示模型",
+        source: "fallback",
+      },
+      summary: {
+        weekTokens: 0,
+        weekCost: 0,
+        coverDays: 0,
+        suggestRecharge: 0,
+        dailyAverageCost: 0,
+        message: "暂无足够真实数据生成预测，当前趋势线为前端演示数据，仅用于验证图表效果。",
+        hasData: false,
+        source: "fallback",
+      },
+    };
+  }
   const futureValues = tokenForecast.map((tokens) => {
     if (metric === "spend") return Number((tokens * costPerToken).toFixed(4));
     if (metric === "requests") return Number(Math.max(0, tokens * requestsPerToken).toFixed(2));
@@ -1135,6 +1595,7 @@ function buildPredictionFromTrend(trendData, metric, balance) {
       futureCosts: tokenForecast.map((tokens) => Number((Number(tokens || 0) * costPerToken).toFixed(4))),
       unit: metricConfig.unit,
       primaryModel: "DeepSeek V4 Flash",
+      source: "real",
     },
     summary: {
       weekTokens,
@@ -1146,6 +1607,7 @@ function buildPredictionFromTrend(trendData, metric, balance) {
         ? `按最近 7 天平均消耗，当前余额预计可使用 ${estimatedDaysLeft} 天。`
         : "暂无足够数据生成预测，继续使用后将自动生成。",
       hasData,
+      source: "real",
     },
   };
 }
@@ -1191,7 +1653,7 @@ function buildModelUsageTrend(trendData, modelUsage) {
   });
 }
 
-function CoreMetricCard({ label, value, detail, tooltip, onTooltip, theme, onClick }) {
+function CoreMetricCard({ label, value, detail, tooltip, onTooltip, theme, onClick, chartData = [], chartType = "area", chartColor = "purple", chartFormatter = formatCurrency, chartEmptyText = "数据同步中" }) {
   return (
     <InteractiveCard className="dash3-core-metric-card" title={label} hint="点击查看指标明细" onClick={onClick}>
       <div>
@@ -1219,6 +1681,14 @@ function CoreMetricCard({ label, value, detail, tooltip, onTooltip, theme, onCli
       </div>
       <strong className="dash3-core-metric-value">{value}</strong>
       <p>{detail}</p>
+      <MiniMetricChart
+        data={chartData}
+        type={chartType}
+        color={chartColor}
+        valueFormatter={chartFormatter}
+        emptyText={chartEmptyText}
+        height={58}
+      />
     </InteractiveCard>
   );
 }
@@ -1346,7 +1816,7 @@ function ModelDistributionDonut({ models, onTooltip, theme }) {
                 <div>
                   <ModelNameWithLogo model={item.model} provider={item.provider} size={24} />
                   <div style={{ marginTop: 8, color: theme === "light" ? "#6b7280" : "#9ca3af" }}>金额：¥{item.cost.toFixed(2)}</div>
-                  <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af" }}>Token：{formatCompactToken(item.tokens)} Tokens</div>
+                  <div style={{ color: theme === "light" ? "#6b7280" : "#9ca3af" }}>Token：{formatCompactToken(item.tokens)} Token</div>
                 </div>
               ),
             })}
@@ -1406,11 +1876,11 @@ function ModelUsageTrendChart({ data, onTooltip, theme }) {
                     {day.models.map((item) => (
                       <div key={item.model}>
                         <span><ModelLogo model={item.model} provider={item.provider} size={22} />{item.model}</span>
-                        <b>{formatCompactToken(item.tokens)} Tokens</b>
+                        <b>{formatCompactToken(item.tokens)} Token</b>
                       </div>
                     ))}
                   </div>
-                  <div style={{ marginTop: 10, color: theme === "light" ? "#6b7280" : "#9ca3af" }}>总量：<b>{formatCompactToken(day.totalTokens)} Tokens</b></div>
+                  <div style={{ marginTop: 10, color: theme === "light" ? "#6b7280" : "#9ca3af" }}>总量：<b>{formatCompactToken(day.totalTokens)} Token</b></div>
                 </div>
               ),
             })}
@@ -1445,6 +1915,11 @@ function ModelUsageTrendChart({ data, onTooltip, theme }) {
 function DashboardOperationsSection({ stats, trendData, trendRange, setTrendRange, modelUsage, recentRows, onTooltip, theme, onOpenMetric, onOpenModel }) {
   const modelUsageTrend = buildModelUsageTrend(trendData, modelUsage);
   const totalCost = Number(stats.totalCost ?? stats.monthCost ?? 0);
+  const costMini = buildDailyMiniSeries(trendData, "cost", 7);
+  const tokenMini = buildDailyMiniSeries(trendData, "tokens", 7);
+  const requestMini = buildDailyMiniSeries(trendData, "requests", 7);
+  const apiKeyMini = Number(stats.apiKeyCount || 0) > 0 ? [{ label: "当前 API Key", value: Number(stats.apiKeyCount || 0), secondaryValue: Number(stats.activeApiKeyCount || 0) }] : [];
+  const cacheMini = Number(stats.cacheHitRate || 0) > 0 ? [{ label: "当前命中率", value: Number(stats.cacheHitRate || 0), secondaryValue: Number(stats.cacheStats?.hitCount || 0) }] : [];
   const exportSheets = [
     { sheetName: "核心指标", data: [
       { metric: "总消耗金额", value: `¥${totalCost.toFixed(2)}`, description: "累计 API 调用消耗金额" },
@@ -1467,20 +1942,12 @@ function DashboardOperationsSection({ stats, trendData, trendRange, setTrendRang
         right={<ExportExcelButton fileName="数据面板_全部统计" sheets={exportSheets}>导出数据面板统计</ExportExcelButton>}
       />
       <div className="dash3-core-metrics-grid">
-        <CoreMetricCard label="总消耗金额" value={<MetricValueInline prefix="¥" value={totalCost.toFixed(2)} />} detail="累计 API 调用消耗金额" onClick={() => onOpenMetric("totalCost")} />
-        <CoreMetricCard label="今日消耗" value={<MetricValueInline prefix="¥" value={stats.todayCost.toFixed(2)} />} detail={`${formatCompactToken(stats.todayTokens)} Tokens`} onClick={() => onOpenMetric("today")} />
-        <CoreMetricCard label="本月消耗" value={<MetricValueInline prefix="¥" value={stats.monthCost.toFixed(2)} />} detail={`${formatCompactToken(stats.monthTokens)} Tokens，帮助判断预算`} onClick={() => onOpenMetric("month")} />
-        <CoreMetricCard label="请求次数" value={<MetricValueInline value={`${stats.todayRequests} / ${stats.monthRequests}`} unit="次" />} detail="今日 / 本月请求次数" onClick={() => onOpenMetric("requests")} />
-        <CoreMetricCard label="平均响应时间" value={<MetricValueInline value={stats.avgLatency.toFixed(1)} unit="s" />} detail={`请求成功率 ${stats.successRate.toFixed(1)}%`} onClick={() => onOpenMetric("latency")} />
-        <CoreMetricCard
-          label="缓存命中率"
-          value={<MetricValueInline value={stats.cacheHitRate.toFixed(1)} unit="%" />}
-          detail="命中越高，通常更快且更省钱"
-          tooltip="缓存命中率表示有多少请求命中了缓存。命中率越高，通常代表响应更快、成本更低。"
-          onTooltip={onTooltip}
-          theme={theme}
-          onClick={() => onOpenMetric("cache")}
-        />
+        <CoreMetricCard label="总消耗金额" value={<MetricValueInline prefix="¥" value={totalCost.toFixed(2)} />} detail="累计 API 调用消耗金额" chartData={hasMiniSeriesData(costMini) ? costMini : []} chartColor="purple" chartFormatter={moneyFormatter} chartEmptyText="" onClick={() => onOpenMetric("totalCost")} />
+        <CoreMetricCard label="API Key" value={<MetricValueInline value={stats.apiKeyCount} unit="个" />} detail={`可用 ${stats.activeApiKeyCount} 个，默认脱敏展示`} chartData={apiKeyMini} chartType="bar" chartColor="purple" chartFormatter={countFormatter} chartEmptyText="" onClick={() => onOpenMetric("keys")} />
+        <CoreMetricCard label="今日消耗" value={<MetricValueInline prefix="¥" value={stats.todayCost.toFixed(2)} />} detail={`${formatCompactToken(stats.todayTokens)} Token`} chartData={hasMiniSeriesData(costMini) ? costMini : []} chartColor="yellow" chartFormatter={moneyFormatter} chartEmptyText="" onClick={() => onOpenMetric("today")} />
+        <CoreMetricCard label="本月消耗" value={<MetricValueInline prefix="¥" value={stats.monthCost.toFixed(2)} />} detail={`${formatCompactToken(stats.monthTokens)} Token，帮助判断预算`} chartData={hasMiniSeriesData(costMini) ? costMini : []} chartColor="orange" chartFormatter={moneyFormatter} chartEmptyText="" onClick={() => onOpenMetric("month")} />
+        <CoreMetricCard label="请求次数" value={<MetricValueInline value={`${stats.todayRequests} / ${stats.monthRequests}`} unit="次" />} detail="今日 / 本月请求次数" chartData={hasMiniSeriesData(requestMini) ? requestMini : []} chartType="bar" chartColor="cyan" chartFormatter={countFormatter} chartEmptyText="" onClick={() => onOpenMetric("requests")} />
+        <CoreMetricCard label="Token 消耗" value={<MetricValueInline value={formatCompactToken(stats.monthTokens)} unit="Token" />} detail={`今日 ${formatCompactToken(stats.todayTokens)} Token`} chartData={hasMiniSeriesData(tokenMini) ? tokenMini : []} chartColor="cyan" chartFormatter={tokenFormatter} chartEmptyText="" onClick={() => onOpenMetric("tokens")} />
       </div>
       <CacheStatsStrip stats={stats.cacheStats} />
 
@@ -1586,7 +2053,7 @@ function buildMetricDetail(metricKey, { stats, trendData, modelUsage, recentRows
       description: "查看你累计 API 调用消耗的金额、Token 和主要模型。",
       rows: [
         { label: "总消耗金额", value: `¥${Number(stats.totalCost ?? stats.monthCost ?? 0).toFixed(2)}`, note: "累计 API 调用消耗金额" },
-        { label: "累计 Token", value: `${formatCompactToken(modelUsage.reduce((total, item) => total + Number(item.tokens || 0), 0))} Tokens` },
+        { label: "累计 Token", value: `${formatCompactToken(modelUsage.reduce((total, item) => total + Number(item.tokens || 0), 0))} Token` },
         { label: "主要消耗模型", value: modelUsage[0]?.model || "暂无" },
         { label: "最近更新时间", value: updatedAt },
       ],
@@ -1600,12 +2067,28 @@ function buildMetricDetail(metricKey, { stats, trendData, modelUsage, recentRows
         { sheetName: "调用明细", data: calls },
       ],
     },
+    keys: {
+      title: "API Key 详情",
+      description: "查看当前 API Key 数量、可用状态和最近调用来源。",
+      rows: [
+        { label: "API Key 总数", value: `${Number(stats.apiKeyCount || 0)} 个` },
+        { label: "可用 API Key", value: `${Number(stats.activeApiKeyCount || 0)} 个` },
+        { label: "安全状态", value: "默认脱敏展示，完整值只在复制时使用" },
+        { label: "最近更新时间", value: updatedAt },
+      ],
+      extraTitle: "最近调用来源",
+      extraRows: calls,
+      sheets: [
+        { sheetName: "API Key概览", data: [{ apiKeyCount: stats.apiKeyCount, activeApiKeyCount: stats.activeApiKeyCount, note: "API Key 默认脱敏展示" }] },
+        { sheetName: "调用来源", data: calls },
+      ],
+    },
     balance: {
       title: "当前余额详情",
       description: "查看余额、可用 Token 等值额度、充值记录和最近消耗。",
       rows: [
         { label: "当前余额", value: `¥${stats.balance.toFixed(2)}`, note: "当前账户可用额度" },
-        { label: "可用 Token 等值额度", value: `${formatCompactToken(Math.floor(stats.balance / 0.0000065))} Tokens`, note: "按当前平均成本粗略估算" },
+        { label: "可用 Token 等值额度", value: `${formatCompactToken(Math.floor(stats.balance / 0.0000065))} Token`, note: "按当前平均成本粗略估算" },
         { label: "余额预估可用天数", value: `约 ${Math.max(1, Math.floor(stats.balance / Math.max(stats.todayCost, 0.1)))} 天` },
         { label: "最近更新时间", value: updatedAt },
       ],
@@ -1625,7 +2108,7 @@ function buildMetricDetail(metricKey, { stats, trendData, modelUsage, recentRows
       description: "查看今天已经消耗的金额、Token、请求数和模型分布。",
       rows: [
         { label: "今日消耗金额", value: `¥${stats.todayCost.toFixed(2)}` },
-        { label: "今日 Token 数", value: `${formatCompactToken(stats.todayTokens)} Tokens` },
+        { label: "今日 Token 数", value: `${formatCompactToken(stats.todayTokens)} Token` },
         { label: "今日请求次数", value: `${stats.todayRequests} 次` },
         { label: "今日最常用模型", value: modelUsage[0]?.model || "暂无" },
         { label: "今日最耗钱模型", value: modelUsage[0]?.model || "暂无" },
@@ -1643,7 +2126,7 @@ function buildMetricDetail(metricKey, { stats, trendData, modelUsage, recentRows
       description: "查看本月累计消耗、日均消耗、月底预测和模型成本排行。",
       rows: [
         { label: "本月累计消耗金额", value: `¥${stats.monthCost.toFixed(2)}` },
-        { label: "本月累计 Token", value: `${formatCompactToken(stats.monthTokens)} Tokens` },
+        { label: "本月累计 Token", value: `${formatCompactToken(stats.monthTokens)} Token` },
         { label: "日均消耗", value: `¥${(stats.monthCost / Math.max(1, new Date().getDate())).toFixed(2)}` },
         { label: "预计月底消耗", value: `¥${((stats.monthCost / Math.max(1, new Date().getDate())) * 30).toFixed(2)}` },
       ],
@@ -1670,6 +2153,23 @@ function buildMetricDetail(metricKey, { stats, trendData, modelUsage, recentRows
       sheets: [
         { sheetName: "请求概览", data: [{ requests: stats.monthRequests, successRate: `${stats.successRate.toFixed(1)}%`, errorRate: `${(100 - stats.successRate).toFixed(1)}%` }] },
         { sheetName: "API Key分布", data: calls },
+      ],
+    },
+    tokens: {
+      title: "Token 消耗详情",
+      description: "查看本月 Token 消耗、今日 Token 消耗和模型分布。",
+      rows: [
+        { label: "本月 Token", value: `${formatCompactToken(stats.monthTokens)} Token` },
+        { label: "今日 Token", value: `${formatCompactToken(stats.todayTokens)} Token` },
+        { label: "主要消耗模型", value: modelUsage[0]?.model || "暂无" },
+        { label: "最近更新时间", value: updatedAt },
+      ],
+      extraTitle: "Token 消耗趋势",
+      extraRows: commonTrend,
+      sheets: [
+        { sheetName: "Token概览", data: [{ monthTokens: stats.monthTokens, todayTokens: stats.todayTokens, mainModel: modelUsage[0]?.model || "-" }] },
+        { sheetName: "Token趋势", data: commonTrend },
+        { sheetName: "模型Token分布", data: models },
       ],
     },
     latency: {
@@ -1737,7 +2237,7 @@ function buildModelUsageDetail(model, trendData, recentRows) {
     { label: "模型名称", value: model.model },
     { label: "上游供应商", value: model.provider || "FlowAPI" },
     { label: "请求次数", value: `${model.requests} 次` },
-    { label: "总 Token", value: `${formatCompactToken(model.tokens)} Tokens` },
+    { label: "总 Token", value: `${formatCompactToken(model.tokens)} Token` },
     { label: "总成本", value: `¥${model.cost.toFixed(2)}` },
     { label: "平均单次成本", value: `¥${(model.cost / Math.max(1, model.requests)).toFixed(4)}` },
     { label: "平均响应时间", value: `${model.avgLatency.toFixed(1)}s` },
@@ -1788,91 +2288,6 @@ function SectionTitle({ title, subtitle, right }) {
   );
 }
 
-function OnboardingChecklist({ customer, usage }) {
-  const apiKeys = customer?.apiKeys || [];
-  const hasApiKey = apiKeys.length > 0;
-  const hasCalls = Boolean(usage?.hasCalls);
-  const hasBalance = Number(customer?.balance || 0) > 0;
-  const completed = [hasApiKey, hasCalls, hasBalance].filter(Boolean).length;
-  const percent = Math.round((completed / 3) * 100);
-  const tasks = [
-    {
-      title: "下载 CC 配置工具",
-      desc: "先准备本地调用环境，后面一键导入更省心。",
-      href: "/guide",
-      status: "建议完成",
-      done: false,
-    },
-    {
-      title: "创建 API Key",
-      desc: "这是你调用模型和记录消耗的专属凭证。",
-      href: "/guide#api-keys-section",
-      status: hasApiKey ? "已创建" : "待创建",
-      done: hasApiKey,
-    },
-    {
-      title: "选择免费 / 低价模型",
-      desc: "先用新手模型跑通流程，再切换高价值模型。",
-      href: "/models",
-      status: "去选择",
-      done: false,
-    },
-    {
-      title: "完成第一次调用",
-      desc: "调用成功后，这里会展示 Token 消耗和调用流水。",
-      href: hasApiKey ? "/guide#api-keys-section" : "/guide",
-      status: hasCalls ? "已调用" : "待测试",
-      done: hasCalls,
-    },
-    {
-      title: "查看调用流水",
-      desc: "确认每次请求的模型、Token、金额和状态。",
-      href: "/dashboard#dash-recent-calls",
-      status: hasCalls ? "可查看" : "调用后显示",
-      done: hasCalls,
-    },
-    {
-      title: "充值或购买套餐",
-      desc: "余额不足前提前补充，避免调用中断。",
-      href: "/recharge",
-      status: hasBalance ? "余额正常" : "去充值",
-      done: hasBalance,
-    },
-  ];
-
-  return (
-    <section className="dash3-onboarding-panel">
-      <div className="dash3-onboarding-head">
-        <div>
-          <span className="dash3-section-hint">新手闭环</span>
-          <h2>{hasCalls ? "你的首次调用闭环已跑通" : "先跑通第一次 API 调用"}</h2>
-          <p>按这个顺序完成：下载工具 → 创建 API Key → 选择模型 → 测试调用 → 查看消耗 → 充值续用。</p>
-        </div>
-        <div className="dash3-onboarding-progress" aria-label={`新手任务完成度 ${percent}%`}>
-          <strong>{percent}%</strong>
-          <span>完成度</span>
-        </div>
-      </div>
-      <div className="dash3-onboarding-grid">
-        {tasks.map((task, index) => (
-          <Link
-            key={task.title}
-            href={task.href}
-            className={task.done ? "dash3-onboarding-task done" : "dash3-onboarding-task"}
-          >
-            <span className="dash3-onboarding-num">{String(index + 1).padStart(2, "0")}</span>
-            <div>
-              <strong>{task.title}</strong>
-              <p>{task.desc}</p>
-            </div>
-            <em>{task.status}</em>
-          </Link>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function AssetDetailMiniChart({ data = [], onTooltip, theme }) {
   const maxValue = Math.max(...data.map((item) => Number(item.value || 0)), 1);
   return (
@@ -1909,8 +2324,8 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
   const tokenChart = trendData.map((item) => ({
     label: item.date,
     value: item.tokens,
-    display: `${formatCompactToken(item.tokens)} Tokens`,
-    tooltip: `${item.date} 消耗 ${formatCompactToken(item.tokens)} Tokens，金额 ¥${Number(item.cost || 0).toFixed(2)}`,
+    display: `${formatCompactToken(item.tokens)} Token`,
+    tooltip: `${item.date} 消耗 ${formatCompactToken(item.tokens)} Token，金额 ¥${Number(item.cost || 0).toFixed(2)}`,
     color: "#6366f1",
   }));
   const costChart = trendData.map((item) => ({
@@ -1923,7 +2338,7 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
   const recentCallRows = recentRows.slice(0, 8).map((row) => ({
     time: row.time,
     model: row.model,
-    totalTokens: `${formatCompactToken(row.total)} Tokens`,
+    totalTokens: `${formatCompactToken(row.total)} Token`,
     cost: `¥${Number(row.amount || 0).toFixed(4)}`,
     status: row.status,
   }));
@@ -1934,7 +2349,7 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
       rows: [
         { label: "当前余额", value: `¥${overview.balance.toFixed(2)}`, note: "账户当前可用总额度" },
         { label: "赠送额度", value: `¥${Number(overview.giftBalance || 0).toFixed(2)}`, note: "今日有效，调用模型时优先使用" },
-        { label: "约可调用", value: `${formatCompactToken(overview.callableTokens)} Tokens`, note: "按当前平均成本粗略估算" },
+        { label: "约可调用", value: `${formatCompactToken(overview.callableTokens)} Token`, note: "按当前平均成本粗略估算" },
         { label: "最近更新时间", value: updatedAt },
       ],
       chartTitle: "最近 7 天金额消耗",
@@ -1948,7 +2363,7 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
       description: "查看今天的金额流出、Token 消耗和调用记录。",
       rows: [
         { label: "今日消耗", value: `¥${overview.todaySpend.toFixed(2)}` },
-        { label: "今日 Token", value: `${formatCompactToken(overview.todayTokens)} Tokens` },
+        { label: "今日 Token", value: `${formatCompactToken(overview.todayTokens)} Token` },
         { label: "最近调用", value: overview.lastCall?.model || "暂无调用" },
         { label: "最近更新时间", value: updatedAt },
       ],
@@ -1963,7 +2378,7 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
       description: "查看最近 7 天的 Token 使用节奏和成本变化。",
       rows: [
         { label: "本周消耗", value: `¥${overview.weekSpend.toFixed(2)}` },
-        { label: "本周 Token", value: `${formatCompactToken(overview.weekTokens)} Tokens` },
+        { label: "本周 Token", value: `${formatCompactToken(overview.weekTokens)} Token` },
         { label: "日均消耗", value: `¥${(overview.weekSpend / 7).toFixed(2)}` },
         { label: "最近更新时间", value: updatedAt },
       ],
@@ -1978,7 +2393,7 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
       description: "查看最近一次 API 调用的模型、Token 和金额。",
       rows: [
         { label: "模型", value: overview.lastCall?.model || "暂无调用" },
-        { label: "消耗 Token", value: overview.lastCall ? `${formatCompactToken(overview.lastCall.tokens)} Tokens` : "暂无" },
+        { label: "消耗 Token", value: overview.lastCall ? `${formatCompactToken(overview.lastCall.tokens)} Token` : "暂无" },
         { label: "消耗金额", value: overview.lastCall ? `¥${overview.lastCall.amount.toFixed(4)}` : "暂无" },
         { label: "调用时间", value: overview.lastCall?.time || "完成首次调用后展示" },
       ],
@@ -2015,17 +2430,241 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
   };
 }
 
-function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, savingsLoading, savingsPeriod, onOpenSavings }) {
+function DashboardExchangeCard({
+  label,
+  value,
+  detail,
+  chartData = [],
+  chartType = "area",
+  chartColor = "purple",
+  chartFormatter = moneyFormatter,
+  empty = false,
+  onClick,
+  children,
+}) {
+  return (
+    <button type="button" className={`dash3-exchange-card ${empty ? "is-empty" : ""}`} onClick={onClick}>
+      <span className="dash3-exchange-card-label">{label}</span>
+      <strong className="dash3-exchange-card-value">{value}</strong>
+      <p>{detail}</p>
+      {children}
+      <MiniMetricChart
+        data={chartData}
+        type={chartType}
+        color={chartColor}
+        valueFormatter={chartFormatter}
+        height={68}
+        emptyText=""
+      />
+      <em>点击查看详情</em>
+    </button>
+  );
+}
+
+function TotalAssetOverviewSection({ data, onOpenDetail, onOpenModel }) {
+  const hasCalls = data.totalRequests > 0;
+  const commonRows = [
+    { label: "总花费", value: hasCalls ? `¥${data.totalSpendCny.toFixed(2)}` : "暂无数据" },
+    { label: "官方价花费", value: data.officialCostCny !== null ? `¥${data.officialCostCny.toFixed(2)}` : "完成真实调用后显示" },
+    { label: "FlowAPI 实际花费", value: hasCalls ? `¥${data.actualCostCny.toFixed(2)}` : "暂无数据" },
+    { label: "已节省", value: data.savedAmountCny > 0 ? `¥${data.savedAmountCny.toFixed(2)}` : "完成真实调用后显示" },
+    { label: "使用 Token", value: hasCalls ? `${formatCompactToken(data.totalTokens)} Token` : "暂无数据" },
+    { label: "总请求数", value: hasCalls ? `${data.totalRequests} 次` : "暂无调用" },
+  ];
+  const recentRows = data.recentRows.slice(0, 8).map((row) => ({
+    time: row.time,
+    model: row.model,
+    totalTokens: `${formatCompactToken(row.total)} Token`,
+    cost: formatSmallCny(row.actualCostCny || row.amount),
+    status: row.status,
+  }));
+  const open = (title, chartData, rows = commonRows, chartFormatter = moneyFormatter, chartColor = "purple") => onOpenDetail(buildSimpleMetricDetail({
+    title,
+    description: "查看 FlowAPI 账户累计 Token、官方价、实际扣费和模型调用详情。",
+    rows,
+    trend: chartData,
+    chartFormatter,
+    chartColor,
+    tableRows: recentRows,
+  }));
+  return (
+    <section className="dash3-section">
+      <SectionTitle
+        title="总消耗与资产概览"
+        subtitle="查看你在 FlowAPI 的累计 Token 使用、官方价对比、实际花费和主要模型。"
+        right={<Link href="#dash-recent-calls" className="dash3-section-hint">查看调用流水</Link>}
+      />
+      <div className="dash3-exchange-grid dash3-exchange-grid-top">
+        <DashboardExchangeCard
+          label="总花费"
+          value={hasCalls ? <MetricValueInline prefix="¥" value={<FlashValue value={data.totalSpendCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"}
+          detail="累计 API 调用消耗金额"
+          chartData={data.actualTrend}
+          chartColor="purple"
+          empty={!hasCalls}
+          onClick={() => open("总花费详情", data.actualTrend, commonRows, moneyFormatter, "purple")}
+        />
+        <DashboardExchangeCard
+          label="官方价花费"
+          value={data.officialCostCny !== null ? <MetricValueInline prefix="¥" value={<FlashValue value={data.officialCostCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"}
+          detail="如果直接使用官方价格，预计需要支付的金额"
+          chartData={data.officialTrend}
+          chartColor="orange"
+          empty={data.officialCostCny === null}
+          onClick={() => open("官方价花费详情", data.officialTrend, commonRows, moneyFormatter, "orange")}
+        />
+        <DashboardExchangeCard
+          label="FlowAPI 实际花费"
+          value={hasCalls ? <MetricValueInline prefix="¥" value={<FlashValue value={data.actualCostCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"}
+          detail="你在 FlowAPI 的真实扣费金额"
+          chartData={data.actualTrend}
+          chartColor="cyan"
+          empty={!hasCalls}
+          onClick={() => open("FlowAPI 实际花费详情", data.actualTrend, commonRows, moneyFormatter, "cyan")}
+        />
+        <DashboardExchangeCard
+          label="使用 Token"
+          value={hasCalls ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.totalTokens)} tick={data.tick} />} unit="Token" /> : "暂无数据"}
+          detail="累计输入 + 输出 Token"
+          chartData={data.tokenTrend}
+          chartColor="cyan"
+          chartFormatter={tokenFormatter}
+          empty={!hasCalls}
+          onClick={() => open("Token 使用详情", data.tokenTrend, commonRows, tokenFormatter, "cyan")}
+        />
+      </div>
+      <div className="dash3-exchange-grid dash3-exchange-grid-bottom">
+        <DashboardExchangeCard
+          label="总请求数"
+          value={hasCalls ? <MetricValueInline value={<FlashValue value={data.totalRequests} tick={data.tick} />} unit="次" /> : "暂无调用"}
+          detail="累计模型调用次数"
+          chartData={data.requestTrend}
+          chartType="bar"
+          chartColor="cyan"
+          chartFormatter={countFormatter}
+          empty={!hasCalls}
+          onClick={() => open("请求次数详情", data.requestTrend, commonRows, countFormatter, "cyan")}
+        />
+        <DashboardExchangeCard
+          label="最常用模型"
+          value={data.mostUsedModel ? (
+            <span className="dash3-model-value-inline">
+              <ModelLogo model={data.mostUsedModel.model} provider={data.mostUsedModel.provider} size={34} />
+              <span>{data.mostUsedModel.model}</span>
+            </span>
+          ) : "暂无数据"}
+          detail={data.mostUsedModel ? `${data.mostUsedModel.provider || getModelProviderLabel(data.mostUsedModel.model)} · ${data.mostUsedModel.requests} 次调用` : "完成真实调用后显示"}
+          chartData={data.mostUsedTrend}
+          chartColor="purple"
+          empty={!data.mostUsedModel}
+          onClick={() => data.mostUsedModel ? onOpenModel(data.mostUsedModel) : open("最常用模型详情", [])}
+        />
+        <DashboardExchangeCard
+          label="最耗费模型"
+          value={data.mostExpensiveModel ? (
+            <span className="dash3-model-value-inline">
+              <ModelLogo model={data.mostExpensiveModel.model} provider={data.mostExpensiveModel.provider} size={34} />
+              <span>{data.mostExpensiveModel.model}</span>
+            </span>
+          ) : "暂无数据"}
+          detail={data.mostExpensiveModel ? `${data.mostExpensiveModel.provider || getModelProviderLabel(data.mostExpensiveModel.model)} · ¥${data.mostExpensiveModel.spend.toFixed(4)} 累计消耗` : "完成真实调用后显示"}
+          chartData={data.mostExpensiveTrend}
+          chartColor="yellow"
+          empty={!data.mostExpensiveModel}
+          onClick={() => data.mostExpensiveModel ? onOpenModel(data.mostExpensiveModel) : open("最耗费模型详情", [])}
+        />
+      </div>
+    </section>
+  );
+}
+
+function WeekUsageSection({ data, onOpenDetail, onOpenSavings }) {
+  const hasWeek = data.weekRequests > 0 || data.weekSpendCny > 0 || data.weekTokens > 0;
+  const open = (title, chartData, chartFormatter = moneyFormatter, chartColor = "purple") => onOpenDetail(buildSimpleMetricDetail({
+    title,
+    description: "查看本周 FlowAPI 实际扣费、Token 使用、节省金额和平均单次成本。",
+    rows: [
+      { label: "本周花费", value: hasWeek ? `¥${data.weekSpendCny.toFixed(2)}` : "暂无数据" },
+      { label: "本周 Token", value: hasWeek ? `${formatCompactToken(data.weekTokens)} Token` : "暂无数据" },
+      { label: "本周已省", value: data.weekSavedCny > 0 ? `¥${data.weekSavedCny.toFixed(2)}` : "完成真实调用后显示" },
+      { label: "本周平均单次成本", value: data.weekAvgCostPerRequestCny !== null ? `¥${data.weekAvgCostPerRequestCny.toFixed(4)} / 次` : "暂无数据" },
+    ],
+    trend: chartData,
+    chartFormatter,
+    chartColor,
+  }));
+  return (
+    <section className="dash3-section">
+      <SectionTitle title="本周使用情况" subtitle="查看本周花费、Token 使用、节省金额和平均单次调用成本。" />
+      <div className="dash3-exchange-grid dash3-exchange-grid-four">
+        <DashboardExchangeCard label="本周花费余额" value={hasWeek ? <MetricValueInline prefix="¥" value={<FlashValue value={data.weekSpendCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"} detail="本周 FlowAPI 实际扣费" chartData={data.weekSpendTrend} chartColor="yellow" empty={!hasWeek} onClick={() => open("本周花费详情", data.weekSpendTrend, moneyFormatter, "yellow")} />
+        <DashboardExchangeCard label="本周使用 Token" value={hasWeek ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.weekTokens)} tick={data.tick} />} unit="Token" /> : "暂无数据"} detail="本周输入 + 输出 Token" chartData={data.weekTokenTrend} chartColor="cyan" chartFormatter={tokenFormatter} empty={!hasWeek} onClick={() => open("本周 Token 详情", data.weekTokenTrend, tokenFormatter, "cyan")} />
+        <DashboardExchangeCard label="本周已省" value={data.weekSavedCny > 0 ? <MetricValueInline prefix="¥" value={<FlashValue value={data.weekSavedCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"} detail="官方价花费 - FlowAPI 实际花费" chartData={data.weekSavingTrend} chartColor="green" empty={data.weekSavedCny <= 0} onClick={onOpenSavings} />
+        <DashboardExchangeCard label="本周平均单次成本" value={data.weekAvgCostPerRequestCny !== null ? <MetricValueInline prefix="¥" value={<FlashValue value={data.weekAvgCostPerRequestCny.toFixed(4)} tick={data.tick} />} unit="/ 次" /> : "暂无数据"} detail="本周每次请求平均扣费" chartData={data.weekAvgCostTrend} chartColor="orange" empty={data.weekAvgCostPerRequestCny === null} onClick={() => open("本周平均单次成本详情", data.weekAvgCostTrend, moneyFormatter, "orange")} />
+      </div>
+    </section>
+  );
+}
+
+function TodayAccountStatusSection({ data, onOpenDetail, onOpenSavings, onOpenLedger }) {
+  const hasToday = data.todayRequests > 0 || data.todaySpendCny > 0 || data.todayTokens > 0;
+  const recent = data.recentCall;
+  const open = (title, chartData, chartFormatter = moneyFormatter, chartColor = "purple") => onOpenDetail(buildSimpleMetricDetail({
+    title,
+    description: "查看今天的 Token 消耗、扣费金额、节省金额和最近调用。",
+    rows: [
+      { label: "当前余额", value: `¥${data.balanceCny.toFixed(2)}` },
+      { label: "当前套餐", value: data.planName || "暂无套餐" },
+      { label: "今日 Token", value: hasToday ? `${formatCompactToken(data.todayTokens)} Token` : "暂无数据" },
+      { label: "今日花费", value: hasToday ? `¥${data.todaySpendCny.toFixed(2)}` : "暂无数据" },
+      { label: "今日已省", value: data.todaySavedCny > 0 ? `¥${data.todaySavedCny.toFixed(2)}` : "完成真实调用后显示" },
+    ],
+    trend: chartData,
+    chartFormatter,
+    chartColor,
+  }));
+  return (
+    <section className="dash3-section">
+      <SectionTitle title="今日与当前账户状态" subtitle="查看当前余额、套餐、今日消耗、今日节省和最近调用。" />
+      <div className="dash3-exchange-grid dash3-exchange-grid-six">
+        <DashboardExchangeCard label="当前余额" value={<MetricValueInline prefix="¥" value={<FlashValue value={data.balanceCny.toFixed(2)} tick={data.tick} />} />} detail={data.balanceDetail} chartData={data.balanceTrend} chartColor="purple" onClick={() => open("当前余额详情", data.balanceTrend)} />
+        <button type="button" className="dash3-exchange-card dash3-plan-card" onClick={() => open("当前套餐详情", [])}>
+          <span className="dash3-exchange-card-label">当前套餐</span>
+          <strong className="dash3-exchange-card-value">{data.planName || "暂无套餐"}</strong>
+          <p>{data.planDetail}</p>
+          <div className="dash3-plan-progress"><i style={{ width: `${Math.max(0, Math.min(100, data.planProgress || 0))}%` }} /></div>
+          <em>点击查看详情</em>
+        </button>
+        <DashboardExchangeCard label="今日消耗 Token" value={hasToday ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.todayTokens)} tick={data.tick} />} unit="Token" /> : "暂无数据"} detail="今日输入 + 输出 Token" chartData={data.todayTokenTrend} chartType="bar" chartColor="cyan" chartFormatter={tokenFormatter} empty={!hasToday} onClick={() => open("今日 Token 详情", data.todayTokenTrend, tokenFormatter, "cyan")} />
+        <DashboardExchangeCard label="今日花费余额" value={hasToday ? <MetricValueInline prefix="¥" value={<FlashValue value={data.todaySpendCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"} detail="今日 FlowAPI 实际扣费" chartData={data.todaySpendTrend} chartType="step" chartColor="yellow" empty={!hasToday} onClick={() => open("今日花费详情", data.todaySpendTrend, moneyFormatter, "yellow")} />
+        <DashboardExchangeCard label="今日已省" value={data.todaySavedCny > 0 ? <MetricValueInline prefix="¥" value={<FlashValue value={data.todaySavedCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"} detail={data.todaySavedCny > 0 ? `官方价 ¥${data.todayOfficialCny.toFixed(2)} / 实际价 ¥${data.todayActualCny.toFixed(2)}` : "完成今日真实调用后显示"} chartData={data.todaySavingTrend} chartColor="green" empty={data.todaySavedCny <= 0} onClick={onOpenSavings} />
+        <DashboardExchangeCard label="最近调用" value={recent ? (
+          <span className="dash3-model-value-inline">
+            <ModelLogo model={recent.model} provider={recent.provider} size={34} />
+            <span>{recent.model}</span>
+          </span>
+        ) : "暂无调用"} detail={recent ? `${formatCompactToken(recent.total)} Token · ${formatSmallCny(recent.actualCostCny || recent.amount)} · ${recent.status}` : "完成首次 API 调用后自动记录"} chartData={data.recentCallTrend} chartType="bar" chartColor="cyan" chartFormatter={countFormatter} empty={!recent} onClick={() => recent ? onOpenLedger?.() : open("最近调用详情", [], countFormatter, "cyan")} />
+      </div>
+    </section>
+  );
+}
+
+function AssetOverviewSection({ overview, trendData, calls, tick, onOpenAsset, savingsData, savingsLoading, savingsPeriod, onOpenSavings }) {
   const savingsSummary = savingsData?.summary;
   const hasCallableEstimate = Number(overview.callableTokens || 0) > 0;
   const hasTodayUsage = Number(overview.todaySpend || 0) > 0 || Number(overview.todayTokens || 0) > 0;
   const hasWeekUsage = Number(overview.weekSpend || 0) > 0 || Number(overview.weekTokens || 0) > 0;
+  const balanceMini = Number(overview.balance || 0) > 0 ? [{ label: "当前余额", value: Number(overview.balance || 0) }] : [];
+  const todayMini = buildTodayHourlyMiniSeries(calls || []);
+  const weekMini = buildDailyMiniSeries(trendData, "cost", 7);
+  const callMini = buildDailyMiniSeries(trendData, "requests", 7);
+  const savingsMini = buildSavingsMiniSeries(savingsData, 7);
   return (
     <section className="dash3-section dash3-asset-overview-section">
       <SectionTitle
         title="AI Token 资产总览"
-        subtitle="查看你的余额、消耗、调用和成本优势。"
-        right={<span className="dash3-live-badge"><span className="dash3-live-dot" /> Live</span>}
+        subtitle="查看你的余额、今日消耗、本周消耗、最近调用和成本优势。"
+        right={<span className="dash3-live-status"><i />Live 状态</span>}
       />
       <div className="dash3-asset-overview-grid">
         <article
@@ -2037,10 +2676,19 @@ function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, saving
         >
           <span>当前余额</span>
           <strong><MetricValueInline prefix="¥" value={overview.balance.toFixed(2)} /></strong>
-          <p>约可调用 <b>{hasCallableEstimate ? formatTokens(overview.callableTokens) : "完成调用后估算"}</b></p>
           <p className="dash3-gift-credit" title="赠送额度仅当日有效，调用模型时优先消耗赠送额度，用完后再消耗充值余额。">
-            赠送额度：<b>¥{Number(overview.giftBalance || 0).toFixed(2)}</b> 今日有效，优先使用
+            <span>赠送额度：<b>¥{Number(overview.giftBalance || 0).toFixed(2)}</b></span>
+            <span>今日有效，优先使用</span>
           </p>
+          <p>约可调用 <b>{hasCallableEstimate ? formatTokens(overview.callableTokens) : "完成调用后估算"}</b></p>
+          <MiniMetricChart
+            data={balanceMini}
+            type="area"
+            color="purple"
+            valueFormatter={moneyFormatter}
+            emptyText=""
+            height={66}
+          />
           <em className="dash3-asset-card-hint">查看详情</em>
         </article>
         <article
@@ -2053,6 +2701,15 @@ function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, saving
           <span>今日消耗</span>
           <strong className={!hasTodayUsage ? "dash3-asset-empty-value" : ""}>{hasTodayUsage ? <MetricValueInline prefix="¥" value={<FlashValue value={overview.todaySpend.toFixed(2)} tick={tick} />} /> : "暂无数据"}</strong>
           <p><b>{hasTodayUsage ? formatTokens(overview.todayTokens) : "完成今日调用后显示"}</b></p>
+          <MiniMetricChart
+            data={hasMiniSeriesData(todayMini) ? todayMini : []}
+            type="step"
+            color="yellow"
+            valueFormatter={moneyFormatter}
+            secondaryFormatter={tokenFormatter}
+            emptyText=""
+            height={68}
+          />
           <em className="dash3-asset-card-hint">查看详情</em>
         </article>
         <article
@@ -2065,6 +2722,15 @@ function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, saving
           <span>本周消耗</span>
           <strong className={!hasWeekUsage ? "dash3-asset-empty-value" : ""}>{hasWeekUsage ? <MetricValueInline prefix="¥" value={<FlashValue value={overview.weekSpend.toFixed(2)} tick={tick} />} /> : "暂无数据"}</strong>
           <p><b>{hasWeekUsage ? formatTokens(overview.weekTokens) : "完成本周调用后显示"}</b></p>
+          <MiniMetricChart
+            data={hasMiniSeriesData(weekMini) ? weekMini : []}
+            type="area"
+            color="orange"
+            valueFormatter={moneyFormatter}
+            secondaryFormatter={tokenFormatter}
+            emptyText=""
+            height={68}
+          />
           <em className="dash3-asset-card-hint">查看详情</em>
         </article>
         <article
@@ -2090,6 +2756,14 @@ function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, saving
           ) : (
             <p><b>完成首次 API 调用后自动记录</b></p>
           )}
+          <MiniMetricChart
+            data={hasMiniSeriesData(callMini) ? callMini : []}
+            type="bar"
+            color="cyan"
+            valueFormatter={countFormatter}
+            emptyText=""
+            height={64}
+          />
           <em className="dash3-asset-card-hint">查看详情</em>
         </article>
         <SavingsCard
@@ -2100,6 +2774,7 @@ function AssetOverviewSection({ overview, tick, onOpenAsset, savingsData, saving
           loading={savingsLoading}
           source={savingsData?.source}
           rankText={savingsData?.savingRank ? `节省排名：前 ${Number(savingsData.savingRank.percentileTop || 0)}%` : ""}
+          chartData={hasMiniSeriesData(savingsMini) ? savingsMini : []}
           onClick={onOpenSavings}
         />
       </div>
@@ -2159,7 +2834,7 @@ function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
             ))}
           </div>
           <div className="dash3-flow-tooltip-total">
-            <span>{metric === "spend" ? `总计 ¥${totalSpend.toFixed(2)}` : metric === "tokens" ? `总计 ${formatCompactToken(totalTokens)} Tokens` : `总计 ${totalRequests} 次`} · 主要 {mainModel}</span>
+            <span>{metric === "spend" ? `总计 ¥${totalSpend.toFixed(2)}` : metric === "tokens" ? `总计 ${formatCompactToken(totalTokens)} Token` : `总计 ${totalRequests} 次`} · 主要 {mainModel}</span>
           </div>
         </div>
       ),
@@ -2167,18 +2842,10 @@ function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
   };
 
   const handleMove = (event) => {
-    const rect = svgRef.current?.getBoundingClientRect();
+    const rect = event.currentTarget?.getBoundingClientRect();
     if (!rect) return;
-    const viewX = ((event.clientX - rect.left) / rect.width) * width;
-    let nearest = 0;
-    let minDist = Infinity;
-    data.forEach((_, index) => {
-      const dist = Math.abs(getBarCenter(index) - viewX);
-      if (dist < minDist) {
-        nearest = index;
-        minDist = dist;
-      }
-    });
+    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width)));
+    const nearest = Math.min(data.length - 1, Math.max(0, Math.round(ratio * (data.length - 1))));
     setActiveIndex(nearest);
     showTooltip(event, nearest);
   };
@@ -2286,7 +2953,61 @@ function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
   );
 }
 
-function TokenSpendFlowSection({ flow, ranking, metric, setMetric, onTooltip, theme }) {
+function ModelDistributionBars({ ranking, metric, onTooltip, onOpenModel, theme }) {
+  const total = ranking.reduce((sum, item) => sum + Number(metric === "tokens" ? item.tokens : metric === "requests" ? item.requests : item.spend), 0);
+  if (!ranking.length || total <= 0) {
+    return (
+      <div className="dash3-empty-list">
+        <strong>暂无模型消耗分布</strong>
+        <span>完成真实调用后，这里会显示每个模型的金额、Token 和请求占比。</span>
+      </div>
+    );
+  }
+  return (
+    <div className="dash3-model-share-bars">
+      {ranking.slice(0, 7).map((item, index) => {
+        const value = Number(metric === "tokens" ? item.tokens : metric === "requests" ? item.requests : item.spend);
+        const pct = total > 0 ? (value / total) * 100 : 0;
+        const valueLabel = metric === "tokens" ? formatCompactToken(item.tokens) : metric === "requests" ? `${item.requests} 次` : `¥${item.spend.toFixed(2)}`;
+        return (
+          <button
+            type="button"
+            key={item.model}
+            className="dash3-model-share-row"
+            onClick={() => onOpenModel?.(item)}
+            onMouseMove={(event) => onTooltip?.({
+              x: event.clientX + 14,
+              y: event.clientY - 20,
+              content: (
+                <div>
+                  <strong>{item.model}</strong>
+                  <p style={{ margin: "8px 0 0", color: theme === "light" ? "#6b7280" : "#9ca3af" }}>
+                    金额 ¥{item.spend.toFixed(2)} · {formatCompactToken(item.tokens)} Token · {item.requests} 次 · 占比 {pct.toFixed(1)}%
+                  </p>
+                </div>
+              ),
+            })}
+            onMouseLeave={() => onTooltip?.(null)}
+          >
+            <span className="dash3-model-share-rank">{index + 1}</span>
+            <span className="dash3-model-share-model">
+              <ModelLogo model={item.model} provider={item.provider} size={28} />
+              <span>
+                <strong>{item.model}</strong>
+                <small>{item.provider || getModelProviderLabel(item.model)}</small>
+              </span>
+            </span>
+            <span className="dash3-model-share-value">{valueLabel}</span>
+            <span className="dash3-model-share-track"><i style={{ width: `${Math.max(4, pct)}%`, background: item.color }} /></span>
+            <span className="dash3-model-share-pct">{pct.toFixed(1)}%</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function TokenSpendFlowSection({ flow, ranking, metric, setMetric, onTooltip, theme, onOpenModel }) {
   const totals = ranking.reduce((acc, item) => ({
     spend: acc.spend + item.spend,
     tokens: acc.tokens + item.tokens,
@@ -2302,9 +3023,9 @@ function TokenSpendFlowSection({ flow, ranking, metric, setMetric, onTooltip, th
         right={(
           <div className="dash3-metric-tabs">
             {[
-              { key: "spend", label: "Spend" },
-              { key: "tokens", label: "Tokens" },
-              { key: "requests", label: "Requests" },
+              { key: "spend", label: "金额" },
+              { key: "tokens", label: "Token" },
+              { key: "requests", label: "请求数" },
             ].map((tab) => (
               <button key={tab.key} className={`dash3-metric-tab ${metric === tab.key ? "active" : ""}`} onClick={() => setMetric(tab.key)}>
                 {tab.label}
@@ -2316,52 +3037,54 @@ function TokenSpendFlowSection({ flow, ranking, metric, setMetric, onTooltip, th
       <div className="dash3-flow-shell">
         <div className="dash3-flow-kpis">
           <div><span>总消费</span><strong>¥{totals.spend.toFixed(2)}</strong></div>
-          <div><span>总 Tokens</span><strong>{formatCompactToken(totals.tokens)}</strong></div>
+          <div><span>总 Token</span><strong>{formatCompactToken(totals.tokens)}</strong></div>
           <div><span>总请求</span><strong>{totals.requests} 次</strong></div>
           <div><span>主要消耗模型</span><strong>{mainModel}</strong></div>
         </div>
-        <div className="dash3-card">
-          <div className="dash3-card-subtitle">模型消耗分布</div>
-          <ModelSpendFlowChart data={flow} metric={metric} onTooltip={onTooltip} theme={theme} />
-        </div>
+        <div className="dash3-flow-analysis-grid">
+          <div className="dash3-card">
+            <div className="dash3-card-subtitle">模型消耗分布图</div>
+            <ModelDistributionBars ranking={ranking} metric={metric} onTooltip={onTooltip} onOpenModel={onOpenModel} theme={theme} />
+          </div>
 
-        <div className="dash3-card" style={{ marginTop: 16 }}>
-          <div className="dash3-card-subtitle">模型排行</div>
-          {ranking.length === 0 ? (
-            <div className="dash3-empty-list">
-              <strong>还没有模型消费排行</strong>
-              <span>使用 API Key 发起一次调用后，系统会按模型自动汇总金额、Token 和请求次数。</span>
-            </div>
-          ) : (
-            <div className="dash3-model-ranking-list">
-              <div className="dash3-model-ranking-header">
-                <span>#</span>
-                <span>模型</span>
-                <span className="text-right">金额</span>
-                <span className="text-right">Token</span>
-                <span className="text-right">请求次数</span>
-                <span className="text-right">占比</span>
-                <span className="text-right">趋势</span>
+          <div className="dash3-card">
+            <div className="dash3-card-subtitle">模型成本排行榜</div>
+            {ranking.length === 0 ? (
+              <div className="dash3-empty-list">
+                <strong>还没有模型消费排行</strong>
+                <span>使用 API Key 发起一次调用后，系统会按模型自动汇总金额、Token 和请求次数。</span>
               </div>
-              {ranking.map((item, index) => (
-                <Link href={`/models?model=${encodeURIComponent(item.model)}`} key={item.model} className="dash3-flow-row">
-                  <span className="dash3-flow-rank">{index + 1}</span>
-                  <div className="model-name-cell dash3-flow-model-cell">
-                    <ModelLogo model={item.model} provider={item.provider} size={26} />
-                    <span className="model-text">
-                      <strong className="model-name">{item.model}</strong>
-                      <small className="model-provider">{item.provider || getModelProviderLabel(item.model)}</small>
-                    </span>
-                  </div>
-                  <div className="dash3-flow-money">¥{item.spend.toFixed(2)}</div>
-                  <div className="dash3-flow-meta">{formatCompactToken(item.tokens)} Tokens</div>
-                  <div className="dash3-flow-meta">{item.requests} 次</div>
-                  <div className="dash3-flow-share">{item.share}%</div>
-                  <div className={trendClass(item.trend)}>{trendText(item.trend)}</div>
-                </Link>
-              ))}
-            </div>
-          )}
+            ) : (
+              <div className="dash3-model-ranking-list">
+                <div className="dash3-model-ranking-header">
+                  <span>#</span>
+                  <span>模型</span>
+                  <span className="text-right">金额</span>
+                  <span className="text-right">Token</span>
+                  <span className="text-right">请求数</span>
+                  <span className="text-right">占比</span>
+                  <span className="text-right">趋势</span>
+                </div>
+                {ranking.map((item, index) => (
+                  <button type="button" key={item.model} className="dash3-flow-row" onClick={() => onOpenModel?.(item)}>
+                    <span className="dash3-flow-rank">{index + 1}</span>
+                    <div className="model-name-cell dash3-flow-model-cell">
+                      <ModelLogo model={item.model} provider={item.provider} size={26} />
+                      <span className="model-text">
+                        <strong className="model-name">{item.model}</strong>
+                        <small className="model-provider">{item.provider || getModelProviderLabel(item.model)}</small>
+                      </span>
+                    </div>
+                    <div className="dash3-flow-money">¥{item.spend.toFixed(2)}</div>
+                    <div className="dash3-flow-meta">{formatCompactToken(item.tokens)}</div>
+                    <div className="dash3-flow-meta">{item.requests} 次</div>
+                    <div className="dash3-flow-share">{item.share}%</div>
+                    <div className={trendClass(item.trend)}>{trendText(item.trend)}</div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
         <p className="dash3-advice">
           {ranking.length > 0
@@ -2401,7 +3124,7 @@ function ModelSpendTrendSection({ ranking, onTooltip, theme }) {
             </div>
             <div className="dash3-model-trend-body">
               <span>本周 ¥{item.spend.toFixed(2)}</span>
-              <span>{formatCompactToken(item.tokens)} Tokens</span>
+              <span>{formatCompactToken(item.tokens)} Token</span>
               <span>{item.requests} 次</span>
             </div>
             <MiniTrendLine values={item.spark} width={240} height={58} color={item.trend < 0 ? "var(--dash-red)" : "var(--dash-green)"} onTooltip={onTooltip} tooltipLabel={`${item.model} 本周消费趋势`} theme={theme} />
@@ -2416,8 +3139,67 @@ function ModelSpendTrendSection({ ranking, onTooltip, theme }) {
   );
 }
 
+function CostStabilitySection({ stats, trendData, modelUsage, recentRows, onOpenMetric, onOpenModel }) {
+  const cacheStats = stats.cacheStats || {};
+  const hasCacheData = Number(cacheStats.hitCount || 0) > 0 || Number(cacheStats.savedTokens || 0) > 0 || Number(cacheStats.savedCostCny || 0) > 0;
+  const hasLatencyData = Number(stats.avgLatency || 0) > 0 && recentRows.length > 0;
+  const hasSuccessData = trendData.some((item) => Number(item.requests || 0) > 0);
+  const latencyMini = buildDailyMiniSeries(trendData, "requests", 7);
+  const cacheMini = hasCacheData ? [{ label: "当前缓存", value: Number(cacheStats.hitRate || 0), secondaryValue: Number(cacheStats.hitCount || 0) }] : [];
+  const successMini = trendData.slice(-7).map((item) => ({
+    label: item.date,
+    value: Number(item.requests || 0) > 0 ? (Number(item.success || 0) / Number(item.requests || 1)) * 100 : null,
+  }));
+  const highCostModel = [...modelUsage].sort((a, b) => Number(b.cost || 0) - Number(a.cost || 0))[0];
+  const alternative = modelUsage.find((item) => item.model !== highCostModel?.model && Number(item.cost || 0) < Number(highCostModel?.cost || 0));
+  const highAvgCost = highCostModel?.requests ? Number(highCostModel.cost || 0) / Number(highCostModel.requests || 1) : 0;
+  const altAvgCost = alternative?.requests ? Number(alternative.cost || 0) / Number(alternative.requests || 1) : 0;
+  const potentialSave = highCostModel && alternative
+    ? Math.max(0, highAvgCost - altAvgCost) * Number(highCostModel.requests || 0)
+    : 0;
+
+  return (
+    <section className="dash3-section">
+      <SectionTitle
+        title="成本优化与稳定性"
+        subtitle="查看缓存命中率、响应速度、请求成功率和高成本模型提醒。"
+      />
+      {!hasCacheData ? (
+        <div className="dash3-cache-empty-note">
+          <strong>暂无缓存数据</strong>
+          <span>完成更多真实调用后显示缓存命中率和节省情况。</span>
+        </div>
+      ) : null}
+      <div className="dash3-stability-grid">
+        <CoreMetricCard label="缓存命中率" value={hasCacheData ? <MetricValueInline value={Number(cacheStats.hitRate || 0).toFixed(1)} unit="%" /> : "暂无数据"} detail={hasCacheData ? "命中越高，通常更快且更省钱" : "完成更多真实调用后显示"} chartData={cacheMini} chartType="area" chartColor="green" chartFormatter={percentFormatter} chartEmptyText="" onClick={() => onOpenMetric("cache")} />
+        <CoreMetricCard label="缓存命中次数" value={hasCacheData ? <MetricValueInline value={Number(cacheStats.hitCount || 0).toLocaleString("zh-CN")} unit="次" /> : "暂无数据"} detail={hasCacheData ? "本周期命中的请求" : "暂无缓存数据"} chartData={cacheMini} chartType="bar" chartColor="cyan" chartFormatter={countFormatter} chartEmptyText="" onClick={() => onOpenMetric("cache")} />
+        <CoreMetricCard label="缓存节省 Token" value={hasCacheData ? <MetricValueInline value={formatCompactToken(Number(cacheStats.savedTokens || 0))} unit="Token" /> : "暂无数据"} detail={hasCacheData ? "估算少消耗的 Token" : "完成更多调用后显示"} chartData={cacheMini} chartColor="green" chartFormatter={percentFormatter} chartEmptyText="" onClick={() => onOpenMetric("cache")} />
+        <CoreMetricCard label="缓存节省金额" value={hasCacheData ? <MetricValueInline prefix="¥" value={Number(cacheStats.savedCostCny || 0).toFixed(2)} /> : "暂无数据"} detail={hasCacheData ? "缓存带来的成本优势" : "暂无缓存数据"} chartData={cacheMini} chartColor="green" chartFormatter={percentFormatter} chartEmptyText="" onClick={() => onOpenMetric("cache")} />
+        <CoreMetricCard label="平均响应时间" value={hasLatencyData ? <MetricValueInline value={Number(stats.avgLatency || 0).toFixed(2)} unit="s" /> : "暂无数据"} detail={hasLatencyData ? "最近调用平均响应速度" : "完成真实调用后显示"} chartData={hasMiniSeriesData(latencyMini) ? latencyMini : []} chartType="bar" chartColor="cyan" chartFormatter={countFormatter} chartEmptyText="" onClick={() => onOpenMetric("latency")} />
+        <CoreMetricCard label="请求成功率" value={hasSuccessData ? <MetricValueInline value={Number(stats.successRate || 0).toFixed(1)} unit="%" /> : "暂无数据"} detail={hasSuccessData ? `${recentRows.length || 0} 条最近流水参与展示` : "完成真实调用后显示"} chartData={hasMiniSeriesData(successMini) ? successMini : []} chartColor="purple" chartFormatter={percentFormatter} chartEmptyText="" onClick={() => onOpenMetric("requests")} />
+      </div>
+      <button type="button" className="dash3-high-cost-alert" onClick={() => highCostModel ? onOpenModel?.(highCostModel) : null}>
+        <div>
+          <span>高成本模型提醒</span>
+          <strong>{highCostModel ? highCostModel.model : "暂无高成本模型"}</strong>
+          <p>
+            {highCostModel
+              ? alternative
+                ? `${highCostModel.model} 是当前成本大头，可对比 ${alternative.model}。按当前请求量估算，理论可节省约 ¥${potentialSave.toFixed(2)}。`
+                : "完成更多模型调用后，FlowAPI 会给出可替换的低成本模型建议。"
+              : "完成真实调用后，系统会识别主要成本来源。"}
+          </p>
+        </div>
+        <em>{highCostModel ? "查看模型详情" : "数据同步中"}</em>
+      </button>
+    </section>
+  );
+}
+
 function TokenForecastDecisionSection({ data, summary, metric, setMetric, onTooltip, theme, tick }) {
   const hasPredictionData = Boolean(summary?.hasData);
+  const isFallbackPrediction = summary?.source === "fallback" || data?.source === "fallback";
+  const shouldShowChart = hasPredictionData || isFallbackPrediction;
   return (
     <section className="dash3-section">
       <SectionTitle
@@ -2439,18 +3221,35 @@ function TokenForecastDecisionSection({ data, summary, metric, setMetric, onTool
       />
       <div className="dash3-card dash3-forecast-card">
         <div className="dash3-forecast-metrics">
-          <div><span>未来 7 天预计消耗</span><strong><MetricValueInline value={<FlashValue value={`${formatCompactToken(summary.weekTokens)}`} tick={tick} />} unit="Tokens" /></strong></div>
-          <div><span>预计需要额度</span><strong><MetricValueInline prefix="¥" value={<FlashValue value={summary.weekCost.toFixed(2)} tick={tick} />} /></strong></div>
-          <div><span>当前余额可覆盖</span><strong><MetricValueInline prefix="约" value={<FlashValue value={summary.coverDays} tick={tick} />} unit="天" /></strong></div>
-          <div><span>建议充值</span><strong><MetricValueInline prefix="¥" value={<FlashValue value={summary.suggestRecharge.toFixed(0)} tick={tick} />} /></strong></div>
+          <article>
+            <span>未来 7 天预计消耗</span>
+            <strong className="prediction-stat-value">{hasPredictionData ? <MetricValueInline value={<FlashValue value={formatCompactToken(summary.weekTokens)} tick={tick} />} unit="Token" /> : "暂无数据"}</strong>
+            <p>{hasPredictionData ? "按最近调用节奏推算" : "完成更多真实调用后预测"}</p>
+          </article>
+          <article>
+            <span>预计需要额度</span>
+            <strong className="prediction-stat-value">{hasPredictionData ? <MetricValueInline prefix="¥" value={<FlashValue value={summary.weekCost.toFixed(2)} tick={tick} />} /> : "暂无数据"}</strong>
+            <p>{hasPredictionData ? "未来 7 天预估扣费" : "完成更多真实调用后显示"}</p>
+          </article>
+          <article>
+            <span>当前余额可覆盖</span>
+            <strong className="prediction-stat-value">{hasPredictionData ? <MetricValueInline prefix="约" value={<FlashValue value={summary.coverDays} tick={tick} />} unit="天" /> : "暂无数据"}</strong>
+            <p>{hasPredictionData ? "基于当前余额估算" : "完成更多真实调用后显示"}</p>
+          </article>
+          <article>
+            <span>建议充值</span>
+            <strong className="prediction-stat-value">{hasPredictionData ? <MetricValueInline prefix="¥" value={<FlashValue value={summary.suggestRecharge.toFixed(0)} tick={tick} />} /> : "暂无数据"}</strong>
+            <p>{hasPredictionData ? "避免后续调用中断" : "完成更多真实调用后显示"}</p>
+          </article>
         </div>
         <div className="dash3-prediction-chart-wrap">
           <div className="dash3-prediction-legend">
             <span><span className="dash3-prediction-legend-dot" style={{ background: "#f59e0b" }} /> 实际使用</span>
             <span><span className="dash3-prediction-legend-dot" style={{ background: "#3b82f6" }} /> 预测趋势</span>
+            {isFallbackPrediction ? <span className="dash3-prediction-source">演示数据</span> : null}
           </div>
-          {hasPredictionData ? (
-            <DualLineChart data={data} unit={data.unit} height={360} width={960} onTooltip={onTooltip} theme={theme} />
+          {shouldShowChart ? (
+            <DualLineChart data={data} unit={data.unit} height={300} width={960} onTooltip={onTooltip} theme={theme} />
           ) : (
             <div className="dash3-empty-chart">
               <strong>暂无调用数据</strong>
@@ -2470,11 +3269,26 @@ function TokenForecastDecisionSection({ data, summary, metric, setMetric, onTool
 function RecentCallLedger({ rows }) {
   const [expanded, setExpanded] = useState(false);
   const [openRowId, setOpenRowId] = useState(null);
-  const visibleRows = expanded ? rows.slice(0, 50) : rows.slice(0, 5);
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
   const canExpand = rows.length > 5;
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const visibleRows = expanded
+    ? rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+    : rows.slice(0, 5);
 
   function toggleRow(id) {
     setOpenRowId((prev) => (prev === id ? null : id));
+  }
+
+  function toggleExpanded() {
+    setExpanded((value) => {
+      const next = !value;
+      setPage(1);
+      setOpenRowId(null);
+      return next;
+    });
   }
 
   return (
@@ -2483,8 +3297,8 @@ function RecentCallLedger({ rows }) {
         title="API 调用流水"
         subtitle="每一次模型调用都会记录 Token、渠道、价格、折扣和最终扣费，方便你核对成本。"
         right={canExpand ? (
-          <button type="button" className="dash3-ledger-toggle" onClick={() => setExpanded((value) => !value)}>
-            {expanded ? "收起记录" : `展开全部记录（${Math.min(rows.length, 50)}）`}
+          <button type="button" className="dash3-ledger-toggle" onClick={toggleExpanded}>
+            {expanded ? "收起记录" : `展开记录（每页 10 行）`}
           </button>
         ) : null}
       />
@@ -2621,8 +3435,12 @@ function RecentCallLedger({ rows }) {
                 </article>
               );
             })}
-            {rows.length > 50 && expanded ? (
-              <p className="dash3-ledger-limit">已显示最近 50 条调用记录，更多历史数据后续可在调用日志页查看。</p>
+            {expanded && rows.length > pageSize ? (
+              <div className="dash3-ledger-pagination">
+                <button type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</button>
+                <span>第 {currentPage} / {totalPages} 页 · 共 {rows.length} 条</span>
+                <button type="button" disabled={currentPage >= totalPages} onClick={() => setPage((value) => Math.min(totalPages, value + 1))}>下一页</button>
+              </div>
             ) : null}
           </div>
         ) : (
@@ -2634,8 +3452,8 @@ function RecentCallLedger({ rows }) {
         )}
         {canExpand ? (
           <div className="dash3-ledger-bottom">
-            <button type="button" className="dash3-ledger-toggle" onClick={() => setExpanded((value) => !value)}>
-              {expanded ? "收起记录" : "展开全部记录"}
+            <button type="button" className="dash3-ledger-toggle" onClick={toggleExpanded}>
+              {expanded ? "收起记录" : "展开记录"}
             </button>
           </div>
         ) : null}
@@ -2867,12 +3685,22 @@ function MetricValueInline({ prefix, value, unit, className = "" }) {
   );
 }
 
-function PortraitMetric({ label, value, sub }) {
+function PortraitMetric({ label, value, sub, chartData = [], chartType = "line", chartColor = "cyan", valueFormatter }) {
   return (
     <div className="dash3-portrait-metric">
-      <span className="dash3-portrait-metric-label">{label}</span>
-      <strong className="dash3-portrait-metric-value">{value}</strong>
-      <small className="dash3-portrait-metric-sub">{sub}</small>
+      <div className="dash3-portrait-metric-copy">
+        <span className="dash3-portrait-metric-label">{label}</span>
+        <strong className="dash3-portrait-metric-value">{value}</strong>
+        <small className="dash3-portrait-metric-sub">{sub}</small>
+      </div>
+      <MiniMetricChart
+        data={chartData}
+        type={chartType}
+        color={chartColor}
+        valueFormatter={valueFormatter}
+        emptyText=""
+        height={62}
+      />
     </div>
   );
 }
@@ -2903,18 +3731,13 @@ export default function DashboardPage() {
   const [savingsOpen, setSavingsOpen] = useState(false);
   const [walletData, setWalletData] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
+  const localDemoMode = useSyncExternalStore(subscribeClientSnapshot, getClientLocalDemoMode, () => false);
   const [heatmapYear, setHeatmapYear] = useState(() => new Date().getFullYear());
   const [heatmapMonth, setHeatmapMonth] = useState(() => new Date().getMonth());
-  const [greeting] = useState(() => {
-    const h = new Date().getHours();
-    if (h < 6) return "凌晨好";
-    if (h < 12) return "上午好";
-    if (h < 14) return "中午好";
-    if (h < 18) return "下午好";
-    return "晚上好";
-  });
+  const greeting = useSyncExternalStore(subscribeClientSnapshot, getClientGreeting, () => "你好");
 
   const handleTooltip = useCallback((t) => setTooltip(t), []);
+
   const loadCustomer = useCallback(async (customerInput) => {
     const customerId = typeof customerInput === "string" ? customerInput : customerInput?.id;
     if (!customerId) return;
@@ -3014,24 +3837,82 @@ export default function DashboardPage() {
   }, [savingsPeriod]);
 
   useEffect(() => {
-    if (!customer?.id) return undefined;
     let cancelled = false;
+
+    if (localDemoMode) {
+      const now = new Date();
+      const expiresAt = new Date(now);
+      expiresAt.setDate(now.getDate() + 12);
+      const startedAt = new Date(now);
+      startedAt.setDate(now.getDate() - 18);
+      setWalletData({
+        source: "local-demo",
+        wallet: {
+          balanceCny: 58.8,
+          totalQuotaCny: 100,
+          usedQuotaCny: 41.2,
+          remainingQuotaCny: 58.8,
+          progressPercent: 41.2,
+          paidBalanceCny: 56.8,
+          giftBalanceCny: 2,
+        },
+        token: {
+          totalTokens: 1000000,
+          usedTokens: 412000,
+          remainingTokens: 588000,
+        },
+        plan: {
+          planName: "FlowAPI 黑金会员体验包",
+          planAmountCny: 100,
+          status: "active",
+          startedAt: startedAt.toISOString(),
+          expiresAt: expiresAt.toISOString(),
+          remainingDays: 12,
+        },
+        membership: {
+          status: "active",
+          level: "black_gold",
+          dailyBonusTokens: 20000,
+          todayClaimed: true,
+          expiresAt: expiresAt.toISOString(),
+          memberQuotaCny: 2,
+        },
+        billingPreference: { priorityMode: "package_first" },
+        wallets: [
+          { type: "member", name: "会员赠送额度", balanceCnyEquivalent: 2, locked: true },
+          { type: "package", name: "套餐额度", balanceCnyEquivalent: 0, locked: false },
+          { type: "paid", name: "充值余额", balanceCnyEquivalent: 56.8, locked: false },
+        ],
+      });
+      setWalletLoading(false);
+      return () => { cancelled = true; };
+    }
+
+    if (!customer?.id) {
+      setWalletData({ source: "empty", wallet: null, plan: null });
+      setWalletLoading(false);
+      return () => { cancelled = true; };
+    }
+
     setWalletLoading(true);
     fetch("/api/user/wallet-summary")
-      .then((r) => r.json())
+      .then((res) => res.json())
       .then((data) => { if (!cancelled) setWalletData(data); })
       .catch(() => { if (!cancelled) setWalletData({ source: "empty", wallet: null, plan: null }); })
       .finally(() => { if (!cancelled) setWalletLoading(false); });
+
     return () => { cancelled = true; };
-  }, [customer?.id, customer?.balance, customer?.calls?.length]);
+  }, [customer?.id, customer?.balance, localDemoMode]);
 
   /* Computed */
-  const user = customer || { name: "用户", email: "", balance: 0, totalSpend: 0, apiKeys: [], calls: [] };
+  const rawUser = customer || { name: "用户", email: "", balance: 0, totalSpend: 0, apiKeys: [], calls: [] };
+  const user = localDemoMode ? buildLocalDemoCustomer(rawUser) : rawUser;
+  const effectiveSavingsData = localDemoMode ? buildLocalDemoSavings(user.calls || []) : savingsData;
   const userName = user.name || "用户";
   const baseBalance = Number(user.balance) || 0;
   const usage = buildDashboardUsage(user);
   const modelSpend = buildModelSpendData(usage.calls);
-  const savingsByCallId = new Map((savingsData?.callSavings || []).map((item) => [item.id, item]));
+  const savingsByCallId = new Map((effectiveSavingsData?.callSavings || []).map((item) => [item.id, item]));
   const recentCallRows = buildRecentCallRows(usage.calls, user.apiKeys || []).map((row) => {
     const saving = savingsByCallId.get(row.id);
     if (!saving) return row;
@@ -3052,27 +3933,127 @@ export default function DashboardPage() {
   const dashboardStats = buildDashboardStats(user, usage.calls);
   const trendDays = trendRange === "90d" ? 90 : trendRange === "30d" ? 30 : 7;
   const trendData = buildTrendData(usage.calls, trendDays);
+  const dashboardAssetCharts = {
+    balance: [],
+    todaySpend: hasMiniSeriesData(buildTodayHourlyMiniSeries(usage.calls)) ? buildTodayHourlyMiniSeries(usage.calls) : [],
+    weekSpend: hasMiniSeriesData(buildDailyMiniSeries(trendData, "cost", 7)) ? buildDailyMiniSeries(trendData, "cost", 7) : [],
+    recentCalls: hasMiniSeriesData(buildDailyMiniSeries(trendData, "requests", 7)) ? buildDailyMiniSeries(trendData, "requests", 7) : [],
+    tokens: hasMiniSeriesData(buildDailyMiniSeries(trendData, "tokens", 7)) ? buildDailyMiniSeries(trendData, "tokens", 7) : [],
+    averageCost: hasMiniSeriesData(buildDailyAverageCostMiniSeries(trendData, 7)) ? buildDailyAverageCostMiniSeries(trendData, 7) : [],
+    savings: hasMiniSeriesData(buildSavingsMiniSeries(effectiveSavingsData, 7)) ? buildSavingsMiniSeries(effectiveSavingsData, 7) : [],
+  };
+  const weekRequestCount = dashboardAssetCharts.recentCalls.reduce((sum, item) => sum + Number(item.value || 0), 0);
   const modelUsage = buildModelUsage(modelSpend.ranking);
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const heatmapCalendar = useMemo(() => generateMonthCalendar(usage.calls, heatmapYear, heatmapMonth), [usage.calls, heatmapYear, heatmapMonth]);
-  const userTopModels = modelSpend.ranking.slice(0, 4).map((item) => ({
-    name: item.model,
-    id: item.model,
-    provider: item.provider,
-    tokens: `${formatCompactToken(item.tokens)} Tokens`,
-    pct: item.share,
-    color: item.color,
+  const localDemoRankItems = modelSpend.ranking.map((item, index) => ({
+    rank: index + 1,
+    model: item.model,
+    provider: item.provider || getModelProviderLabel(item.model),
+    tokens: item.tokens,
+    tokensLabel: `${formatCompactToken(item.tokens)} Token`,
+    changePercent: item.trend,
+    requests: item.requests,
+    costCny: item.spend,
+    share: item.share,
   }));
+  const effectiveMarketRanks = localDemoMode
+    ? { status: "local-demo", updatedAt: new Date().toISOString(), models: localDemoRankItems }
+    : marketRanks;
+  const effectiveFlowApiRanks = localDemoMode
+    ? { status: "local-demo", updatedAt: new Date().toISOString(), models: localDemoRankItems }
+    : flowApiRanks;
   const mostUsedModel = modelSpend.ranking[0];
   const mostExpensiveModel = [...modelSpend.ranking].sort((a, b) => b.spend - a.spend)[0];
-  const avgRequestCost = usage.calls.length
-    ? usage.calls.reduce((sum, call) => sum + Number(call.cost || 0), 0) / usage.calls.length
+  const savingsRows = Array.isArray(effectiveSavingsData?.callSavings) ? effectiveSavingsData.callSavings : [];
+  const nowForDashboard = new Date();
+  const weekStartForDashboard = new Date(nowForDashboard);
+  weekStartForDashboard.setDate(nowForDashboard.getDate() - 6);
+  weekStartForDashboard.setHours(0, 0, 0, 0);
+  const isSavingsToday = (row) => row.createdAt && isSameDay(new Date(row.createdAt), nowForDashboard);
+  const isSavingsThisWeek = (row) => row.createdAt && new Date(row.createdAt) >= weekStartForDashboard;
+  const todaySavingsTotals = sumSavingsRows(savingsRows, isSavingsToday);
+  const weekSavingsTotals = sumSavingsRows(savingsRows, isSavingsThisWeek);
+  const hasOfficialSavingsData = Boolean(Number(effectiveSavingsData?.summary?.officialCostCny || 0))
+    || savingsRows.some((row) => Number(row.officialCostCny || 0) > 0);
+  const totalOfficialCostCny = usage.hasCalls && hasOfficialSavingsData
+    ? Number(effectiveSavingsData?.summary?.officialCostCny || 0)
+    : null;
+  const totalActualCostCny = usage.hasCalls
+    ? Number(effectiveSavingsData?.summary?.actualCostCny || dashboardStats.totalCost || 0)
     : 0;
+  const totalSavingsCny = hasOfficialSavingsData ? Number(effectiveSavingsData?.summary?.savedAmountCny || 0) : 0;
+  const officialTrend = hasOfficialSavingsData && hasMiniSeriesData(buildSavingsCostSeries(effectiveSavingsData, trendData, "officialCostCny", 7))
+    ? buildSavingsCostSeries(effectiveSavingsData, trendData, "officialCostCny", 7)
+    : [];
+  const actualTrend = hasMiniSeriesData(buildSavingsCostSeries(effectiveSavingsData, trendData, "actualCostCny", 7))
+    ? buildSavingsCostSeries(effectiveSavingsData, trendData, "actualCostCny", 7)
+    : [];
+  const savingTrend = hasOfficialSavingsData && hasMiniSeriesData(buildSavingsCostSeries(effectiveSavingsData, trendData, "savedAmountCny", 7))
+    ? buildSavingsCostSeries(effectiveSavingsData, trendData, "savedAmountCny", 7)
+    : [];
+  const weekAvgCostTrend = buildDailyAverageCostMiniSeries(trendData, 7);
+  const todayHourlySpend = buildTodayHourlyMiniSeries(usage.calls);
+  const todayHourlyTokens = todayHourlySpend.map((item) => ({ label: item.label, value: Number(item.secondaryValue || 0), secondaryValue: Number(item.value || 0) }));
+  const weekRequests = trendData.slice(-7).reduce((sum, item) => sum + Number(item.requests || 0), 0);
+  const todayRequests = Number(dashboardStats.todayRequests || 0);
+  const totalOverviewData = {
+    tick,
+    totalSpendCny: Number(dashboardStats.totalCost || 0),
+    officialCostCny: totalOfficialCostCny,
+    actualCostCny: totalActualCostCny,
+    savedAmountCny: totalSavingsCny,
+    totalTokens: usage.calls.reduce((sum, call) => sum + Number(call.tokens || 0), 0),
+    totalRequests: usage.calls.length,
+    mostUsedModel,
+    mostExpensiveModel,
+    actualTrend,
+    officialTrend,
+    tokenTrend: dashboardAssetCharts.tokens,
+    requestTrend: dashboardAssetCharts.recentCalls,
+    mostUsedTrend: buildModelSparkSeries(mostUsedModel, trendData),
+    mostExpensiveTrend: buildModelSparkSeries(mostExpensiveModel, trendData),
+    recentRows: recentCallRows,
+  };
+  const weekOverviewData = {
+    tick,
+    weekSpendCny: Number(usage.overview.weekSpend || 0),
+    weekTokens: Number(usage.overview.weekTokens || 0),
+    weekSavedCny: Number(weekSavingsTotals.saved || 0),
+    weekRequests,
+    weekAvgCostPerRequestCny: weekRequests > 0 ? Number((Number(usage.overview.weekSpend || 0) / weekRequests).toFixed(6)) : null,
+    weekSpendTrend: dashboardAssetCharts.weekSpend,
+    weekTokenTrend: dashboardAssetCharts.tokens,
+    weekSavingTrend: savingTrend,
+    weekAvgCostTrend,
+  };
+  const todayOverviewData = {
+    tick,
+    balanceCny: baseBalance,
+    balanceDetail: baseBalance > 0 ? "当前可用于模型调用的余额" : "建议充值后开始调用",
+    balanceTrend: dashboardAssetCharts.balance,
+    planName: user.plan?.planName || "",
+    planDetail: user.plan?.planName
+      ? `${user.plan?.remainingDays ? `剩余 ${user.plan.remainingDays} 天` : "生效中"} · ${user.plan?.expiresAt ? `到期 ${new Date(user.plan.expiresAt).toLocaleDateString("zh-CN")}` : "暂无到期时间"}`
+      : "暂无套餐，按余额扣费",
+    planProgress: Number(user.wallet?.progressPercent || 0),
+    todayTokens: Number(dashboardStats.todayTokens || 0),
+    todaySpendCny: Number(dashboardStats.todayCost || 0),
+    todayOfficialCny: Number(todaySavingsTotals.official || 0),
+    todayActualCny: Number(todaySavingsTotals.actual || dashboardStats.todayCost || 0),
+    todaySavedCny: Number(todaySavingsTotals.saved || 0),
+    todayRequests,
+    recentCall: recentCallRows[0] || null,
+    todayTokenTrend: hasMiniSeriesData(todayHourlyTokens) ? todayHourlyTokens : [],
+    todaySpendTrend: hasMiniSeriesData(todayHourlySpend) ? todayHourlySpend : [],
+    todaySavingTrend: savingTrend,
+    recentCallTrend: dashboardAssetCharts.recentCalls,
+  };
 
   const prediction = buildPredictionFromTrend(trendData.slice(-7), predictionMetric, baseBalance);
   const predictionData = prediction.data;
   const basePrediction = prediction.summary;
-
+  const companionReward = buildCompanionReward(user.createdAt);
   const contentStyle = {
     background: "var(--dash-bg)",
     minHeight: "100vh",
@@ -3083,6 +4064,1320 @@ export default function DashboardPage() {
       <Head>
         <title>数据面板 - FlowAPI</title>
       </Head>
+      <style>{`
+        .dashboard-part1 {
+          display: grid;
+          gap: 26px;
+          margin: 0 0 48px;
+          padding: 26px;
+          border: 1px solid var(--dash-border);
+          border-radius: 28px;
+          background:
+            radial-gradient(circle at 7% 0%, rgba(99, 102, 241, 0.20), transparent 34%),
+            radial-gradient(circle at 96% 8%, rgba(34, 211, 238, 0.12), transparent 30%),
+            linear-gradient(145deg, rgba(99, 102, 241, 0.08), transparent 48%),
+            var(--dash-card-bg);
+          box-shadow: 0 24px 80px rgba(2, 6, 23, 0.18);
+          overflow: hidden;
+        }
+
+        .dashboard-part1 .dash3-header {
+          display: grid !important;
+          grid-template-columns: minmax(280px, 0.95fr) minmax(340px, 1.05fr) minmax(420px, 1.25fr) !important;
+          align-items: stretch !important;
+          justify-content: stretch !important;
+          width: 100% !important;
+          margin: 0 !important;
+          gap: 18px !important;
+        }
+
+        .dashboard-part1 .dash3-header > div {
+          min-width: 0 !important;
+        }
+
+        .dashboard-part1 .dash3-header > div:first-child,
+        .dashboard-part1 .dash3-header-center,
+        .dashboard-part1-heatmap .activity-heatmap-card {
+          min-height: 242px !important;
+          border: 1px solid rgba(148, 163, 184, 0.18) !important;
+          border-radius: 22px !important;
+          background:
+            radial-gradient(circle at 12% 0%, rgba(99, 102, 241, 0.18), transparent 36%),
+            rgba(15, 23, 42, 0.28) !important;
+          box-shadow: none !important;
+        }
+
+        .dashboard-part1 .dash3-header > div:first-child {
+          display: grid !important;
+          align-content: center !important;
+          justify-content: stretch !important;
+          gap: 16px !important;
+          padding: 26px !important;
+        }
+
+        .dashboard-part1 .dash3-header h1 {
+          max-width: 100% !important;
+          margin: 0 !important;
+          color: var(--dash-readable-number, var(--dash-text)) !important;
+          font-size: clamp(34px, 3.2vw, 54px) !important;
+          font-weight: 950 !important;
+          line-height: 1.05 !important;
+          letter-spacing: -0.035em !important;
+          overflow-wrap: anywhere !important;
+        }
+
+        .dashboard-part1 .dash3-header > div:first-child p {
+          max-width: 100% !important;
+          margin: 0 !important;
+          color: var(--dash-sub) !important;
+          font-size: 15px !important;
+          line-height: 1.7 !important;
+        }
+
+        .dashboard-part1 .dash3-header-center {
+          display: grid !important;
+          align-content: center !important;
+          gap: 14px !important;
+          padding: 22px !important;
+        }
+
+        .dashboard-part1 .dash3-companion-title {
+          display: flex !important;
+          flex-wrap: wrap !important;
+          align-items: baseline !important;
+          gap: 7px !important;
+          margin: 0 !important;
+          color: var(--dash-sub) !important;
+          font-size: 15px !important;
+          font-weight: 850 !important;
+          line-height: 1.2 !important;
+        }
+
+        .dashboard-part1 .dash3-companion-days {
+          margin: 0 !important;
+          color: var(--dash-readable-number, var(--dash-text)) !important;
+          font-size: clamp(34px, 3vw, 44px) !important;
+          font-weight: 950 !important;
+          line-height: 0.95 !important;
+        }
+
+        .dashboard-part1 .dash3-companion-lines {
+          gap: 5px !important;
+          color: var(--dash-sub) !important;
+          font-size: 13px !important;
+          line-height: 1.45 !important;
+        }
+
+        .dashboard-part1 .dash3-companion-lines b {
+          color: var(--dash-readable-number, var(--dash-text)) !important;
+          font-weight: 900 !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward {
+          gap: 10px !important;
+          margin-top: 2px !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-track {
+          height: 10px !important;
+          background: rgba(148, 163, 184, 0.18) !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-tiers {
+          gap: 8px !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-tiers span {
+          min-height: 32px !important;
+          padding: 0 10px !important;
+          background: rgba(15, 23, 42, 0.22) !important;
+        }
+
+        .dashboard-part1-heatmap {
+          min-width: 0 !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-card {
+          display: grid !important;
+          align-content: center !important;
+          gap: 10px !important;
+          height: 100% !important;
+          padding: 18px !important;
+          background:
+            radial-gradient(circle at 96% 0%, rgba(34, 211, 238, 0.12), transparent 34%),
+            rgba(15, 23, 42, 0.28) !important;
+          box-shadow: none !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-head {
+          display: flex !important;
+          align-items: flex-start !important;
+          justify-content: space-between !important;
+          gap: 10px !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-head span {
+          font-size: 10px !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-head h2 {
+          margin: 4px 0 0 !important;
+          font-size: 20px !important;
+          line-height: 1.05 !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-head p,
+        .dashboard-part1-heatmap .activity-heatmap-source {
+          display: none !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-month {
+          flex: none !important;
+          gap: 6px !important;
+          padding: 0 !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-month button {
+          width: 28px !important;
+          height: 28px !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-month strong {
+          min-width: 78px !important;
+          font-size: 12px !important;
+          white-space: nowrap !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-grid-wrap {
+          display: grid !important;
+          justify-content: center !important;
+          gap: 6px !important;
+          min-width: 0 !important;
+          overflow: visible !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-weekdays,
+        .dashboard-part1-heatmap .activity-heatmap-week {
+          gap: 5px !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-cell {
+          width: 25px !important;
+          height: 25px !important;
+          min-width: 25px !important;
+          border-radius: 8px !important;
+          font-size: 10px !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-legend {
+          margin-top: 2px !important;
+          justify-content: flex-end !important;
+          gap: 6px !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-legend i {
+          width: 12px !important;
+          height: 12px !important;
+          border-radius: 4px !important;
+        }
+
+        .dashboard-part1-heatmap .activity-heatmap-empty {
+          min-height: 118px !important;
+          padding: 14px !important;
+        }
+
+        .dashboard-part1 .dash3-section,
+        .dashboard-part1 .wallet-progress-card {
+          margin: 0 !important;
+        }
+
+        .dashboard-part1 .dash3-section-header,
+        .dashboard-part1 .dash3-section > .dash3-section-header {
+          margin-bottom: 20px !important;
+        }
+
+        .dashboard-part1 .dash3-section-header h2 {
+          font-size: clamp(24px, 2vw, 32px) !important;
+          line-height: 1.15 !important;
+        }
+
+        .dashboard-part1 .dash3-asset-overview-grid {
+          grid-template-columns: minmax(260px, 1.22fr) repeat(4, minmax(170px, 1fr)) !important;
+          gap: 16px !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card,
+        .dashboard-part1 .savings-card {
+          height: 278px !important;
+          min-height: 278px !important;
+          max-height: 278px !important;
+          border-color: rgba(148, 163, 184, 0.18) !important;
+          background:
+            radial-gradient(circle at 18% 0%, rgba(99, 102, 241, 0.14), transparent 34%),
+            rgba(15, 23, 42, 0.22) !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card .mini-metric-chart,
+        .dashboard-part1 .savings-card .mini-metric-chart {
+          max-height: 58px !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card p {
+          margin-top: 10px !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card-primary {
+          display: grid !important;
+          grid-template-rows: auto minmax(74px, auto) auto auto !important;
+          align-content: start !important;
+          gap: 10px !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card-primary > span {
+          margin: 0 !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card-primary > strong {
+          display: block !important;
+          min-width: 0 !important;
+          margin: 0 !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card-primary .dash3-metric-inline {
+          display: inline-flex !important;
+          width: min-content !important;
+          max-width: 100% !important;
+          align-items: baseline !important;
+          gap: 6px !important;
+          white-space: nowrap !important;
+          line-height: 1 !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card-primary .dash3-metric-prefix {
+          color: var(--dash-sub) !important;
+          font-size: clamp(20px, 1.6vw, 26px) !important;
+          font-weight: 780 !important;
+          line-height: 1 !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card-primary .dash3-metric-number {
+          color: var(--dash-readable-number, var(--dash-text)) !important;
+          font-size: clamp(48px, 4.2vw, 64px) !important;
+          font-weight: 850 !important;
+          letter-spacing: 0 !important;
+          line-height: 0.95 !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card-primary .dash3-gift-credit {
+          display: grid !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          min-height: 0 !important;
+          max-height: none !important;
+          gap: 4px !important;
+          align-items: start !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          border: 0 !important;
+          border-radius: 0 !important;
+          background: transparent !important;
+          color: var(--dash-sub) !important;
+          font-size: 13px !important;
+          font-weight: 850 !important;
+          line-height: 1.35 !important;
+          white-space: normal !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card-primary .dash3-gift-credit span {
+          display: block !important;
+          margin: 0 !important;
+          color: inherit !important;
+          font-size: inherit !important;
+          font-weight: inherit !important;
+          line-height: inherit !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card-primary .dash3-gift-credit b {
+          color: var(--dash-readable-number, var(--dash-text)) !important;
+          font-size: 14px !important;
+          font-weight: 950 !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card-primary .mini-metric-chart {
+          display: none !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card:not(.dash3-asset-card-primary):not(.dash3-live-call) > strong {
+          display: block !important;
+          min-width: 0 !important;
+          margin: 0 !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card:not(.dash3-asset-card-primary):not(.dash3-live-call) > strong .dash3-metric-inline {
+          display: inline-flex !important;
+          width: min-content !important;
+          max-width: 100% !important;
+          align-items: baseline !important;
+          gap: 6px !important;
+          white-space: nowrap !important;
+          line-height: 1 !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card:not(.dash3-asset-card-primary):not(.dash3-live-call) > strong .dash3-metric-prefix {
+          color: var(--dash-sub) !important;
+          font-size: clamp(20px, 1.6vw, 26px) !important;
+          font-weight: 780 !important;
+          line-height: 1 !important;
+        }
+
+        .dashboard-part1 .dash3-asset-card:not(.dash3-asset-card-primary):not(.dash3-live-call) > strong .dash3-metric-number {
+          color: var(--dash-readable-number, var(--dash-text)) !important;
+          font-size: clamp(42px, 3.3vw, 58px) !important;
+          font-weight: 850 !important;
+          letter-spacing: 0 !important;
+          line-height: 0.95 !important;
+          font-family: inherit !important;
+          font-variant-numeric: tabular-nums !important;
+          font-feature-settings: "tnum" !important;
+        }
+
+        .dashboard-part1 .wallet-progress-card {
+          border-color: rgba(148, 163, 184, 0.18) !important;
+          border-radius: 24px !important;
+          background:
+            radial-gradient(circle at 88% 0%, rgba(34, 211, 238, 0.14), transparent 30%),
+            radial-gradient(circle at 10% 0%, rgba(99, 102, 241, 0.16), transparent 34%),
+            rgba(15, 23, 42, 0.26) !important;
+          box-shadow: none !important;
+        }
+
+        .dash3-shell .dash3-forecast-metrics article {
+          display: grid !important;
+          grid-template-rows: auto minmax(52px, auto) auto !important;
+          align-content: center !important;
+          min-height: 154px !important;
+          gap: 10px !important;
+        }
+
+        .dash3-shell .dash3-forecast-metrics .prediction-stat-value {
+          display: flex !important;
+          min-height: 52px !important;
+          align-items: center !important;
+          color: var(--dash-readable-number) !important;
+          font-size: inherit !important;
+          font-weight: 760 !important;
+          line-height: 1 !important;
+          letter-spacing: 0 !important;
+          font-variant-numeric: tabular-nums !important;
+          font-feature-settings: "tnum" !important;
+          white-space: nowrap !important;
+        }
+
+        .dash3-shell .dash3-forecast-metrics .prediction-stat-value .dash3-metric-inline {
+          display: inline-flex !important;
+          align-items: baseline !important;
+          gap: 6px !important;
+          line-height: 1 !important;
+          white-space: nowrap !important;
+        }
+
+        .dash3-shell .dash3-forecast-metrics .prediction-stat-value .dash3-metric-number {
+          color: var(--dash-readable-number) !important;
+          font-size: 44px !important;
+          font-weight: 760 !important;
+          line-height: 1 !important;
+          letter-spacing: -0.018em !important;
+          font-family: inherit !important;
+          font-variant-numeric: tabular-nums !important;
+          font-feature-settings: "tnum" !important;
+        }
+
+        .dash3-shell .dash3-forecast-metrics .prediction-stat-value .dash3-metric-prefix,
+        .dash3-shell .dash3-forecast-metrics .prediction-stat-value .dash3-metric-unit {
+          color: var(--dash-sub) !important;
+          font-size: 16px !important;
+          font-weight: 650 !important;
+          line-height: 1 !important;
+          letter-spacing: 0 !important;
+        }
+
+        .token-market-table-head,
+        .token-market-row {
+          box-sizing: border-box !important;
+          display: grid !important;
+          grid-template-columns:
+            48px
+            minmax(188px, 1.35fr)
+            minmax(106px, 0.78fr)
+            minmax(106px, 0.78fr)
+            minmax(100px, 0.72fr)
+            minmax(94px, 0.68fr)
+            minmax(94px, 0.68fr)
+            minmax(150px, 0.95fr)
+            minmax(94px, 0.68fr)
+            minmax(78px, 0.56fr) !important;
+          column-gap: 14px !important;
+          align-items: center !important;
+        }
+
+        .token-market-table-head {
+          height: 44px !important;
+          margin: 0 8px !important;
+          padding: 0 14px !important;
+        }
+
+        .token-market-row {
+          height: 72px !important;
+          min-height: 72px !important;
+          max-height: 72px !important;
+          padding: 0 14px !important;
+        }
+
+        .token-market-table-head > span,
+        .token-market-row > span {
+          display: flex !important;
+          min-width: 0 !important;
+          height: 100% !important;
+          align-items: center !important;
+          align-self: center !important;
+        }
+
+        .token-market-table-head > span:first-child,
+        .token-market-row > span:first-child {
+          justify-content: center !important;
+          text-align: center !important;
+        }
+
+        .token-market-table-head > span:nth-child(n+3),
+        .token-market-row > span:nth-child(n+3) {
+          justify-content: flex-end !important;
+          text-align: right !important;
+        }
+
+        .token-market-table-head > span:nth-child(8),
+        .token-market-row > span:nth-child(8) {
+          justify-content: center !important;
+          text-align: center !important;
+        }
+
+        .token-market-model-cell {
+          align-items: center !important;
+          justify-content: flex-start !important;
+          text-align: left !important;
+        }
+
+        .token-market-model-cell > span {
+          min-width: 0 !important;
+        }
+
+        .token-market-model-cell strong,
+        .token-market-model-cell small {
+          display: block !important;
+          max-width: 100% !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
+        }
+
+        .token-market-price-pair,
+        .token-market-number,
+        .token-market-change,
+        .token-market-change-percent,
+        .token-market-saving,
+        .token-market-saving-percent {
+          align-items: flex-end !important;
+          justify-content: center !important;
+          text-align: right !important;
+          font-variant-numeric: tabular-nums !important;
+          font-feature-settings: "tnum" !important;
+        }
+
+        .token-market-change b {
+          min-width: 72px !important;
+          font-variant-numeric: tabular-nums !important;
+          font-feature-settings: "tnum" !important;
+        }
+
+        .token-market-chart {
+          height: 72px !important;
+          min-height: 72px !important;
+          align-items: center !important;
+          justify-content: center !important;
+          justify-self: center !important;
+        }
+
+        .token-market-chart .mini-metric-chart {
+          width: 140px !important;
+          height: 36px !important;
+          margin: 0 !important;
+          overflow: visible !important;
+        }
+
+        .token-market-chart .mini-metric-chart svg {
+          display: block !important;
+          width: 100% !important;
+          height: 100% !important;
+        }
+
+        .token-market-summary article {
+          display: grid !important;
+          grid-template-rows: auto minmax(62px, auto) auto !important;
+          align-content: center !important;
+          min-height: 148px !important;
+          gap: 8px !important;
+        }
+
+        .token-market-summary strong,
+        .token-market-summary-value {
+          display: flex !important;
+          min-height: 62px !important;
+          align-items: baseline !important;
+          gap: 6px !important;
+          margin: 0 !important;
+          color: var(--dash-readable-number, var(--dash-text)) !important;
+          font-size: clamp(42px, 3.3vw, 58px) !important;
+          font-weight: 850 !important;
+          line-height: 0.95 !important;
+          letter-spacing: 0 !important;
+          font-family: inherit !important;
+          font-variant-numeric: tabular-nums !important;
+          font-feature-settings: "tnum" !important;
+          white-space: nowrap !important;
+        }
+
+        .token-market-summary-value .live-number,
+        .token-market-summary-value .live-number-value {
+          color: inherit !important;
+          font: inherit !important;
+          line-height: inherit !important;
+          letter-spacing: inherit !important;
+        }
+
+        .token-market-summary-prefix,
+        .token-market-summary-unit {
+          color: var(--dash-sub) !important;
+          font-size: clamp(20px, 1.6vw, 26px) !important;
+          font-weight: 780 !important;
+          line-height: 1 !important;
+          letter-spacing: 0 !important;
+        }
+
+        .token-market-summary-value.is-empty {
+          align-items: center !important;
+          color: var(--dash-sub) !important;
+          font-size: 18px !important;
+          font-weight: 850 !important;
+          line-height: 1.2 !important;
+        }
+
+        .token-market-summary article > span,
+        .token-market-summary p {
+          margin: 0 !important;
+        }
+
+        .dashboard-portrait-top {
+          display: grid;
+          gap: 22px;
+          margin: 48px 0 42px;
+        }
+
+        .profile-ai-pair {
+          display: grid;
+          grid-template-columns: minmax(360px, 0.92fr) minmax(0, 1.08fr);
+          gap: 26px;
+          align-items: stretch;
+          min-width: 0;
+        }
+
+        .profile-ai-card,
+        .activity-heatmap-card {
+          min-width: 0;
+          border: 1px solid var(--dash-border);
+          border-radius: 24px;
+          background:
+            radial-gradient(circle at 10% 0%, rgba(99, 102, 241, 0.18), transparent 36%),
+            radial-gradient(circle at 100% 0%, rgba(34, 211, 238, 0.08), transparent 32%),
+            var(--dash-card-bg);
+          box-shadow: 0 22px 70px rgba(15, 23, 42, 0.14);
+        }
+
+        .profile-ai-card {
+          display: grid;
+          gap: 18px;
+          padding: 26px;
+        }
+
+        .profile-ai-card-top {
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr) auto;
+          gap: 16px;
+          align-items: center;
+          min-width: 0;
+        }
+
+        .profile-ai-avatar {
+          display: grid;
+          width: 78px;
+          height: 78px;
+          place-items: center;
+          border: 1px solid rgba(129, 140, 248, 0.32);
+          border-radius: 24px;
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.34), rgba(34, 211, 238, 0.18));
+          color: #fff;
+          font-size: 30px;
+          font-weight: 950;
+          box-shadow: 0 16px 42px rgba(99, 102, 241, 0.18);
+        }
+
+        .profile-ai-identity {
+          min-width: 0;
+        }
+
+        .profile-ai-identity span,
+        .activity-heatmap-head span {
+          color: var(--dash-accent);
+          font-size: 12px;
+          font-weight: 950;
+          letter-spacing: 0.08em;
+        }
+
+        .profile-ai-identity strong {
+          display: block;
+          margin-top: 5px;
+          overflow: hidden;
+          color: var(--dash-text);
+          font-size: 26px;
+          font-weight: 950;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .profile-ai-identity small {
+          display: block;
+          margin-top: 4px;
+          overflow: hidden;
+          color: var(--dash-sub);
+          font-size: 13px;
+          font-weight: 750;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .profile-ai-member,
+        .profile-ai-tags span,
+        .profile-ai-tags button {
+          display: inline-flex;
+          min-height: 34px;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid rgba(129, 140, 248, 0.28);
+          border-radius: 999px;
+          background: rgba(99, 102, 241, 0.12);
+          color: var(--dash-text);
+          font-family: inherit;
+          font-size: 12px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+
+        .profile-ai-member {
+          padding: 0 13px;
+          cursor: pointer;
+        }
+
+        .profile-ai-member.is-member {
+          border-color: rgba(250, 204, 21, 0.34);
+          background: linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(99, 102, 241, 0.18));
+          color: #facc15;
+        }
+
+        .profile-ai-source,
+        .activity-heatmap-source {
+          display: inline-flex;
+          width: fit-content;
+          min-height: 28px;
+          align-items: center;
+          padding: 0 10px;
+          border: 1px solid rgba(129, 140, 248, 0.26);
+          border-radius: 999px;
+          background: rgba(99, 102, 241, 0.1);
+          color: var(--dash-sub);
+          font-size: 12px;
+          font-weight: 850;
+        }
+
+        .profile-ai-tags {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .profile-ai-tags span,
+        .profile-ai-tags button {
+          padding: 0 12px;
+        }
+
+        .profile-ai-tags .active,
+        .profile-ai-tags button.active {
+          border-color: rgba(34, 197, 94, 0.34);
+          background: rgba(34, 197, 94, 0.12);
+          color: var(--dash-green);
+        }
+
+        .profile-ai-desc {
+          margin: 0;
+          color: var(--dash-sub);
+          font-size: 14px;
+          line-height: 1.7;
+        }
+
+        .profile-ai-main {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+          gap: 12px;
+          padding-top: 16px;
+          border-top: 1px solid var(--dash-border);
+        }
+
+        .profile-ai-balance,
+        .profile-ai-calls,
+        .profile-ai-models button,
+        .profile-ai-models > div {
+          min-width: 0;
+          border: 1px solid var(--dash-border);
+          border-radius: 18px;
+          background: rgba(15, 23, 42, 0.12);
+        }
+
+        .profile-ai-balance,
+        .profile-ai-calls {
+          display: grid;
+          gap: 9px;
+          padding: 16px;
+          color: inherit;
+          text-align: left;
+          cursor: pointer;
+        }
+
+        .profile-ai-balance span,
+        .profile-ai-calls span,
+        .profile-ai-models span,
+        .profile-ai-empty p {
+          color: var(--dash-sub);
+          font-size: 12px;
+          font-weight: 850;
+        }
+
+        .profile-ai-balance strong,
+        .profile-ai-calls strong {
+          display: flex;
+          align-items: baseline;
+          gap: 6px;
+          color: var(--dash-readable-number);
+          font-size: clamp(30px, 2.6vw, 42px);
+          font-weight: 850;
+          line-height: 1;
+          font-variant-numeric: tabular-nums;
+        }
+
+        .profile-ai-calls strong .live-number {
+          color: inherit;
+          font-size: inherit;
+          font-weight: inherit;
+          line-height: inherit;
+          letter-spacing: -0.018em;
+        }
+
+        .profile-ai-calls strong small {
+          color: var(--dash-sub);
+          font-size: 0.48em;
+          font-weight: 700;
+          line-height: 1;
+        }
+
+        .profile-ai-models {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+        }
+
+        .profile-ai-models button,
+        .profile-ai-models > div {
+          display: grid;
+          gap: 8px;
+          padding: 14px;
+          color: inherit;
+          text-align: left;
+        }
+
+        .profile-ai-models b {
+          display: flex;
+          min-width: 0;
+          align-items: center;
+          gap: 8px;
+          color: var(--dash-text);
+          font-style: normal;
+          font-weight: 920;
+        }
+
+        .profile-ai-models em {
+          min-width: 0;
+          overflow: hidden;
+          font-style: normal;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .profile-ai-models small {
+          color: var(--dash-sub);
+          font-size: 12px;
+          font-weight: 750;
+        }
+
+        .profile-ai-models strong {
+          color: var(--dash-readable-number);
+          font-size: 20px;
+          font-weight: 900;
+        }
+
+        .profile-ai-empty {
+          display: grid;
+          gap: 10px;
+          padding: 18px;
+          border: 1px dashed var(--dash-border);
+          border-radius: 18px;
+        }
+
+        .profile-ai-empty strong {
+          color: var(--dash-text);
+          font-size: 18px;
+          font-weight: 950;
+        }
+
+        .profile-ai-empty div {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .profile-ai-empty a {
+          min-height: 36px;
+          padding: 0 12px;
+          border: 1px solid rgba(129, 140, 248, 0.28);
+          border-radius: 999px;
+          color: var(--dash-text);
+          display: inline-flex;
+          align-items: center;
+          text-decoration: none;
+          font-size: 12px;
+          font-weight: 900;
+        }
+
+        .activity-heatmap-card {
+          display: grid;
+          gap: 18px;
+          padding: 26px;
+        }
+
+        .activity-heatmap-head {
+          display: flex;
+          justify-content: space-between;
+          gap: 18px;
+          align-items: flex-start;
+        }
+
+        .activity-heatmap-head h2 {
+          margin: 5px 0 8px;
+          color: var(--dash-text);
+          font-size: 26px;
+          font-weight: 950;
+        }
+
+        .activity-heatmap-head p {
+          margin: 0;
+          color: var(--dash-sub);
+          font-size: 14px;
+          line-height: 1.6;
+        }
+
+        .activity-heatmap-month {
+          display: inline-flex;
+          flex: none;
+          align-items: center;
+          gap: 8px;
+          padding: 7px;
+          border: 1px solid var(--dash-border);
+          border-radius: 999px;
+          background: rgba(15, 23, 42, 0.14);
+        }
+
+        .activity-heatmap-month button {
+          width: 30px;
+          height: 30px;
+          border: 0;
+          border-radius: 999px;
+          background: rgba(99, 102, 241, 0.16);
+          color: var(--dash-text);
+          font-size: 20px;
+          cursor: pointer;
+        }
+
+        .activity-heatmap-month strong {
+          color: var(--dash-text);
+          font-size: 13px;
+          font-weight: 900;
+          white-space: nowrap;
+        }
+
+        .activity-heatmap-grid-wrap {
+          position: relative;
+          overflow-x: auto;
+          padding: 6px 4px 12px;
+        }
+
+        .activity-heatmap-weekdays,
+        .activity-heatmap-week {
+          display: grid;
+          grid-template-columns: repeat(7, 42px);
+          justify-content: center;
+          gap: 8px;
+          min-width: 0;
+        }
+
+        .activity-heatmap-weekdays {
+          margin-bottom: 8px;
+        }
+
+        .activity-heatmap-weekdays span {
+          color: var(--dash-sub);
+          font-size: 12px;
+          font-weight: 850;
+          text-align: center;
+        }
+
+        .activity-heatmap-grid {
+          display: grid;
+          gap: 8px;
+        }
+
+        .activity-heatmap-cell {
+          display: grid;
+          width: 42px;
+          height: 42px;
+          aspect-ratio: 1;
+          place-items: center;
+          border: 1px solid rgba(148, 163, 184, 0.16);
+          border-radius: 10px;
+          background: rgba(148, 163, 184, 0.08);
+          color: var(--dash-sub);
+          font-size: 12px;
+          font-weight: 850;
+          cursor: pointer;
+        }
+
+        .activity-heatmap-cell.is-empty {
+          cursor: default;
+          opacity: 0.22;
+        }
+
+        .activity-heatmap-cell.level-1 { background: rgba(34, 197, 94, 0.16); color: #86efac; }
+        .activity-heatmap-cell.level-2 { background: rgba(34, 197, 94, 0.28); color: #bbf7d0; }
+        .activity-heatmap-cell.level-3 { background: rgba(16, 185, 129, 0.42); color: #ecfdf5; }
+        .activity-heatmap-cell.level-4 { background: rgba(45, 212, 191, 0.58); color: #042f2e; }
+
+        .activity-heatmap-tooltip {
+          position: fixed;
+          z-index: 1600;
+          display: grid;
+          gap: 4px;
+          min-width: 150px;
+          padding: 10px 12px;
+          border: 1px solid var(--dash-border);
+          border-radius: 12px;
+          background: var(--dash-card-bg);
+          color: var(--dash-text);
+          box-shadow: 0 18px 42px rgba(15, 23, 42, 0.24);
+          pointer-events: none;
+          transform: translate(12px, -110%);
+        }
+
+        .activity-heatmap-tooltip strong {
+          font-size: 13px;
+          font-weight: 950;
+        }
+
+        .activity-heatmap-tooltip span {
+          color: var(--dash-sub);
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .activity-heatmap-legend {
+          display: flex;
+          align-items: center;
+          justify-content: flex-end;
+          gap: 7px;
+          color: var(--dash-sub);
+          font-size: 12px;
+          font-weight: 850;
+        }
+
+        .activity-heatmap-legend i {
+          width: 18px;
+          height: 18px;
+          border-radius: 6px;
+          background: rgba(148, 163, 184, 0.08);
+        }
+
+        .activity-heatmap-legend .level-1 { background: rgba(34, 197, 94, 0.16); }
+        .activity-heatmap-legend .level-2 { background: rgba(34, 197, 94, 0.28); }
+        .activity-heatmap-legend .level-3 { background: rgba(16, 185, 129, 0.42); }
+        .activity-heatmap-legend .level-4 { background: rgba(45, 212, 191, 0.58); }
+
+        .activity-heatmap-empty {
+          display: grid;
+          place-items: center;
+          min-height: 260px;
+          gap: 10px;
+          border: 1px dashed var(--dash-border);
+          border-radius: 18px;
+          text-align: center;
+        }
+
+        .activity-heatmap-empty strong {
+          color: var(--dash-text);
+          font-size: 20px;
+          font-weight: 950;
+        }
+
+        .activity-heatmap-empty p {
+          max-width: 420px;
+          margin: 0;
+          color: var(--dash-sub);
+          line-height: 1.7;
+        }
+
+        .activity-day-drawer-layer {
+          position: fixed;
+          inset: 0;
+          z-index: 1500;
+          display: flex;
+          justify-content: flex-end;
+          background: rgba(2, 6, 23, 0.52);
+          backdrop-filter: blur(10px);
+        }
+
+        .activity-day-drawer {
+          width: min(420px, 100vw);
+          height: 100%;
+          padding: 26px;
+          border-left: 1px solid var(--dash-border);
+          background: var(--dash-bg);
+          color: var(--dash-text);
+          box-shadow: -24px 0 80px rgba(2, 6, 23, 0.28);
+        }
+
+        .activity-day-drawer > button {
+          float: right;
+          min-height: 34px;
+          padding: 0 12px;
+          border: 1px solid var(--dash-border);
+          border-radius: 10px;
+          background: var(--dash-card-bg);
+          color: var(--dash-text);
+          font-family: inherit;
+          font-weight: 850;
+        }
+
+        .activity-day-drawer > span {
+          color: var(--dash-accent);
+          font-size: 12px;
+          font-weight: 950;
+          letter-spacing: 0.08em;
+        }
+
+        .activity-day-drawer h3 {
+          margin: 8px 0 18px;
+          font-size: 28px;
+          font-weight: 950;
+        }
+
+        .activity-day-drawer-grid {
+          display: grid;
+          gap: 12px;
+        }
+
+        .activity-day-drawer-grid article {
+          display: grid;
+          gap: 8px;
+          padding: 16px;
+          border: 1px solid var(--dash-border);
+          border-radius: 16px;
+          background: var(--dash-card-bg);
+        }
+
+        .activity-day-drawer-grid span,
+        .activity-day-drawer p {
+          color: var(--dash-sub);
+        }
+
+        .activity-day-drawer-grid strong {
+          color: var(--dash-readable-number);
+          font-size: 22px;
+          font-weight: 900;
+          font-variant-numeric: tabular-nums;
+        }
+
+        @media (max-width: 1380px) {
+          .token-market-row {
+            height: auto !important;
+            max-height: none !important;
+            min-height: 128px !important;
+          }
+        }
+
+        @media (max-width: 760px) {
+          .dashboard-part1 {
+            gap: 18px !important;
+            margin-bottom: 34px !important;
+            padding: 16px !important;
+            border-radius: 22px !important;
+          }
+
+          .dashboard-part1 .dash3-header {
+            grid-template-columns: 1fr !important;
+            gap: 14px !important;
+          }
+
+          .dashboard-part1 .dash3-header > div:first-child,
+          .dashboard-part1 .dash3-header-center,
+          .dashboard-part1-heatmap .activity-heatmap-card {
+            min-height: auto !important;
+            padding: 20px !important;
+            border-radius: 18px !important;
+          }
+
+          .dashboard-part1 .dash3-header h1 {
+            font-size: 34px !important;
+          }
+
+          .dashboard-part1 .dash3-login-reward-tiers {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          .dashboard-part1-heatmap .activity-heatmap-card {
+            align-content: start !important;
+          }
+
+          .dashboard-part1-heatmap .activity-heatmap-cell {
+            width: 32px !important;
+            height: 32px !important;
+            min-width: 32px !important;
+          }
+
+          .dashboard-part1 .dash3-asset-overview-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .dashboard-part1 .dash3-asset-card,
+          .dashboard-part1 .savings-card {
+            height: auto !important;
+            min-height: 190px !important;
+            max-height: none !important;
+          }
+
+          .dashboard-portrait-top {
+            grid-template-columns: 1fr !important;
+            gap: 18px !important;
+            margin: 36px 0 34px !important;
+          }
+
+          .profile-ai-pair {
+            grid-template-columns: 1fr !important;
+            gap: 18px !important;
+          }
+
+          .profile-ai-card,
+          .activity-heatmap-card {
+            padding: 20px !important;
+            border-radius: 20px !important;
+          }
+
+          .profile-ai-card-top,
+          .activity-heatmap-head {
+            align-items: flex-start !important;
+            flex-direction: column !important;
+            grid-template-columns: auto minmax(0, 1fr) !important;
+          }
+
+          .profile-ai-member {
+            grid-column: 1 / -1 !important;
+            justify-self: start !important;
+          }
+
+          .profile-ai-main,
+          .profile-ai-models {
+            grid-template-columns: 1fr !important;
+          }
+
+          .activity-heatmap-month {
+            align-self: flex-start !important;
+          }
+
+          .activity-heatmap-weekdays,
+          .activity-heatmap-week {
+            grid-template-columns: repeat(7, 38px) !important;
+            min-width: 0 !important;
+            gap: 6px !important;
+          }
+
+          .activity-heatmap-cell {
+            width: 38px !important;
+            height: 38px !important;
+          }
+
+          .dash3-shell .dash3-forecast-metrics article {
+            min-height: 142px !important;
+          }
+
+          .dash3-shell .dash3-forecast-metrics .prediction-stat-value {
+            min-height: 48px !important;
+          }
+
+          .dash3-shell .dash3-forecast-metrics .prediction-stat-value .dash3-metric-number {
+            font-size: 38px !important;
+          }
+
+          .token-market-row {
+            grid-template-columns: 44px minmax(0, 1fr) !important;
+            gap: 10px 12px !important;
+            padding: 16px !important;
+          }
+
+          .token-market-row > span:nth-child(n+3):not(.token-market-chart) {
+            display: grid !important;
+            grid-column: 1 / -1 !important;
+            grid-template-columns: 92px minmax(0, 1fr) !important;
+            gap: 12px !important;
+            height: auto !important;
+            min-height: 32px !important;
+            align-items: center !important;
+            justify-content: stretch !important;
+            text-align: right !important;
+          }
+
+          .token-market-chart {
+            grid-column: 1 / -1 !important;
+            height: 48px !important;
+            min-height: 48px !important;
+          }
+
+          .token-market-chart .mini-metric-chart {
+            width: min(100%, 180px) !important;
+            height: 42px !important;
+          }
+        }
+      `}</style>
 
       <ConsoleLayout customer={user} currentPath="/dashboard" contentStyle={contentStyle}>
         <div className="dash3-shell">
@@ -3090,87 +5385,129 @@ export default function DashboardPage() {
           {/* ======== Global Tooltip ======== */}
           <DashboardTooltip tooltip={tooltip} theme={theme} />
 
-          {/* ======== SECTION 1: Header ======== */}
-          <header className="dash3-header">
-            <div>
-              <h1>{greeting}，{userName}</h1>
-              <p>你的 AI Token 资产正在流动，<FlowApiBrandText size="sm" /> 帮你看清每一次模型调用、每一笔消耗和未来额度需求。</p>
-            </div>
-            <div className="dash3-header-right">
-              <div className="dash3-brand-gradient" aria-label="FlowAPI 品牌">
-                <strong className="dash3-brand-gradient-text"><FlowApiBrandText size="xl" /></strong>
-                <span className="dash3-brand-gradient-sub">AI Token Router · 统一 API 中转站 · 多模型 · Token 资产</span>
-              </div>
-              <span className="dash3-live-badge">
-                <span className="dash3-live-dot" /> 实时
-              </span>
-            </div>
-          </header>
-
           {dashboardError ? <div className="dash3-error-banner">{dashboardError}</div> : null}
 
-          <AssetOverviewSection
-            overview={usage.overview}
-            tick={tick}
-            savingsData={savingsData}
-            savingsLoading={savingsLoading}
-            savingsPeriod={savingsPeriod}
+          <section className="dashboard-part1" aria-label="FlowAPI 首页资产总览">
+            <header className="dash3-header">
+              <div>
+                <h1>{greeting}，{userName}</h1>
+                <p>你的 AI Token 资产正在流动，<FlowApiBrandText size="sm" /> 帮你看清每一次模型调用、每一笔消耗和未来额度需求。</p>
+              </div>
+              <div className="dash3-header-center" aria-label="登录陪伴进度">
+                <p className="dash3-companion-title">
+                  <span>已陪伴</span>
+                  <FlowApiBrandText size="sm" />
+                  <span className="dash3-companion-days">{companionReward.days ?? "--"}</span>
+                  <span>天</span>
+                </p>
+                <div className="dash3-companion-lines">
+                  <span>{companionReward.label}</span>
+                  <span>下一档奖励：<b>¥{companionReward.nextTier?.reward ?? 0}</b> Token 额度</span>
+                </div>
+                <div className="dash3-login-reward">
+                  <div className="dash3-login-reward-head">
+                    <span>登录奖励进度</span>
+                    <strong>{Math.round(companionReward.progress || 0)}%</strong>
+                  </div>
+                  <div className="dash3-login-reward-track">
+                    <i style={{ width: `${Math.max(0, Math.min(100, companionReward.progress || 0))}%` }} />
+                  </div>
+                  <div className="dash3-login-reward-tiers">
+                    {LOGIN_REWARD_TIERS.map((tier) => (
+                      <span key={tier.days} className={Number(companionReward.days || 0) >= tier.days ? "active" : ""}>
+                        {tier.days} 天 <b>¥{tier.reward}</b>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="dashboard-part1-heatmap" aria-label="活跃热力图">
+                <ActivityHeatmapCard
+                  calendar={heatmapCalendar}
+                  hasData={usage.calls.length > 0}
+                  sourceLabel={localDemoMode ? "本地演示数据" : "真实调用数据"}
+                  onPreviousMonth={() => {
+                    const next = new Date(heatmapYear, heatmapMonth - 1, 1);
+                    setHeatmapYear(next.getFullYear());
+                    setHeatmapMonth(next.getMonth());
+                  }}
+                  onNextMonth={() => {
+                    const next = new Date(heatmapYear, heatmapMonth + 1, 1);
+                    setHeatmapYear(next.getFullYear());
+                    setHeatmapMonth(next.getMonth());
+                  }}
+                />
+              </div>
+            </header>
+
+            <AssetOverviewSection
+              overview={usage.overview}
+              trendData={trendData}
+              calls={usage.calls}
+              tick={tick}
+              savingsData={effectiveSavingsData}
+              savingsLoading={localDemoMode ? false : savingsLoading}
+              savingsPeriod={savingsPeriod}
+              onOpenSavings={() => setSavingsOpen(true)}
+              onOpenAsset={(assetKey) => setDetailModal(buildAssetOverviewDetail(assetKey, {
+                overview: usage.overview,
+                trendData,
+                recentRows: recentCallRows,
+                onTooltip: handleTooltip,
+                theme,
+              }))}
+            />
+
+            <WalletProgressCard
+              mode="dashboard"
+              loading={walletLoading}
+              empty={!walletLoading && walletData?.source === "empty"}
+              balanceCny={Number(walletData?.wallet?.balanceCny ?? user.balance ?? 0)}
+              totalQuotaCny={Number(walletData?.wallet?.totalQuotaCny || 0)}
+              usedQuotaCny={Number(walletData?.wallet?.usedQuotaCny || 0)}
+              remainingQuotaCny={Number(walletData?.wallet?.remainingQuotaCny ?? walletData?.wallet?.balanceCny ?? user.balance ?? 0)}
+              totalTokens={walletData?.token?.totalTokens}
+              usedTokens={walletData?.token?.usedTokens}
+              remainingTokens={walletData?.token?.remainingTokens}
+              planName={walletData?.plan?.planName}
+              planAmountCny={walletData?.plan?.planAmountCny}
+              planStatus={walletData?.plan?.status || "none"}
+              startedAt={walletData?.plan?.startedAt}
+              expiresAt={walletData?.plan?.expiresAt}
+              remainingDays={walletData?.plan?.remainingDays}
+              progressPercent={Number(walletData?.wallet?.progressPercent || 0)}
+              data={walletData}
+              dashboardOverview={usage.overview}
+            />
+          </section>
+
+          <WeekUsageSection
+            data={weekOverviewData}
+            onOpenDetail={setDetailModal}
             onOpenSavings={() => setSavingsOpen(true)}
-            onOpenAsset={(assetKey) => setDetailModal(buildAssetOverviewDetail(assetKey, {
-              overview: usage.overview,
-              trendData,
-              recentRows: recentCallRows,
-              onTooltip: handleTooltip,
-              theme,
-            }))}
           />
 
-          <WalletProgressCard
-            mode="dashboard"
-            loading={walletLoading}
-            empty={!walletLoading && walletData?.source === "empty"}
-            balanceCny={Number(walletData?.wallet?.balanceCny ?? user.balance ?? 0)}
-            totalQuotaCny={Number(walletData?.wallet?.totalQuotaCny || 0)}
-            usedQuotaCny={Number(walletData?.wallet?.usedQuotaCny || 0)}
-            remainingQuotaCny={Number(walletData?.wallet?.remainingQuotaCny ?? walletData?.wallet?.balanceCny ?? user.balance ?? 0)}
-            totalTokens={walletData?.token?.totalTokens}
-            usedTokens={walletData?.token?.usedTokens}
-            remainingTokens={walletData?.token?.remainingTokens}
-            planName={walletData?.plan?.planName}
-            planAmountCny={walletData?.plan?.planAmountCny}
-            planStatus={walletData?.plan?.status || "none"}
-            startedAt={walletData?.plan?.startedAt}
-            expiresAt={walletData?.plan?.expiresAt}
-            remainingDays={walletData?.plan?.remainingDays}
-            progressPercent={Number(walletData?.wallet?.progressPercent || 0)}
-            data={walletData}
+          <TodayAccountStatusSection
+            data={todayOverviewData}
+            onOpenDetail={setDetailModal}
+            onOpenSavings={() => setSavingsOpen(true)}
+            onOpenLedger={() => {
+              if (typeof document !== "undefined") {
+                document.getElementById("dash-recent-calls")?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }
+            }}
           />
 
-          <OnboardingChecklist customer={customer} usage={usage} />
-
-          <DashboardOperationsSection
+          <CostStabilitySection
             stats={dashboardStats}
             trendData={trendData}
-            trendRange={trendRange}
-            setTrendRange={setTrendRange}
             modelUsage={modelUsage}
             recentRows={recentCallRows}
-            onTooltip={handleTooltip}
-            theme={theme}
             onOpenMetric={(metricKey) => setDetailModal(buildMetricDetail(metricKey, { stats: dashboardStats, trendData, modelUsage, recentRows: recentCallRows }))}
             onOpenModel={(model) => setDetailModal(buildModelUsageDetail(model, trendData, recentCallRows))}
           />
 
-          <TokenSpendFlowSection
-            flow={modelSpend.flow}
-            ranking={modelSpend.ranking}
-            metric={flowMetric}
-            setMetric={setFlowMetric}
-            onTooltip={handleTooltip}
-            theme={theme}
-          />
-
-          <ModelSpendTrendSection ranking={modelSpend.ranking} onTooltip={handleTooltip} theme={theme} />
+          <RecentCallLedger rows={recentCallRows} />
 
           <TokenForecastDecisionSection
             data={predictionData}
@@ -3182,149 +5519,56 @@ export default function DashboardPage() {
             tick={tick}
           />
 
-          <RecentCallLedger rows={recentCallRows} />
+          <TokenSpendFlowSection
+            flow={modelSpend.flow}
+            ranking={modelSpend.ranking}
+            metric={flowMetric}
+            setMetric={setFlowMetric}
+            onTooltip={handleTooltip}
+            theme={theme}
+            onOpenModel={(model) => setDetailModal(buildModelUsageDetail(model, trendData, recentCallRows))}
+          />
+
+          <TokenMarketPanel />
 
           <SavingsDetailDrawer
             open={savingsOpen}
             onClose={() => setSavingsOpen(false)}
-            data={savingsData}
-            loading={savingsLoading}
+            data={effectiveSavingsData}
+            loading={localDemoMode ? false : savingsLoading}
             period={savingsPeriod}
             onPeriodChange={setSavingsPeriod}
           />
 
-          {/* ===== 全球模型热度排行 + FlowAPI 站内模型用量排行 ===== */}
           <section className="dash3-section">
+            <SectionTitle
+              title="模型市场参考"
+              subtitle="参考 FlowAPI 站内真实用量和全球模型热度，辅助你选择模型。"
+            />
             <div className="model-leaderboard-stack">
-              <ModelLeaderboard
-                title="全球模型热度排行"
-                subtitle="基于全球公开模型热度数据，仅供选择模型时参考。"
-                sourceLabel={marketRanks?.status === "synced" ? "全球 · 实时数据" : marketRanks?.status === "cached" ? "全球 · 最近同步数据" : "全球 · 同步中"}
-                updatedAt={marketRanks?.updatedAt}
-                items={marketRanks?.models || []}
-                loading={marketRanksLoading}
-                emptyText="全球模型热度数据同步中"
-              />
-
               <ModelLeaderboard
                 title="FlowAPI 站内模型用量排行"
                 subtitle="基于 FlowAPI 用户真实调用数据，展示本站最常被使用的大模型。"
-                sourceLabel="FlowAPI · 实时数据"
-                updatedAt={flowApiRanks?.updatedAt}
-                items={flowApiRanks?.models || []}
-                loading={flowApiRanksLoading}
+                sourceLabel={localDemoMode ? "FlowAPI · 演示数据" : "FlowAPI · 实时数据"}
+                updatedAt={effectiveFlowApiRanks?.updatedAt}
+                items={effectiveFlowApiRanks?.models || []}
+                loading={localDemoMode ? false : flowApiRanksLoading}
                 emptyText="暂无站内模型调用数据"
                 emptyDescription="完成真实调用后，这里会展示 FlowAPI 用户最常使用的模型。"
                 period={flowApiRanksPeriod}
                 onPeriodChange={setFlowApiRanksPeriod}
                 showTooltip
               />
-            </div>
-          </section>
 
-          <section className="dash3-section">
-            <SectionTitle
-              title="个人 AI 画像"
-              subtitle="根据最近 30 天调用行为生成的 AI 使用分析。"
-            />
-
-            <div className="dash3-portrait-layout">
-              {/* === Left: Profile Summary === */}
-              <div className="dash3-card dash3-portrait-summary">
-                <div className="dash3-portrait-hero">
-                  <div className="dash3-profile-avatar">
-                    {(user.name || user.email || "U")[0].toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="dash3-profile-name">{userName}</div>
-                    <div className="dash3-profile-email">{user.email || "未登录"}</div>
-                  </div>
-                </div>
-
-                <div className="dash3-portrait-tags">
-                  <span className="dash3-portrait-tag" style={{ background: "rgba(99,102,241,0.12)", color: "var(--dash-accent)" }}>{usage.hasCalls ? "已开始调用" : "待首次调用"}</span>
-                  <span className="dash3-portrait-tag" style={{ background: "rgba(245,158,11,0.12)", color: "#f59e0b" }}>{usage.hasCalls ? `${usage.calls.length} 次调用` : "暂无调用数据"}</span>
-                  <span className="dash3-portrait-tag" style={{ background: "rgba(34,197,94,0.12)", color: "#22c55e" }}>{baseBalance > 0 ? "余额可用" : "建议充值"}</span>
-                </div>
-
-                <p className="dash3-portrait-summary-text">
-                  {usage.hasCalls
-                    ? "你的常用模型、消耗模型和活跃趋势已基于真实调用记录生成。"
-                    : "完成第一次 API 调用后，这里会自动生成你的 AI 使用画像和模型消耗建议。"}
-                </p>
-
-                <div className="dash3-portrait-balance-row">
-                  <span>当前余额</span>
-                  <MetricValueInline prefix="¥" value={baseBalance.toFixed(2)} />
-                  <span style={{ fontSize: 11, color: "var(--dash-green)" }}>{usage.hasCalls ? `${usage.calls.length} 次真实调用` : "等待首次调用"}</span>
-                </div>
-              </div>
-
-              {/* === Right: Profile Metric Grid === */}
-              <div className="dash3-portrait-metrics">
-                <PortraitMetric label="最常用模型" value={mostUsedModel?.model || "暂无数据"} sub={mostUsedModel?.provider || "调用后生成"} />
-                <PortraitMetric label="最耗费模型" value={mostExpensiveModel?.model || "暂无数据"} sub={mostExpensiveModel ? `¥${mostExpensiveModel.spend.toFixed(4)} 累计消耗` : "调用后生成"} />
-                <PortraitMetric label="平均单次成本" value={`¥${avgRequestCost.toFixed(4)}`} sub="/ 次调用" />
-                <PortraitMetric label="本周 Token" value={`${formatCompactToken(usage.overview.weekTokens)} Tokens`} sub="最近 7 天真实消耗" />
-                <PortraitMetric label="本周请求" value={`${usage.calls.length} 次`} sub="最近调用记录" />
-                <PortraitMetric label="优化建议" value={mostExpensiveModel ? "检查高成本模型" : "先完成首次调用"} sub={mostExpensiveModel ? "确认是否用于高价值任务" : "数据生成后给出建议"} />
-              </div>
-            </div>
-
-            {/* Bottom: Top Models + Heatmap */}
-            <div className="dash3-portrait-bottom">
-              <div className="dash3-card">
-                <div className="dash3-card-subtitle">热门模型</div>
-                <div className="dash3-topmodels-mini">
-                  {userTopModels.length ? userTopModels.map((m, i) => (
-                    <div key={m.name} className="dash3-topmodel-row">
-                      <span className="dash3-topmodel-rank">{i + 1}</span>
-                      <ModelLogo model={m.id || m.name} provider={m.provider} size={24} />
-                      <span className="dash3-topmodel-name">{m.name}</span>
-                      <span className="dash3-topmodel-tokens">{m.tokens}</span>
-                      <div className="dash3-topmodel-bar-track">
-                        <div className="dash3-topmodel-bar-fill" style={{ width: `${m.pct}%`, background: m.color }} />
-                      </div>
-                    </div>
-                  )) : (
-                    <div className="dash3-empty-small">暂无真实模型数据，完成调用后自动生成排行。</div>
-                  )}
-                </div>
-              </div>
-              <div className="dash3-card dash3-heatmap-card">
-                <div className="dash3-card-subtitle" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span>活跃热力图</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHeatmapMonth((m) => m === 0 ? (setHeatmapYear((y) => y - 1), 11) : m - 1);
-                      }}
-                      style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}
-                    >‹</button>
-                    <span style={{ fontSize: 13, fontWeight: 700, minWidth: 80, textAlign: "center" }}>{heatmapCalendar?.label}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHeatmapMonth((m) => m === 11 ? (setHeatmapYear((y) => y + 1), 0) : m + 1);
-                      }}
-                      style={{ width: 26, height: 26, borderRadius: 6, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}
-                    >›</button>
-                  </div>
-                </div>
-                <div className="dash3-heatmap-wrap">
-                  <MonthCalendar calendar={heatmapCalendar} onTooltip={handleTooltip} theme={theme} />
-                </div>
-                <div className="dash3-heatmap-legend">
-                  <span>少</span>
-                  <span style={{ width: 14, height: 14, borderRadius: 3, background: theme === "light" ? "#e5e7eb" : "#1e293b", opacity: 0.6 }} />
-                  <span style={{ width: 14, height: 14, borderRadius: 3, background: theme === "light" ? "#dbeafe" : "#1e3a5f" }} />
-                  <span style={{ width: 14, height: 14, borderRadius: 3, background: theme === "light" ? "#d1fae5" : "#1e4a3f" }} />
-                  <span style={{ width: 14, height: 14, borderRadius: 3, background: theme === "light" ? "#86efac" : "#25632d" }} />
-                  <span style={{ width: 14, height: 14, borderRadius: 3, background: theme === "light" ? "#22c55e" : "#388a34" }} />
-                  <span>多</span>
-                </div>
-              </div>
+              <ModelLeaderboard
+                title="全球模型热度排行"
+                subtitle="基于全球公开模型热度数据，仅供选型参考。"
+                sourceLabel={effectiveMarketRanks?.status === "local-demo" ? "全球 · 演示数据" : effectiveMarketRanks?.status === "synced" ? "全球 · 实时数据" : effectiveMarketRanks?.status === "cached" ? "全球 · 最近同步数据" : "全球 · 数据同步中"}
+                updatedAt={effectiveMarketRanks?.updatedAt}
+                items={effectiveMarketRanks?.models || []}
+                loading={localDemoMode ? false : marketRanksLoading}
+                emptyText="全球模型热度数据同步中"
+              />
             </div>
           </section>
 

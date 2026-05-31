@@ -45,6 +45,7 @@ export default function ProviderLogo({
   if (!logoUrl || imgFailed) return fallback;
 
   return (
+    // eslint-disable-next-line @next/next/no-img-element -- Provider logos are tiny external marks with a text fallback.
     <img
       src={logoUrl}
       alt={provider.label}

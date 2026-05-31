@@ -5,8 +5,14 @@ import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import ModelLogo from "@/components/ModelLogo";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
+import InteractiveCard from "@/components/InteractiveCard";
+import { buildCcSwitchConfigUrl } from "@/lib/cc-switch";
+import { formatDateTime, formatPercent, formatRequestCount, formatSmallCny, formatToken as formatUnifiedToken } from "@/lib/format/number-format";
 
 const API_BASE_URL = "https://flowapi.fun/v1";
+const DEFAULT_MODEL_ID = "deepseek-chat";
+const CC_SWITCH_RELEASE_URL = "https://github.com/farion1231/cc-switch/releases/tag/v3.15.0";
+const CC_SWITCH_WINDOWS_URL = "https://github.com/farion1231/cc-switch/releases/download/v3.15.0/CC-Switch-v3.15.0-Windows.msi";
 
 function maskToken(token = "") {
   if (!token || token.length <= 14) return "sk-******";
@@ -17,26 +23,21 @@ function maskToken(token = "") {
 
 function formatDate(value) {
   if (!value) return "暂无记录";
-  return new Date(value).toLocaleString("zh-CN", { hour12: false });
+  return formatDateTime(value);
 }
 
 function formatCny(value) {
-  const number = Number(value || 0);
-  if (number > 0 && number < 0.01) return `¥${number.toFixed(6)}`;
-  return `¥${number.toFixed(2)}`;
+  return formatSmallCny(value);
 }
 
 function formatToken(value) {
-  const number = Number(value || 0);
-  if (number >= 1000000) return `${(number / 1000000).toFixed(2)}M Token`;
-  if (number >= 1000) return `${(number / 1000).toFixed(1)}K Token`;
-  return `${number.toLocaleString("zh-CN")} Token`;
+  return formatUnifiedToken(value);
 }
 
 function pricePerMLabel(value) {
   const number = Number(value || 0);
   if (!Number.isFinite(number) || number <= 0) return "价格同步中";
-  return `¥${number.toFixed(number % 1 === 0 ? 0 : 2)} / M Token`;
+  return `${formatSmallCny(number)} / M Token`;
 }
 
 function modelPriceSummary(model = {}) {
@@ -69,6 +70,87 @@ function normalizeModel(model = {}) {
     flowapiOutputPricePerM: model.flowapiOutputPricePerM || model.outputPricePerM || null,
     primaryButtonHref: model.primaryButtonHref || "/api-management",
   };
+}
+
+function ApiManagementGuideHero({ onCreateKey }) {
+  return (
+    <section className="guide-hero api-management-guide-hero">
+      <span className="guide-hero-badge">
+        <span className="guide-hero-badge-text"><FlowApiBrandText text="FLOWAPI" /> 中转站</span>
+      </span>
+      <h1>三步即可开始</h1>
+      <p>不懂 API 也能照着配置。先选模型，再创建 API Key，复制 Base URL 后即可开始调用。</p>
+      <div className="guide-hero-steps">
+        <span>下载工具</span>
+        <span>创建 API Key</span>
+        <span>自动配置</span>
+        <span>查看用量</span>
+      </div>
+      <div className="api-management-guide-actions">
+        <button type="button" onClick={onCreateKey}>选择模型创建 API Key</button>
+        <Link href="/models">前往模型广场</Link>
+      </div>
+    </section>
+  );
+}
+
+function ApiManagementGuideSteps({ onCreateKey, onAutoConfig, onOpenDetail }) {
+  return (
+    <section className="guide-three-steps api-management-guide-steps">
+      <InteractiveCard className="guide-step-wide" title="下载 CC" hint="点击查看安装说明" onClick={() => onOpenDetail("download")}>
+        <div className="guide-step-wide-top">
+          <div className="guide-step-wide-num">01</div>
+          <h3>下载 CC</h3>
+          <p>先下载并安装客户端 / 配置工具，准备好本地调用环境。</p>
+        </div>
+        <div className="guide-step-wide-bottom">
+          <div className="guide-dl-btns">
+            <a className="guide-step-action guide-dl-btn" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>Windows 下载</a>
+            <a className="guide-step-action guide-dl-btn" href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>macOS 下载</a>
+            <a className="guide-step-action guide-dl-btn" href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>全部版本</a>
+          </div>
+          <p className="guide-dl-hint">无法访问 GitHub？请优先使用上方站内下载按钮。</p>
+        </div>
+      </InteractiveCard>
+
+      <InteractiveCard className="guide-step-wide" title="创建 API Key" hint="点击查看 API Key 说明" onClick={() => onOpenDetail("createKey")}>
+        <div className="guide-step-wide-top">
+          <div className="guide-step-wide-num">02</div>
+          <h3>创建 API Key</h3>
+          <p>创建你的专属 API Key，用于在客户端或代码中调用模型。</p>
+        </div>
+        <div className="guide-step-wide-bottom">
+          <button className="guide-step-action" type="button" onClick={(event) => { event.stopPropagation(); onCreateKey(); }}>选择模型创建</button>
+        </div>
+      </InteractiveCard>
+
+      <InteractiveCard className="guide-step-wide" title="配置调用地址" hint="点击查看配置参数" onClick={() => onOpenDetail("config")}>
+        <div className="guide-step-wide-top">
+          <div className="guide-step-wide-num">03</div>
+          <h3>配置调用地址</h3>
+          <p>启动 CC-Switch 后，填入 Base URL、API Key 和 Model ID。</p>
+        </div>
+        <div className="guide-step-wide-bottom">
+          <button className="guide-step-action" type="button" onClick={(event) => { event.stopPropagation(); onAutoConfig(); }}>启动 CC-Switch</button>
+          <p className="guide-autoconfig-hint">
+            <Link href="/help#manual-config" onClick={(event) => event.stopPropagation()}>自动配置失败？查看手动配置教程</Link>
+          </p>
+        </div>
+      </InteractiveCard>
+
+      <InteractiveCard className="guide-step-wide" title="开始使用" hint="点击查看测试说明" onClick={() => onOpenDetail("start")}>
+        <div className="guide-step-wide-top">
+          <div className="guide-step-wide-num">04</div>
+          <h3>开始使用</h3>
+          <p>完成配置后发起第一次调用，并在数据面板查看 Token 消耗。</p>
+        </div>
+        <div className="guide-step-wide-bottom guide-step-links">
+          <Link className="guide-step-action" href="/dashboard" onClick={(event) => event.stopPropagation()}>查看用量</Link>
+          <Link className="guide-step-action secondary" href="/models" onClick={(event) => event.stopPropagation()}>选择模型</Link>
+        </div>
+      </InteractiveCard>
+    </section>
+  );
 }
 
 export default function ApiManagementPage() {
@@ -136,6 +218,10 @@ export default function ApiManagementPage() {
     showToast(label);
   }
 
+  function scrollToCreateCard() {
+    document.getElementById("api-create-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   async function refreshCustomer() {
     if (!customer?.id) return;
     const res = await fetch(`/api/customer?customerId=${customer.id}`);
@@ -146,6 +232,7 @@ export default function ApiManagementPage() {
   }
 
   function openCreateModal(model = selectedModel) {
+    scrollToCreateCard();
     if (!model?.modelId) {
       showToast("模型配置同步中，请稍后再试");
       return;
@@ -159,6 +246,100 @@ export default function ApiManagementPage() {
     }));
     setCreatedKey(null);
     setCreateModalOpen(true);
+  }
+
+  function handleAutoConfig() {
+    const primaryKey = apiKeys[0];
+    if (!primaryKey?.token || !String(primaryKey.token).startsWith("sk-")) {
+      showToast("请先在下方创建 API Key，再启动 CC-Switch");
+      scrollToCreateCard();
+      return;
+    }
+    const modelId = primaryKey.publicModelId || selectedModel?.modelId || DEFAULT_MODEL_ID;
+    const url = buildCcSwitchConfigUrl({
+      apiKey: primaryKey.token,
+      baseUrl: API_BASE_URL,
+      model: modelId,
+      name: "FlowAPI",
+      displayName: primaryKey.modelDisplayName || modelId,
+    });
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.target = "_blank";
+    anchor.rel = "noreferrer";
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    showToast("正在启动 CC-Switch");
+  }
+
+  function openGuideDetail(step) {
+    const curl = `curl ${API_BASE_URL}/chat/completions \\
+  -H "Authorization: Bearer 你的 API Key" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model": "${selectedModel?.modelId || DEFAULT_MODEL_ID}",
+       "messages": [{"role":"user","content":"你好"}]}'`;
+    const configs = {
+      download: {
+        title: "01 下载 CC-Switch",
+        description: "先下载并安装配置工具，准备好本地调用环境。",
+        rows: [
+          { label: "Windows 下载", value: "CC-Switch-v3.15.0-Windows.msi" },
+          { label: "全部版本", value: CC_SWITCH_RELEASE_URL },
+          { label: "下一步", value: "回到本页选择模型并创建 API Key" },
+        ],
+        actions: <a href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer">下载 Windows 版本</a>,
+      },
+      createKey: {
+        title: "02 创建 API Key",
+        description: "API Key 是你的调用凭证，请在下方 CREATE API KEY 区域选择模型后创建。",
+        rows: [
+          { label: "当前模型", value: selectedModel?.modelId || "模型同步中" },
+          { label: "创建位置", value: "本页 CREATE API KEY 卡片" },
+          { label: "安全提醒", value: "API Key 默认脱敏展示，完整值只在复制时使用" },
+        ],
+        actions: <button type="button" onClick={() => openCreateModal(selectedModel)}>选择模型创建 API Key</button>,
+      },
+      config: {
+        title: "03 配置调用地址",
+        description: "把 Base URL、API Key、Model ID 分别填入你的客户端。",
+        rows: [
+          { label: "Base URL", value: API_BASE_URL },
+          { label: "Model ID", value: selectedModel?.modelId || DEFAULT_MODEL_ID },
+          { label: "Chat Completions", value: `${API_BASE_URL}/chat/completions` },
+        ],
+        actions: <button type="button" onClick={() => copyText(API_BASE_URL, "Base URL 已复制")}>复制 Base URL</button>,
+      },
+      start: {
+        title: "04 开始使用",
+        description: "完成配置后先跑一次最短测试，再去数据面板看 Token 消耗。",
+        rows: [
+          { label: "成功标志", value: "返回 200 或模型回复内容" },
+          { label: "调用流水", value: "数据面板会展示模型、Token、金额和状态" },
+          { label: "常见错误", value: "余额不足、API Key 错误、模型名写错、网络超时" },
+        ],
+        actions: <Link href="/dashboard">查看数据面板</Link>,
+      },
+    };
+    const config = configs[step] || configs.download;
+    setDetail({
+      title: config.title,
+      description: config.description,
+      badge: "API 接入步骤",
+      sections: [
+        { title: "核心说明", content: <DetailRows rows={config.rows} /> },
+        { title: "测试示例", content: <DetailTable columns={[
+          { key: "step", label: "项目" },
+          { key: "title", label: "内容" },
+          { key: "description", label: "说明" },
+        ]} rows={[
+          { step: "Base URL", title: API_BASE_URL, description: "统一接入地址，不要改成上游地址" },
+          { step: "Model", title: selectedModel?.modelId || DEFAULT_MODEL_ID, description: "可在模型广场复制其他模型 ID" },
+          { step: "Curl", title: curl, description: "替换为你的 API Key 后即可测试" },
+        ]} /> },
+      ],
+      actions: config.actions,
+    });
   }
 
   function canSelectModel(model) {
@@ -272,10 +453,10 @@ export default function ApiManagementPage() {
         { label: "状态", value: keyStatus(key).label },
       ];
       const summaryRows = data.summary ? [
-        { label: "总请求", value: `${data.summary.totalRequests} 次` },
+        { label: "总请求", value: formatRequestCount(data.summary.totalRequests) },
         { label: "总 Token", value: formatToken(data.summary.totalTokens) },
         { label: "总消耗", value: formatCny(data.summary.totalSpendCny) },
-        { label: "成功率", value: `${data.summary.successRate}%` },
+        { label: "成功率", value: formatPercent(data.summary.successRate) },
       ] : [];
       setDetail({
         title: key.label || "API Key 详情",
@@ -298,6 +479,15 @@ export default function ApiManagementPage() {
                 rows={data.recentCalls.slice(0, 8).map((call) => ({
                   ...call,
                   createdAt: formatDate(call.createdAt),
+                  model: (
+                    <span className="model-name-cell">
+                      <ModelLogo model={call.model} provider={call.provider} size={20} />
+                      <span className="model-text">
+                        <strong className="model-name">{call.model || "未知模型"}</strong>
+                        <small className="model-provider">{call.provider || "未知供应商"}</small>
+                      </span>
+                    </span>
+                  ),
                   totalTokens: formatToken(call.totalTokens),
                   costCny: formatCny(call.costCny),
                   status: call.status === "success" ? "成功" : call.status === "failed" ? "失败" : "同步中",
@@ -332,34 +522,12 @@ export default function ApiManagementPage() {
       <Head><title>API 管理 - FlowAPI</title></Head>
       <ConsoleLayout customer={customer} currentPath="/api-management">
         <main className="api-management-page">
-          <section className="api-management-hero">
-            <div>
-              <span>API KEY CONSOLE</span>
-              <h1><FlowApiBrandText /> API 管理</h1>
-              <p>先选模型，再创建专属 API Key。复制 Base URL、API Key 和 Model ID 后即可接入 CC-Switch、Cherry Studio、Chatbox 或代码项目。</p>
-            </div>
-            <Link href="/models">去选择大模型</Link>
-          </section>
+          <div className="guide-page api-management-guide-page">
+            <ApiManagementGuideHero onCreateKey={() => openCreateModal(selectedModel)} />
+            <ApiManagementGuideSteps onCreateKey={() => openCreateModal(selectedModel)} onAutoConfig={handleAutoConfig} onOpenDetail={openGuideDetail} />
+          </div>
 
-          <section className="api-management-quickstart">
-            <div>
-              <span>Base URL</span>
-              <code>{API_BASE_URL}</code>
-              <button type="button" onClick={() => copyText(API_BASE_URL, "Base URL 已复制")}>复制</button>
-            </div>
-            <div>
-              <span>当前模型</span>
-              <code>{selectedModel?.modelId || "模型同步中"}</code>
-              <button type="button" disabled={!selectedModel?.modelId} onClick={() => copyText(selectedModel.modelId, "Model ID 已复制")}>复制</button>
-            </div>
-            <div>
-              <span>下一步</span>
-              <strong>{apiKeys.length ? "复制已有 API Key 或创建新 Key" : "创建第一个 API Key"}</strong>
-              <small>API Key 默认脱敏展示，完整值只在复制时使用。</small>
-            </div>
-          </section>
-
-          <section className="api-management-create-card">
+          <section id="api-create-section" className="api-management-create-card">
             <div className="api-management-card-head">
               <div>
                 <span>CREATE API KEY</span>
@@ -390,7 +558,7 @@ export default function ApiManagementPage() {
               </div>
               <label>
                 <span>搜索</span>
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索 Key / 模型" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索 API Key / 模型" />
               </label>
             </div>
 
@@ -536,7 +704,12 @@ export default function ApiManagementPage() {
         </div>
       ) : null}
 
-      <CardDetailModal open={Boolean(detail)} onClose={() => setDetail(null)} {...(detail || {})} actions={usageLoading ? null : <Link href="/help">查看接入教程</Link>} />
+      <CardDetailModal
+        open={Boolean(detail)}
+        onClose={() => setDetail(null)}
+        {...(detail || {})}
+        actions={detail?.actions ?? (usageLoading ? null : <Link href="/help">查看接入教程</Link>)}
+      />
       {toast ? <div className="models-toast-v3">{toast}</div> : null}
     </>
   );

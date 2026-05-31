@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
+import { formatSmallCny } from "@/lib/format/number-format";
 
 const amounts = [
   { value: 20, label: "¥20", desc: "体验测试" },
@@ -59,16 +60,16 @@ const paymentQrImages = {
 };
 
 const weeklyPackages = [
-  { id: "cell_50", code: "CELL-50", name: "点火测试", scene: "低成本验证", price: 12, quotaText: "50 万", quotaTokens: 500000, validDays: 7, unitPrice: "0.24 元 / 万", tag: "试用", highlight: false, benefits: ["有效期：7 天", "单价：0.24 元 / 万", "可叠加购买", "优先消耗最早到期权益"] },
-  { id: "drive_100", code: "DRIVE-100", name: "日常推进", scene: "日常 Coding", price: 24, quotaText: "100 万", quotaTokens: 1000000, validDays: 7, unitPrice: "0.24 元 / 万", tag: "常用", highlight: true, benefits: ["有效期：7 天", "单价：0.24 元 / 万", "可叠加购买", "优先消耗最早到期权益"] },
-  { id: "orbit_200", code: "ORBIT-200", name: "高频航段", scene: "高频自动化", price: 45, quotaText: "200 万", quotaTokens: 2000000, validDays: 7, unitPrice: "0.23 元 / 万", tag: "高频", highlight: false, benefits: ["有效期：7 天", "单价：0.23 元 / 万", "可叠加购买", "优先消耗最早到期权益"] },
-  { id: "core_500", code: "CORE-500", name: "主推燃料舱", scene: "长程主力", price: 108, quotaText: "500 万", quotaTokens: 5000000, validDays: 7, unitPrice: "0.22 元 / 万", tag: "主推", highlight: true, featured: true, benefits: ["有效期：7 天", "单价：0.22 元 / 万", "可叠加购买", "优先消耗最早到期权益"] },
+  { id: "cell_50", code: "CELL-50", name: "点火测试", scene: "低成本验证", price: 12, quotaText: "50 万", quotaTokens: 500000, validDays: 7, unitPrice: "¥0.24 / 万 Token", tag: "试用", highlight: false, benefits: ["有效期：7 天", "单价：¥0.24 / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
+  { id: "drive_100", code: "DRIVE-100", name: "日常推进", scene: "日常 Coding", price: 24, quotaText: "100 万", quotaTokens: 1000000, validDays: 7, unitPrice: "¥0.24 / 万 Token", tag: "常用", highlight: true, benefits: ["有效期：7 天", "单价：¥0.24 / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
+  { id: "orbit_200", code: "ORBIT-200", name: "高频航段", scene: "高频自动化", price: 45, quotaText: "200 万", quotaTokens: 2000000, validDays: 7, unitPrice: "¥0.23 / 万 Token", tag: "高频", highlight: false, benefits: ["有效期：7 天", "单价：¥0.23 / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
+  { id: "core_500", code: "CORE-500", name: "主推燃料舱", scene: "长程主力", price: 108, quotaText: "500 万", quotaTokens: 5000000, validDays: 7, unitPrice: "¥0.22 / 万 Token", tag: "主推", highlight: true, featured: true, benefits: ["有效期：7 天", "单价：¥0.22 / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
 ];
 
 const monthlyPackages = [
-  { id: "monthly_probe", name: "前进一：探测", quotaText: "每日 10 万 / 月共 300 万", price: 30, validDays: 30, unitPrice: "0.10 元 / 万", totalValue: "¥72.00", plusEquivalent: "约等于 1 个 Plus", recommended: false, benefits: ["有效期：30 天", "单价：0.10 元 / 万", "额度重置：每天", "总额度：¥72.00", "约等于 1 个 Plus"] },
-  { id: "monthly_launch", name: "前进二：启航", quotaText: "每日 30 万 / 月共 900 万", price: 98, validDays: 30, unitPrice: "0.11 元 / 万", totalValue: "¥216.00", plusEquivalent: "约等于 2 个 Plus", recommended: false, benefits: ["有效期：30 天", "单价：0.11 元 / 万", "额度重置：每天", "总额度：¥216.00", "约等于 2 个 Plus"] },
-  { id: "monthly_cruise", name: "前进三：巡航", quotaText: "每日 50 万 / 月共 1500 万", price: 168, validDays: 30, unitPrice: "0.11 元 / 万", totalValue: "¥360.00", plusEquivalent: "约等于 3.5 个 Plus", recommended: true, benefits: ["有效期：30 天", "单价：0.11 元 / 万", "额度重置：每天", "总额度：¥360.00", "约等于 3.5 个 Plus"] },
+  { id: "monthly_probe", name: "前进一：探测", quotaText: "每日 10 万 / 月共 300 万", price: 30, validDays: 30, unitPrice: "¥0.10 / 万 Token", totalValue: "¥72.00", plusEquivalent: "约等于 1 个 Plus", recommended: false, benefits: ["有效期：30 天", "单价：¥0.10 / 万 Token", "额度重置：每天", "总额度：¥72.00", "约等于 1 个 Plus"] },
+  { id: "monthly_launch", name: "前进二：启航", quotaText: "每日 30 万 / 月共 900 万", price: 98, validDays: 30, unitPrice: "¥0.11 / 万 Token", totalValue: "¥216.00", plusEquivalent: "约等于 2 个 Plus", recommended: false, benefits: ["有效期：30 天", "单价：¥0.11 / 万 Token", "额度重置：每天", "总额度：¥216.00", "约等于 2 个 Plus"] },
+  { id: "monthly_cruise", name: "前进三：巡航", quotaText: "每日 50 万 / 月共 1500 万", price: 168, validDays: 30, unitPrice: "¥0.11 / 万 Token", totalValue: "¥360.00", plusEquivalent: "约等于 3.5 个 Plus", recommended: true, benefits: ["有效期：30 天", "单价：¥0.11 / 万 Token", "额度重置：每天", "总额度：¥360.00", "约等于 3.5 个 Plus"] },
 ];
 
 const rechargeTrustItems = [
@@ -93,7 +94,7 @@ function formatDate(value) {
 }
 
 function formatMoney(value) {
-  return `¥ ${Number(value || 0).toFixed(2)}`;
+  return formatSmallCny(value);
 }
 
 function getPaymentPayload({ customerId, amount, paymentMethod, purchaseType, pkg, paymentRef = "" }) {
@@ -343,10 +344,6 @@ export default function RechargePage() {
           <div>
             <span className="recharge-page-kicker">资产管理</span>
             <h1>充值 Token</h1>
-            <p>当前余额 <strong>¥ {Number(customer.balance).toFixed(2)}</strong></p>
-          </div>
-          <div className="recharge-page-badges">
-            <span>人民币充值</span><span>套餐可选</span><span>异常订单人工兜底</span>
           </div>
         </div>
 

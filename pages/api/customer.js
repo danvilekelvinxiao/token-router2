@@ -1,4 +1,5 @@
 import { getDashboard, loginCustomer } from "@/lib/customer-store";
+import { buildLocalDemoDashboard, isLocalDemoRequest } from "@/lib/local-demo-dashboard";
 import { assertCustomerOwner } from "@/lib/session";
 
 export default async function handler(req, res) {
@@ -16,6 +17,7 @@ export default async function handler(req, res) {
     if (!session) return;
     const customer = await getDashboard(session.customerId);
     if (!customer) return res.status(404).json({ error: "用户不存在或服务实例已重启" });
+    if (isLocalDemoRequest(req)) return res.status(200).json(buildLocalDemoDashboard(customer));
     return res.status(200).json(customer);
   }
 

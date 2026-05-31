@@ -4,11 +4,9 @@ import { useRouter } from "next/router";
 import { useCallback, useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal from "@/components/CardDetailModal";
-import SavingsDetailDrawer from "@/components/analytics/savings-detail-drawer";
 import UserBadges from "@/components/profile/user-badges";
 import UserBadgeDrawer from "@/components/profile/user-badge-drawer";
 import LiveNumber from "@/components/ui/live-number";
-import WalletProgressCard from "@/components/wallet/wallet-progress-card";
 
 const ANNOUNCEMENTS = [
   {
@@ -96,12 +94,6 @@ function formatMoney(value) {
   return `¥${Number(value || 0).toFixed(2)}`;
 }
 
-function formatCompactCount(value) {
-  const number = Number(value || 0);
-  if (number >= 10000) return `${(number / 10000).toFixed(number >= 100000 ? 0 : 1)} 万`;
-  return String(number);
-}
-
 function formatDate(value) {
   if (!value) return "-";
   return new Date(value).toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
@@ -138,17 +130,13 @@ export default function ProfilePage() {
   const [invitesExpanded, setInvitesExpanded] = useState(false);
   const [rewardsExpanded, setRewardsExpanded] = useState(false);
   const [referralModal, setReferralModal] = useState("");
+  const [referralDetailsOpen, setReferralDetailsOpen] = useState(false);
   const [referralForm, setReferralForm] = useState({ amountCny: "", method: "alipay", account: "", realName: "", remark: "" });
   const [referralMessage, setReferralMessage] = useState("");
-  const [savingsData, setSavingsData] = useState(null);
-  const [savingsLoading, setSavingsLoading] = useState(true);
-  const [savingsOpen, setSavingsOpen] = useState(false);
-  const [savingsPeriod, setSavingsPeriod] = useState("all");
   const [badgesData, setBadgesData] = useState(null);
   const [badgesLoading, setBadgesLoading] = useState(true);
   const [badgesOpen, setBadgesOpen] = useState(false);
   const [walletData, setWalletData] = useState(null);
-  const [walletLoading, setWalletLoading] = useState(true);
 
   const refreshProfile = useCallback(async (c) => {
     if (!c) {
@@ -218,18 +206,6 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!customer?.id) return undefined;
     let cancelled = false;
-    queueMicrotask(() => { if (!cancelled) setSavingsLoading(true); });
-    fetch(`/api/analytics/savings?period=${savingsPeriod}`)
-      .then((res) => res.json())
-      .then((data) => { if (!cancelled) setSavingsData(data); })
-      .catch(() => { if (!cancelled) setSavingsData({ source: "empty", summary: null, modelSavings: [], callSavings: [] }); })
-      .finally(() => { if (!cancelled) setSavingsLoading(false); });
-    return () => { cancelled = true; };
-  }, [customer?.id, savingsPeriod]);
-
-  useEffect(() => {
-    if (!customer?.id) return undefined;
-    let cancelled = false;
     queueMicrotask(() => { if (!cancelled) setBadgesLoading(true); });
     fetch("/api/profile/badges")
       .then((res) => res.json())
@@ -242,12 +218,10 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!customer?.id) return undefined;
     let cancelled = false;
-    queueMicrotask(() => { if (!cancelled) setWalletLoading(true); });
     fetch("/api/user/wallet-summary")
       .then((res) => res.json())
       .then((data) => { if (!cancelled) setWalletData(data); })
       .catch(() => { if (!cancelled) setWalletData({ source: "empty", wallet: null, plan: null }); })
-      .finally(() => { if (!cancelled) setWalletLoading(false); });
     return () => { cancelled = true; };
   }, [customer?.id, customer?.balance, customer?.calls?.length]);
 
@@ -291,40 +265,7 @@ export default function ProfilePage() {
     .filter((item) => item.status === "已发布" || item.status === "进行中")
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.publishedAt) - new Date(a.publishedAt));
   const ranking = assetRanking || buildLocalRanking(customer);
-  const balanceCny = Number(customer.balance || 0);
-  const totalSpendCny = Number(customer.totalSpend || 0);
-  const savingsAmountCny = savingsData?.summary?.savedAmountCny;
-  const hasSavingsData = savingsData?.source === "real" && savingsAmountCny !== null && savingsAmountCny !== undefined;
-  const profileStats = [
-    {
-      key: "balance",
-      label: "账户余额",
-      value: <LiveNumber value={balanceCny} prefix="¥" decimals={2} />,
-      note: balanceCny > 0 ? "可用于模型调用与套餐扣费" : "充值后即可开始调用模型",
-      tone: "primary",
-    },
-    {
-      key: "spend",
-      label: "累计消耗",
-      value: <LiveNumber value={totalSpendCny} prefix="¥" decimals={2} />,
-      note: totalSpendCny > 0 ? "来自真实模型调用扣费" : "完成调用后自动累计",
-      tone: "violet",
-    },
-    {
-      key: "calls",
-      label: "调用次数",
-      value: <><LiveNumber value={formatCompactCount(calls.length)} /><span>次</span></>,
-      note: calls.length > 0 ? "已记录在调用流水中" : "完成首次 API 调用后显示",
-      tone: "green",
-    },
-    {
-      key: "keys",
-      label: "API 密匙",
-      value: <><LiveNumber value={apiKeys.length} /><span>个</span></>,
-      note: apiKeys.length > 0 ? "默认脱敏保护，可随时管理" : "创建 API Key 后开始接入",
-      tone: "slate",
-    },
-  ];
+  const isBlackGoldMember = walletData?.membership?.status === "active";
 
   async function copyQqGroup() {
     await navigator.clipboard.writeText("217637139");
@@ -378,13 +319,10 @@ export default function ProfilePage() {
 
         {/* ===== Profile Header ===== */}
         <div className="profile-user-hero">
-          <div style={{
-            width: 72, height: 72, borderRadius: 20,
-            background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "#fff", fontSize: 30, fontWeight: 900, flex: "none",
-          }}>
-            {(customer.name || customer.email || "U")[0].toUpperCase()}
+          <div className={`profile-avatar-wrap ${isBlackGoldMember ? "is-black-gold" : ""}`}>
+            <div className="profile-avatar-core">
+              {(customer.name || customer.email || "U")[0].toUpperCase()}
+            </div>
           </div>
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 900, color: "var(--page-heading)", margin: 0, letterSpacing: "-0.03em" }}>
@@ -401,7 +339,7 @@ export default function ProfilePage() {
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--page-success-text)" }} />
                 已验证
               </span>
-              {walletData?.membership?.status === "active" ? (
+              {isBlackGoldMember ? (
                 <span className="profile-membership-badge">FLOWAPI 黑金会员</span>
               ) : null}
             </div>
@@ -414,66 +352,11 @@ export default function ProfilePage() {
           />
         </div>
 
-        <WalletProgressCard
-          mode="profile"
-          loading={walletLoading}
-          empty={!walletLoading && walletData?.source === "empty"}
-          balanceCny={Number(walletData?.wallet?.balanceCny ?? customer.balance ?? 0)}
-          totalQuotaCny={Number(walletData?.wallet?.totalQuotaCny || 0)}
-          usedQuotaCny={Number(walletData?.wallet?.usedQuotaCny || 0)}
-          remainingQuotaCny={Number(walletData?.wallet?.remainingQuotaCny ?? walletData?.wallet?.balanceCny ?? customer.balance ?? 0)}
-          totalTokens={walletData?.token?.totalTokens}
-          usedTokens={walletData?.token?.usedTokens}
-          remainingTokens={walletData?.token?.remainingTokens}
-          planName={walletData?.plan?.planName}
-          planAmountCny={walletData?.plan?.planAmountCny}
-          planStatus={walletData?.plan?.status || "none"}
-          startedAt={walletData?.plan?.startedAt}
-          expiresAt={walletData?.plan?.expiresAt}
-          remainingDays={walletData?.plan?.remainingDays}
-          progressPercent={Number(walletData?.wallet?.progressPercent || 0)}
-          data={walletData}
-        />
-
         {/* ===== Two-column layout ===== */}
         <div className="profile-main-grid">
 
           {/* ---- Left ---- */}
           <div style={{ display: "grid", gap: 20, alignContent: "start" }}>
-
-            {/* Stats Row */}
-            <section className="profile-asset-overview" aria-label="账户资产概览">
-              <div className="profile-asset-overview-head">
-                <div>
-                  <span>账户资产</span>
-                  <h2>余额、消耗与接入概览</h2>
-                </div>
-                <em>真实数据同步</em>
-              </div>
-              <div className="profile-asset-metric-grid">
-                {profileStats.map((item) => (
-                  <article key={item.key} className={`profile-asset-metric tone-${item.tone}`}>
-                    <span>{item.label}</span>
-                    <strong>{item.value}</strong>
-                    <p>{item.note}</p>
-                  </article>
-                ))}
-              </div>
-              <button type="button" className="profile-savings-strip" onClick={() => setSavingsOpen(true)}>
-                <div className="profile-savings-copy">
-                  <span>成本优势</span>
-                  <strong>累计节省金额</strong>
-                  <p>{hasSavingsData ? "根据真实调用、官方价格和 FlowAPI 实际价格计算。" : "完成真实模型调用后，系统会自动计算节省金额。"}</p>
-                </div>
-                <div className="profile-savings-value">
-                  <b className={hasSavingsData ? "" : "empty"}>
-                    {savingsLoading ? "同步中" : hasSavingsData ? <LiveNumber value={Number(savingsAmountCny || 0)} prefix="¥" decimals={2} /> : "暂无数据"}
-                  </b>
-                  <small>{savingsData?.savingRank ? `节省排名前 ${Number(savingsData.savingRank.percentileTop || 0)}%` : "排名数据生成中"}</small>
-                </div>
-                <span className="profile-savings-action">查看详情</span>
-              </button>
-            </section>
 
             {/* Edit Form */}
             <div style={{ background: "var(--page-card-bg)", border: "1px solid var(--page-card-border)", borderRadius: 16, padding: "24px" }}>
@@ -572,6 +455,7 @@ export default function ProfilePage() {
           setInvitesExpanded={setInvitesExpanded}
           rewardsExpanded={rewardsExpanded}
           setRewardsExpanded={setRewardsExpanded}
+          onOpenDetails={() => setReferralDetailsOpen(true)}
           onOpenAction={(type) => {
             setReferralModal(type);
             setReferralMessage("");
@@ -713,13 +597,16 @@ export default function ProfilePage() {
             </form>
           </div>
         ) : null}
-        <SavingsDetailDrawer
-          open={savingsOpen}
-          onClose={() => setSavingsOpen(false)}
-          data={savingsData}
-          loading={savingsLoading}
-          period={savingsPeriod}
-          onPeriodChange={setSavingsPeriod}
+        <ReferralDetailDrawer
+          open={referralDetailsOpen}
+          referral={referral}
+          onClose={() => setReferralDetailsOpen(false)}
+          onOpenAction={(type) => {
+            setReferralDetailsOpen(false);
+            setReferralModal(type);
+            setReferralMessage("");
+            setReferralForm({ amountCny: "", method: "alipay", account: "", realName: "", remark: "" });
+          }}
         />
         <UserBadgeDrawer
           open={badgesOpen}
@@ -741,6 +628,7 @@ function ReferralProgram({
   setInvitesExpanded,
   rewardsExpanded,
   setRewardsExpanded,
+  onOpenDetails,
   onOpenAction,
 }) {
   const code = referral?.code || fallbackCode || "FLOW8888";
@@ -758,17 +646,21 @@ function ReferralProgram({
   const progressValue = Math.min(100, (validInvites / 50) * 100);
   const nextTarget = validInvites >= 50 ? null : validInvites >= 20 ? 50 : 20;
   const nextNeed = nextTarget ? Math.max(0, nextTarget - validInvites) : 0;
-  const progressTip = nextTarget
-    ? `再邀请 ${nextNeed} 位有效充值用户，即可解锁${nextTarget === 20 ? "进阶邀请：10% 可提现佣金 + 10% 等额额度" : "高级邀请：15% 可提现佣金 + 15% 等额额度"}。`
-    : "你已解锁最高等级奖励：15% 可提现佣金 + 15% 等额额度。";
+  const nextLevelName = nextTarget === 20 ? "进阶邀请" : nextTarget === 50 ? "高级邀请" : "最高等级";
+  const rewardSteps = rules.map((rule) => {
+    const threshold = rule.key === "premium" ? 50 : rule.key === "advanced" ? 20 : 0;
+    const isUnlocked = validInvites >= threshold;
+    const isCurrent = referral?.levelKey ? referral.levelKey === rule.key : (!nextTarget && rule.key === "premium") || (nextTarget === 20 && rule.key === "basic") || (nextTarget === 50 && rule.key === "advanced");
+    return { ...rule, threshold, isUnlocked, isCurrent };
+  });
 
   return (
     <section className="profile-referral-suite">
       <div className="profile-referral-hero">
         <div>
-          <span>Referral Program</span>
+          <span>邀请返佣</span>
           <h2>邀请好友赚佣金</h2>
-          <p>好友通过你的专属链接注册并充值后，你可以获得奖励额度和可提现佣金，邀请越多，奖励越多。</p>
+          <p>分享专属链接给好友。好友完成真实充值后，系统自动结算佣金和奖励额度。</p>
         </div>
         <div className="profile-referral-actions">
           <button type="button" className="btn-primary" onClick={() => onOpenAction("withdraw")}>申请提现</button>
@@ -776,51 +668,40 @@ function ReferralProgram({
         </div>
       </div>
 
-      <div className="profile-referral-copy-grid">
-        <div>
+      <div className="profile-referral-share-panel">
+        <div className="profile-referral-share-main">
           <span>专属邀请链接</span>
-          <code>{inviteUrl}</code>
-          <button type="button" onClick={() => onCopy(inviteUrl, "url")}>{copied === "url" ? "邀请链接已复制" : "复制邀请链接"}</button>
+          <div>
+            <code>{inviteUrl}</code>
+            <button type="button" onClick={() => onCopy(inviteUrl, "url")}>{copied === "url" ? "已复制" : "复制链接"}</button>
+          </div>
+          <p>建议直接发链接给客户，注册关系会自动绑定。</p>
         </div>
-        <div>
-          <span>专属邀请码</span>
-          <code>{code}</code>
-          <button type="button" onClick={() => onCopy(code, "code")}>{copied === "code" ? "邀请码已复制" : "复制邀请码"}</button>
+        <div className="profile-referral-code-card">
+          <span>邀请码</span>
+          <strong>{code}</strong>
+          <button type="button" onClick={() => onCopy(code, "code")}>{copied === "code" ? "已复制" : "复制"}</button>
         </div>
       </div>
 
-      <div className="profile-referral-stats">
+      <div className="profile-referral-summary">
         {[
-          ["累计邀请", `${referral?.totalInvites || 0} 人`],
-          ["有效充值", `${referral?.validInvites || 0} 人`],
-          ["累计佣金", formatMoney(referral?.totalCommissionCny)],
-          ["可提现佣金", formatMoney(referral?.withdrawableCommissionCny)],
-          ["已提现佣金", formatMoney(referral?.withdrawnCommissionCny)],
-          ["累计奖励额度", formatMoney(referral?.totalCreditBonusCny)],
-          ["已用佣金购买 Token", formatMoney(referral?.usedCommissionForTokenCny)],
-        ].map(([label, value]) => (
-          <div key={label}><span>{label}</span><strong>{value}</strong></div>
+          { label: "累计邀请", value: Number(referral?.totalInvites || 0), suffix: "人", hint: "通过你的链接注册的好友" },
+          { label: "有效充值", value: Number(referral?.validInvites || 0), suffix: "人", hint: "完成真实充值后计入奖励" },
+          { label: "可提现佣金", value: Number(referral?.withdrawableCommissionCny || 0), prefix: "¥", decimals: 2, hint: "可申请提现或购买 Token" },
+        ].map((item) => (
+          <div key={item.label} className="profile-referral-kpi">
+            <span>{item.label}</span>
+            <strong><LiveNumber value={item.value} prefix={item.prefix || ""} suffix={item.suffix || ""} decimals={item.decimals} /></strong>
+            <p>{item.hint}</p>
+          </div>
         ))}
-      </div>
-
-      <div className="profile-referral-section">
-        <div className="profile-panel-head">
-          <div><span>奖励规则</span><h2>邀请奖励规则</h2></div>
-          <em>{referral?.level ? `当前：${referral.level}` : "服务端计算"}</em>
-        </div>
-        <p className="profile-referral-rule-copy">
-          好友通过你的专属邀请链接或邀请码注册后，只要好友完成实际充值，你就可以获得对应等级的邀请奖励。每个被邀请新用户只会触发一次首笔充值双向奖励额度，好友后续每次实际充值，邀请人仍可继续获得对应比例奖励。
-        </p>
-        <div className="profile-referral-rule-grid">
-          {rules.map((rule) => (
-            <div key={rule.key} className={referral?.levelKey === rule.key ? "active" : ""}>
-              <strong>{rule.level}</strong>
-              <span>{rule.rangeLabel}</span>
-              <p>{rule.commissionRate}% 可提现佣金</p>
-              <p>{rule.creditBonusRate}% 等额额度</p>
-            </div>
-          ))}
-        </div>
+        <button type="button" className="profile-referral-detail-card" onClick={onOpenDetails}>
+          <span>佣金明细</span>
+          <strong>查看完整返佣数据</strong>
+          <p>累计佣金、已提现、奖励额度、购买 Token 记录都收进这里。</p>
+          <em>打开抽屉</em>
+        </button>
       </div>
 
       <div className="profile-referral-section">
@@ -834,13 +715,39 @@ function ReferralProgram({
               <span>当前进度</span>
               <strong>{validInvites >= 50 ? "50+" : `${validInvites} / 50`}</strong>
             </div>
-            <p>{progressTip}</p>
+            <div className="profile-referral-next-goal">
+              <span>{nextTarget ? "下一目标" : "已达最高等级"}</span>
+              <strong>{nextTarget ? `还差 ${nextNeed} 人解锁${nextLevelName}` : "高级邀请已解锁"}</strong>
+              <p>{nextTarget ? "有效充值用户越多，返佣等级越高。" : "继续邀请好友，每次有效充值仍会继续结算奖励。"}</p>
+            </div>
           </div>
           <div className="profile-referral-progress-track"><i style={{ width: `${progressValue}%` }} /></div>
           <div className="profile-referral-progress-nodes">
             <span className={validInvites >= 0 ? "active" : ""}><b>0</b>普通邀请</span>
             <span className={validInvites >= 20 ? "active" : ""}><b>20</b>进阶邀请</span>
             <span className={validInvites >= 50 ? "active" : ""}><b>50</b>高级邀请</span>
+          </div>
+          <div className="profile-referral-reward-steps" aria-label="邀请等级奖励">
+            {rewardSteps.map((rule) => (
+              <article
+                key={rule.key}
+                className={[
+                  "profile-referral-reward-step",
+                  rule.isUnlocked ? "unlocked" : "locked",
+                  rule.isCurrent ? "current" : "",
+                ].filter(Boolean).join(" ")}
+              >
+                <div>
+                  <span>{rule.threshold === 0 ? "0 人起" : `${rule.threshold} 人解锁`}</span>
+                  <strong>{rule.level}</strong>
+                </div>
+                <ul>
+                  <li>{rule.commissionRate}% 可提现佣金</li>
+                  <li>{rule.creditBonusRate}% 等额 Token 额度</li>
+                </ul>
+                <em>{rule.isUnlocked ? "已解锁" : "未解锁"}</em>
+              </article>
+            ))}
           </div>
         </div>
       </div>
@@ -884,6 +791,48 @@ function ReferralProgram({
         ))}
       </ReferralList>
     </section>
+  );
+}
+
+function ReferralDetailDrawer({ open, referral, onClose, onOpenAction }) {
+  if (!open) return null;
+  const detailItems = [
+    ["累计邀请", `${referral?.totalInvites || 0} 人`, "所有通过你邀请链接或邀请码注册的用户。"],
+    ["有效充值", `${referral?.validInvites || 0} 人`, "完成真实充值后才会进入有效邀请统计。"],
+    ["累计佣金", formatMoney(referral?.totalCommissionCny), "历史累计获得的可提现佣金总额。"],
+    ["可提现佣金", formatMoney(referral?.withdrawableCommissionCny), "当前可以提现，也可以直接购买 Token。"],
+    ["已提现佣金", formatMoney(referral?.withdrawnCommissionCny), "已经提交并完成处理的提现金额。"],
+    ["累计奖励额度", formatMoney(referral?.totalCreditBonusCny), "系统发放到账户的等额奖励额度。"],
+    ["已用佣金购买 Token", formatMoney(referral?.usedCommissionForTokenCny), "已转入 FlowAPI 余额用于模型调用的佣金。"],
+  ];
+
+  return (
+    <div className="referral-detail-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+      <aside className="referral-detail-drawer" aria-label="邀请返佣明细">
+        <header>
+          <div>
+            <span>Referral Detail</span>
+            <h2>邀请返佣明细</h2>
+            <p>这里集中展示返佣、提现和奖励额度，主页面只保留最关键的行动数字。</p>
+          </div>
+          <button type="button" onClick={onClose}>×</button>
+        </header>
+        <div className="referral-detail-grid">
+          {detailItems.map(([label, value, desc]) => (
+            <article key={label}>
+              <span>{label}</span>
+              <strong>{value}</strong>
+              <p>{desc}</p>
+            </article>
+          ))}
+        </div>
+        <div className="referral-detail-actions">
+          <button type="button" className="btn-primary" onClick={() => onOpenAction("withdraw")}>申请提现</button>
+          <button type="button" className="btn-secondary" onClick={() => onOpenAction("convert")}>用佣金购买 Token</button>
+        </div>
+        <p className="referral-detail-note">返佣数据以服务端真实充值订单和结算记录为准，没有记录时不会用假数据冒充收益。</p>
+      </aside>
+    </div>
   );
 }
 
