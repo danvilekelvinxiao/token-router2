@@ -8,6 +8,8 @@ import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetai
 import InteractiveCard from "@/components/InteractiveCard";
 import { buildCcSwitchConfigUrl } from "@/lib/cc-switch";
 import { formatDateTime, formatPercent, formatRequestCount, formatSmallCny, formatToken as formatUnifiedToken } from "@/lib/format/number-format";
+import { useLocale } from "@/components/providers/locale-provider";
+import { applyLocalePrice } from "@/lib/pricing/locale-pricing";
 
 const API_BASE_URL = "https://flowapi.fun/v1";
 const DEFAULT_MODEL_ID = "deepseek-chat";
@@ -40,11 +42,11 @@ function pricePerMLabel(value) {
   return `${formatSmallCny(number)} / M Token`;
 }
 
-function modelPriceSummary(model = {}) {
+function modelPriceSummary(model = {}, locale = "zh-CN") {
   const input = Number(model.flowapiInputPricePerM || model.inputPricePerM || 0);
   const output = Number(model.flowapiOutputPricePerM || model.outputPricePerM || 0);
   if (!input && !output) return "价格同步中";
-  return `输入 ${pricePerMLabel(input)} · 输出 ${pricePerMLabel(output)}`;
+  return `输入 ${pricePerMLabel(applyLocalePrice(input, locale))} · 输出 ${pricePerMLabel(applyLocalePrice(output, locale))}`;
 }
 
 function keyStatus(key = {}) {
@@ -154,6 +156,7 @@ function ApiManagementGuideSteps({ onCreateKey, onAutoConfig, onOpenDetail }) {
 }
 
 export default function ApiManagementPage() {
+  const { locale } = useLocale();
   const [customer, setCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState([]);
@@ -255,13 +258,18 @@ export default function ApiManagementPage() {
       scrollToCreateCard();
       return;
     }
-    const modelId = primaryKey.publicModelId || selectedModel?.modelId || DEFAULT_MODEL_ID;
+    launchCcSwitchWithKey(primaryKey);
+    showToast("正在启动 CC-Switch");
+  }
+
+  function launchCcSwitchWithKey(key) {
+    const modelId = key?.publicModelId || selectedModel?.modelId || DEFAULT_MODEL_ID;
     const url = buildCcSwitchConfigUrl({
-      apiKey: primaryKey.token,
+      apiKey: key?.token,
       baseUrl: API_BASE_URL,
       model: modelId,
       name: "FlowAPI",
-      displayName: primaryKey.modelDisplayName || modelId,
+      displayName: key?.modelDisplayName || modelId,
     });
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -270,7 +278,6 @@ export default function ApiManagementPage() {
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
-    showToast("正在启动 CC-Switch");
   }
 
   function openGuideDetail(step) {
@@ -386,6 +393,7 @@ export default function ApiManagementPage() {
           modelId: model.modelId,
           label: createForm.label.trim() || `${model.displayName} Key`,
           expiresAt: resolveCreateExpiresAt(),
+          locale,
         }),
       });
       const data = await res.json();
@@ -393,8 +401,14 @@ export default function ApiManagementPage() {
       const updated = data.customer || data;
       setCustomer(updated);
       localStorage.setItem("flowapi_customer", JSON.stringify(updated));
-      setCreatedKey(data.createdKey || null);
-      showToast("API Key 已创建，请立即复制保存");
+      const created = data.createdKey || null;
+      setCreatedKey(created);
+      if (created?.token && String(created.token).startsWith("sk-")) {
+        launchCcSwitchWithKey(created);
+        showToast("API Key 创建成功，已自动导入 CC-Switch");
+      } else {
+        showToast("API Key 已创建，请立即复制保存");
+      }
     } catch (error) {
       showToast(error.message || "创建失败，请稍后重试");
     } finally {
@@ -658,7 +672,7 @@ export default function ApiManagementPage() {
                               <em>{disabled ? "黑金会员专属" : createForm.modelId === model.modelId ? "已选择" : model.recommended ? "推荐" : "可用"}</em>
                             </span>
                             <code title={model.modelId}>{model.modelId || "同步中"}</code>
-                            <small>{model.provider} · {modelPriceSummary(model)}</small>
+                            <small>{model.provider} · {modelPriceSummary(model, locale)}</small>
                             {model.tags?.length ? <small>{model.tags.slice(0, 3).join(" · ")}</small> : null}
                           </button>
                         );

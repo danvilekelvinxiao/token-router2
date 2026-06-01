@@ -17,26 +17,31 @@ export default async function handler(req, res) {
 
   const ip = getClientIp(req);
   const cleanEmail = String(email).trim().toLowerCase();
+  const isDev = process.env.NODE_ENV !== "production";
 
-  if (isGraylisted(`login:${ip}`)) {
+  if (!isDev && isGraylisted(`login:${ip}`)) {
     return res.status(429).json({ error: "登录请求过多，请稍后再试" });
   }
 
-  const ipLimit = rateLimit(`login:ip:${ip}`, { limit: 30, windowMs: 10 * 60 * 1000 });
-  const emailLimit = rateLimit(`login:email:${cleanEmail}`, { limit: 10, windowMs: 10 * 60 * 1000 });
-  if (!ipLimit.ok || !emailLimit.ok) {
-    graylistKey(`login:${ip}`, 15 * 60 * 1000);
-    securityLog("login_limited", { ip, email: cleanEmail });
-    return res.status(429).json({ error: "登录请求过多，请稍后再试" });
+  if (!isDev) {
+    const ipLimit = rateLimit(`login:ip:${ip}`, { limit: 30, windowMs: 10 * 60 * 1000 });
+    const emailLimit = rateLimit(`login:email:${cleanEmail}`, { limit: 10, windowMs: 10 * 60 * 1000 });
+    if (!ipLimit.ok || !emailLimit.ok) {
+      graylistKey(`login:${ip}`, 15 * 60 * 1000);
+      securityLog("login_limited", { ip, email: cleanEmail });
+      return res.status(429).json({ error: "登录请求过多，请稍后再试" });
+    }
   }
 
   const result = await loginCustomer({ email, password });
 
   if (!result) {
-    const failLimit = rateLimit(`login-fail:${ip}:${cleanEmail}`, { limit: 5, windowMs: 10 * 60 * 1000 });
-    if (!failLimit.ok) {
-      graylistKey(`login:${ip}`, 30 * 60 * 1000);
-      securityLog("login_bruteforce_graylisted", { ip, email: cleanEmail });
+    if (!isDev) {
+      const failLimit = rateLimit(`login-fail:${ip}:${cleanEmail}`, { limit: 5, windowMs: 10 * 60 * 1000 });
+      if (!failLimit.ok) {
+        graylistKey(`login:${ip}`, 30 * 60 * 1000);
+        securityLog("login_bruteforce_graylisted", { ip, email: cleanEmail });
+      }
     }
     return res.status(401).json({ error: "邮箱或密码错误" });
   }

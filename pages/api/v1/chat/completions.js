@@ -326,6 +326,7 @@ export default async function handler(req, res) {
   const boundPublicModel = customerMatch.apiKey.publicModelId || "";
   const boundActualModel = customerMatch.apiKey.actualModelId || boundPublicModel;
   const requestedModel = body.model && body.model !== "auto" ? normalizeModelLookup(body.model) : "";
+  const localePriceMultiplier = Math.max(1, Number(customerMatch.apiKey?.localePriceMultiplier || 1));
   const effectiveRequestedModel = requestedModel || boundPublicModel;
   const requestedManualModel = Boolean(effectiveRequestedModel);
   if (boundPublicModel && effectiveRequestedModel && ![boundPublicModel, boundActualModel].includes(effectiveRequestedModel)) {
@@ -391,7 +392,7 @@ export default async function handler(req, res) {
   }
   const upstreamBody = normalizeChatRequestBody(body, upstreamModelId);
   const promptTokens = estimatePromptTokens(upstreamBody.messages || []);
-  const reserveCost = estimateReserveCost(selected.modelId, upstreamBody, promptTokens);
+  const reserveCost = Number((estimateReserveCost(selected.modelId, upstreamBody, promptTokens) * localePriceMultiplier).toFixed(6));
   const reserve = await reserveBalanceByToken(clientToken, reserveCost);
 
   if (reserve.error) {
@@ -476,6 +477,7 @@ export default async function handler(req, res) {
         prompt_tokens: promptTokens,
         completion_tokens: 0,
       });
+      const billedEstimatedCost = Number((estimatedCost * localePriceMultiplier).toFixed(6));
       const nodeStream = Readable.fromWeb(upstreamResponse.body);
 
       nodeStream.on("end", () => {
@@ -487,7 +489,7 @@ export default async function handler(req, res) {
           status: upstreamResponse.status,
           promptTokens,
           completionTokens: 0,
-          cost: estimatedCost,
+          cost: billedEstimatedCost,
           grantUsageCredit: true,
         }, reserve).catch((error) => console.error("[flowapi] stream record failed:", error));
         releaseConcurrency(concurrencyKey);
@@ -507,7 +509,8 @@ export default async function handler(req, res) {
     }
 
     const data = await upstreamResponse.json();
-    const cost = estimateCnyCost(selected.modelId, data.usage);
+    const baseCost = estimateCnyCost(selected.modelId, data.usage);
+    const cost = Number((baseCost * localePriceMultiplier).toFixed(6));
 
     const customer = await finalizeReservedCallByToken(clientToken, {
       endpoint: "/v1/chat/completions",

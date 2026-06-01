@@ -84,7 +84,7 @@ export function formatTrendPercent(value: unknown, emptyText = "数据同步中"
   const percent = formatPercent(Math.abs(number), emptyText);
   if (number > 0) return `↑${percent}`;
   if (number < 0) return `↓${percent}`;
-  return "→0%";
+  return "0%";
 }
 
 export function formatDateTime(value: unknown, emptyText = "数据同步中") {

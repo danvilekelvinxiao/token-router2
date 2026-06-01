@@ -5,7 +5,12 @@ import { useEffect, useMemo, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
+import PaymentLaunchModal from "@/components/payments/payment-launch-modal";
+import QrPaymentModal from "@/components/payments/qr-payment-modal";
+import CryptoPaymentModal from "@/components/payments/crypto-payment-modal";
+import PaymentSuccessModal from "@/components/payments/payment-success-modal";
 import { formatSmallCny } from "@/lib/format/number-format";
+import { useLocale } from "@/components/providers/locale-provider";
 
 const amounts = [
   { value: 20, label: "¥20", desc: "体验测试" },
@@ -19,6 +24,7 @@ const amounts = [
 const paymentMethods = [
   { key: "wechat", name: "微信支付", icon: "WX", color: "#07c160", bg: "#f0fdf4" },
   { key: "alipay", name: "支付宝", icon: "ALI", color: "#1677ff", bg: "#eff6ff" },
+  { key: "crypto", name: "加密货币支付", icon: "USDT", color: "#0ea5e9", bg: "#ecfeff" },
   { key: "taobao_code", name: "淘宝激活码", icon: "TB", color: "#f97316", bg: "#fff7ed", imageSrc: "/images/pay/taobao.jpg" },
 ];
 
@@ -54,10 +60,35 @@ const addOnServices = [
 ];
 
 const paymentQrImages = {
-  wechat: "/images/pay/wechat.jpg",
-  alipay: "/images/pay/alipay.jpg",
+  wechat: "/images/pay/wechat-manual-20260601.jpg",
+  alipay: "/images/pay/alipay-manual-20260601.png",
+  crypto: "",
   taobao_code: "/images/pay/taobao.jpg",
 };
+const cryptoChoices = [
+  {
+    token: "USDT",
+    network: "TRON",
+    key: "usdt-tron",
+    address: "TJeTTxyTnvhmMMyGU9EUBmQwbjHhjgENeY",
+    image: "/images/pay/crypto-usdt-tron.jpg",
+  },
+  {
+    token: "USDC",
+    network: "Polygon",
+    key: "usdc-polygon",
+    address: "0x5F2d4d7a2bd62A2bc1c50Dc1FD5513fcD5003D12",
+    image: "/images/pay/crypto-usdc-polygon.jpg",
+  },
+];
+
+function formatCryptoNetworkLabel(value = "") {
+  const key = String(value || "").trim().toLowerCase();
+  if (key === "tron" || key === "trc20") return "TRON";
+  if (key === "polygon" || key === "matic") return "Polygon";
+  if (key === "ethereum") return "Ethereum";
+  return value || "-";
+}
 
 const weeklyPackages = [
   { id: "cell_50", code: "CELL-50", name: "点火测试", scene: "低成本验证", price: 12, quotaText: "50 万", quotaTokens: 500000, validDays: 7, unitPrice: "¥0.24 / 万 Token", tag: "试用", highlight: false, benefits: ["有效期：7 天", "单价：¥0.24 / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
@@ -104,6 +135,9 @@ function getPaymentPayload({ customerId, amount, paymentMethod, purchaseType, pk
 /* ==================== Main Page ==================== */
 
 export default function RechargePage() {
+  const { locale } = useLocale();
+  const isEn = locale === "en-US";
+  const L = (zh, en) => (isEn ? en : zh);
   const router = useRouter();
   const [customer, setCustomer] = useState(null);
   const [orders, setOrders] = useState([]);
@@ -112,12 +146,19 @@ export default function RechargePage() {
   const [selectedPackageId, setSelectedPackageId] = useState(null);
   const [customAmount, setCustomAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("wechat");
+  const [cryptoToken, setCryptoToken] = useState("USDT");
+  const [cryptoNetwork, setCryptoNetwork] = useState("TRON");
   const [paymentRef, setPaymentRef] = useState("");
   const [step, setStep] = useState("choose");
   const [copied, setCopied] = useState("");
   const [paying, setPaying] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState(null);
   const [paymentSession, setPaymentSession] = useState(null);
+  const [launchVisible, setLaunchVisible] = useState(false);
+  const [activePaymentModal, setActivePaymentModal] = useState("");
+  const [paymentSuccessVisible, setPaymentSuccessVisible] = useState(false);
+  const [cryptoExpireAt, setCryptoExpireAt] = useState(null);
+  const [cryptoNow, setCryptoNow] = useState(Date.now());
   const [paymentError, setPaymentError] = useState("");
   const [manualFallback, setManualFallback] = useState(false);
   const [activationCode, setActivationCode] = useState("");
@@ -132,6 +173,26 @@ export default function RechargePage() {
   const [commissionMessage, setCommissionMessage] = useState("");
   const [walletData, setWalletData] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
+
+  const localizedPaymentMethods = useMemo(() => paymentMethods.map((method) => {
+    if (method.key === "wechat") return { ...method, name: isEn ? "WeChat Pay" : "微信支付" };
+    if (method.key === "alipay") return { ...method, name: isEn ? "Alipay" : "支付宝" };
+    if (method.key === "crypto") return { ...method, name: isEn ? "Crypto (USDT)" : "加密货币支付" };
+    if (method.key === "taobao_code") return { ...method, name: isEn ? "Taobao Activation Code" : "淘宝激活码" };
+    return method;
+  }), [isEn]);
+
+  const localizedAmounts = useMemo(() => amounts.map((item) => {
+    const descMap = {
+      "体验测试": "Quick test",
+      "轻度使用": "Light usage",
+      "推荐入门": "Starter choice",
+      "开发常用": "Developer standard",
+      "团队测试": "Team testing",
+      "大额充值": "Large top-up",
+    };
+    return { ...item, desc: isEn ? (descMap[item.desc] || item.desc) : item.desc };
+  }), [isEn]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -182,7 +243,12 @@ export default function RechargePage() {
       const data = await res.json();
       if (!data.order) return;
       setSubmittedOrder(data.order);
-      if (data.order.status === "approved" && customer) refreshCustomer(customer);
+      if (data.order.status === "approved") {
+        setLaunchVisible(false);
+        setActivePaymentModal("");
+        setPaymentSuccessVisible(true);
+        if (customer) refreshCustomer(customer);
+      }
     }, 3000);
     return () => window.clearInterval(timer);
   }, [customer, manualFallback, paymentMethod, step, submittedOrder]);
@@ -207,7 +273,33 @@ export default function RechargePage() {
 
   const finalAmount = baseAmount + addOnTotal;
 
-  const currentMethod = useMemo(() => paymentMethods.find((item) => item.key === paymentMethod) || paymentMethods[0], [paymentMethod]);
+  const currentMethod = useMemo(() => localizedPaymentMethods.find((item) => item.key === paymentMethod) || localizedPaymentMethods[0], [localizedPaymentMethods, paymentMethod]);
+  const manualModeNotice = useMemo(() => {
+    if (paymentMethod === "wechat") return "微信商户参数未配置完整，已切换到手动确认模式";
+    if (paymentMethod === "alipay") return "支付宝商户参数未配置完整，已切换到手动确认模式";
+    if (paymentMethod === "crypto" && manualFallback) return "当前已开放 USDT-TRON 与 USDC-Polygon 收款，到账先走人工确认，后续再接自动链上监听。";
+    return "";
+  }, [paymentMethod, manualFallback]);
+  const selectedCryptoChoice = useMemo(
+    () => cryptoChoices.find((item) => item.token === cryptoToken && item.network === cryptoNetwork) || cryptoChoices[0],
+    [cryptoToken, cryptoNetwork]
+  );
+  const cryptoNetworkOptions = useMemo(
+    () => cryptoChoices.filter((item) => item.token === cryptoToken).map((item) => item.network),
+    [cryptoToken]
+  );
+  const activeCryptoToken = String(paymentSession?.token || cryptoToken || "").toUpperCase();
+  const activeCryptoNetwork = formatCryptoNetworkLabel(paymentSession?.network || cryptoNetwork);
+  const activeCryptoAddress = paymentSession?.receiveAddress || selectedCryptoChoice?.address || "";
+  const cryptoPaymentRef = useMemo(
+    () => `币种：${cryptoToken}；网络：${cryptoNetwork}；地址：${selectedCryptoChoice?.address || ""}`,
+    [cryptoNetwork, cryptoToken, selectedCryptoChoice?.address]
+  );
+  const paymentOrderNumber = useMemo(
+    () => paymentSession?.orderId || submittedOrder?.outTradeNo || submittedOrder?.transactionNo || submittedOrder?.id || "-",
+    [paymentSession?.orderId, submittedOrder?.id, submittedOrder?.outTradeNo, submittedOrder?.transactionNo]
+  );
+  const paymentStatusLabel = submittedOrder ? (statusMap[submittedOrder.status]?.label || submittedOrder.status) : L("等待支付", "Pending Payment");
 
   const selectedAddOnDetails = useMemo(() => {
     return selectedAddOns.map((id) => {
@@ -221,20 +313,44 @@ export default function RechargePage() {
   }, [selectedAddOns, openrouterCredits]);
 
   const orderSummary = useMemo(() => {
-    let summary = { typeLabel: "余额充值", packageName: "", quotaLabel: "", quotaValue: "", validDays: null, amount: baseAmount };
+    let summary = { typeLabel: isEn ? "Balance Top-up" : "余额充值", packageName: "", quotaLabel: "", quotaValue: "", validDays: null, amount: baseAmount };
     if (purchaseType === "weekly_package" && selectedPackage) {
-      summary = { typeLabel: "周畅用包", packageName: `${selectedPackage.name} ${selectedPackage.code}`, quotaLabel: "获得额度", quotaValue: `${selectedPackage.quotaText} Token`, validDays: selectedPackage.validDays, amount: selectedPackage.price };
+      summary = { typeLabel: isEn ? "Weekly Pack" : "周畅用包", packageName: `${selectedPackage.name} ${selectedPackage.code}`, quotaLabel: isEn ? "Token Quota" : "获得额度", quotaValue: `${selectedPackage.quotaText} Token`, validDays: selectedPackage.validDays, amount: selectedPackage.price };
     } else if (purchaseType === "monthly_subscription" && selectedPackage) {
-      summary = { typeLabel: "月卡套餐", packageName: selectedPackage.name, quotaLabel: "每日额度 / 月总额度", quotaValue: `${selectedPackage.quotaText} Token`, validDays: selectedPackage.validDays, amount: selectedPackage.price };
+      summary = { typeLabel: isEn ? "Monthly Plan" : "月卡套餐", packageName: selectedPackage.name, quotaLabel: isEn ? "Daily / Monthly Quota" : "每日额度 / 月总额度", quotaValue: `${selectedPackage.quotaText} Token`, validDays: selectedPackage.validDays, amount: selectedPackage.price };
     }
     return summary;
-  }, [purchaseType, selectedPackage, baseAmount]);
+  }, [purchaseType, selectedPackage, baseAmount, isEn]);
+
+  const cryptoMinutesLeft = useMemo(() => {
+    if (!cryptoExpireAt) return "10:00";
+    const diff = Math.max(0, cryptoExpireAt - cryptoNow);
+    const mm = String(Math.floor(diff / 60000)).padStart(2, "0");
+    const ss = String(Math.floor((diff % 60000) / 1000)).padStart(2, "0");
+    return `${mm}:${ss}`;
+  }, [cryptoExpireAt, cryptoNow]);
+
+  const cryptoAmountEstimate = useMemo(() => {
+    if (Number(paymentSession?.actualAmount) > 0) return Number(paymentSession.actualAmount).toFixed(2);
+    const cny = Number(finalAmount || 0);
+    const stable = cny > 0 ? cny / 7.2 : 0;
+    return stable.toFixed(2);
+  }, [finalAmount, paymentSession?.actualAmount]);
+  const qrModalTitle = paymentMethod === "wechat" ? L("微信支付", "WeChat Pay") : L("支付宝支付", "Alipay");
+  const launchTitle = paymentMethod === "crypto"
+    ? L("正在生成链上支付订单...", "Generating on-chain payment order...")
+    : L("正在拉起支付中...", "Preparing your payment...");
 
   /* ---------- Handlers ---------- */
 
   function selectRechargeAmount(amount) { setPurchaseType("balance_recharge"); setSelectedAmount(amount); setSelectedPackageId(null); setCustomAmount(""); }
   function selectCustomRechargeAmount(value) { setPurchaseType("balance_recharge"); setCustomAmount(value); setSelectedAmount(null); setSelectedPackageId(null); }
   function selectPackage(type, packageId) { setPurchaseType(type); setSelectedPackageId(packageId); setSelectedAmount(null); setCustomAmount(""); }
+  function handleCryptoTokenChange(nextToken) {
+    const matched = cryptoChoices.find((item) => item.token === nextToken);
+    setCryptoToken(nextToken);
+    if (matched) setCryptoNetwork(matched.network);
+  }
 
   function toggleAddOn(id) {
     setSelectedAddOns((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
@@ -242,31 +358,97 @@ export default function RechargePage() {
 
   async function handleSubmit() {
     if (finalAmount <= 0) return;
-    setStep("pay");
     setSubmittedOrder(null);
     setPaymentSession(null);
+    setLaunchVisible(paymentMethod !== "taobao_code");
+    setActivePaymentModal("");
+    setPaymentSuccessVisible(false);
+    setCryptoExpireAt(null);
+    setCryptoNow(Date.now());
     setPaymentError("");
     setManualFallback(false);
-    const payload = getPaymentPayload({ customerId: customer?.id, amount: finalAmount, paymentMethod, purchaseType, pkg: selectedPackage });
+    const payload = getPaymentPayload({
+      customerId: customer?.id,
+      amount: finalAmount,
+      paymentMethod,
+      cryptoToken,
+      cryptoNetwork,
+      purchaseType,
+      pkg: selectedPackage,
+      paymentRef: paymentMethod === "crypto" ? cryptoPaymentRef : "",
+    });
     if (paymentMethod === "taobao_code" || !customer) {
+      setLaunchVisible(false);
       if (customer && purchaseType !== "balance_recharge") {
         try {
           const res = await fetch("/api/recharge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
           const data = await res.json();
-          if (res.ok && data.order) { setSubmittedOrder(data.order); setOrders((prev) => [data.order, ...prev]); }
-        } catch { setPaymentError("套餐订单创建失败，请稍后再试"); }
+          if (res.ok && data.order) { setSubmittedOrder(data.order); setOrders((prev) => [data.order, ...prev]); setStep("pay"); }
+        } catch { setPaymentError(L("套餐订单创建失败，请稍后再试", "Package order creation failed. Please try again.")); }
       }
+      return;
+    }
+    if (paymentMethod === "crypto") {
+      setPaying(true);
+      try {
+        const res = await fetch("/api/payments/crypto/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setPaymentError(data.error || L("加密货币支付订单创建失败", "Failed to create crypto order"));
+          setStep("choose");
+        } else {
+          setSubmittedOrder(data.order);
+          setPaymentSession(data.payment || null);
+          setStep("pay");
+          setActivePaymentModal("crypto");
+          if (data.mode === "manual") {
+            setManualFallback(true);
+            setPaymentError(data.reason || L("当前链路暂未接通自动到账，已切换为人工确认。", "Automatic settlement is not available for this network yet. Switched to manual confirmation."));
+            setCryptoExpireAt(null);
+          } else {
+            setCryptoExpireAt(data.payment?.expiresAt ? new Date(data.payment.expiresAt).getTime() : Date.now() + 10 * 60 * 1000);
+          }
+          setCryptoNow(Date.now());
+        }
+      } catch {
+        setPaymentError(L("网络异常，请稍后再试", "Network error. Please try again."));
+        setStep("choose");
+      }
+      setLaunchVisible(false);
+      setPaying(false);
       return;
     }
     setPaying(true);
     try {
       const res = await fetch("/api/recharge/create-payment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
-      if (res.ok && data.mode === "manual") { setManualFallback(true); setPaymentError(data.reason || ""); }
-      else if (!res.ok) { setPaymentError(data.error || "支付订单生成失败"); }
-      else { setSubmittedOrder(data.order); setPaymentSession(data.payment); }
-    } catch { setPaymentError("网络异常，请稍后再试"); }
+      if (res.ok) {
+        setSubmittedOrder(data.order);
+        setPaymentSession(data.payment);
+        setStep("pay");
+        setActivePaymentModal("qr");
+        if (data.mode === "manual") { setManualFallback(true); setPaymentError(data.reason || ""); }
+      } else {
+        setPaymentError(data.error || L("支付订单生成失败", "Failed to create payment order"));
+        setStep("choose");
+      }
+    } catch {
+      setPaymentError(L("网络异常，请稍后再试", "Network error. Please try again."));
+      setStep("choose");
+    }
+    setLaunchVisible(false);
     setPaying(false);
+  }
+
+  function closePaymentFlow() {
+    setLaunchVisible(false);
+    setActivePaymentModal("");
+    setPaymentSuccessVisible(false);
+    setStep("choose");
   }
 
   async function confirmPayment() {
@@ -277,10 +459,71 @@ export default function RechargePage() {
       const res = await fetch("/api/recharge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const data = await res.json();
       if (res.ok && data.order) { setSubmittedOrder(data.order); setOrders((prev) => [data.order, ...prev]); setPaymentRef(""); }
-      else { alert(data.error || "提交失败，请稍后再试"); }
-    } catch { alert("网络异常，请稍后再试"); }
+      else { alert(data.error || L("提交失败，请稍后再试", "Submit failed. Please try again.")); }
+    } catch { alert(L("网络异常，请稍后再试", "Network error. Please try again.")); }
     setPaying(false);
   }
+
+  async function checkCryptoStatus() {
+    if (!submittedOrder?.id) return;
+    setPaying(true);
+    try {
+      const search = new URLSearchParams({ orderId: submittedOrder.id });
+      if (paymentSession?.tradeId) search.set("tradeId", paymentSession.tradeId);
+      const res = await fetch(`/api/payments/crypto/status?${search.toString()}`);
+      const data = await res.json();
+      if (res.ok && data.order) {
+        setSubmittedOrder(data.order);
+        if (data.paid) {
+          setLaunchVisible(false);
+          setActivePaymentModal("");
+          setPaymentSuccessVisible(true);
+          if (customer) refreshCustomer(customer);
+        }
+        if (!data.paid) {
+          setPaymentError(data.gatewayError || L("订单等待链上确认中，请完成支付后刷新状态。", "Waiting for chain confirmation. Please refresh after payment."));
+        } else {
+          setPaymentError("");
+        }
+      } else {
+        setPaymentError(data.error || L("状态查询失败", "Status query failed"));
+      }
+    } catch {
+      setPaymentError(L("网络异常，请稍后重试", "Network error. Please try again."));
+    }
+    setPaying(false);
+  }
+
+  useEffect(() => {
+    if (paymentMethod !== "crypto" || step !== "pay" || manualFallback || !submittedOrder?.id || submittedOrder?.status === "approved") return undefined;
+    const timer = window.setInterval(() => {
+      const search = new URLSearchParams({ orderId: submittedOrder.id });
+      if (paymentSession?.tradeId) search.set("tradeId", paymentSession.tradeId);
+      fetch(`/api/payments/crypto/status?${search.toString()}`)
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.order) {
+            setSubmittedOrder(data.order);
+            if (data.paid) {
+              setLaunchVisible(false);
+              setActivePaymentModal("");
+              setPaymentSuccessVisible(true);
+              if (customer) refreshCustomer(customer);
+            }
+          }
+        })
+        .catch(() => {});
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [paymentMethod, paymentSession?.tradeId, step, submittedOrder?.id, submittedOrder?.status, customer, manualFallback]);
+
+  useEffect(() => {
+    if (!cryptoExpireAt || paymentMethod !== "crypto" || step !== "pay" || manualFallback || submittedOrder?.status === "approved") return undefined;
+    const timer = window.setInterval(() => {
+      setCryptoNow(Date.now());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [cryptoExpireAt, paymentMethod, step, submittedOrder?.status, manualFallback]);
 
   async function redeemCode() {
     if (!customer || !activationCode.trim() || redeeming) return;
@@ -290,8 +533,8 @@ export default function RechargePage() {
       const res = await fetch("/api/redeem", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code: activationCode.trim(), customerId: customer.id }) });
       const data = await res.json();
       if (res.ok && data.success) { setRedeemResult(data); setCustomer(data.customer); localStorage.setItem("flowapi_customer", JSON.stringify(data.customer)); }
-      else { setRedeemResult({ success: false, error: data.error || "激活失败，请检查激活码" }); }
-    } catch { setRedeemResult({ success: false, error: "网络异常，请稍后再试" }); }
+      else { setRedeemResult({ success: false, error: data.error || L("激活失败，请检查激活码", "Activation failed. Please check the code.") }); }
+    } catch { setRedeemResult({ success: false, error: L("网络异常，请稍后再试", "Network error. Please try again.") }); }
     setRedeeming(false);
   }
 
@@ -328,7 +571,7 @@ export default function RechargePage() {
   if (!customer) {
     return (
       <main className="landing-shell" style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p style={{ color: "var(--page-sub)" }}>加载中...</p>
+        <p style={{ color: "var(--page-sub)" }}>{L("加载中...", "Loading...")}</p>
       </main>
     );
   }
@@ -337,13 +580,13 @@ export default function RechargePage() {
 
   return (
     <>
-      <Head><title>充值 - FlowAPI</title></Head>
+      <Head><title>{L("充值 - FlowAPI", "Recharge - FlowAPI")}</title></Head>
       <ConsoleLayout customer={customer} currentPath="/recharge">
         {/* Page header */}
         <div className="recharge-page-header">
           <div>
-            <span className="recharge-page-kicker">资产管理</span>
-            <h1>充值 Token</h1>
+            <span className="recharge-page-kicker">{L("资产管理", "Asset Management")}</span>
+            <h1>{L("充值 Token", "Recharge Token")}</h1>
           </div>
         </div>
 
@@ -377,18 +620,18 @@ export default function RechargePage() {
               {/* 1. Recharge amount */}
               <div className="recharge-section-card">
                 <div className="section-heading-row">
-                  <div><h2>充值金额</h2><p>选择预设金额或输入自定义金额。</p></div>
+                  <div><h2>{L("充值金额", "Top-up Amount")}</h2><p>{L("选择预设金额或输入自定义金额。", "Select a preset amount or enter a custom amount.")}</p></div>
                 </div>
                 <div className="recharge-amount-grid">
-                  {amounts.map((item) => (
+                  {localizedAmounts.map((item) => (
                     <button key={item.value} type="button" className={`recharge-amount-card ${purchaseType === "balance_recharge" && selectedAmount === item.value ? "selected" : ""}`} onClick={() => selectRechargeAmount(item.value)}>
                       <strong>{item.label}</strong><span>{item.desc}</span>
                     </button>
                   ))}
                 </div>
                 <label className="recharge-custom-input">
-                  <span>自定义金额</span>
-                  <input type="number" min="1" placeholder="输入充值金额" value={customAmount} onChange={(event) => selectCustomRechargeAmount(event.target.value)} />
+                  <span>{L("自定义金额", "Custom Amount")}</span>
+                  <input type="number" min="1" placeholder={L("输入充值金额", "Enter top-up amount")} value={customAmount} onChange={(event) => selectCustomRechargeAmount(event.target.value)} />
                 </label>
               </div>
 
@@ -396,8 +639,8 @@ export default function RechargePage() {
               <div className="recharge-section-card">
                 <div className="section-heading-row">
                   <div>
-                    <h2>附加服务</h2>
-                    <p>可选增值服务，适合需要人工协助、订阅支持、额度代充或接入配置的用户。</p>
+                    <h2>{L("附加服务", "Add-on Services")}</h2>
+                    <p>{L("可选增值服务，适合需要人工协助、订阅支持、额度代充或接入配置的用户。", "Optional value-added services for setup, subscriptions, and credits support.")}</p>
                   </div>
                 </div>
                 <div className="addon-services-grid">
@@ -431,7 +674,7 @@ export default function RechargePage() {
                           </div>
                         )}
                         <span className={`addon-service-action ${isSelected ? "selected" : ""}`}>
-                          {isSelected ? "已选择" : "选择服务"}
+                          {isSelected ? L("已选择", "Selected") : L("选择服务", "Select")}
                         </span>
                       </button>
                     );
@@ -477,17 +720,17 @@ export default function RechargePage() {
 
               {/* Order summary */}
               <div className="recharge-summary-card">
-                <h2>订单摘要</h2>
+                <h2>{L("订单摘要", "Order Summary")}</h2>
                 <div className="summary-rows">
-                  <Row label="订单类型" value={orderSummary.typeLabel} />
-                  {orderSummary.packageName ? <Row label="套餐名称" value={orderSummary.packageName} /> : null}
+                  <Row label={L("订单类型", "Order Type")} value={orderSummary.typeLabel} />
+                  {orderSummary.packageName ? <Row label={L("套餐名称", "Plan Name")} value={orderSummary.packageName} /> : null}
                   {orderSummary.quotaValue ? <Row label={orderSummary.quotaLabel} value={orderSummary.quotaValue} /> : null}
-                  {orderSummary.validDays ? <Row label="有效期" value={`${orderSummary.validDays} 天`} /> : null}
-                  <Row label={purchaseType === "balance_recharge" ? "充值金额" : "套餐价格"} value={formatMoney(baseAmount)} strong />
+                  {orderSummary.validDays ? <Row label={L("有效期", "Validity")} value={`${orderSummary.validDays} ${L("天", "days")}`} /> : null}
+                  <Row label={purchaseType === "balance_recharge" ? L("充值金额", "Top-up Amount") : L("套餐价格", "Plan Price")} value={formatMoney(baseAmount)} strong />
 
                   {selectedAddOnDetails.length > 0 && (
                     <div className="summary-addons">
-                      <div className="summary-addons-label">附加服务</div>
+                      <div className="summary-addons-label">{L("附加服务", "Add-ons")}</div>
                       {selectedAddOnDetails.map((svc) => (
                         <div key={svc.id} className="summary-addon-row">
                           <span>{svc.title}{svc.quantity ? ` ${svc.quantity} ${svc.unit}` : ""}</span>
@@ -498,15 +741,15 @@ export default function RechargePage() {
                   )}
 
                   <div className="summary-divider" />
-                  <Row label="应付金额" value={formatMoney(finalAmount)} strong />
+                  <Row label={L("应付金额", "Amount Due")} value={formatMoney(finalAmount)} strong />
                 </div>
               </div>
 
               {/* Payment method */}
               <div className="recharge-summary-card">
-                <h2>支付方式</h2>
+                <h2>{L("支付方式", "Payment Method")}</h2>
                 <div className="payment-method-sidebar-grid">
-                  {paymentMethods.map((method) => (
+                  {localizedPaymentMethods.map((method) => (
                     <button
                       key={method.key}
                       type="button"
@@ -518,20 +761,51 @@ export default function RechargePage() {
                     </button>
                   ))}
                 </div>
+                {paymentMethod === "crypto" ? (
+                  <div className="payment-method-config-card">
+                    <div className="payment-method-config-head">
+                      <strong>{L("选择币种与网络", "Choose token and network")}</strong>
+                      <span>{L("下单后进入链上收银台", "Checkout opens after order creation")}</span>
+                    </div>
+                    <div className="payment-method-config-grid">
+                      <div className="payment-method-config-group">
+                        <span>{L("币种", "Token")}</span>
+                        <SegmentedSelect options={["USDT", "USDC"]} value={cryptoToken} onChange={handleCryptoTokenChange} />
+                      </div>
+                      <div className="payment-method-config-group">
+                        <span>{L("网络", "Network")}</span>
+                        <SegmentedSelect options={cryptoNetworkOptions} value={cryptoNetwork} onChange={setCryptoNetwork} />
+                      </div>
+                    </div>
+                    <p>
+                      {cryptoToken === "USDT"
+                        ? L("当前开放 USDT-TRON 收款码，按页面地址转账后提交人工确认。", "USDT-TRON is currently available. Transfer to the shown address and submit for manual confirmation.")
+                        : L("当前开放 USDC-Polygon 收款码，按页面地址转账后提交人工确认。", "USDC-Polygon is currently available. Transfer to the shown address and submit for manual confirmation.")}
+                    </p>
+                  </div>
+                ) : null}
                 {paymentMethod === "taobao_code" && (
                   <div className="activation-inline-box">
-                    <input value={activationCode} onChange={(event) => setActivationCode(event.target.value)} placeholder="粘贴淘宝自动发货的激活码" />
-                    <button type="button" className="btn-secondary" disabled={redeeming} onClick={redeemCode}>{redeeming ? "激活中..." : "激活充值"}</button>
-                    {redeemResult ? <p className={redeemResult.success ? "pay-success" : "pay-error"}>{redeemResult.success ? "激活成功，余额已更新" : redeemResult.error}</p> : null}
+                    <input value={activationCode} onChange={(event) => setActivationCode(event.target.value)} placeholder={L("粘贴淘宝自动发货的激活码", "Paste activation code from Taobao")} />
+                    <button type="button" className="btn-secondary" disabled={redeeming} onClick={redeemCode}>{redeeming ? L("激活中...", "Activating...") : L("激活充值", "Activate")}</button>
+                    {redeemResult ? <p className={redeemResult.success ? "pay-success" : "pay-error"}>{redeemResult.success ? L("激活成功，余额已更新", "Activated successfully, balance updated") : redeemResult.error}</p> : null}
                   </div>
                 )}
               </div>
 
               {/* Pay button */}
               <button type="button" className="btn-primary recharge-pay-button" disabled={finalAmount <= 0 || paying} onClick={handleSubmit}>
-                {paying ? "正在处理..." : orderSummary.typeLabel === "余额充值" ? "继续支付" : orderSummary.typeLabel === "周畅用包" ? "立即购买" : "立即订阅"}
+                {paying
+                  ? L("正在处理...", "Processing...")
+                  : paymentMethod === "crypto"
+                    ? L("创建加密货币支付订单", "Create Crypto Payment Order")
+                    : orderSummary.typeLabel === L("余额充值", "Balance Top-up")
+                      ? L("继续支付", "Continue Payment")
+                      : orderSummary.typeLabel === L("周畅用包", "Weekly Pack")
+                        ? L("立即购买", "Buy Now")
+                        : L("立即订阅", "Subscribe Now")}
               </button>
-              <p className="recharge-sidebar-note">一般 10 秒内到账，异常订单可凭订单号联系客服处理。</p>
+              <p className="recharge-sidebar-note">{L("一般 10 秒内到账，异常订单可凭订单号联系客服处理。", "Usually credited within 10 seconds. Contact support with your order number if anything is abnormal.")}</p>
 
               <RechargeSupportCard copied={copied} onCopy={copyText} />
             </aside>
@@ -542,25 +816,89 @@ export default function RechargePage() {
             <section className="recharge-main">
               <div className="recharge-section-card">
                 <div className="section-heading-row">
-                  <div><h2>{currentMethod.name}支付</h2><p>请按页面提示完成付款。</p></div>
+                  <div><h2>{currentMethod.name}{L("支付", "")}</h2><p>{L("请按页面提示完成付款。", "Please complete payment as instructed.")}</p></div>
                   {submittedOrder ? <StatusBadge status={submittedOrder.status} /> : null}
                 </div>
                 {paymentMethod === "taobao_code" ? (
                   <div className="taobao-payment-panel">
-                    <PaymentQr src={paymentQrImages.taobao_code} methodName="淘宝激活码" hint="保存图片后打开淘宝 App 扫码，或点击按钮前往店铺。" />
-                    <a href={TAOBAO_SHOP_URL} target="_blank" rel="noreferrer" className="btn-primary">立即前往淘宝店铺</a>
+                    <PaymentQr src={paymentQrImages.taobao_code} methodName={L("淘宝激活码", "Taobao Activation Code")} hint={L("保存图片后打开淘宝 App 扫码，或点击按钮前往店铺。", "Save image and scan in Taobao app, or open the store directly.")} />
+                    <a href={TAOBAO_SHOP_URL} target="_blank" rel="noreferrer" className="btn-primary">{L("立即前往淘宝店铺", "Open Taobao Store")}</a>
                     <div className="activation-box">
-                      <input value={activationCode} onChange={(event) => setActivationCode(event.target.value)} placeholder="粘贴淘宝自动发货的激活码" />
-                      <button type="button" className="btn-secondary" disabled={redeeming} onClick={redeemCode}>{redeeming ? "激活中..." : "激活充值"}</button>
+                      <input value={activationCode} onChange={(event) => setActivationCode(event.target.value)} placeholder={L("粘贴淘宝自动发货的激活码", "Paste activation code from Taobao")} />
+                      <button type="button" className="btn-secondary" disabled={redeeming} onClick={redeemCode}>{redeeming ? L("激活中...", "Activating...") : L("激活充值", "Activate")}</button>
                     </div>
-                    {redeemResult ? <p className={redeemResult.success ? "pay-success" : "pay-error"}>{redeemResult.success ? "激活成功，余额已更新" : redeemResult.error}</p> : null}
+                    {redeemResult ? <p className={redeemResult.success ? "pay-success" : "pay-error"}>{redeemResult.success ? L("激活成功，余额已更新", "Activated successfully, balance updated") : redeemResult.error}</p> : null}
+                  </div>
+                ) : paymentMethod === "crypto" ? (
+                  <div className="payment-workspace">
+                    {paymentError ? <p className="pay-error">{paymentError}</p> : null}
+                    <div className="payment-box" style={{ display: "grid", gap: 10 }}>
+                      <strong>{L("收银台", "Checkout")}</strong>
+                      <div style={{ fontSize: 34, lineHeight: 1, fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>
+                        {cryptoAmountEstimate} {activeCryptoToken}
+                      </div>
+                      <div style={{ fontSize: 13, color: "var(--page-sub)" }}>
+                        {L("订单金额", "Order Amount")}：{formatMoney(finalAmount)}
+                      </div>
+                      <div style={{ fontSize: 13, color: "var(--page-sub)" }}>
+                        {L("订单号", "Order No.")}：{paymentSession?.orderId || submittedOrder?.outTradeNo || submittedOrder?.transactionNo || "-"}
+                      </div>
+                      <div style={{ fontSize: 28, fontWeight: 800, color: "#16a34a", fontVariantNumeric: "tabular-nums" }}>
+                        {manualFallback ? L("人工确认", "Manual Review") : cryptoMinutesLeft}
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gap: 12 }}>
+                      <SegmentedSelect options={["USDT", "USDC"]} value={cryptoToken} onChange={handleCryptoTokenChange} />
+                      <SegmentedSelect options={cryptoNetworkOptions} value={cryptoNetwork} onChange={setCryptoNetwork} />
+                    </div>
+                    <PaymentQr
+                      src={selectedCryptoChoice.image}
+                      qrValue={activeCryptoAddress}
+                      methodName={`${activeCryptoToken} · ${activeCryptoNetwork}`}
+                      loading={false}
+                      hint={L("请务必选择与钱包一致的币种和网络再转账。", "Please transfer with the exact token and network shown above.")}
+                    />
+                    <PaymentBox title={L("收款地址", "Wallet Address")} value={activeCryptoAddress} copied={copied} onCopy={copyText} />
+                    <PaymentBox title={L("交易流水号", "Transaction No.")} value={submittedOrder?.outTradeNo || submittedOrder?.transactionNo || L("生成中", "Generating")} copied={copied} onCopy={copyText} />
+                    {paymentSession?.checkoutUrl ? (
+                      <a href={paymentSession.checkoutUrl} target="_blank" rel="noreferrer" className="btn-primary">
+                        {L("打开加密货币收银台", "Open Crypto Checkout")}
+                      </a>
+                    ) : null}
+                    <div style={{ fontSize: 12, color: "var(--page-sub)", lineHeight: 1.6 }}>
+                      {manualFallback
+                        ? L("当前网络暂未接通自动监听，请按页面信息完成转账后提交人工确认。", "This network is not on automatic monitoring yet. Complete the transfer and submit it for manual confirmation.")
+                        : L("仅接收所选网络资产，选错网络会导致资产丢失。到账后系统自动入账。", "Only assets on the selected network are accepted. Wrong network transfer may cause permanent loss.")}
+                    </div>
+                    {manualFallback ? (
+                      <>
+                        <label className="payment-ref-input"><span>{L("转账哈希 / 备注", "Transfer Hash / Note")}</span><input value={paymentRef} onChange={(event) => setPaymentRef(event.target.value)} placeholder={L("填写 TxHash、转账备注或钱包昵称，方便人工核对", "Enter TxHash, transfer note or wallet nickname for manual review")} /></label>
+                        <button type="button" className="btn-secondary" disabled={paying} onClick={confirmPayment}>{L("提交人工确认订单", "Submit for Manual Confirmation")}</button>
+                      </>
+                    ) : (
+                      <>
+                        <button type="button" className="btn-primary" disabled={submittedOrder?.status === "approved"} onClick={checkCryptoStatus}>
+                          {submittedOrder?.status === "approved" ? L("已到账", "Paid") : L("我已完成转账", "I Have Transferred")}
+                        </button>
+                        <button type="button" className="btn-secondary" disabled={paying} onClick={checkCryptoStatus}>
+                          {paying ? L("查询中...", "Checking...") : L("刷新支付状态", "Refresh Payment Status")}
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="payment-workspace">
-                    <PaymentQr src={paymentSession?.qrImage || paymentQrImages[paymentMethod]} methodName={currentMethod.name} loading={paying && !manualFallback} error={paymentError} hint={manualFallback ? "当前自动支付通道未配置完整，请扫码后提交付款备注，管理员会人工确认。" : "扫码付款后，系统会自动处理到账。"} />
-                    <PaymentBox title="付款备注 / 订单号" value={submittedOrder?.outTradeNo || submittedOrder?.id || paymentRef || "支付后可填写付款备注"} copied={copied} onCopy={copyText} />
-                    <label className="payment-ref-input"><span>人工核对备注</span><input value={paymentRef} onChange={(event) => setPaymentRef(event.target.value)} placeholder="可填写微信/支付宝付款备注或淘宝订单号" /></label>
-                    <button type="button" className="btn-secondary" disabled={paying} onClick={confirmPayment}>提交人工确认订单</button>
+                    <p className="pay-error">{paymentError || manualModeNotice}</p>
+                    <PaymentQr
+                      src={paymentQrImages[paymentMethod]}
+                      methodName={currentMethod.name}
+                      loading={false}
+                      error={paymentError}
+                      hint={L("请使用对应支付 App 扫码付款，付款后填写备注并提交人工确认。", "Scan with the corresponding payment app, then submit your payment note for manual confirmation.")}
+                    />
+                    <PaymentBox title={L("付款备注 / 订单号", "Payment Note / Order ID")} value={submittedOrder?.outTradeNo || submittedOrder?.id || paymentRef || L("支付后可填写付款备注", "Fill in your payment note after paying")} copied={copied} onCopy={copyText} />
+                    <label className="payment-ref-input"><span>{L("人工核对备注", "Manual Verification Note")}</span><input value={paymentRef} onChange={(event) => setPaymentRef(event.target.value)} placeholder={L("可填写微信/支付宝付款备注或淘宝订单号", "You can enter WeChat/Alipay note or Taobao order number")} /></label>
+                    <button type="button" className="btn-secondary" disabled={paying} onClick={confirmPayment}>{L("提交人工确认订单", "Submit for Manual Confirmation")}</button>
                   </div>
                 )}
               </div>
@@ -568,13 +906,15 @@ export default function RechargePage() {
 
             <aside className="recharge-sidebar">
               <div className="recharge-summary-card">
-                <h2>到账说明</h2>
+                <h2>{L("到账说明", "Payment Notes")}</h2>
                 <div className="summary-rows">
-                  <Row label="应付金额" value={formatMoney(finalAmount)} strong />
-                  <Row label="支付方式" value={currentMethod.name} />
-                  <Row label="订单状态" value={submittedOrder ? statusMap[submittedOrder.status]?.label || submittedOrder.status : "等待支付"} />
+                  <Row label={L("应付金额", "Amount Due")} value={formatMoney(finalAmount)} strong />
+                  <Row label={L("支付方式", "Payment Method")} value={currentMethod.name} />
+                  {paymentMethod === "crypto" ? <Row label={L("币种 / 网络", "Token / Network")} value={`${activeCryptoToken} / ${activeCryptoNetwork}`} /> : null}
+                  <Row label={L("交易流水号", "Transaction No.")} value={submittedOrder?.outTradeNo || submittedOrder?.transactionNo || L("生成中", "Generating")} />
+                  <Row label={L("订单状态", "Order Status")} value={submittedOrder ? statusMap[submittedOrder.status]?.label || submittedOrder.status : L("等待支付", "Pending Payment")} />
                 </div>
-                <button type="button" className="btn-secondary recharge-pay-button" onClick={() => setStep("choose")}>返回修改订单</button>
+                <button type="button" className="btn-secondary recharge-pay-button" onClick={() => setStep("choose")}>{L("返回修改订单", "Back to Edit Order")}</button>
               </div>
               <RechargeSupportCard copied={copied} onCopy={copyText} />
             </aside>
@@ -589,6 +929,78 @@ export default function RechargePage() {
         </div>
 
         {packageDetail ? <CardDetailModal open={Boolean(packageDetail)} onOpenChange={(open) => { if (!open) setPackageDetail(null); }} {...packageDetail} /> : null}
+        <PaymentLaunchModal
+          open={launchVisible}
+          title={launchTitle}
+          description={paymentMethod === "crypto"
+            ? L("我们正在为这笔充值生成专属链上订单，请不要重复点击。", "We are creating a dedicated on-chain order for this payment. No need to click again.")
+            : L("系统正在拉起支付收银台并同步本次订单信息。", "We are preparing your cashier flow and syncing the order details.")}
+          progressLabel={paymentMethod === "crypto"
+            ? L("预计 1 秒内完成，随后进入链上收银台。", "Usually ready within 1 second, then we open the crypto cashier.")
+            : L("预计 1 秒内完成，随后展示扫码支付页面。", "Usually ready within 1 second, then we show the QR cashier.")}
+          onClose={closePaymentFlow}
+        />
+        <QrPaymentModal
+          open={activePaymentModal === "qr"}
+          title={qrModalTitle}
+          amountLabel={formatMoney(finalAmount)}
+          orderNumber={paymentOrderNumber}
+          methodName={currentMethod.name}
+          qrSrc={paymentQrImages[paymentMethod]}
+          qrValue=""
+          hint={L("请使用对应支付 App 扫码，支付后填写备注并提交，方便更快核对。", "Scan with the corresponding app, then submit your payment note for faster verification.")}
+          notice={manualModeNotice || L("当前走人工确认模式，付款备注越清晰，到账越快。", "This payment is currently under manual confirmation. Clear notes help us credit it faster.")}
+          statusLabel={paymentStatusLabel}
+          paymentRef={paymentRef}
+          onPaymentRefChange={setPaymentRef}
+          onConfirm={confirmPayment}
+          onClose={closePaymentFlow}
+          onCopy={copyText}
+          copied={copied}
+          error={paymentError}
+          processing={paying}
+          confirmLabel={L("提交人工确认订单", "Submit for manual confirmation")}
+        />
+        <CryptoPaymentModal
+          open={activePaymentModal === "crypto"}
+          title={L("加密货币支付", "Crypto Payment")}
+          amountLabel={`${cryptoAmountEstimate} ${activeCryptoToken}`}
+          cnyAmountLabel={formatMoney(finalAmount)}
+          orderNumber={paymentOrderNumber}
+          token={activeCryptoToken}
+          network={activeCryptoNetwork}
+          countdown={cryptoMinutesLeft}
+          address={activeCryptoAddress}
+          qrSrc={selectedCryptoChoice.image}
+          qrValue={activeCryptoAddress}
+          notice={manualModeNotice || L("转账完成后系统会自动轮询到账状态，也可以手动刷新。", "The system will keep polling after transfer, and you can also refresh manually.")}
+          statusLabel={paymentStatusLabel}
+          paymentRef={paymentRef}
+          onPaymentRefChange={setPaymentRef}
+          manualFallback={manualFallback}
+          copied={copied}
+          onCopy={copyText}
+          onClose={closePaymentFlow}
+          onRefresh={checkCryptoStatus}
+          onConfirm={manualFallback ? confirmPayment : checkCryptoStatus}
+          processing={paying}
+          checkoutUrl={paymentSession?.checkoutUrl}
+          error={paymentError}
+        />
+        <PaymentSuccessModal
+          open={paymentSuccessVisible}
+          title={L("支付成功，余额已更新", "Payment successful, balance updated")}
+          description={L("这笔充值已经到账，你现在可以继续调用模型或返回数据面板查看最新资产变化。", "This top-up has been credited. You can continue calling models or return to the dashboard to view your updated balance.")}
+          orderNumber={paymentOrderNumber}
+          methodName={currentMethod.name}
+          amountLabel={formatMoney(finalAmount)}
+          onViewOrders={() => router.push("/profile")}
+          onGoDashboard={() => router.push("/dashboard")}
+          onContinue={() => {
+            setPaymentSuccessVisible(false);
+            setStep("choose");
+          }}
+        />
         {commissionModal ? (
           <div className="referral-modal-backdrop" role="presentation" onMouseDown={() => setCommissionModal("")}>
             <form className="referral-action-modal" onSubmit={submitCommissionAction} onMouseDown={(event) => event.stopPropagation()}>
@@ -715,6 +1127,30 @@ function Row({ label, value, strong = false }) {
   );
 }
 
+function SegmentedSelect({ options, value, onChange }) {
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {options.map((option) => (
+        <button
+          key={option}
+          type="button"
+          className="btn-secondary"
+          onClick={() => onChange(option)}
+          style={{
+            minWidth: 92,
+            padding: "8px 14px",
+            border: value === option ? "1px solid var(--page-brand)" : undefined,
+            background: value === option ? "var(--page-card-bg)" : undefined,
+            color: value === option ? "var(--page-brand)" : undefined,
+          }}
+        >
+          {option}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function StatusBadge({ status }) {
   const item = statusMap[status] || statusMap.pending;
   return <span style={{ padding: "5px 9px", borderRadius: 999, background: item.bg, color: item.color, fontSize: 12, fontWeight: 800 }}>{item.label}</span>;
@@ -732,16 +1168,40 @@ function PaymentBox({ title, value, copied, onCopy }) {
   );
 }
 
-function PaymentQr({ src, methodName, loading = false, error = "", hint = "" }) {
+function PaymentQr({ src, qrValue = "", methodName, loading = false, error = "", hint = "" }) {
   const [missing, setMissing] = useState(false);
+  const [dynamicQrSrc, setDynamicQrSrc] = useState("");
+  const directSrc = src ? `${src}${src.includes("?") ? "&" : "?"}v=20260601-manual` : "";
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!qrValue) return undefined;
+    import("qrcode")
+      .then((mod) => mod.toDataURL(qrValue, { margin: 1, width: 320 }))
+      .then((url) => {
+        if (!cancelled) setDynamicQrSrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setDynamicQrSrc("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [qrValue]);
+
   return (
     <div style={{ background: "var(--page-input-bg)", borderRadius: 16, border: "1px solid var(--page-card-border)", padding: 18, textAlign: "center" }}>
       <div style={{ fontSize: 12, color: "var(--page-sub)", fontWeight: 800, marginBottom: 12 }}>{methodName}收款码</div>
       {loading ? <div style={{ background: "var(--page-card-bg)", border: "1px dashed #ddd", borderRadius: 14, padding: "26px 18px", color: "var(--page-sub)", fontSize: 13, fontWeight: 700, lineHeight: 1.7 }}>正在生成专属支付二维码</div>
-       : error ? <div style={{ background: "#fff5f5", border: "1px dashed #fecaca", borderRadius: 14, padding: "26px 18px", color: "#b91c1c", fontSize: 13, fontWeight: 700, lineHeight: 1.7 }}>{error}</div>
-       : !missing && src ? <Image src={src} alt={`${methodName}收款码`} onError={() => setMissing(true)} width={320} height={410} unoptimized style={{ width: "min(100%, 320px)", aspectRatio: "1 / 1.28", objectFit: "contain", borderRadius: 14, border: "1px solid var(--page-input-border)", background: "var(--page-card-bg)" }} />
+       : dynamicQrSrc ? <img src={dynamicQrSrc} alt={`${methodName}收款码`} style={{ width: "min(100%, 320px)", aspectRatio: "1 / 1", objectFit: "contain", borderRadius: 14, border: "1px solid var(--page-input-border)", background: "#fff", padding: 12 }} />
+       : !missing && directSrc ? <img src={directSrc} alt={`${methodName}收款码`} onError={() => setMissing(true)} style={{ width: "min(100%, 320px)", aspectRatio: "1 / 1.28", objectFit: "contain", borderRadius: 14, border: "1px solid var(--page-input-border)", background: "var(--page-card-bg)" }} />
        : <div style={{ background: "var(--page-card-bg)", border: "1px dashed #ddd", borderRadius: 14, padding: "26px 18px", color: "var(--page-sub)", fontSize: 13, fontWeight: 700, lineHeight: 1.7 }}>收款码正在配置中</div>
       }
+      {error ? (
+        <div style={{ marginTop: 10, background: "#fff5f5", border: "1px dashed #fecaca", borderRadius: 10, padding: "10px 12px", color: "#b91c1c", fontSize: 12, fontWeight: 700, lineHeight: 1.6 }}>
+          {error}
+        </div>
+      ) : null}
       <div style={{ fontSize: 13, color: "var(--page-code-text)", marginTop: 12, lineHeight: 1.7 }}>{hint || "扫码付款后，系统会自动处理到账。"}</div>
     </div>
   );

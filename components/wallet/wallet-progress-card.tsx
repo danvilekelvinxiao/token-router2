@@ -215,7 +215,7 @@ export default function WalletProgressCard({
             </button>
             <button type="button" className="wallet-pool-card" onClick={() => openDetail("会员赠送额度")}>
               <span>会员赠送额度</span>
-              <strong>¥{Number(memberGiftCny + giftBalanceCny).toFixed(2)}</strong>
+              <strong>{formatWalletCny(Number(memberGiftCny + giftBalanceCny))}</strong>
               <p>黑金会员额度始终优先消耗</p>
             </button>
             <button type="button" className="wallet-pool-card" onClick={() => openDetail("套餐额度")}>
@@ -225,7 +225,7 @@ export default function WalletProgressCard({
             </button>
             <button type="button" className="wallet-pool-card" onClick={() => openDetail("充值余额")}>
               <span>充值余额</span>
-              <strong>¥{Number(rechargeBalanceCny).toFixed(2)}</strong>
+              <strong>{formatWalletCny(Number(rechargeBalanceCny))}</strong>
               <p>普通模型调用按实际价格扣费</p>
             </button>
             <button type="button" className="wallet-pool-card" onClick={() => openDetail("最近到期时间")}>

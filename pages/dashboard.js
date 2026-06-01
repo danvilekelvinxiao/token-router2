@@ -5,6 +5,7 @@ import { useTheme } from "next-themes";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import MiniMetricChart from "@/components/charts/mini-metric-chart";
 import ConsoleLayout from "@/components/ConsoleLayout";
+import DataExportCenter from "@/components/DataExportCenter";
 import { calculateCallCost, formatSmallCny } from "@/lib/billing/calculate-call-cost";
 import ModelLogo, { ModelNameWithLogo, getModelProviderLabel } from "@/components/ModelLogo";
 import InteractiveCard from "@/components/InteractiveCard";
@@ -16,7 +17,9 @@ import ActivityHeatmapCard from "@/components/dashboard/activity-heatmap-card";
 import SavingsCard from "@/components/analytics/savings-card";
 import SavingsDetailDrawer from "@/components/analytics/savings-detail-drawer";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
+import DashboardAnnouncementPopup from "@/components/announcements/dashboard-announcement-popup";
 import { generateTokenForecast } from "@/lib/analytics/token-forecast";
+import { useLocale } from "@/components/providers/locale-provider";
 
 /* ===================================================================
    REFERENCE DATA
@@ -1022,7 +1025,7 @@ function formatFlowMetric(value, metric) {
 function trendText(trend) {
   if (trend > 0) return `↑${trend}%`;
   if (trend < 0) return `↓${Math.abs(trend)}%`;
-  return "持平";
+  return "0%";
 }
 
 function trendClass(trend) {
@@ -1524,45 +1527,17 @@ function buildPredictionFromTrend(trendData, metric, balance) {
 
   const hasData = activeDays.length > 0;
   if (!hasData) {
-    const fallbackSeries = {
-      spend: {
-        unit: "¥",
-        pastValues: [0.04, 0.06, 0.05, 0.08, 0.07, 0.10, 0.09],
-        futureValues: [0.10, 0.11, 0.12, 0.12, 0.13, 0.14, 0.15],
-        futureCosts: [0.10, 0.11, 0.12, 0.12, 0.13, 0.14, 0.15],
-      },
-      requests: {
-        unit: "",
-        pastValues: [2, 3, 2, 4, 3, 5, 4],
-        futureValues: [4, 5, 5, 6, 6, 7, 7],
-        futureCosts: [0.10, 0.11, 0.12, 0.12, 0.13, 0.14, 0.15],
-      },
-      tokens: {
-        unit: "K",
-        pastValues: [12, 16, 14, 20, 18, 24, 22],
-        futureValues: [23, 24, 26, 27, 29, 30, 32],
-        futureCosts: [0.10, 0.11, 0.12, 0.12, 0.13, 0.14, 0.15],
-      },
-    }[metric] || {
-      unit: "K",
-      pastValues: [12, 16, 14, 20, 18, 24, 22],
-      futureValues: [23, 24, 26, 27, 29, 30, 32],
-      futureCosts: [0.10, 0.11, 0.12, 0.12, 0.13, 0.14, 0.15],
-    };
-    const fallbackPastDates = trendData.length
-      ? trendData.map((item) => item.date.replace("-", "/")).slice(-7)
-      : ["05/24", "05/25", "05/26", "05/27", "05/28", "05/29", "05/30"];
     return {
       data: {
-        pastDates: fallbackPastDates,
-        pastValues: fallbackSeries.pastValues,
-        pastCosts: fallbackSeries.pastValues.map((_, index) => fallbackSeries.futureCosts[index] || 0),
+        pastDates: [],
+        pastValues: [],
+        pastCosts: [],
         futureDates: getFutureDateLabels(7),
-        futureValues: fallbackSeries.futureValues,
-        futureCosts: fallbackSeries.futureCosts,
-        unit: fallbackSeries.unit,
-        primaryModel: "演示模型",
-        source: "fallback",
+        futureValues: [],
+        futureCosts: [],
+        unit: metricConfig.unit,
+        primaryModel: "暂无数据",
+        source: "empty",
       },
       summary: {
         weekTokens: 0,
@@ -1570,9 +1545,9 @@ function buildPredictionFromTrend(trendData, metric, balance) {
         coverDays: 0,
         suggestRecharge: 0,
         dailyAverageCost: 0,
-        message: "暂无足够真实数据生成预测，当前趋势线为前端演示数据，仅用于验证图表效果。",
+        message: "暂无足够数据生成预测，完成更多真实调用后会自动生成。",
         hasData: false,
-        source: "fallback",
+        source: "empty",
       },
     };
   }
@@ -2461,7 +2436,7 @@ function DashboardExchangeCard({
   );
 }
 
-function TotalAssetOverviewSection({ data, onOpenDetail, onOpenModel }) {
+function TotalAssetOverviewSection({ data, onOpenDetail, onOpenModel, titleText = "AI Token 资产总览", subtitleText = "查看你在 FlowAPI 的累计花费、Token 消耗、节省金额和主要使用模型。" }) {
   const hasCalls = data.totalRequests > 0;
   const commonRows = [
     { label: "总花费", value: hasCalls ? `¥${data.totalSpendCny.toFixed(2)}` : "暂无数据" },
@@ -2490,13 +2465,13 @@ function TotalAssetOverviewSection({ data, onOpenDetail, onOpenModel }) {
   return (
     <section className="dash3-section">
       <SectionTitle
-        title="总消耗与资产概览"
-        subtitle="查看你在 FlowAPI 的累计 Token 使用、官方价对比、实际花费和主要模型。"
+        title={titleText}
+        subtitle={subtitleText}
         right={<Link href="#dash-recent-calls" className="dash3-section-hint">查看调用流水</Link>}
       />
       <div className="dash3-exchange-grid dash3-exchange-grid-top">
         <DashboardExchangeCard
-          label="总花费"
+          label="累计花费"
           value={hasCalls ? <MetricValueInline prefix="¥" value={<FlashValue value={data.totalSpendCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"}
           detail="累计 API 调用消耗金额"
           chartData={data.actualTrend}
@@ -2505,25 +2480,7 @@ function TotalAssetOverviewSection({ data, onOpenDetail, onOpenModel }) {
           onClick={() => open("总花费详情", data.actualTrend, commonRows, moneyFormatter, "purple")}
         />
         <DashboardExchangeCard
-          label="官方价花费"
-          value={data.officialCostCny !== null ? <MetricValueInline prefix="¥" value={<FlashValue value={data.officialCostCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"}
-          detail="如果直接使用官方价格，预计需要支付的金额"
-          chartData={data.officialTrend}
-          chartColor="orange"
-          empty={data.officialCostCny === null}
-          onClick={() => open("官方价花费详情", data.officialTrend, commonRows, moneyFormatter, "orange")}
-        />
-        <DashboardExchangeCard
-          label="FlowAPI 实际花费"
-          value={hasCalls ? <MetricValueInline prefix="¥" value={<FlashValue value={data.actualCostCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"}
-          detail="你在 FlowAPI 的真实扣费金额"
-          chartData={data.actualTrend}
-          chartColor="cyan"
-          empty={!hasCalls}
-          onClick={() => open("FlowAPI 实际花费详情", data.actualTrend, commonRows, moneyFormatter, "cyan")}
-        />
-        <DashboardExchangeCard
-          label="使用 Token"
+          label="累计 Token"
           value={hasCalls ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.totalTokens)} tick={data.tick} />} unit="Token" /> : "暂无数据"}
           detail="累计输入 + 输出 Token"
           chartData={data.tokenTrend}
@@ -2532,18 +2489,14 @@ function TotalAssetOverviewSection({ data, onOpenDetail, onOpenModel }) {
           empty={!hasCalls}
           onClick={() => open("Token 使用详情", data.tokenTrend, commonRows, tokenFormatter, "cyan")}
         />
-      </div>
-      <div className="dash3-exchange-grid dash3-exchange-grid-bottom">
         <DashboardExchangeCard
-          label="总请求数"
-          value={hasCalls ? <MetricValueInline value={<FlashValue value={data.totalRequests} tick={data.tick} />} unit="次" /> : "暂无调用"}
-          detail="累计模型调用次数"
-          chartData={data.requestTrend}
-          chartType="bar"
-          chartColor="cyan"
-          chartFormatter={countFormatter}
-          empty={!hasCalls}
-          onClick={() => open("请求次数详情", data.requestTrend, commonRows, countFormatter, "cyan")}
+          label="累计节省"
+          value={data.savedAmountCny > 0 ? <MetricValueInline prefix="¥" value={<FlashValue value={data.savedAmountCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"}
+          detail="相比官方价格，FlowAPI 已帮你节省的估算成本"
+          chartData={data.actualTrend}
+          chartColor="green"
+          empty={data.savedAmountCny <= 0}
+          onClick={() => open("累计节省详情", data.actualTrend, commonRows, moneyFormatter, "green")}
         />
         <DashboardExchangeCard
           label="最常用模型"
@@ -2558,6 +2511,19 @@ function TotalAssetOverviewSection({ data, onOpenDetail, onOpenModel }) {
           chartColor="purple"
           empty={!data.mostUsedModel}
           onClick={() => data.mostUsedModel ? onOpenModel(data.mostUsedModel) : open("最常用模型详情", [])}
+        />
+      </div>
+      <div className="dash3-exchange-grid dash3-exchange-grid-bottom">
+        <DashboardExchangeCard
+          label="总请求数"
+          value={hasCalls ? <MetricValueInline value={<FlashValue value={data.totalRequests} tick={data.tick} />} unit="次" /> : "暂无调用"}
+          detail="累计模型调用次数"
+          chartData={data.requestTrend}
+          chartType="bar"
+          chartColor="cyan"
+          chartFormatter={countFormatter}
+          empty={!hasCalls}
+          onClick={() => open("请求次数详情", data.requestTrend, commonRows, countFormatter, "cyan")}
         />
         <DashboardExchangeCard
           label="最耗费模型"
@@ -2578,7 +2544,7 @@ function TotalAssetOverviewSection({ data, onOpenDetail, onOpenModel }) {
   );
 }
 
-function WeekUsageSection({ data, onOpenDetail, onOpenSavings }) {
+function WeekUsageSection({ data, onOpenDetail, onOpenSavings, titleText = "本周使用情况", subtitleText = "查看本周花费、Token 使用、节省金额和平均单次调用成本。" }) {
   const hasWeek = data.weekRequests > 0 || data.weekSpendCny > 0 || data.weekTokens > 0;
   const open = (title, chartData, chartFormatter = moneyFormatter, chartColor = "purple") => onOpenDetail(buildSimpleMetricDetail({
     title,
@@ -2595,7 +2561,7 @@ function WeekUsageSection({ data, onOpenDetail, onOpenSavings }) {
   }));
   return (
     <section className="dash3-section">
-      <SectionTitle title="本周使用情况" subtitle="查看本周花费、Token 使用、节省金额和平均单次调用成本。" />
+      <SectionTitle title={titleText} subtitle={subtitleText} />
       <div className="dash3-exchange-grid dash3-exchange-grid-four">
         <DashboardExchangeCard label="本周花费余额" value={hasWeek ? <MetricValueInline prefix="¥" value={<FlashValue value={data.weekSpendCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"} detail="本周 FlowAPI 实际扣费" chartData={data.weekSpendTrend} chartColor="yellow" empty={!hasWeek} onClick={() => open("本周花费详情", data.weekSpendTrend, moneyFormatter, "yellow")} />
         <DashboardExchangeCard label="本周使用 Token" value={hasWeek ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.weekTokens)} tick={data.tick} />} unit="Token" /> : "暂无数据"} detail="本周输入 + 输出 Token" chartData={data.weekTokenTrend} chartColor="cyan" chartFormatter={tokenFormatter} empty={!hasWeek} onClick={() => open("本周 Token 详情", data.weekTokenTrend, tokenFormatter, "cyan")} />
@@ -2606,7 +2572,7 @@ function WeekUsageSection({ data, onOpenDetail, onOpenSavings }) {
   );
 }
 
-function TodayAccountStatusSection({ data, onOpenDetail, onOpenSavings, onOpenLedger }) {
+function TodayAccountStatusSection({ data, onOpenDetail, onOpenSavings, onOpenLedger, titleText = "钱包与今日账户状态", subtitleText = "查看当前可用资产、套餐进度、今日消耗、今日节省和最近调用。" }) {
   const hasToday = data.todayRequests > 0 || data.todaySpendCny > 0 || data.todayTokens > 0;
   const recent = data.recentCall;
   const open = (title, chartData, chartFormatter = moneyFormatter, chartColor = "purple") => onOpenDetail(buildSimpleMetricDetail({
@@ -2625,7 +2591,7 @@ function TodayAccountStatusSection({ data, onOpenDetail, onOpenSavings, onOpenLe
   }));
   return (
     <section className="dash3-section">
-      <SectionTitle title="今日与当前账户状态" subtitle="查看当前余额、套餐、今日消耗、今日节省和最近调用。" />
+      <SectionTitle title={titleText} subtitle={subtitleText} />
       <div className="dash3-exchange-grid dash3-exchange-grid-six">
         <DashboardExchangeCard label="当前余额" value={<MetricValueInline prefix="¥" value={<FlashValue value={data.balanceCny.toFixed(2)} tick={data.tick} />} />} detail={data.balanceDetail} chartData={data.balanceTrend} chartColor="purple" onClick={() => open("当前余额详情", data.balanceTrend)} />
         <button type="button" className="dash3-exchange-card dash3-plan-card" onClick={() => open("当前套餐详情", [])}>
@@ -3198,8 +3164,7 @@ function CostStabilitySection({ stats, trendData, modelUsage, recentRows, onOpen
 
 function TokenForecastDecisionSection({ data, summary, metric, setMetric, onTooltip, theme, tick }) {
   const hasPredictionData = Boolean(summary?.hasData);
-  const isFallbackPrediction = summary?.source === "fallback" || data?.source === "fallback";
-  const shouldShowChart = hasPredictionData || isFallbackPrediction;
+  const shouldShowChart = hasPredictionData;
   return (
     <section className="dash3-section">
       <SectionTitle
@@ -3246,7 +3211,6 @@ function TokenForecastDecisionSection({ data, summary, metric, setMetric, onTool
           <div className="dash3-prediction-legend">
             <span><span className="dash3-prediction-legend-dot" style={{ background: "#f59e0b" }} /> 实际使用</span>
             <span><span className="dash3-prediction-legend-dot" style={{ background: "#3b82f6" }} /> 预测趋势</span>
-            {isFallbackPrediction ? <span className="dash3-prediction-source">演示数据</span> : null}
           </div>
           {shouldShowChart ? (
             <DualLineChart data={data} unit={data.unit} height={300} width={960} onTooltip={onTooltip} theme={theme} />
@@ -3354,18 +3318,7 @@ function RecentCallLedger({ rows }) {
                   {/* Expanded detail */}
                   {isOpen && (
                     <div className="call-billing-detail" onClick={(e) => e.stopPropagation()}>
-                      {/* Section 1: Channel & Request */}
-                      <div className="call-billing-detail-tags">
-                        <span>渠道：{row.channelName}</span>
-                        <span>{row.upstreamHost}</span>
-                        <span>{row.source}</span>
-                        <span>FinishReason: {row.finishReason}</span>
-                        <span>状态：{row.status}</span>
-                        <span>IP：{row.requestIp || "-"}</span>
-                        <span>耗时：{row.latency}</span>
-                      </div>
-
-                      {/* Section 2-4: Pricing cards */}
+                      {/* Section 1-3: Pricing cards */}
                       <div className="call-billing-pricing-grid">
                         {/* Original price */}
                         <div className="call-billing-pricing-card">
@@ -3710,6 +3663,7 @@ function PortraitMetric({ label, value, sub, chartData = [], chartType = "line",
    =================================================================== */
 
 export default function DashboardPage() {
+  const { t } = useLocale();
   const { resolvedTheme: theme } = useTheme();
   const [customer, setCustomer] = useState(null);
   const [tick, setTick] = useState(0);
@@ -3731,6 +3685,9 @@ export default function DashboardPage() {
   const [savingsOpen, setSavingsOpen] = useState(false);
   const [walletData, setWalletData] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
+  const [announcementPopupData, setAnnouncementPopupData] = useState(null);
+  const [announcementPopupOpen, setAnnouncementPopupOpen] = useState(false);
+  const [announcementMarkingSeen, setAnnouncementMarkingSeen] = useState(false);
   const localDemoMode = useSyncExternalStore(subscribeClientSnapshot, getClientLocalDemoMode, () => false);
   const [heatmapYear, setHeatmapYear] = useState(() => new Date().getFullYear());
   const [heatmapMonth, setHeatmapMonth] = useState(() => new Date().getMonth());
@@ -3805,7 +3762,7 @@ export default function DashboardPage() {
   useEffect(() => {
     let cancelled = false;
     setMarketRanksLoading(true);
-    fetch("/api/market/model-rank")
+    fetch("/api/analytics/global-model-rank")
       .then((r) => r.json())
       .then((data) => { if (!cancelled) setMarketRanks(data); })
       .catch(() => { if (!cancelled) setMarketRanks({ dataSource: "error", models: [] }); })
@@ -3904,6 +3861,52 @@ export default function DashboardPage() {
     return () => { cancelled = true; };
   }, [customer?.id, customer?.balance, localDemoMode]);
 
+  useEffect(() => {
+    if (!customer?.id) return;
+    let cancelled = false;
+    fetch("/api/announcements/dashboard-popup")
+      .then((res) => res.json())
+      .then((data) => {
+        if (cancelled || !data?.success || !data?.announcementVersion || !Array.isArray(data?.announcements) || data.announcements.length === 0) return;
+        setAnnouncementPopupData(data);
+        const localSeenKey = `flowapi_seen_announcement_version:${customer.id}`;
+        const localSeenVersion = typeof window !== "undefined" ? window.localStorage.getItem(localSeenKey) : "";
+        if (data.shouldShow !== true || localSeenVersion === data.announcementVersion) return;
+        window.setTimeout(() => {
+          if (!cancelled) setAnnouncementPopupOpen(true);
+        }, 300);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [customer?.id]);
+
+  const handleAnnouncementSeen = useCallback(async () => {
+    if (!announcementPopupData?.announcementVersion) {
+      setAnnouncementPopupOpen(false);
+      return;
+    }
+    const version = announcementPopupData.announcementVersion;
+    const localSeenKey = `flowapi_seen_announcement_version:${customer?.id || "anon"}`;
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(localSeenKey, version);
+      }
+      setAnnouncementMarkingSeen(true);
+      await fetch("/api/announcements/mark-seen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ announcementVersion: version }),
+      });
+    } catch {
+      // fallback only with local storage
+    } finally {
+      setAnnouncementMarkingSeen(false);
+      setAnnouncementPopupOpen(false);
+    }
+  }, [announcementPopupData, customer?.id]);
+
   /* Computed */
   const rawUser = customer || { name: "用户", email: "", balance: 0, totalSpend: 0, apiKeys: [], calls: [] };
   const user = localDemoMode ? buildLocalDemoCustomer(rawUser) : rawUser;
@@ -3957,9 +3960,7 @@ export default function DashboardPage() {
     costCny: item.spend,
     share: item.share,
   }));
-  const effectiveMarketRanks = localDemoMode
-    ? { status: "local-demo", updatedAt: new Date().toISOString(), models: localDemoRankItems }
-    : marketRanks;
+  const effectiveMarketRanks = marketRanks;
   const effectiveFlowApiRanks = localDemoMode
     ? { status: "local-demo", updatedAt: new Date().toISOString(), models: localDemoRankItems }
     : flowApiRanks;
@@ -4066,18 +4067,22 @@ export default function DashboardPage() {
       </Head>
       <style>{`
         .dashboard-part1 {
+          --dash-space-1: 8px;
+          --dash-space-2: 12px;
+          --dash-space-3: 16px;
+          --dash-space-4: 24px;
+          --dash-space-5: 32px;
           display: grid;
           gap: 26px;
           margin: 0 0 48px;
           padding: 26px;
-          border: 1px solid var(--dash-border);
+          border: 1px solid var(--card-border-light, rgba(15, 23, 42, 0.08));
           border-radius: 28px;
           background:
-            radial-gradient(circle at 7% 0%, rgba(99, 102, 241, 0.20), transparent 34%),
-            radial-gradient(circle at 96% 8%, rgba(34, 211, 238, 0.12), transparent 30%),
-            linear-gradient(145deg, rgba(99, 102, 241, 0.08), transparent 48%),
-            var(--dash-card-bg);
-          box-shadow: 0 24px 80px rgba(2, 6, 23, 0.18);
+            radial-gradient(circle at 7% 0%, rgba(99, 102, 241, 0.08), transparent 34%),
+            radial-gradient(circle at 96% 8%, rgba(34, 211, 238, 0.06), transparent 30%),
+            var(--page-bg-gradient-light, #f8f9ff);
+          box-shadow: var(--card-shadow-light, 0 12px 40px rgba(15, 23, 42, 0.06));
           overflow: hidden;
         }
 
@@ -4099,12 +4104,12 @@ export default function DashboardPage() {
         .dashboard-part1 .dash3-header-center,
         .dashboard-part1-heatmap .activity-heatmap-card {
           min-height: 242px !important;
-          border: 1px solid rgba(148, 163, 184, 0.18) !important;
+          border: 1px solid var(--card-border-light, rgba(15, 23, 42, 0.08)) !important;
           border-radius: 22px !important;
           background:
-            radial-gradient(circle at 12% 0%, rgba(99, 102, 241, 0.18), transparent 36%),
-            rgba(15, 23, 42, 0.28) !important;
-          box-shadow: none !important;
+            radial-gradient(circle at 12% 0%, rgba(99, 102, 241, 0.08), transparent 36%),
+            var(--page-card-bg, rgba(255, 255, 255, 0.86)) !important;
+          box-shadow: var(--card-shadow-light, 0 12px 40px rgba(15, 23, 42, 0.06)) !important;
         }
 
         .dashboard-part1 .dash3-header > div:first-child {
@@ -4180,7 +4185,7 @@ export default function DashboardPage() {
 
         .dashboard-part1 .dash3-login-reward-track {
           height: 10px !important;
-          background: rgba(148, 163, 184, 0.18) !important;
+          background: rgba(15, 23, 42, 0.08) !important;
         }
 
         .dashboard-part1 .dash3-login-reward-tiers {
@@ -4190,7 +4195,7 @@ export default function DashboardPage() {
         .dashboard-part1 .dash3-login-reward-tiers span {
           min-height: 32px !important;
           padding: 0 10px !important;
-          background: rgba(15, 23, 42, 0.22) !important;
+          background: rgba(99, 102, 241, 0.08) !important;
         }
 
         .dashboard-part1-heatmap {
@@ -4204,9 +4209,9 @@ export default function DashboardPage() {
           height: 100% !important;
           padding: 18px !important;
           background:
-            radial-gradient(circle at 96% 0%, rgba(34, 211, 238, 0.12), transparent 34%),
-            rgba(15, 23, 42, 0.28) !important;
-          box-shadow: none !important;
+            radial-gradient(circle at 96% 0%, rgba(99, 102, 241, 0.08), transparent 34%),
+            var(--page-card-bg, rgba(255, 255, 255, 0.86)) !important;
+          box-shadow: var(--card-shadow-light, 0 12px 40px rgba(15, 23, 42, 0.06)) !important;
         }
 
         .dashboard-part1-heatmap .activity-heatmap-head {
@@ -4293,7 +4298,7 @@ export default function DashboardPage() {
 
         .dashboard-part1 .dash3-section-header,
         .dashboard-part1 .dash3-section > .dash3-section-header {
-          margin-bottom: 20px !important;
+          margin-bottom: var(--dash-space-4) !important;
         }
 
         .dashboard-part1 .dash3-section-header h2 {
@@ -4303,7 +4308,37 @@ export default function DashboardPage() {
 
         .dashboard-part1 .dash3-asset-overview-grid {
           grid-template-columns: minmax(260px, 1.22fr) repeat(4, minmax(170px, 1fr)) !important;
-          gap: 16px !important;
+          gap: var(--dash-space-3) !important;
+        }
+
+        .dash3-shell > .dash3-section {
+          margin-top: var(--dash-space-5);
+        }
+
+        .dash3-shell button,
+        .dash3-shell [role="button"] {
+          transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease, color 160ms ease;
+        }
+
+        .dash3-shell button:hover:not(:disabled),
+        .dash3-shell [role="button"]:hover {
+          border-color: rgba(99, 102, 241, 0.35);
+        }
+
+        .dash3-shell button:active:not(:disabled),
+        .dash3-shell [role="button"]:active {
+          transform: translateY(1px);
+        }
+
+        .dash3-shell button:focus-visible,
+        .dash3-shell [role="button"]:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .dash3-shell button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .dashboard-part1 .dash3-asset-card,
@@ -4311,10 +4346,11 @@ export default function DashboardPage() {
           height: 278px !important;
           min-height: 278px !important;
           max-height: 278px !important;
-          border-color: rgba(148, 163, 184, 0.18) !important;
+          border-color: var(--card-border-light, rgba(15, 23, 42, 0.08)) !important;
           background:
-            radial-gradient(circle at 18% 0%, rgba(99, 102, 241, 0.14), transparent 34%),
-            rgba(15, 23, 42, 0.22) !important;
+            radial-gradient(circle at 18% 0%, rgba(99, 102, 241, 0.08), transparent 34%),
+            var(--page-card-bg, rgba(255, 255, 255, 0.86)) !important;
+          box-shadow: var(--card-shadow-light, 0 12px 40px rgba(15, 23, 42, 0.06)) !important;
         }
 
         .dashboard-part1 .dash3-asset-card .mini-metric-chart,
@@ -4442,13 +4478,12 @@ export default function DashboardPage() {
         }
 
         .dashboard-part1 .wallet-progress-card {
-          border-color: rgba(148, 163, 184, 0.18) !important;
+          border-color: var(--card-border-light, rgba(15, 23, 42, 0.08)) !important;
           border-radius: 24px !important;
           background:
-            radial-gradient(circle at 88% 0%, rgba(34, 211, 238, 0.14), transparent 30%),
-            radial-gradient(circle at 10% 0%, rgba(99, 102, 241, 0.16), transparent 34%),
-            rgba(15, 23, 42, 0.26) !important;
-          box-shadow: none !important;
+            radial-gradient(circle at 88% 0%, rgba(99, 102, 241, 0.08), transparent 30%),
+            var(--page-card-bg, rgba(255, 255, 255, 0.86)) !important;
+          box-shadow: var(--card-shadow-light, 0 12px 40px rgba(15, 23, 42, 0.06)) !important;
         }
 
         .dash3-shell .dash3-forecast-metrics article {
@@ -5440,6 +5475,14 @@ export default function DashboardPage() {
               </div>
             </header>
 
+            <TotalAssetOverviewSection
+              data={totalOverviewData}
+              onOpenDetail={setDetailModal}
+              onOpenModel={(model) => setDetailModal(buildModelUsageDetail(model, trendData, recentCallRows))}
+              titleText={t("dashboard.totalOverviewTitle", "AI Token 资产总览")}
+              subtitleText={t("dashboard.totalOverviewSubtitle", "查看你在 FlowAPI 的累计花费、Token 消耗、节省金额和主要使用模型。")}
+            />
+
             <AssetOverviewSection
               overview={usage.overview}
               trendData={trendData}
@@ -5481,21 +5524,25 @@ export default function DashboardPage() {
             />
           </section>
 
-          <WeekUsageSection
-            data={weekOverviewData}
-            onOpenDetail={setDetailModal}
-            onOpenSavings={() => setSavingsOpen(true)}
-          />
-
           <TodayAccountStatusSection
             data={todayOverviewData}
             onOpenDetail={setDetailModal}
             onOpenSavings={() => setSavingsOpen(true)}
+            titleText={t("dashboard.walletTodayTitle", "钱包与今日账户状态")}
+            subtitleText={t("dashboard.walletTodaySubtitle", "查看当前可用资产、套餐进度、今日消耗、今日节省和最近调用。")}
             onOpenLedger={() => {
               if (typeof document !== "undefined") {
                 document.getElementById("dash-recent-calls")?.scrollIntoView({ behavior: "smooth", block: "start" });
               }
             }}
+          />
+
+          <WeekUsageSection
+            data={weekOverviewData}
+            onOpenDetail={setDetailModal}
+            onOpenSavings={() => setSavingsOpen(true)}
+            titleText={t("dashboard.weekUsageTitle", "本周使用情况")}
+            subtitleText={t("dashboard.weekUsageSubtitle", "查看本周花费、Token 使用、节省金额和平均单次调用成本。")}
           />
 
           <CostStabilitySection
@@ -5508,6 +5555,8 @@ export default function DashboardPage() {
           />
 
           <RecentCallLedger rows={recentCallRows} />
+
+          <DataExportCenter variant="dashboard" />
 
           <TokenForecastDecisionSection
             data={predictionData}
@@ -5568,6 +5617,7 @@ export default function DashboardPage() {
                 items={effectiveMarketRanks?.models || []}
                 loading={localDemoMode ? false : marketRanksLoading}
                 emptyText="全球模型热度数据同步中"
+                emptyDescription="系统正在同步全球公开模型热度数据，完成后会展示热门模型、Token 热度和趋势变化。"
               />
             </div>
           </section>
@@ -5580,6 +5630,13 @@ export default function DashboardPage() {
         onClose={() => setDetailModal(null)}
         {...(detailModal || {})}
         actions={<Link href="/api-management">去 API 管理</Link>}
+      />
+      <DashboardAnnouncementPopup
+        open={announcementPopupOpen}
+        data={announcementPopupData}
+        onClose={handleAnnouncementSeen}
+        onConfirm={handleAnnouncementSeen}
+        loading={announcementMarkingSeen}
       />
     </>
   );

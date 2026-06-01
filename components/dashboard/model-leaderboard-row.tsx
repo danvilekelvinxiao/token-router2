@@ -31,7 +31,7 @@ function formatTrend(item: ModelLeaderboardRowProps["item"]) {
 
   if (value > 0) return { label: `↑${Math.round(value)}%`, className: "is-up" };
   if (value < 0) return { label: `↓${Math.abs(Math.round(value))}%`, className: "is-down" };
-  return { label: "→0%", className: "is-flat" };
+  return { label: "0%", className: "is-flat" };
 }
 
 export default function ModelLeaderboardRow({ item, showTooltip = false }: ModelLeaderboardRowProps) {

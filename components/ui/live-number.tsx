@@ -6,6 +6,8 @@ interface LiveNumberProps {
   suffix?: string;
   decimals?: number;
   className?: string;
+  useGrouping?: boolean;
+  locale?: string;
 }
 
 export default function LiveNumber({
@@ -14,6 +16,8 @@ export default function LiveNumber({
   suffix = "",
   decimals,
   className = "",
+  useGrouping = true,
+  locale = "zh-CN",
 }: LiveNumberProps) {
   const prevRef = useRef<number | string>("");
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
@@ -32,10 +36,19 @@ export default function LiveNumber({
     prevRef.current = value;
   }, [value]);
 
-  const displayValue =
-    typeof value === "number" && decimals !== undefined
-      ? value.toFixed(decimals)
-      : String(value);
+  const displayValue = (() => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      if (decimals !== undefined) {
+        return value.toLocaleString(locale, {
+          minimumFractionDigits: decimals,
+          maximumFractionDigits: decimals,
+          useGrouping,
+        });
+      }
+      return value.toLocaleString(locale, { useGrouping });
+    }
+    return String(value);
+  })();
 
   const colorClass =
     flash === "up"

@@ -4,6 +4,7 @@ import { useRouter } from "next/router";
 import { useCallback, useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal from "@/components/CardDetailModal";
+import DataExportCenter from "@/components/DataExportCenter";
 import UserBadges from "@/components/profile/user-badges";
 import UserBadgeDrawer from "@/components/profile/user-badge-drawer";
 import LiveNumber from "@/components/ui/live-number";
@@ -463,6 +464,8 @@ export default function ProfilePage() {
           }}
         />
 
+        <DataExportCenter variant="profile" />
+
         <section className="profile-support-grid">
           <div
             role="button"
@@ -700,7 +703,7 @@ function ReferralProgram({
           <span>佣金明细</span>
           <strong>查看完整返佣数据</strong>
           <p>累计佣金、已提现、奖励额度、购买 Token 记录都收进这里。</p>
-          <em>打开抽屉</em>
+          <em>查看明细</em>
         </button>
       </div>
 

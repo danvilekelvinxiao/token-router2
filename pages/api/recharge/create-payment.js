@@ -1,4 +1,4 @@
-import { createRechargeOrder } from "@/lib/customer-store";
+import { createRechargeOrder, logActivity } from "@/lib/customer-store";
 import { createAlipayRechargePayment, isAlipayConfigured } from "@/lib/payments/alipay";
 import { createWechatRechargePayment, isWechatConfigured } from "@/lib/payments/wechat";
 import { assertCustomerOwner } from "@/lib/session";
@@ -41,9 +41,22 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "该支付方式暂不支持自动到账" });
   }
 
+  async function recordOrderFlow(order) {
+    await logActivity({
+      customerId: session.customerId,
+      action: "recharge_order",
+      category: "payment",
+      detail: `生成交易流水：${order?.outTradeNo || order?.id || "-"} · ${paymentMethod} ¥${value.toFixed(2)}`,
+      amount: value,
+      ip: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || "",
+      userAgent: req.headers["user-agent"] || "",
+    });
+  }
+
   if (paymentMethod === "wechat" && !isWechatConfigured()) {
     const created = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef: buildPurchaseRef(req.body) });
     if (created.error) return res.status(400).json({ error: created.error });
+    await recordOrderFlow(created.order);
     return res.status(200).json({
       ok: true,
       mode: "manual",
@@ -55,6 +68,7 @@ export default async function handler(req, res) {
   if (paymentMethod === "alipay" && !isAlipayConfigured()) {
     const created = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef: buildPurchaseRef(req.body) });
     if (created.error) return res.status(400).json({ error: created.error });
+    await recordOrderFlow(created.order);
     return res.status(200).json({
       ok: true,
       mode: "manual",
@@ -67,6 +81,7 @@ export default async function handler(req, res) {
   if (created.error) {
     return res.status(400).json({ error: created.error });
   }
+  await recordOrderFlow(created.order);
 
   const payment = paymentMethod === "wechat"
     ? await createWechatRechargePayment({ req, order: created.order })

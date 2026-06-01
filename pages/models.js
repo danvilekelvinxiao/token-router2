@@ -138,7 +138,7 @@ function trendLabel(item) {
   if (!Number.isFinite(number)) return null;
   if (number > 0) return { text: `↑${Math.abs(number)}%`, className: "up" };
   if (number < 0) return { text: `↓${Math.abs(number)}%`, className: "down" };
-  return { text: "→0%", className: "flat" };
+  return { text: "0%", className: "flat" };
 }
 
 function generateCurl(model, apiBaseUrl) {

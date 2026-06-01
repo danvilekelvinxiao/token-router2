@@ -1,6 +1,9 @@
 export function formatWalletCny(value?: number | null) {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) return "暂无数据";
-  return `¥${Number(value).toFixed(2)}`;
+  return `¥${Number(value).toLocaleString("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 export function formatWalletDate(value?: string | null) {

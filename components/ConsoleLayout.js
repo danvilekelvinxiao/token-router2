@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ThemeToggle from "@/components/ThemeToggle";
+import LanguageSwitcher from "@/components/common/language-switcher";
 
 function IconDashboard() {
   return (
@@ -275,6 +276,7 @@ export default function ConsoleLayout({ customer, currentPath, children, content
           </Link>
           <div className="flow-console-nav-actions">
             <ThemeToggle />
+            <LanguageSwitcher />
             <AccountMenu customer={customer} />
           </div>
         </div>

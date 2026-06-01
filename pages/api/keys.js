@@ -1,6 +1,7 @@
 import { createApiKey, deleteApiKey, getDashboard, updateApiKey } from "@/lib/customer-store";
 import { getModelProduct } from "@/lib/model-products";
 import { assertCustomerOwner } from "@/lib/session";
+import { getLocalePriceMultiplier, normalizeLocale } from "@/lib/pricing/locale-pricing";
 
 export default async function handler(req, res) {
   if (!["POST", "PATCH", "DELETE"].includes(req.method)) {
@@ -50,7 +51,10 @@ export default async function handler(req, res) {
         customerId,
         req.body?.label || `${modelProduct.displayName} Key`,
         req.body?.expiresAt || null,
-        modelProduct
+        modelProduct,
+        {
+          localePriceMultiplier: getLocalePriceMultiplier(normalizeLocale(req.body?.locale)),
+        }
       );
       const customer = await getDashboard(customerId);
       return res.status(200).json({
