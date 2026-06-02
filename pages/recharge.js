@@ -146,6 +146,12 @@ function getPaymentPayload({ customerId, amount, paymentMethod, purchaseType, pk
   return { customerId, amount, paymentMethod, purchaseType, packageId: pkg?.id || "", packageName: pkg ? `${pkg.name}${pkg.code ? ` ${pkg.code}` : ""}` : "", quotaText: pkg?.quotaText || "", validDays: pkg?.validDays || null, paymentRef };
 }
 
+function calculateCryptoUsdAmount(amountCny) {
+  const value = Number(amountCny);
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.ceil(value / 7);
+}
+
 /* ==================== Main Page ==================== */
 
 export default function RechargePage() {
@@ -347,14 +353,11 @@ export default function RechargePage() {
 
   const cryptoAmountEstimate = useMemo(() => {
     if (Number(paymentSession?.actualAmount) > 0) return Number(paymentSession.actualAmount).toFixed(2);
-    const cny = Number(finalAmount || 0);
-    const stable = cny > 0 ? cny / 7.2 : 0;
-    return stable.toFixed(2);
+    return calculateCryptoUsdAmount(finalAmount).toFixed(2);
   }, [finalAmount, paymentSession?.actualAmount]);
   const cryptoUsdEstimate = useMemo(() => {
     if (Number(paymentSession?.amountUsd) > 0) return `$${Number(paymentSession.amountUsd).toFixed(2)}`;
-    const cny = Number(finalAmount || 0);
-    return `$${(cny > 0 ? cny / 7.2 : 0).toFixed(2)}`;
+    return `$${calculateCryptoUsdAmount(finalAmount).toFixed(2)}`;
   }, [finalAmount, paymentSession?.amountUsd]);
   const qrModalTitle = paymentMethod === "wechat" ? L("微信支付", "WeChat Pay") : L("支付宝支付", "Alipay");
   const launchTitle = paymentMethod === "crypto"

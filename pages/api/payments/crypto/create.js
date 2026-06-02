@@ -1,5 +1,5 @@
 import { createRechargeOrder, logActivity, updateRechargeOrderGatewayPayload } from "@/lib/customer-store";
-import { createEpusdtPayment, getCryptoConfigSafe, getManualCryptoWallet, isSupportedCryptoPayment, normalizeCryptoSelection } from "@/lib/payments/crypto";
+import { calculateCryptoUsdAmount, createEpusdtPayment, getCryptoConfigSafe, getManualCryptoWallet, isSupportedCryptoPayment, normalizeCryptoSelection } from "@/lib/payments/crypto";
 import { assertCustomerOwner } from "@/lib/session";
 
 function buildPurchaseRef(body = {}) {
@@ -91,8 +91,8 @@ export default async function handler(req, res) {
       payment: {
         provider: "manual_crypto",
         receiveAddress: manualWallet.address,
-        actualAmount: Number((value / 7.2).toFixed(2)),
-        amountUsd: Number((value / 7.2).toFixed(2)),
+        actualAmount: calculateCryptoUsdAmount(value),
+        amountUsd: calculateCryptoUsdAmount(value),
         token: manualWallet.token,
         network: manualWallet.network,
         orderId: created.order.outTradeNo,
