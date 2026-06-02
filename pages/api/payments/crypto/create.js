@@ -1,5 +1,5 @@
 import { createRechargeOrder, logActivity, updateRechargeOrderGatewayPayload } from "@/lib/customer-store";
-import { createEpusdtPayment, getCryptoConfigSafe, getManualCryptoWallet, normalizeCryptoSelection } from "@/lib/payments/crypto";
+import { createEpusdtPayment, getCryptoConfigSafe, getManualCryptoWallet, isSupportedCryptoPayment, normalizeCryptoSelection } from "@/lib/payments/crypto";
 import { assertCustomerOwner } from "@/lib/session";
 
 function buildPurchaseRef(body = {}) {
@@ -58,6 +58,12 @@ export default async function handler(req, res) {
   const selected = normalizeCryptoSelection({ token: cryptoToken, network: cryptoNetwork });
   if (!selected.token || !selected.network) {
     return res.status(400).json({ error: "请选择正确的加密货币和链网络", order: created.order });
+  }
+  if (!isSupportedCryptoPayment({ token: cryptoToken, network: cryptoNetwork })) {
+    return res.status(400).json({
+      error: "当前仅支持 USDT-TRON、USDT-Ethereum、USDC-Ethereum、USDC-Polygon 收银台。",
+      order: created.order,
+    });
   }
 
   const payment = await createEpusdtPayment({

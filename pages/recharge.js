@@ -74,6 +74,20 @@ const cryptoChoices = [
     image: "/images/pay/crypto-usdt-tron.jpg",
   },
   {
+    token: "USDT",
+    network: "Ethereum",
+    key: "usdt-ethereum",
+    address: "0x5F2d4d7a2bd62A2bc1c50Dc1FD5513fcD5003D12",
+    image: "/images/pay/crypto-usdt-ethereum.jpg",
+  },
+  {
+    token: "USDC",
+    network: "Ethereum",
+    key: "usdc-ethereum",
+    address: "0x5F2d4d7a2bd62A2bc1c50Dc1FD5513fcD5003D12",
+    image: "/images/pay/crypto-usdc-ethereum.jpg",
+  },
+  {
     token: "USDC",
     network: "Polygon",
     key: "usdc-polygon",
@@ -177,7 +191,7 @@ export default function RechargePage() {
   const localizedPaymentMethods = useMemo(() => paymentMethods.map((method) => {
     if (method.key === "wechat") return { ...method, name: isEn ? "WeChat Pay" : "微信支付" };
     if (method.key === "alipay") return { ...method, name: isEn ? "Alipay" : "支付宝" };
-    if (method.key === "crypto") return { ...method, name: isEn ? "Crypto (USDT)" : "加密货币支付" };
+    if (method.key === "crypto") return { ...method, name: isEn ? "Crypto (USDT / USDC)" : "加密货币支付" };
     if (method.key === "taobao_code") return { ...method, name: isEn ? "Taobao Activation Code" : "淘宝激活码" };
     return method;
   }), [isEn]);
@@ -417,6 +431,10 @@ export default function RechargePage() {
             setCryptoExpireAt(null);
           } else {
             setCryptoExpireAt(data.payment?.expiresAt ? new Date(data.payment.expiresAt).getTime() : Date.now() + 10 * 60 * 1000);
+            if (data.payment?.checkoutUrl) {
+              window.location.assign(data.payment.checkoutUrl);
+              return;
+            }
           }
           setCryptoNow(Date.now());
         }
@@ -815,9 +833,7 @@ export default function RechargePage() {
                       </div>
                     </div>
                     <p>
-                      {cryptoToken === "USDT"
-                        ? L("使用 GMWallet 生成 USDT-TRON 专属收银台：订单号、倒计时、二维码、地址复制和到账轮询会同步显示。", "GMWallet creates a dedicated USDT-TRON cashier with order number, countdown, QR code, address copy and payment polling.")
-                        : L("使用 GMWallet 生成 USDC-Polygon 专属收银台：订单号、倒计时、二维码、地址复制和到账轮询会同步显示。", "GMWallet creates a dedicated USDC-Polygon cashier with order number, countdown, QR code, address copy and payment polling.")}
+                      {L("使用 GMWallet 直接打开专属收银台：订单号、倒计时、二维码、地址复制和到账轮询会同步显示。仅支持 USDT / USDC。", "GMWallet opens a dedicated cashier directly with order number, countdown, QR code, address copy and payment polling. Only USDT / USDC are supported.")}
                     </p>
                   </div>
                 ) : null}
