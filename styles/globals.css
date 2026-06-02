@@ -16492,6 +16492,25 @@ pre {
   font-variant-numeric: tabular-nums;
 }
 
+.payment-modal-amount-copy-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.payment-modal-amount-copy-row strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.payment-modal-amount-copy-row .btn-secondary {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
 .payment-modal-amount-card small {
   color: var(--page-sub);
   font-size: 13px;

@@ -1,5 +1,5 @@
-import { createRechargeOrder, logActivity } from "@/lib/customer-store";
-import { createEpusdtPayment, getCryptoConfigSafe, normalizeCryptoSelection } from "@/lib/payments/crypto";
+import { createRechargeOrder, logActivity, updateRechargeOrderGatewayPayload } from "@/lib/customer-store";
+import { createEpusdtPayment, getCryptoConfigSafe, getManualCryptoWallet, normalizeCryptoSelection } from "@/lib/payments/crypto";
 import { assertCustomerOwner } from "@/lib/session";
 
 function buildPurchaseRef(body = {}) {
@@ -56,23 +56,8 @@ export default async function handler(req, res) {
   });
 
   const selected = normalizeCryptoSelection({ token: cryptoToken, network: cryptoNetwork });
-  if (selected.network && selected.network !== "ethereum") {
-    const manualAddress = String(cryptoToken || "").toUpperCase() === "USDT"
-      ? "TJeTTxyTnvhmMMyGU9EUBmQwbjHhjgENeY"
-      : "0x5F2d4d7a2bd62A2bc1c50Dc1FD5513fcD5003D12";
-    return res.status(200).json({
-      ok: true,
-      mode: "manual",
-      reason: "当前新钱包已切换为 USDT-TRON 与 USDC-Polygon，链上到账先走人工确认。",
-      order: created.order,
-      payment: {
-        provider: "manual_crypto",
-        receiveAddress: manualAddress,
-        token: String(cryptoToken || "USDT").toUpperCase(),
-        network: cryptoNetwork || "TRON",
-      },
-      gateway: getCryptoConfigSafe(),
-    });
+  if (!selected.token || !selected.network) {
+    return res.status(400).json({ error: "请选择正确的加密货币和链网络", order: created.order });
   }
 
   const payment = await createEpusdtPayment({
@@ -82,9 +67,55 @@ export default async function handler(req, res) {
     token: cryptoToken,
     network: cryptoNetwork,
   });
+
   if (payment.error) {
-    return res.status(400).json({
-      error: payment.error,
+    const manualWallet = getManualCryptoWallet({ token: cryptoToken, network: cryptoNetwork });
+    if (!manualWallet) {
+      return res.status(400).json({
+        error: payment.error,
+        order: created.order,
+        gateway: getCryptoConfigSafe(),
+      });
+    }
+    return res.status(200).json({
+      ok: true,
+      mode: "manual",
+      reason: `GMWallet 暂时未能生成自动收银台：${payment.error}。已切换到人工确认兜底，请按页面订单号转账后提交凭证。`,
+      order: created.order,
+      payment: {
+        provider: "manual_crypto",
+        receiveAddress: manualWallet.address,
+        actualAmount: Number((value / 7.2).toFixed(2)),
+        amountUsd: Number((value / 7.2).toFixed(2)),
+        token: manualWallet.token,
+        network: manualWallet.network,
+        orderId: created.order.outTradeNo,
+      },
+      gateway: getCryptoConfigSafe(),
+    });
+  }
+
+  const bound = await updateRechargeOrderGatewayPayload({
+    orderId: created.order.id,
+    customerId: session.customerId,
+    providerTradeNo: payment.tradeId || payment.gatewayOrderNo || "",
+    gatewayPayload: JSON.stringify({
+      provider: payment.provider,
+      tradeId: payment.tradeId,
+      gatewayOrderNo: payment.gatewayOrderNo,
+      orderId: payment.orderId,
+      token: payment.token,
+      network: payment.network,
+      amountUsd: payment.amountUsd,
+      actualAmount: payment.actualAmount,
+      receiveAddress: payment.receiveAddress,
+      checkoutUrl: payment.checkoutUrl,
+      expiresAt: payment.expiresAt,
+    }),
+  });
+  if (bound.error) {
+    return res.status(500).json({
+      error: `GMWallet 订单已创建，但 FlowAPI 交易流水绑定失败：${bound.error}。请重新发起支付，避免付款后无法自动到账。`,
       order: created.order,
       gateway: getCryptoConfigSafe(),
     });
@@ -92,7 +123,8 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     ok: true,
-    order: created.order,
+    mode: "gateway",
+    order: bound.order || created.order,
     payment: {
       provider: payment.provider,
       checkoutUrl: payment.checkoutUrl,
@@ -101,6 +133,7 @@ export default async function handler(req, res) {
       orderId: payment.orderId,
       receiveAddress: payment.receiveAddress,
       actualAmount: payment.actualAmount,
+      amountUsd: payment.amountUsd,
       token: payment.token,
       network: payment.network,
       expiresAt: payment.expiresAt,

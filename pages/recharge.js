@@ -236,7 +236,7 @@ export default function RechargePage() {
   }, [customer?.id, customer?.balance, orders.length]);
 
   useEffect(() => {
-    if (step !== "pay" || paymentMethod === "taobao_code" || manualFallback || !submittedOrder?.id || submittedOrder.status === "approved") return undefined;
+    if (step !== "pay" || paymentMethod === "taobao_code" || paymentMethod === "crypto" || manualFallback || !submittedOrder?.id || submittedOrder.status === "approved") return undefined;
     const timer = window.setInterval(async () => {
       const res = await fetch(`/api/recharge?orderId=${submittedOrder.id}`);
       if (!res.ok) return;
@@ -277,7 +277,7 @@ export default function RechargePage() {
   const manualModeNotice = useMemo(() => {
     if (paymentMethod === "wechat") return "微信商户参数未配置完整，已切换到手动确认模式";
     if (paymentMethod === "alipay") return "支付宝商户参数未配置完整，已切换到手动确认模式";
-    if (paymentMethod === "crypto" && manualFallback) return "当前已开放 USDT-TRON 与 USDC-Polygon 收款，到账先走人工确认，后续再接自动链上监听。";
+    if (paymentMethod === "crypto" && manualFallback) return "GMWallet 暂时未能生成自动收银台，当前订单已切换到人工确认兜底。";
     return "";
   }, [paymentMethod, manualFallback]);
   const selectedCryptoChoice = useMemo(
@@ -290,7 +290,8 @@ export default function RechargePage() {
   );
   const activeCryptoToken = String(paymentSession?.token || cryptoToken || "").toUpperCase();
   const activeCryptoNetwork = formatCryptoNetworkLabel(paymentSession?.network || cryptoNetwork);
-  const activeCryptoAddress = paymentSession?.receiveAddress || selectedCryptoChoice?.address || "";
+  const activeCryptoAddress = paymentSession?.receiveAddress || (manualFallback ? selectedCryptoChoice?.address : "") || "";
+  const activeCryptoQrValue = paymentSession?.checkoutUrl || activeCryptoAddress || "";
   const cryptoPaymentRef = useMemo(
     () => `币种：${cryptoToken}；网络：${cryptoNetwork}；地址：${selectedCryptoChoice?.address || ""}`,
     [cryptoNetwork, cryptoToken, selectedCryptoChoice?.address]
@@ -336,6 +337,11 @@ export default function RechargePage() {
     const stable = cny > 0 ? cny / 7.2 : 0;
     return stable.toFixed(2);
   }, [finalAmount, paymentSession?.actualAmount]);
+  const cryptoUsdEstimate = useMemo(() => {
+    if (Number(paymentSession?.amountUsd) > 0) return `$${Number(paymentSession.amountUsd).toFixed(2)}`;
+    const cny = Number(finalAmount || 0);
+    return `$${(cny > 0 ? cny / 7.2 : 0).toFixed(2)}`;
+  }, [finalAmount, paymentSession?.amountUsd]);
   const qrModalTitle = paymentMethod === "wechat" ? L("微信支付", "WeChat Pay") : L("支付宝支付", "Alipay");
   const launchTitle = paymentMethod === "crypto"
     ? L("正在生成链上支付订单...", "Generating on-chain payment order...")
@@ -453,6 +459,37 @@ export default function RechargePage() {
 
   async function confirmPayment() {
     if (!customer || finalAmount <= 0) return;
+    if (paymentMethod === "crypto" && manualFallback && submittedOrder?.id) {
+      setPaying(true);
+      try {
+        const res = await fetch("/api/recharge/manual-confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: submittedOrder.id,
+            paymentRef,
+            providerTradeNo: paymentRef,
+            gatewayPayload: JSON.stringify({
+              token: activeCryptoToken,
+              network: activeCryptoNetwork,
+              address: activeCryptoAddress,
+              note: paymentRef,
+            }),
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.order) {
+          setSubmittedOrder(data.order);
+          setPaymentError(data.message || L("已提交人工确认，请等待后台核对到账。", "Manual confirmation submitted. Please wait for review."));
+        } else {
+          alert(data.error || L("提交失败，请稍后再试", "Submit failed. Please try again."));
+        }
+      } catch {
+        alert(L("网络异常，请稍后再试", "Network error. Please try again."));
+      }
+      setPaying(false);
+      return;
+    }
     const payload = getPaymentPayload({ customerId: customer.id, amount: finalAmount, paymentMethod, purchaseType, pkg: selectedPackage, paymentRef });
     setPaying(true);
     try {
@@ -513,7 +550,7 @@ export default function RechargePage() {
           }
         })
         .catch(() => {});
-    }, 8000);
+    }, 3000);
     return () => window.clearInterval(timer);
   }, [paymentMethod, paymentSession?.tradeId, step, submittedOrder?.id, submittedOrder?.status, customer, manualFallback]);
 
@@ -779,8 +816,8 @@ export default function RechargePage() {
                     </div>
                     <p>
                       {cryptoToken === "USDT"
-                        ? L("当前开放 USDT-TRON 收款码，按页面地址转账后提交人工确认。", "USDT-TRON is currently available. Transfer to the shown address and submit for manual confirmation.")
-                        : L("当前开放 USDC-Polygon 收款码，按页面地址转账后提交人工确认。", "USDC-Polygon is currently available. Transfer to the shown address and submit for manual confirmation.")}
+                        ? L("使用 GMWallet 生成 USDT-TRON 专属收银台：订单号、倒计时、二维码、地址复制和到账轮询会同步显示。", "GMWallet creates a dedicated USDT-TRON cashier with order number, countdown, QR code, address copy and payment polling.")
+                        : L("使用 GMWallet 生成 USDC-Polygon 专属收银台：订单号、倒计时、二维码、地址复制和到账轮询会同步显示。", "GMWallet creates a dedicated USDC-Polygon cashier with order number, countdown, QR code, address copy and payment polling.")}
                     </p>
                   </div>
                 ) : null}
@@ -867,8 +904,8 @@ export default function RechargePage() {
                     ) : null}
                     <div style={{ fontSize: 12, color: "var(--page-sub)", lineHeight: 1.6 }}>
                       {manualFallback
-                        ? L("当前网络暂未接通自动监听，请按页面信息完成转账后提交人工确认。", "This network is not on automatic monitoring yet. Complete the transfer and submit it for manual confirmation.")
-                        : L("仅接收所选网络资产，选错网络会导致资产丢失。到账后系统自动入账。", "Only assets on the selected network are accepted. Wrong network transfer may cause permanent loss.")}
+                        ? L("GMWallet 自动下单失败时才进入人工确认兜底，请提交 TxHash 或付款备注。", "Manual review is only used when GMWallet checkout fails. Submit TxHash or payment note.")
+                        : L("请按 GMWallet 订单展示的币种、网络、金额和地址转账。系统每 3 秒自动查询一次到账状态。", "Transfer with the exact token, network, amount and address shown by GMWallet. The system checks payment status every 3 seconds.")}
                     </div>
                     {manualFallback ? (
                       <>
@@ -966,13 +1003,14 @@ export default function RechargePage() {
           title={L("加密货币支付", "Crypto Payment")}
           amountLabel={`${cryptoAmountEstimate} ${activeCryptoToken}`}
           cnyAmountLabel={formatMoney(finalAmount)}
+          usdAmountLabel={cryptoUsdEstimate}
           orderNumber={paymentOrderNumber}
           token={activeCryptoToken}
           network={activeCryptoNetwork}
           countdown={cryptoMinutesLeft}
           address={activeCryptoAddress}
           qrSrc={selectedCryptoChoice.image}
-          qrValue={activeCryptoAddress}
+          qrValue={activeCryptoQrValue}
           notice={manualModeNotice || L("转账完成后系统会自动轮询到账状态，也可以手动刷新。", "The system will keep polling after transfer, and you can also refresh manually.")}
           statusLabel={paymentStatusLabel}
           paymentRef={paymentRef}

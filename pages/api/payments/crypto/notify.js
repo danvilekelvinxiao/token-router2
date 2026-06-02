@@ -1,4 +1,4 @@
-import { markRechargeOrderPaid } from "@/lib/customer-store";
+import { getRechargeOrderByOutTradeNo, markRechargeOrderPaid } from "@/lib/customer-store";
 import { isEpusdtPaid, verifyEpusdtNotifySignature } from "@/lib/payments/crypto";
 
 export const config = {
@@ -44,11 +44,21 @@ export default async function handler(req, res) {
   if (!normalized.outTradeNo) return res.status(400).json({ error: "缺少商户订单号" });
   if (!normalized.paid) return res.status(200).json({ ok: true, ignored: true, reason: "订单未支付完成" });
 
+  const order = await getRechargeOrderByOutTradeNo(normalized.outTradeNo);
+  if (!order) return res.status(404).json({ error: "订单不存在" });
+
   const marked = await markRechargeOrderPaid({
     outTradeNo: normalized.outTradeNo,
     providerTradeNo: normalized.providerTradeNo,
-    amount: normalized.amount,
-    rawPayload: rawBody.slice(0, 2000),
+    amount: Number(order.amount),
+    rawPayload: JSON.stringify({
+      raw: payload,
+      flowapiPaymentAudit: {
+        gatewayAmountCrypto: normalized.amount,
+        creditedAmountCny: Number(order.amount),
+        note: "GMWallet 回调金额是链上币数，FlowAPI 按订单人民币金额入账。",
+      },
+    }).slice(0, 5000),
     approvedBy: "gmwallet-notify",
   });
   if (marked.error) return res.status(400).json({ error: marked.error });
