@@ -226,6 +226,15 @@ export default function RechargePage() {
     return () => window.clearTimeout(timer);
   }, [router]);
 
+  useEffect(() => {
+    function handlePageShow() {
+      setPaying(false);
+      setLaunchVisible(false);
+    }
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+
   async function refreshCustomer(c) {
     const res = await fetch(`/api/customer?customerId=${c.id}`);
     if (res.ok) {
@@ -381,6 +390,17 @@ export default function RechargePage() {
 
   async function handleSubmit() {
     if (finalAmount <= 0) return;
+    if (
+      paymentMethod === "crypto" &&
+      paymentSession?.checkoutUrl &&
+      submittedOrder?.status !== "approved" &&
+      (!cryptoExpireAt || cryptoExpireAt > Date.now())
+    ) {
+      setPaying(false);
+      setLaunchVisible(false);
+      window.location.assign(paymentSession.checkoutUrl);
+      return;
+    }
     setSubmittedOrder(null);
     setPaymentSession(null);
     setLaunchVisible(paymentMethod !== "taobao_code");
@@ -435,6 +455,8 @@ export default function RechargePage() {
           } else {
             setCryptoExpireAt(data.payment?.expiresAt ? new Date(data.payment.expiresAt).getTime() : Date.now() + 10 * 60 * 1000);
             if (data.payment?.checkoutUrl) {
+              setPaying(false);
+              setLaunchVisible(false);
               window.location.assign(data.payment.checkoutUrl);
               return;
             }
