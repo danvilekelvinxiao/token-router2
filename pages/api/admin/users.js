@@ -1,4 +1,4 @@
-import { listCustomers, updateCustomer, disableApiKey, enableApiKey } from "@/lib/customer-store";
+import { listCustomers, updateCustomer, disableApiKey, enableApiKey, updateApiKeyLimitForAdmin } from "@/lib/customer-store";
 import { requireAdmin } from "@/lib/admin-auth";
 
 export default async function handler(req, res) {
@@ -30,6 +30,16 @@ export default async function handler(req, res) {
     if (action === "enableKey") {
       await enableApiKey(data.keyId);
       return res.status(200).json({ ok: true });
+    }
+    if (action === "updateKeyLimit") {
+      try {
+        const key = await updateApiKeyLimitForAdmin(data.keyId, data.limit || {});
+        if (!key) return res.status(404).json({ error: "API Key 不存在" });
+        return res.status(200).json({ ok: true, key });
+      } catch (error) {
+        if (error?.code === "INVALID_API_KEY_LIMIT") return res.status(400).json({ error: error.message });
+        throw error;
+      }
     }
     return res.status(400).json({ error: "Unknown action" });
   }

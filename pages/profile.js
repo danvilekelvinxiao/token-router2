@@ -8,6 +8,7 @@ import DataExportCenter from "@/components/DataExportCenter";
 import UserBadges from "@/components/profile/user-badges";
 import UserBadgeDrawer from "@/components/profile/user-badge-drawer";
 import LiveNumber from "@/components/ui/live-number";
+import { useSafePolling } from "@/hooks/useSafePolling";
 
 const ANNOUNCEMENTS = [
   {
@@ -185,9 +186,13 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!customer?.id) return undefined;
     queueMicrotask(() => refreshAssetRanking(customer));
-    const timer = window.setInterval(() => refreshAssetRanking(customer), 30_000);
-    return () => window.clearInterval(timer);
   }, [customer, refreshAssetRanking]);
+
+  useSafePolling({
+    intervalMs: 30000,
+    enabled: Boolean(customer?.id),
+    callback: () => refreshAssetRanking(customer),
+  });
 
   const refreshReferral = useCallback(async (currentCustomer = customer) => {
     if (!currentCustomer?.id) return;
@@ -208,7 +213,7 @@ export default function ProfilePage() {
     if (!customer?.id) return undefined;
     let cancelled = false;
     queueMicrotask(() => { if (!cancelled) setBadgesLoading(true); });
-    fetch("/api/profile/badges")
+    fetch("/api/user/titles")
       .then((res) => res.json())
       .then((data) => { if (!cancelled) setBadgesData(data); })
       .catch(() => { if (!cancelled) setBadgesData({ source: "empty", summary: { totalBadges: 0 }, displayBadges: [], allBadges: [] }); })

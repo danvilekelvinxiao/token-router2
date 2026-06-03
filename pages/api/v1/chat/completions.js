@@ -392,11 +392,24 @@ export default async function handler(req, res) {
   }
   const upstreamBody = normalizeChatRequestBody(body, upstreamModelId);
   const promptTokens = estimatePromptTokens(upstreamBody.messages || []);
+  const estimatedCompletionTokens = Math.min(Number(upstreamBody.max_tokens || 1024) || 1024, Number(process.env.MAX_COMPLETION_TOKENS || 4096));
   const reserveCost = Number((estimateReserveCost(selected.modelId, upstreamBody, promptTokens) * localePriceMultiplier).toFixed(6));
-  const reserve = await reserveBalanceByToken(clientToken, reserveCost);
+  const reserve = await reserveBalanceByToken(clientToken, reserveCost, {
+    tokens: promptTokens + estimatedCompletionTokens,
+  });
 
   if (reserve.error) {
     releaseConcurrency(concurrencyKey);
+    if (reserve.quotaExceeded) {
+      return sendApiError(
+        res,
+        reserve.status || 429,
+        reserve.code || "API_KEY_QUOTA_EXCEEDED",
+        reserve.error,
+        reserve.nextResetAt ? `下次重置时间：${reserve.nextResetAt}` : "请调整该 API Key 的额度限制后再调用。",
+        { nextResetAt: reserve.nextResetAt || null }
+      );
+    }
     return sendApiError(res, 402, "INSUFFICIENT_BALANCE", reserve.error, "请进入 FlowAPI 充值页面补充余额，到账后再继续调用。");
   }
 

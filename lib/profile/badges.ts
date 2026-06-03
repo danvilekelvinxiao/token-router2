@@ -1,6 +1,7 @@
 import { calculateCustomerSavings } from "@/lib/analytics/savings";
 import { getContent } from "@/lib/content-cms";
 import { getDashboard, listCustomers } from "@/lib/customer-store";
+import { getUserTitles } from "@/lib/titles/recalculate-user-titles";
 
 type BadgeType =
   | "spend"
@@ -10,7 +11,10 @@ type BadgeType =
   | "request_count"
   | "saving"
   | "referral"
-  | "activity";
+  | "activity"
+  | "rank"
+  | "percentile"
+  | string;
 
 type BadgeLevel = "legendary" | "diamond" | "platinum" | "red" | "gold" | "normal";
 
@@ -30,7 +34,7 @@ type UserBadge = {
   animated: boolean;
   highlight: boolean;
   updatedAt: string;
-  category: "high_value" | "model" | "asset" | "growth";
+  category: "high_value" | "model" | "asset" | "growth" | "token" | "image" | "payment" | "invite" | "team" | "membership" | "data" | "stability" | "developer" | string;
   dimension: string;
   period: string;
 };
@@ -216,6 +220,9 @@ function dedupeDisplayBadges(badges: UserBadge[]) {
 }
 
 export async function generateUserBadges(userId: string) {
+  const titleResult = await getUserTitles(userId);
+  if (titleResult) return titleResult;
+
   const [currentCustomer, customers] = await Promise.all([
     getDashboard(userId),
     listCustomers(),

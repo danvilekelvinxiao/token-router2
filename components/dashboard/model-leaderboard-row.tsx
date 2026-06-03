@@ -50,7 +50,7 @@ export default function ModelLeaderboardRow({ item, showTooltip = false }: Model
         <div className="model-leaderboard-provider" title={provider}>{provider}</div>
       </div>
       <div className="model-leaderboard-metric">
-        <div className="model-leaderboard-token">{tokenLabel}{hasTokenNumber ? <span>Token</span> : null}</div>
+        <div className="model-leaderboard-token">{tokenLabel}</div>
         {trend.label ? <div className={`model-leaderboard-trend ${trend.className}`}>{trend.label}</div> : null}
       </div>
       {hasTooltip ? (

@@ -20,6 +20,18 @@ const PROVIDERS: Record<string, { label: string; shortLabel: string; bg: string;
   xai: { label: "xAI Grok", shortLabel: "X", bg: "#1D1D1F", fg: "#fff" },
   grok: { label: "xAI Grok", shortLabel: "X", bg: "#1D1D1F", fg: "#fff" },
   cohere: { label: "Cohere", shortLabel: "C", bg: "#EC4899", fg: "#fff" },
+  flux: { label: "Black Forest Labs Flux", shortLabel: "FX", bg: "#111827", fg: "#fff" },
+  "black-forest": { label: "Black Forest Labs Flux", shortLabel: "FX", bg: "#111827", fg: "#fff" },
+  stability: { label: "Stability AI", shortLabel: "S", bg: "#0F766E", fg: "#fff" },
+  "stable-diffusion": { label: "Stability AI", shortLabel: "S", bg: "#0F766E", fg: "#fff" },
+  midjourney: { label: "Midjourney", shortLabel: "MJ", bg: "#111827", fg: "#fff" },
+  bytedance: { label: "ByteDance Seedream", shortLabel: "BD", bg: "#111827", fg: "#fff" },
+  seedream: { label: "ByteDance Seedream", shortLabel: "BD", bg: "#111827", fg: "#fff" },
+  doubao: { label: "Doubao", shortLabel: "DB", bg: "#2563EB", fg: "#fff" },
+  kling: { label: "Kling", shortLabel: "KL", bg: "#111827", fg: "#fff" },
+  kuaishou: { label: "Kling", shortLabel: "KL", bg: "#111827", fg: "#fff" },
+  imagen: { label: "Google Imagen", shortLabel: "G", bg: "#4285F4", fg: "#fff" },
+  image: { label: "图片模型", shortLabel: "IM", bg: "#6366F1", fg: "#fff" },
 };
 
 const FALLBACK = { label: "通用模型", shortLabel: "O", bg: "#6B7280", fg: "#fff" };
@@ -30,6 +42,7 @@ function detectProvider(model = "", provider = ""): string {
   if (m.includes("chatgpt")) return "openai";
   if (m.includes("通义千问")) return "qwen";
   if (m.includes("讯飞")) return "spark";
+  if (m.includes("imagen")) return "google";
   for (const key of Object.keys(PROVIDERS)) {
     if (m.includes(key)) return key;
   }

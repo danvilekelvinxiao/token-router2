@@ -73,9 +73,9 @@ export default function ModelLeaderboard({
   onPeriodChange,
   showTooltip = false,
 }: ModelLeaderboardProps) {
-  const safeItems = Array.isArray(items) ? items.slice(0, 20) : [];
+  const safeItems = Array.isArray(items) ? items.slice(0, 10) : [];
   const leftItems = safeItems.slice(0, 10);
-  const rightItems = safeItems.slice(10, 20);
+  const rightItems = safeItems.slice(10);
   const updatedLabel = formatUpdatedAt(updatedAt);
 
   return (

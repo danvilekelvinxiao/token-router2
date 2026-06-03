@@ -33,10 +33,17 @@ function formatTime(value?: string) {
 
 function groupBadges(badges: UserBadge[] = []) {
   return [
-    { key: "high_value", title: "高含金量称号", items: badges.filter((badge) => badge.category === "high_value" || badge.rank === 1 || badge.level === "diamond" || badge.level === "platinum" || badge.level === "red") },
-    { key: "model", title: "模型称号", items: badges.filter((badge) => badge.category === "model" || badge.type.startsWith("model_")) },
-    { key: "asset", title: "资产称号", items: badges.filter((badge) => badge.category === "asset" && !badge.type.startsWith("model_")) },
-    { key: "growth", title: "成长称号", items: badges.filter((badge) => badge.category === "growth") },
+    { key: "asset", title: "资产称号", items: badges.filter((badge) => badge.category === "asset" || badge.category === "high_value") },
+    { key: "token", title: "Token 称号", items: badges.filter((badge) => badge.category === "token") },
+    { key: "model", title: "模型称号", items: badges.filter((badge) => badge.category === "model" || String(badge.type || "").startsWith("model_")) },
+    { key: "image", title: "图片称号", items: badges.filter((badge) => badge.category === "image") },
+    { key: "payment", title: "支付称号", items: badges.filter((badge) => badge.category === "payment") },
+    { key: "invite", title: "邀请称号", items: badges.filter((badge) => badge.category === "invite" || badge.category === "growth") },
+    { key: "team", title: "团队称号", items: badges.filter((badge) => badge.category === "team") },
+    { key: "membership", title: "会员称号", items: badges.filter((badge) => badge.category === "membership") },
+    { key: "data", title: "数据称号", items: badges.filter((badge) => badge.category === "data") },
+    { key: "stability", title: "稳定性称号", items: badges.filter((badge) => badge.category === "stability") },
+    { key: "developer", title: "开发者称号", items: badges.filter((badge) => badge.category === "developer") },
   ].map((group) => ({ ...group, items: group.items.filter((item, index, list) => list.findIndex((next) => next.id === item.id) === index) }));
 }
 

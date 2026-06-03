@@ -1,13 +1,14 @@
 export const dynamic = "force-dynamic";
 import Head from "next/head";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import ModelLogo from "@/components/ModelLogo";
 import { formatTokens } from "@/lib/model-format";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
 import { sanitizePublicModelProvider } from "@/lib/public-model-provider";
+import { useSafePolling } from "@/hooks/useSafePolling";
 
 const DEFAULT_CATEGORIES = [
   { id: "all", name: "全部" },
@@ -263,41 +264,38 @@ export default function ModelsPage() {
     return () => { cancelled = true; };
   }, [customer?.id]);
 
-  useEffect(() => {
-    let cancelled = false;
+  const loadPopularModels = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setPopularLoading(true);
+    try {
+      const response = await fetch("/api/analytics/model-usage-rank?period=week", { cache: "no-store" });
+      const json = await response.json();
+      const rows = response.ok && json?.success && json?.source === "real" && Array.isArray(json.models)
+        ? json.models.filter((item) => Number(item?.tokens) > 0).slice(0, 5)
+        : [];
 
-    async function loadPopularModels({ silent = false } = {}) {
-      if (!silent) setPopularLoading(true);
-      try {
-        const response = await fetch("/api/analytics/model-usage-rank?period=week", { cache: "no-store" });
-        const json = await response.json();
-        if (cancelled) return;
-
-        const rows = response.ok && json?.success && json?.source === "real" && Array.isArray(json.models)
-          ? json.models.filter((item) => Number(item?.tokens) > 0).slice(0, 5)
-          : [];
-
-        setPopularModels(rows);
-        setPopularSource(rows.length ? "real" : "empty");
-        setPopularUpdatedAt(json?.updatedAt || null);
-      } catch {
-        if (!cancelled) {
-          setPopularModels([]);
-          setPopularSource("empty");
-          setPopularUpdatedAt(null);
-        }
-      } finally {
-        if (!cancelled) setPopularLoading(false);
-      }
+      setPopularModels(rows);
+      setPopularSource(rows.length ? "real" : "empty");
+      setPopularUpdatedAt(json?.updatedAt || null);
+    } catch {
+      setPopularModels([]);
+      setPopularSource("empty");
+      setPopularUpdatedAt(null);
+    } finally {
+      setPopularLoading(false);
     }
-
-    loadPopularModels();
-    const timer = window.setInterval(() => loadPopularModels({ silent: true }), 60000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
   }, []);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      loadPopularModels();
+    });
+  }, [loadPopularModels]);
+
+  useSafePolling({
+    intervalMs: 60000,
+    enabled: true,
+    callback: () => loadPopularModels({ silent: true }),
+  });
 
   const moduleEnabled = (key) => {
     const item = pageSettings.find((setting) => setting.page === "models" && setting.moduleKey === key);
@@ -373,7 +371,6 @@ export default function ModelsPage() {
             <section className="models-market-recommend">
               <div className="models-section-head">
                 <div>
-                  <span className="models-market-kicker"><FlowApiBrandText size="sm" /> Live Top 5</span>
                   <h2><FlowApiBrandText /> 最受欢迎 Top 5 大模型</h2>
                 </div>
                 <p>基于 <FlowApiBrandText size="sm" /> 用户真实调用数据实时更新，只展示已有调用记录的模型。</p>

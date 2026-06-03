@@ -54,6 +54,7 @@ export default async function handler(req, res) {
         modelProduct,
         {
           localePriceMultiplier: getLocalePriceMultiplier(normalizeLocale(req.body?.locale)),
+          limit: req.body?.limit || req.body?.quotaLimit || {},
         }
       );
       const customer = await getDashboard(customerId);
@@ -69,6 +70,14 @@ export default async function handler(req, res) {
       if (error?.type === "model_required") {
         return res.status(400).json({
           error: { message: error.message, type: "model_required" },
+        });
+      }
+      if (error?.code === "INVALID_API_KEY_LIMIT") {
+        return res.status(400).json({
+          error: {
+            message: error.message,
+            type: "invalid_api_key_limit",
+          },
         });
       }
       if (error?.code === "INVALID_NEW_API_TOKEN_FORMAT") {
@@ -104,13 +113,27 @@ export default async function handler(req, res) {
   }
 
   if (req.method === "PATCH") {
-    const customer = await updateApiKey(customerId, keyId, {
-      label: req.body?.label,
-      expiresAt: req.body?.expiresAt,
-      disabled: req.body?.disabled,
-    });
-    if (!customer) return res.status(404).json({ error: "API Key 不存在" });
-    return res.status(200).json(customer);
+    try {
+      const customer = await updateApiKey(customerId, keyId, {
+        label: req.body?.label,
+        expiresAt: req.body?.expiresAt,
+        disabled: req.body?.disabled,
+        limit: req.body?.limit,
+        quotaLimit: req.body?.quotaLimit,
+      });
+      if (!customer) return res.status(404).json({ error: "API Key 不存在" });
+      return res.status(200).json(customer);
+    } catch (error) {
+      if (error?.code === "INVALID_API_KEY_LIMIT") {
+        return res.status(400).json({
+          error: {
+            message: error.message,
+            type: "invalid_api_key_limit",
+          },
+        });
+      }
+      throw error;
+    }
   }
 
   const customer = await deleteApiKey(customerId, keyId);

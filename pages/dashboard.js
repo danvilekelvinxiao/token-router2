@@ -20,6 +20,7 @@ import WalletProgressCard from "@/components/wallet/wallet-progress-card";
 import DashboardAnnouncementPopup from "@/components/announcements/dashboard-announcement-popup";
 import { generateTokenForecast } from "@/lib/analytics/token-forecast";
 import { useLocale } from "@/components/providers/locale-provider";
+import { useSafePolling } from "@/hooks/useSafePolling";
 
 /* ===================================================================
    REFERENCE DATA
@@ -2510,6 +2511,19 @@ function TotalAssetOverviewSection({ data, onOpenDetail, onOpenModel, titleText 
           onClick={() => open("累计节省详情", data.actualTrend, commonRows, moneyFormatter, "green")}
         />
         <DashboardExchangeCard
+          label="总请求数"
+          value={hasCalls ? <MetricValueInline value={<FlashValue value={data.totalRequests} tick={data.tick} />} unit="次" /> : "暂无调用"}
+          detail="累计模型调用次数"
+          chartData={data.requestTrend}
+          chartType="bar"
+          chartColor="cyan"
+          chartFormatter={countFormatter}
+          empty={!hasCalls}
+          onClick={() => open("请求次数详情", data.requestTrend, commonRows, countFormatter, "cyan")}
+        />
+      </div>
+      <div className="dash3-exchange-grid dash3-exchange-grid-bottom">
+        <DashboardExchangeCard
           label="最常用模型"
           value={data.mostUsedModel ? (
             <span className="dash3-model-value-inline">
@@ -2522,19 +2536,6 @@ function TotalAssetOverviewSection({ data, onOpenDetail, onOpenModel, titleText 
           chartColor="purple"
           empty={!data.mostUsedModel}
           onClick={() => data.mostUsedModel ? onOpenModel(data.mostUsedModel) : open("最常用模型详情", [])}
-        />
-      </div>
-      <div className="dash3-exchange-grid dash3-exchange-grid-bottom">
-        <DashboardExchangeCard
-          label="总请求数"
-          value={hasCalls ? <MetricValueInline value={<FlashValue value={data.totalRequests} tick={data.tick} />} unit="次" /> : "暂无调用"}
-          detail="累计模型调用次数"
-          chartData={data.requestTrend}
-          chartType="bar"
-          chartColor="cyan"
-          chartFormatter={countFormatter}
-          empty={!hasCalls}
-          onClick={() => open("请求次数详情", data.requestTrend, commonRows, countFormatter, "cyan")}
         />
         <DashboardExchangeCard
           label="最耗费模型"
@@ -3825,6 +3826,32 @@ export default function DashboardPage() {
     }
   }, []);
 
+  const loadMarketRanks = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setMarketRanksLoading(true);
+    try {
+      const response = await fetch("/api/analytics/openrouter-top-models", { cache: "no-store" });
+      const data = await response.json();
+      setMarketRanks(data);
+    } catch {
+      setMarketRanks({ source: "openrouter", syncStatus: "failed", models: [] });
+    } finally {
+      setMarketRanksLoading(false);
+    }
+  }, []);
+
+  const loadFlowApiRanks = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setFlowApiRanksLoading(true);
+    try {
+      const response = await fetch(`/api/analytics/model-usage-rank?period=${flowApiRanksPeriod}`, { cache: "no-store" });
+      const data = await response.json();
+      setFlowApiRanks(data);
+    } catch {
+      setFlowApiRanks({ dataSource: "error", status: "error", models: [] });
+    } finally {
+      setFlowApiRanksLoading(false);
+    }
+  }, [flowApiRanksPeriod]);
+
   /* Load customer */
   useEffect(() => {
     const stored = localStorage.getItem("flowapi_customer");
@@ -3836,56 +3863,52 @@ export default function DashboardPage() {
     } catch {/* ignore */}
   }, [loadCustomer]);
 
+  useEffect(() => {
+    if (!customer?.id) return undefined;
+    let cancelled = false;
+    fetch("/api/user/titles", { cache: "no-store" })
+      .then((res) => res.ok ? res.json() : null)
+      .then(() => { if (!cancelled) setTick((value) => value + 1); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [customer?.id]);
+
   /* Load market model ranks */
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     let cancelled = false;
 
-    async function loadMarketRanks({ silent = false } = {}) {
-      if (!silent) setMarketRanksLoading(true);
-      try {
-        const response = await fetch("/api/analytics/global-model-rank", { cache: "no-store" });
-        const data = await response.json();
-        if (!cancelled) setMarketRanks(data);
-      } catch {
-        if (!cancelled) setMarketRanks({ dataSource: "error", status: "error", models: [] });
-      } finally {
-        if (!cancelled) setMarketRanksLoading(false);
-      }
-    }
-
-    loadMarketRanks();
-    const timer = window.setInterval(() => loadMarketRanks({ silent: true }), 60000);
+    loadMarketRanks().catch(() => {
+      if (!cancelled) setMarketRanks({ dataSource: "error", status: "error", models: [] });
+    });
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
     };
-  }, []);
+  }, [loadMarketRanks]);
 
   /* Load FlowAPI internal model ranks */
   useEffect(() => {
     let cancelled = false;
 
-    async function loadFlowApiRanks({ silent = false } = {}) {
-      if (!silent) setFlowApiRanksLoading(true);
-      try {
-        const response = await fetch(`/api/analytics/model-usage-rank?period=${flowApiRanksPeriod}`, { cache: "no-store" });
-        const data = await response.json();
-        if (!cancelled) setFlowApiRanks(data);
-      } catch {
-        if (!cancelled) setFlowApiRanks({ dataSource: "error", status: "error", models: [] });
-      } finally {
-        if (!cancelled) setFlowApiRanksLoading(false);
-      }
-    }
-
-    loadFlowApiRanks();
-    const timer = window.setInterval(() => loadFlowApiRanks({ silent: true }), 60000);
+    loadFlowApiRanks().catch(() => {
+      if (!cancelled) setFlowApiRanks({ dataSource: "error", status: "error", models: [] });
+    });
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
     };
-  }, [flowApiRanksPeriod]);
+  }, [loadFlowApiRanks]);
+
+  useSafePolling({
+    intervalMs: 60000,
+    enabled: true,
+    callback: () => loadMarketRanks({ silent: true }),
+  });
+
+  useSafePolling({
+    intervalMs: 60000,
+    enabled: true,
+    callback: () => loadFlowApiRanks({ silent: true }),
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -4080,16 +4103,28 @@ export default function DashboardPage() {
     model: item.model,
     provider: item.provider || getModelProviderLabel(item.model),
     tokens: item.tokens,
-    tokensLabel: `${formatCompactToken(item.tokens)} Token`,
+    tokensLabel: formatCompactToken(item.tokens),
     changePercent: item.trend,
     requests: item.requests,
     costCny: item.spend,
     share: item.share,
-  }));
+  })).slice(0, 10);
   const effectiveMarketRanks = marketRanks;
   const effectiveFlowApiRanks = localDemoMode
     ? { status: "local-demo", updatedAt: new Date().toISOString(), models: localDemoRankItems }
     : flowApiRanks;
+  const marketSyncStatus = effectiveMarketRanks?.syncStatus || effectiveMarketRanks?.status || "syncing";
+  const marketUpdatedAt = effectiveMarketRanks?.updatedAt ? new Date(effectiveMarketRanks.updatedAt) : null;
+  const marketUpdatedTime = marketUpdatedAt && !Number.isNaN(marketUpdatedAt.getTime())
+    ? marketUpdatedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
+    : "";
+  const openRouterSourceLabel = localDemoMode
+    ? "OpenRouter · 演示数据"
+    : marketSyncStatus === "synced"
+      ? `OpenRouter · 最近同步${marketUpdatedTime ? ` ${marketUpdatedTime}` : ""}`
+      : marketSyncStatus === "failed"
+        ? "OpenRouter · 同步失败"
+        : "OpenRouter · 数据同步中";
   const mostUsedModel = modelSpend.ranking[0];
   const mostExpensiveModel = [...modelSpend.ranking].sort((a, b) => b.spend - a.spend)[0];
   const savingsRows = Array.isArray(effectiveSavingsData?.callSavings) ? effectiveSavingsData.callSavings : [];
@@ -5728,7 +5763,7 @@ export default function DashboardPage() {
                 subtitle="基于 FlowAPI 用户真实调用数据，展示本站最常被使用的大模型。"
                 sourceLabel={localDemoMode ? "FlowAPI · 演示数据" : "FlowAPI · 实时数据"}
                 updatedAt={effectiveFlowApiRanks?.updatedAt}
-                items={effectiveFlowApiRanks?.models || []}
+                items={(effectiveFlowApiRanks?.models || []).slice(0, 10)}
                 loading={localDemoMode ? false : flowApiRanksLoading}
                 emptyText="暂无站内模型调用数据"
                 emptyDescription="完成真实调用后，这里会展示 FlowAPI 用户最常使用的模型。"
@@ -5738,14 +5773,14 @@ export default function DashboardPage() {
               />
 
               <ModelLeaderboard
-                title={effectiveMarketRanks?.status === "catalog" || effectiveMarketRanks?.source === "openrouter-catalog" ? "全球模型目录参考" : "全球模型热度排行"}
-                subtitle={effectiveMarketRanks?.status === "catalog" || effectiveMarketRanks?.source === "openrouter-catalog" ? "OpenRouter 官方模型目录已同步，热度接口暂不可用，先展示可选模型、上下文和免费状态。" : "基于全球公开模型热度数据，仅供选型参考。"}
-                sourceLabel={effectiveMarketRanks?.status === "local-demo" ? "全球 · 演示数据" : effectiveMarketRanks?.status === "synced" && effectiveMarketRanks?.source !== "openrouter-catalog" ? "全球 · 实时数据" : effectiveMarketRanks?.source === "openrouter-catalog" ? "全球 · 模型目录缓存" : effectiveMarketRanks?.status === "cached" ? "全球 · 最近同步数据" : effectiveMarketRanks?.status === "catalog" ? "全球 · 模型目录" : "全球 · 数据同步中"}
-                updatedAt={effectiveMarketRanks?.updatedAt}
-                items={effectiveMarketRanks?.models || []}
+                title="全球模型目录参考"
+                subtitle="同步 OpenRouter 当前热门模型排行，仅供选型参考。"
+                sourceLabel={openRouterSourceLabel}
+                updatedAt={null}
+                items={(effectiveMarketRanks?.models || []).slice(0, 10)}
                 loading={localDemoMode ? false : marketRanksLoading}
-                emptyText="全球模型数据同步中"
-                emptyDescription="系统正在同步全球公开模型数据；排行榜接口可用时展示热度，暂不可用时展示 OpenRouter 官方模型目录。"
+                emptyText={marketSyncStatus === "failed" ? "OpenRouter 同步失败" : "全球模型数据同步中"}
+                emptyDescription="系统正在同步 OpenRouter 当前热门模型排行；同步完成后这里会展示前 10 名。"
               />
             </div>
           </section>

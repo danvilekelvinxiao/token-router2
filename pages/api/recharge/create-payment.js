@@ -42,11 +42,12 @@ export default async function handler(req, res) {
   }
 
   async function recordOrderFlow(order) {
+    const requestId = order?.outTradeNo || order?.id || "";
     await logActivity({
       customerId: session.customerId,
       action: "recharge_order",
       category: "payment",
-      detail: `生成交易流水：${order?.outTradeNo || order?.id || "-"} · ${paymentMethod} ¥${value.toFixed(2)}`,
+      detail: `生成交易流水：${requestId || "-"} · ${paymentMethod} ¥${value.toFixed(2)}`,
       amount: value,
       ip: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || "",
       userAgent: req.headers["user-agent"] || "",

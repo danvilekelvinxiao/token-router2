@@ -1,7 +1,7 @@
 import Head from "next/head";
 import Image from "next/image";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
@@ -9,8 +9,10 @@ import PaymentLaunchModal from "@/components/payments/payment-launch-modal";
 import QrPaymentModal from "@/components/payments/qr-payment-modal";
 import CryptoPaymentModal from "@/components/payments/crypto-payment-modal";
 import PaymentSuccessModal from "@/components/payments/payment-success-modal";
+import PaymentMethodIcon from "@/components/payments/payment-method-icon";
 import { formatSmallCny } from "@/lib/format/number-format";
 import { useLocale } from "@/components/providers/locale-provider";
+import { useSafePolling } from "@/hooks/useSafePolling";
 
 const amounts = [
   { value: 20, label: "¥20", desc: "体验测试" },
@@ -22,10 +24,10 @@ const amounts = [
 ];
 
 const paymentMethods = [
-  { key: "wechat", name: "微信支付", icon: "WX", color: "#07c160", bg: "#f0fdf4" },
-  { key: "alipay", name: "支付宝", icon: "ALI", color: "#1677ff", bg: "#eff6ff" },
-  { key: "crypto", name: "加密货币支付", icon: "USDT", color: "#0ea5e9", bg: "#ecfeff" },
-  { key: "taobao_code", name: "淘宝激活码", icon: "TB", color: "#f97316", bg: "#fff7ed", imageSrc: "/images/pay/taobao.jpg" },
+  { key: "wechat", name: "微信支付" },
+  { key: "alipay", name: "支付宝" },
+  { key: "crypto", name: "USDT" },
+  { key: "taobao_code", name: "淘宝激活码" },
 ];
 
 const addOnServices = [
@@ -102,6 +104,21 @@ function formatCryptoNetworkLabel(value = "") {
   if (key === "polygon" || key === "matic") return "Polygon";
   if (key === "ethereum") return "Ethereum";
   return value || "-";
+}
+
+function applyOrderUpdate(nextOrder) {
+  return (currentOrder) => {
+    if (
+      currentOrder?.id === nextOrder?.id
+      && currentOrder?.status === nextOrder?.status
+      && currentOrder?.paidAt === nextOrder?.paidAt
+      && currentOrder?.updatedAt === nextOrder?.updatedAt
+      && currentOrder?.gatewayStatus === nextOrder?.gatewayStatus
+    ) {
+      return currentOrder;
+    }
+    return nextOrder;
+  };
 }
 
 const weeklyPackages = [
@@ -264,23 +281,26 @@ export default function RechargePage() {
     return () => { cancelled = true; };
   }, [customer?.id, customer?.balance, orders.length]);
 
-  useEffect(() => {
-    if (step !== "pay" || paymentMethod === "taobao_code" || paymentMethod === "crypto" || manualFallback || !submittedOrder?.id || submittedOrder.status === "approved") return undefined;
-    const timer = window.setInterval(async () => {
-      const res = await fetch(`/api/recharge?orderId=${submittedOrder.id}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!data.order) return;
-      setSubmittedOrder(data.order);
-      if (data.order.status === "approved") {
-        setLaunchVisible(false);
-        setActivePaymentModal("");
-        setPaymentSuccessVisible(true);
-        if (customer) refreshCustomer(customer);
-      }
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [customer, manualFallback, paymentMethod, step, submittedOrder]);
+  const pollRechargeOrder = useCallback(async () => {
+    if (!submittedOrder?.id) return;
+    const res = await fetch(`/api/recharge?orderId=${submittedOrder.id}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.order) return;
+    setSubmittedOrder(applyOrderUpdate(data.order));
+    if (data.order.status === "approved") {
+      setLaunchVisible(false);
+      setActivePaymentModal("");
+      setPaymentSuccessVisible(true);
+      if (customer) refreshCustomer(customer);
+    }
+  }, [customer, submittedOrder?.id]);
+
+  useSafePolling({
+    intervalMs: 3000,
+    enabled: step === "pay" && paymentMethod !== "taobao_code" && paymentMethod !== "crypto" && !manualFallback && Boolean(submittedOrder?.id) && submittedOrder?.status !== "approved",
+    callback: pollRechargeOrder,
+  });
 
   /* ---------- Computed ---------- */
 
@@ -574,36 +594,37 @@ export default function RechargePage() {
     setPaying(false);
   }
 
-  useEffect(() => {
-    if (paymentMethod !== "crypto" || step !== "pay" || manualFallback || !submittedOrder?.id || submittedOrder?.status === "approved") return undefined;
-    const timer = window.setInterval(() => {
-      const search = new URLSearchParams({ orderId: submittedOrder.id });
-      if (paymentSession?.tradeId) search.set("tradeId", paymentSession.tradeId);
-      fetch(`/api/payments/crypto/status?${search.toString()}`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data?.order) {
-            setSubmittedOrder(data.order);
-            if (data.paid) {
-              setLaunchVisible(false);
-              setActivePaymentModal("");
-              setPaymentSuccessVisible(true);
-              if (customer) refreshCustomer(customer);
-            }
-          }
-        })
-        .catch(() => {});
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [paymentMethod, paymentSession?.tradeId, step, submittedOrder?.id, submittedOrder?.status, customer, manualFallback]);
+  const pollCryptoPayment = useCallback(async () => {
+    if (!submittedOrder?.id) return;
+    const search = new URLSearchParams({ orderId: submittedOrder.id });
+    if (paymentSession?.tradeId) search.set("tradeId", paymentSession.tradeId);
+    const res = await fetch(`/api/payments/crypto/status?${search.toString()}`);
+    const data = await res.json();
+    if (data?.order) {
+      setSubmittedOrder(applyOrderUpdate(data.order));
+      if (data.paid) {
+        setLaunchVisible(false);
+        setActivePaymentModal("");
+        setPaymentSuccessVisible(true);
+        if (customer) refreshCustomer(customer);
+      }
+    }
+  }, [customer, paymentSession?.tradeId, submittedOrder?.id]);
 
-  useEffect(() => {
-    if (!cryptoExpireAt || paymentMethod !== "crypto" || step !== "pay" || manualFallback || submittedOrder?.status === "approved") return undefined;
-    const timer = window.setInterval(() => {
+  useSafePolling({
+    intervalMs: 3000,
+    enabled: paymentMethod === "crypto" && step === "pay" && !manualFallback && Boolean(submittedOrder?.id) && submittedOrder?.status !== "approved",
+    callback: pollCryptoPayment,
+  });
+
+  useSafePolling({
+    intervalMs: 1000,
+    enabled: Boolean(cryptoExpireAt) && paymentMethod === "crypto" && step === "pay" && !manualFallback && submittedOrder?.status !== "approved",
+    callback: () => {
       setCryptoNow(Date.now());
-    }, 1000);
-    return () => window.clearInterval(timer);
-  }, [cryptoExpireAt, paymentMethod, step, submittedOrder?.status, manualFallback]);
+    },
+    pauseWhenHidden: false,
+  });
 
   async function redeemCode() {
     if (!customer || !activationCode.trim() || redeeming) return;
@@ -836,8 +857,9 @@ export default function RechargePage() {
                       className={`payment-method-sidebar-card ${paymentMethod === method.key ? "selected" : ""}`}
                       onClick={() => setPaymentMethod(method.key)}
                     >
-                      <span className="payment-method-sidebar-icon" style={{ background: method.bg, color: method.color }}>{method.icon}</span>
+                      <span className="payment-method-sidebar-icon"><PaymentMethodIcon method={method.key} /></span>
                       <strong>{method.name}</strong>
+                      <span className="payment-method-selected-check" aria-hidden="true">✓</span>
                     </button>
                   ))}
                 </div>

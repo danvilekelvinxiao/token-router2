@@ -146,7 +146,7 @@ export default async function handler(req, res) {
         changePercent: getChangePercent(m, previousMap),
         isNew: !previousMap.get(m.model),
       }))
-      .slice(0, 20);
+      .slice(0, 10);
 
     return res.status(200).json({
       success: true,

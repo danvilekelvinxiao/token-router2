@@ -27,7 +27,7 @@ export default function ImagesHistoryPage() {
     } else {
       delete nextQuery.requestId;
     }
-    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true });
+    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true, scroll: false });
   }
 
   useEffect(() => {

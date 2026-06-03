@@ -3,11 +3,17 @@ import Cohere from "@lobehub/icons/es/Cohere";
 import DeepSeek from "@lobehub/icons/es/DeepSeek";
 import Gemini from "@lobehub/icons/es/Gemini";
 import Grok from "@lobehub/icons/es/Grok";
+import ByteDance from "@lobehub/icons/es/ByteDance";
+import Doubao from "@lobehub/icons/es/Doubao";
+import Flux from "@lobehub/icons/es/Flux";
+import Kling from "@lobehub/icons/es/Kling";
 import Meta from "@lobehub/icons/es/Meta";
+import Midjourney from "@lobehub/icons/es/Midjourney";
 import Mistral from "@lobehub/icons/es/Mistral";
 import Moonshot from "@lobehub/icons/es/Moonshot";
 import OpenAI from "@lobehub/icons/es/OpenAI";
 import Qwen from "@lobehub/icons/es/Qwen";
+import Stability from "@lobehub/icons/es/Stability";
 import { getModelBrand, getModelBrandInitial, getModelBrandLabel } from "@/lib/models/brand";
 import { getPublicModelProvider } from "@/lib/public-model-provider";
 
@@ -22,6 +28,12 @@ const PROVIDER_LOGOS = {
   mistral: { label: "Mistral AI", Logo: Mistral },
   cohere: { label: "Cohere", Logo: Cohere },
   xai: { label: "xAI Grok", Logo: Grok },
+  flux: { label: "Black Forest Labs Flux", Logo: Flux },
+  stability: { label: "Stability AI", Logo: Stability },
+  midjourney: { label: "Midjourney", Logo: Midjourney },
+  bytedance: { label: "ByteDance Seedream", Logo: ByteDance },
+  doubao: { label: "Doubao", Logo: Doubao },
+  kling: { label: "Kling", Logo: Kling },
 };
 
 export function getModelProvider(model = "", provider = "") {

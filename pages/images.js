@@ -3,6 +3,7 @@ import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
+import ModelBrandIcon from "@/components/common/model-brand-icon";
 import UsageDeltaBadge from "@/components/common/usage-delta-badge";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import ImageCostIsland from "@/components/images/image-cost-island";
@@ -47,17 +48,6 @@ function fileToDataUrl(file) {
   });
 }
 
-function estimateCost(model, quality, count, hasImages) {
-  if (!model) return { token: 0, money: 0 };
-  const multiplier = quality === "ultra" ? 2.2 : quality === "hd" ? 1.6 : 1;
-  const tokenBase = hasImages ? Number(model.unitPriceTokenImageToImage || model.unitPriceTokenTextToImage || 0) : Number(model.unitPriceTokenTextToImage || 0);
-  const moneyBase = hasImages ? Number(model.unitPriceRmbImageToImage || model.unitPriceRmbTextToImage || 0) : Number(model.unitPriceRmbTextToImage || 0);
-  return {
-    token: Number((tokenBase * multiplier * count).toFixed(1)),
-    money: Number((moneyBase * multiplier * count).toFixed(2)),
-  };
-}
-
 function formatBytes(bytes = 0) {
   if (!bytes) return "0 KB";
   if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -93,6 +83,8 @@ function modelMatchesCategory(model, category) {
   if (!category || category === "全部") return true;
   const haystack = [
     model?.displayName,
+    model?.upstreamModel,
+    model?.modelId,
     model?.id,
     model?.provider,
     model?.sceneDescription,
@@ -105,17 +97,123 @@ function modelMatchesCategory(model, category) {
   return haystack.includes(category);
 }
 
-function getModelMark(model) {
-  const provider = String(`${model?.provider || ""} ${model?.displayName || ""} ${model?.id || ""}`).toLowerCase();
-  if (provider.includes("gpt") || provider.includes("openai")) return "AI";
-  if (provider.includes("gemini") || provider.includes("google")) return "GM";
-  if (provider.includes("grok") || provider.includes("x-ai")) return "GX";
-  if (provider.includes("seedream") || provider.includes("bytedance")) return "SD";
-  return "IM";
+function ModelLogo({ model }) {
+  const modelName = model?.upstreamModel || model?.modelId || model?.displayName || model?.id || "";
+  return <ModelBrandIcon model={modelName} provider={model?.provider || model?.upstreamProvider || ""} size={28} className="image-model-logo" />;
 }
 
-function ModelLogo({ model }) {
-  return <span className="image-model-logo" aria-hidden="true">{getModelMark(model)}</span>;
+function IconGlyph({ name }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    strokeWidth: 1.9,
+    vectorEffect: "non-scaling-stroke",
+  };
+  const paths = {
+    paperclip: (
+      <>
+        <path {...common} d="M8.4 12.3 14.9 5.8a3 3 0 0 1 4.2 4.2l-8 8a4.4 4.4 0 0 1-6.2-6.2l8.1-8.1" />
+        <path {...common} d="m10 14 6.7-6.7" />
+      </>
+    ),
+    send: <path {...common} d="M12 19V5m0 0-6 6m6-6 6 6" />,
+    clock: (
+      <>
+        <circle {...common} cx="12" cy="12" r="8" />
+        <path {...common} d="M12 7.7V12l3 1.8" />
+      </>
+    ),
+    download: (
+      <>
+        <path {...common} d="M12 4v10m0 0-4-4m4 4 4-4" />
+        <path {...common} d="M5 19h14" />
+      </>
+    ),
+    trash: (
+      <>
+        <path {...common} d="M5 7h14" />
+        <path {...common} d="M10 11v5m4-5v5" />
+        <path {...common} d="M8 7l.6 12h6.8L16 7" />
+        <path {...common} d="M9.5 7l.7-2h3.6l.7 2" />
+      </>
+    ),
+    refresh: (
+      <>
+        <path {...common} d="M18 8a6.5 6.5 0 0 0-10.9-2.3L5 8" />
+        <path {...common} d="M5 4v4h4" />
+        <path {...common} d="M6 16a6.5 6.5 0 0 0 10.9 2.3L19 16" />
+        <path {...common} d="M19 20v-4h-4" />
+      </>
+    ),
+    x: (
+      <>
+        <path {...common} d="M7 7l10 10" />
+        <path {...common} d="M17 7 7 17" />
+      </>
+    ),
+    sliders: (
+      <>
+        <path {...common} d="M5 7h5m4 0h5" />
+        <path {...common} d="M5 12h9m4 0h1" />
+        <path {...common} d="M5 17h2m4 0h8" />
+        <circle {...common} cx="12" cy="7" r="2" />
+        <circle {...common} cx="16" cy="12" r="2" />
+        <circle {...common} cx="9" cy="17" r="2" />
+      </>
+    ),
+    chevronDown: <path {...common} d="m7 10 5 5 5-5" />,
+    chevronUp: <path {...common} d="m7 14 5-5 5 5" />,
+    copy: (
+      <>
+        <rect {...common} x="8" y="8" width="10" height="10" rx="2" />
+        <path {...common} d="M6 14H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" />
+      </>
+    ),
+    spark: (
+      <>
+        <path {...common} d="M12 3l1.5 5 4.5 2-4.5 2L12 17l-1.5-5L6 10l4.5-2L12 3Z" />
+        <path {...common} d="M18 15l.7 2.2L21 18l-2.3.8L18 21l-.7-2.2L15 18l2.3-.8L18 15Z" />
+      </>
+    ),
+  };
+  return (
+    <svg className="image-icon" viewBox="0 0 24 24" aria-hidden="true">
+      {paths[name] || paths.sliders}
+    </svg>
+  );
+}
+
+function IconButton({ icon, label, className = "", variant = "ghost", size = "regular", children, ...props }) {
+  return (
+    <button
+      type="button"
+      className={`image-icon-button is-${variant} is-${size} ${className}`.trim()}
+      aria-label={label}
+      title={label}
+      data-tooltip={label}
+      {...props}
+    >
+      <IconGlyph name={icon} />
+      {children}
+    </button>
+  );
+}
+
+function IconLink({ icon, label, className = "", variant = "ghost", size = "regular", children, ...props }) {
+  return (
+    <a
+      className={`image-icon-button is-${variant} is-${size} ${className}`.trim()}
+      aria-label={label}
+      title={label}
+      data-tooltip={label}
+      {...props}
+    >
+      <IconGlyph name={icon} />
+      {children}
+    </a>
+  );
 }
 
 function getAttachmentKind(file) {
@@ -156,7 +254,7 @@ function AttachmentCard({ attachment, onRemove }) {
         <strong>{attachment.name}</strong>
         <small>{attachment.kind === "image" ? "图片" : attachment.kind === "video" ? "视频" : "文件"} · {formatBytes(attachment.size)}</small>
       </div>
-      <button type="button" onClick={() => onRemove(attachment.id)} aria-label={`删除 ${attachment.name}`}>×</button>
+      <IconButton icon="trash" label={`删除 ${attachment.name}`} variant="danger" size="small" onClick={() => onRemove(attachment.id)} />
     </div>
   );
 }
@@ -262,9 +360,9 @@ function ResultMessage({ item, model, onRefineFromImage, onRegenerateImage, onCo
                     </div>
                   ) : null}
                   <div className="image-result-image-actions">
-                    <a href={buildDownloadHref(item, index, src)} download target="_blank" rel="noreferrer">下载</a>
-                    <button type="button" onClick={() => onRefineFromImage?.(item, src, index)}>基于图片生成</button>
-                    <button type="button" onClick={() => onRegenerateImage?.(item, src, index)}>重新生成相似图</button>
+                    <IconLink href={buildDownloadHref(item, index, src)} download target="_blank" rel="noreferrer" icon="download" label="下载" />
+                    <IconButton icon="refresh" label="基于图片生成" onClick={() => onRefineFromImage?.(item, src, index)} />
+                    <IconButton icon="refresh" label="重新生成相似图" onClick={() => onRegenerateImage?.(item, src, index)} />
                   </div>
                 </div>
               ))}
@@ -285,8 +383,8 @@ function ResultMessage({ item, model, onRefineFromImage, onRegenerateImage, onCo
           {item.errorMessage ? <div className="image-log-error">{item.errorMessage}</div> : null}
 
           <div className="image-log-actions">
-            <button type="button" onClick={() => onCopyLink?.(outputImages[0] || "")}>复制图片链接</button>
-            <a href={`/dashboard/logs?requestId=${encodeURIComponent(item.requestId || "")}`}>查看调用详情</a>
+            <IconButton icon="copy" label="复制图片链接" onClick={() => onCopyLink?.(outputImages[0] || "")} disabled={!outputImages[0]} />
+            <IconLink icon="clock" label="查看调用详情" href={`/dashboard/logs?requestId=${encodeURIComponent(item.requestId || "")}`} />
           </div>
         </article>
       </div>
@@ -339,9 +437,8 @@ export default function ImagesPage() {
   const filteredModels = models.filter((item) => modelMatchesCategory(item, modelCategory));
   const imageAttachments = attachments.filter((item) => item.kind === "image");
   const unsupportedAttachments = attachments.filter((item) => item.kind !== "image");
-  const estimatedCost = estimateCost(selectedModel, quality, count, imageAttachments.length > 0);
   const generationStage = getGenerationStage(generationProgress, imageAttachments.length > 0);
-  const canSubmit = Boolean(prompt.trim() || attachments.length) && !sending;
+  const canSubmit = Boolean(prompt.trim() && selectedModel && !sending);
   const chatHistory = useMemo(() => [...history, ...transientResults].reverse(), [history, transientResults]);
 
   useEffect(() => {
@@ -740,6 +837,9 @@ export default function ImagesPage() {
               <h1><FlowApiBrandText className="image-title-brand" /> 生成图片</h1>
               <p>输入文字或上传图片，直接生成。无需注册 OpenRouter，无需研究接口，小白也能直接用。</p>
             </div>
+            <div className="image-studio-hero-actions">
+              <IconLink href="/images/history" icon="clock" label="历史记录" />
+            </div>
             <div className="image-studio-top-cards">
               <article>
                 <span>当前余额</span>
@@ -849,11 +949,19 @@ export default function ImagesPage() {
                 ) : null}
               </div>
 
-              <div className="image-studio-composer" onPaste={handlePaste}>
+              <div
+                className="image-studio-composer"
+                onPaste={handlePaste}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={async (event) => {
+                  event.preventDefault();
+                  await addFiles(event.dataTransfer.files);
+                }}
+              >
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/png,image/jpeg,image/jpg,image/webp,video/mp4,video/webm,application/pdf,text/plain"
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
                   multiple
                   className="image-studio-hidden-file"
                   onChange={async (event) => {
@@ -862,24 +970,28 @@ export default function ImagesPage() {
                   }}
                 />
 
-                <div className="image-studio-advanced-card">
+                <div className={`image-studio-advanced-card ${advancedOpen ? "is-open" : "is-compact"}`}>
                   <div className="image-studio-advanced-head">
-                    <div>
+                    <div className="image-studio-advanced-summary">
                       <span>高级设置</span>
-                      <strong>{count > 1 ? `自动生成 ${count} 张类似风格图片` : "默认生成 1 张图片"}</strong>
+                      <div className="image-studio-advanced-compact">
+                        <span>{selectedModel?.displayName || "模型加载中"}</span>
+                        <span>{aspectRatio}</span>
+                        <span>{count} 张</span>
+                      </div>
                     </div>
-                    <button type="button" className="image-studio-advanced-toggle" onClick={() => setAdvancedOpen((value) => !value)}>
-                      {advancedOpen ? "收起" : "展开"}
-                    </button>
+                    <IconButton
+                      icon="sliders"
+                      label={advancedOpen ? "收起高级设置" : "高级设置"}
+                      className="image-studio-advanced-toggle"
+                      onClick={() => setAdvancedOpen((value) => !value)}
+                      aria-expanded={advancedOpen}
+                    >
+                      <IconGlyph name={advancedOpen ? "chevronUp" : "chevronDown"} />
+                    </IconButton>
                   </div>
 
-                  {!advancedOpen ? (
-                    <div className="image-studio-advanced-compact">
-                      <span>{selectedModel?.displayName || "模型加载中"}</span>
-                      <span>{aspectRatio}</span>
-                      <span>{count} 张</span>
-                    </div>
-                  ) : (
+                  {advancedOpen ? (
                     <div className="image-studio-advanced-grid">
                       <div className="image-advanced-model-picker">
                         <span>模型</span>
@@ -940,8 +1052,7 @@ export default function ImagesPage() {
                         <span>开启自动重试</span>
                       </label>
                     </div>
-                  )}
-                  <p className="image-studio-advanced-hint">一次生成多张相同需求、相似风格但细节不同的图片，方便你挑选。</p>
+                  ) : null}
                 </div>
 
                 {attachments.length ? (
@@ -956,55 +1067,34 @@ export default function ImagesPage() {
                   <div className="image-studio-prompt-head">
                     <label htmlFor="image-studio-prompt">你的图片需求</label>
                     <div className="image-studio-prompt-actions">
-                      <button type="button" onClick={() => fileInputRef.current?.click()}>添加附件</button>
-                      <button type="button" onClick={polishPrompt} disabled={polishing}>{polishing ? "润色中..." : "润色"}</button>
-                      {previousPrompt ? <button type="button" onClick={undoPolish}>撤销润色</button> : null}
+                      <IconButton icon="spark" label={polishing ? "润色中" : "润色"} size="small" onClick={polishPrompt} disabled={polishing} />
+                      {previousPrompt ? <IconButton icon="refresh" label="撤销润色" size="small" onClick={undoPolish} /> : null}
                     </div>
                   </div>
-                  <textarea
-                    id="image-studio-prompt"
-                    value={prompt}
-                    onChange={(event) => setPrompt(event.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="输入你的图片生成需求，或直接粘贴图片 / 视频 / 文件..."
-                    rows={4}
-                  />
-                </div>
-
-                <div
-                  className="image-studio-upload-box"
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={async (event) => {
-                    event.preventDefault();
-                    await addFiles(event.dataTransfer.files);
-                  }}
-                >
-                  <div>
-                    <strong>粘贴或拖拽附件</strong>
-                    <p>图片最大 10MB，视频最大 50MB，文件最大 20MB。第一版仅图片会进入真实生成请求。</p>
+                  <div className="image-composer-input-shell">
+                    <IconButton icon="paperclip" label="上传图片" className="image-composer-attach-button" onClick={() => fileInputRef.current?.click()} />
+                    <textarea
+                      id="image-studio-prompt"
+                      value={prompt}
+                      onChange={(event) => setPrompt(event.target.value)}
+                      onKeyDown={handleKeyDown}
+                      placeholder="输入你的图片生成需求，或直接粘贴图片..."
+                      rows={7}
+                    />
+                    <IconButton
+                      icon="send"
+                      label="生成"
+                      variant="primary"
+                      size="large"
+                      className="image-composer-send-button"
+                      onClick={() => submitGeneration()}
+                      disabled={!canSubmit}
+                    />
                   </div>
-                  <button type="button" className="image-studio-upload-button" onClick={() => fileInputRef.current?.click()}>添加附件</button>
-                </div>
-
-                <div className="image-studio-estimate-bar">
-                  <div>
-                    <span>本次预计扣费</span>
-                    <strong>约 ¥{estimatedCost.money.toFixed(2)} / {estimatedCost.token.toFixed(1)} Token</strong>
-                  </div>
-                  <p>{count > 1 ? "生成多张图片会消耗更多 Token，请确认余额充足。" : "生成失败不扣费。Enter 发送，Shift + Enter 换行。"}</p>
                 </div>
 
                 {error ? <div className="image-studio-error-box">{error} {String(error).includes("余额") ? <Link href="/recharge">立即充值</Link> : null}</div> : null}
 
-                <div className="image-studio-submit-row">
-                  <div>
-                    <strong>{imageAttachments.length ? "系统将自动按图生图 / 改图处理" : "系统将自动按文生图处理"}</strong>
-                    <p>{selectedModel?.sceneDescription || "默认推荐模型适合大多数商业场景。"}</p>
-                  </div>
-                  <button type="button" disabled={!canSubmit} onClick={submitGeneration}>
-                    {sending ? "生成中..." : "生成图片"}
-                  </button>
-                </div>
               </div>
             </div>
 
@@ -1015,7 +1105,8 @@ export default function ImagesPage() {
                   <article><span>今日生成图片数</span><strong>{summary?.todayImages || 0}</strong></article>
                   <article><span>今日消耗 Token</span><strong>{Number(summary?.todayTokens || 0).toFixed(1)}</strong></article>
                   <article><span>今日消耗金额</span><strong>¥{Number(summary?.todayMoney || 0).toFixed(2)}</strong></article>
-                  <article><span>最常用图片模型</span><strong>{summary?.topModel || "暂无"}</strong></article>
+                  <article><span>使用次数最多模型</span><strong>{summary?.topModelByUsage || summary?.topModel || "暂无"}</strong></article>
+                  <article><span>消耗金额最多模型</span><strong>{summary?.topModelBySpend || "暂无"}</strong></article>
                 </div>
               </section>
 
@@ -1034,7 +1125,7 @@ export default function ImagesPage() {
 
         {previewImage ? (
           <div className="image-preview-modal" role="dialog" aria-modal="true" onClick={() => setPreviewImage("")}>
-            <button type="button" aria-label="关闭图片预览">×</button>
+            <IconButton icon="x" label="取消" className="image-preview-close" onClick={() => setPreviewImage("")} />
             <img src={previewImage} alt="生成图片预览" />
           </div>
         ) : null}

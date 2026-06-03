@@ -52,7 +52,67 @@ function modelPriceSummary(model = {}, locale = "zh-CN") {
 function keyStatus(key = {}) {
   if (key.disabledAt) return { label: "已禁用", tone: "danger" };
   if (key.expiresAt && new Date(key.expiresAt) < new Date()) return { label: "已过期", tone: "danger" };
+  if (key.quotaLimit?.status === "exceeded") return { label: "已达限额", tone: "danger" };
   return { label: "已启用", tone: "success" };
+}
+
+const LIMIT_TYPE_OPTIONS = [
+  { value: "none", label: "不限额", hint: "使用账户可用余额" },
+  { value: "total", label: "总额度", hint: "达到后暂停调用" },
+  { value: "daily", label: "每日", hint: "每天 00:00 重置" },
+  { value: "weekly", label: "每周", hint: "周一 00:00 重置" },
+  { value: "monthly", label: "每月", hint: "每月 1 日重置" },
+  { value: "custom", label: "自定义", hint: "按固定周期重置" },
+];
+
+function defaultLimitForm(source = null) {
+  const limit = source?.quotaLimit || source || {};
+  return {
+    type: limit.type || "none",
+    unit: limit.unit || "cny",
+    amount: limit.amount ? String(limit.amount) : "",
+    resetIntervalValue: limit.resetIntervalValue ? String(limit.resetIntervalValue) : "24",
+    resetIntervalUnit: limit.resetIntervalUnit || "hour",
+  };
+}
+
+function buildLimitPayload(form = {}) {
+  return {
+    type: form.type || "none",
+    unit: form.unit || "cny",
+    amount: form.type === "none" ? 0 : Number(form.amount || 0),
+    resetIntervalValue: form.type === "custom" ? Number(form.resetIntervalValue || 0) : 0,
+    resetIntervalUnit: form.type === "custom" ? form.resetIntervalUnit || "hour" : "hour",
+  };
+}
+
+function formatLimitValue(value, unit = "cny") {
+  return unit === "token" ? formatToken(value) : formatCny(value);
+}
+
+function getLimitCopy(limit = {}) {
+  if (!limit?.enabled || limit.type === "none") {
+    return { title: "额度：不限额", detail: "仍受账户余额和套餐余额限制", percent: 0, tone: "neutral" };
+  }
+  const typeLabel = {
+    total: "总额度",
+    daily: "今日",
+    weekly: "本周",
+    monthly: "本月",
+    custom: "本周期",
+  }[limit.type] || "本周期";
+  const resetText = limit.type === "total"
+    ? "手动调整后恢复"
+    : limit.nextResetAt
+      ? `${formatDate(limit.nextResetAt)} 重置`
+      : "到期自动重置";
+  const tone = limit.percent >= 100 ? "danger" : limit.percent >= 80 ? "warning" : "success";
+  return {
+    title: `${typeLabel}已用 ${formatLimitValue(limit.used, limit.unit)} / ${formatLimitValue(limit.amount, limit.unit)}`,
+    detail: resetText,
+    percent: Math.min(100, Math.max(0, Number(limit.percent || 0))),
+    tone,
+  };
 }
 
 function normalizeModel(model = {}) {
@@ -165,11 +225,14 @@ export default function ApiManagementPage() {
   const [selectedModelId, setSelectedModelId] = useState("");
   const [creating, setCreating] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ label: "", modelId: "", expiresAt: "never", customDate: "" });
+  const [createForm, setCreateForm] = useState({ label: "", modelId: "", expiresAt: "never", customDate: "", limit: defaultLimitForm() });
   const [createdKey, setCreatedKey] = useState(null);
   const [toast, setToast] = useState("");
   const [detail, setDetail] = useState(null);
   const [usageLoading, setUsageLoading] = useState(false);
+  const [limitEditorKey, setLimitEditorKey] = useState(null);
+  const [limitForm, setLimitForm] = useState(defaultLimitForm());
+  const [savingLimit, setSavingLimit] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -394,6 +457,7 @@ export default function ApiManagementPage() {
           label: createForm.label.trim() || `${model.displayName} Key`,
           expiresAt: resolveCreateExpiresAt(),
           locale,
+          limit: buildLimitPayload(createForm.limit),
         }),
       });
       const data = await res.json();
@@ -446,6 +510,104 @@ export default function ApiManagementPage() {
     }
   }
 
+  function openLimitEditor(key) {
+    setLimitEditorKey(key);
+    setLimitForm(defaultLimitForm(key));
+  }
+
+  async function saveLimitEditor() {
+    if (!limitEditorKey || savingLimit) return;
+    setSavingLimit(true);
+    try {
+      const res = await fetch("/api/keys", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId: customer.id,
+          keyId: limitEditorKey.id,
+          limit: buildLimitPayload(limitForm),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error?.message || data?.error || "额度保存失败");
+      setCustomer(data);
+      localStorage.setItem("flowapi_customer", JSON.stringify(data));
+      setLimitEditorKey(null);
+      showToast("API Key 额度已更新");
+    } catch (error) {
+      showToast(error.message || "额度保存失败");
+    } finally {
+      setSavingLimit(false);
+    }
+  }
+
+  function renderLimitFields(form, setForm) {
+    const active = form.type !== "none";
+    return (
+      <div className="api-key-limit-editor">
+        <div className="api-key-limit-type-grid">
+          {LIMIT_TYPE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={form.type === option.value ? "active" : ""}
+              onClick={() => setForm((current) => ({ ...current, type: option.value }))}
+            >
+              <strong>{option.label}</strong>
+              <small>{option.hint}</small>
+            </button>
+          ))}
+        </div>
+        {active ? (
+          <div className="api-key-limit-input-row">
+            <label>
+              <span>额度上限</span>
+              <input
+                type="number"
+                min="0"
+                step={form.unit === "cny" ? "0.01" : "1"}
+                value={form.amount}
+                onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
+                placeholder={form.unit === "cny" ? "例如 100" : "例如 1000000"}
+              />
+            </label>
+            <label>
+              <span>单位</span>
+              <select value={form.unit} onChange={(event) => setForm((current) => ({ ...current, unit: event.target.value }))}>
+                <option value="cny">¥ 金额</option>
+                <option value="token">Token</option>
+              </select>
+            </label>
+            {form.type === "custom" ? (
+              <>
+                <label>
+                  <span>每隔</span>
+                  <input
+                    type="number"
+                    min={form.resetIntervalUnit === "minute" ? "60" : "1"}
+                    value={form.resetIntervalValue}
+                    onChange={(event) => setForm((current) => ({ ...current, resetIntervalValue: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  <span>周期</span>
+                  <select value={form.resetIntervalUnit} onChange={(event) => setForm((current) => ({ ...current, resetIntervalUnit: event.target.value }))}>
+                    <option value="minute">分钟</option>
+                    <option value="hour">小时</option>
+                    <option value="day">天</option>
+                  </select>
+                </label>
+              </>
+            ) : null}
+          </div>
+        ) : (
+          <p className="api-key-limit-note">该 API Key 可使用账户可用余额内的全部额度，仍受账户余额、套餐余额和会员赠送额度限制。</p>
+        )}
+        {active ? <p className="api-key-limit-note">达到限额后，此 API Key 将暂停请求；失败或未扣费调用不会计入额度。</p> : null}
+      </div>
+    );
+  }
+
   async function openUsage(key) {
     setUsageLoading(true);
     setDetail({
@@ -466,6 +628,14 @@ export default function ApiManagementPage() {
         { label: "最近调用", value: formatDate(data.key?.lastUsedAt || key.lastUsedAt) },
         { label: "状态", value: keyStatus(key).label },
       ];
+      const quotaCopy = getLimitCopy(key.quotaLimit);
+      const quotaRows = [
+        { label: "额度类型", value: key.quotaLimit?.enabled ? LIMIT_TYPE_OPTIONS.find((item) => item.value === key.quotaLimit.type)?.label || "周期额度" : "不限额" },
+        { label: "额度使用", value: quotaCopy.title.replace(/^额度：/, "") },
+        { label: "重置时间", value: quotaCopy.detail },
+        { label: "累计金额", value: formatCny(key.quotaLimit?.totalUsedCny || 0) },
+        { label: "累计 Token", value: formatToken(key.quotaLimit?.totalUsedTokens || 0) },
+      ];
       const summaryRows = data.summary ? [
         { label: "总请求", value: formatRequestCount(data.summary.totalRequests) },
         { label: "总 Token", value: formatToken(data.summary.totalTokens) },
@@ -478,6 +648,7 @@ export default function ApiManagementPage() {
         badge: data.source === "real" ? "真实数据" : "暂无数据",
         sections: [
           { title: "接入参数", content: <DetailRows rows={rows} /> },
+          { title: "额度使用", content: <DetailRows rows={quotaRows} /> },
           ...(summaryRows.length ? [{ title: "使用汇总", content: <DetailRows rows={summaryRows} /> }] : []),
           {
             title: "最近调用",
@@ -579,6 +750,7 @@ export default function ApiManagementPage() {
             <div className="api-management-key-grid">
               {filteredKeys.map((key) => {
                 const status = keyStatus(key);
+                const limitCopy = getLimitCopy(key.quotaLimit);
                 return (
                   <article key={key.id} className={`api-management-key-card tone-${status.tone}`} onClick={() => openUsage(key)} role="button" tabIndex={0}>
                     <div className="api-key-card-top">
@@ -593,9 +765,22 @@ export default function ApiManagementPage() {
                       <span>Model ID：{key.publicModelId || "同步中"}</span>
                       <span>最近使用：{formatDate(key.lastUsedAt)}</span>
                     </div>
+                    <div className={`api-key-limit-summary tone-${limitCopy.tone}`}>
+                      <div>
+                        <span>{limitCopy.title}</span>
+                        <small>{limitCopy.detail}</small>
+                      </div>
+                      {key.quotaLimit?.enabled ? <em>{limitCopy.percent}%</em> : null}
+                      {key.quotaLimit?.enabled ? (
+                        <div className="api-key-limit-progress" aria-label="额度使用进度">
+                          <i style={{ width: `${limitCopy.percent}%` }} />
+                        </div>
+                      ) : null}
+                    </div>
                     <div className="api-key-card-actions" onClick={(event) => event.stopPropagation()}>
                       <button type="button" onClick={() => copyText(key.token, "API Key 已复制")}>复制 API Key</button>
                       <button type="button" onClick={() => copyText(key.publicModelId || "", "Model ID 已复制")} disabled={!key.publicModelId}>复制 Model ID</button>
+                      <button type="button" onClick={() => openLimitEditor(key)}>调整额度</button>
                       <button type="button" onClick={() => toggleKey(key)}>{key.disabledAt ? "启用" : "禁用"}</button>
                       <button type="button" className="danger" onClick={() => deleteKey(key)}>删除</button>
                     </div>
@@ -682,11 +867,11 @@ export default function ApiManagementPage() {
                   </div>
 
                   <div className="api-expiry-field">
-                    <span>额度 / 限制设置</span>
-                    <div className="api-key-default-limit">
-                      <strong>无限额度 / 按账户余额扣费</strong>
-                      <small>后续调用会按照你的钱包优先级扣费，API Key 本身不单独锁死额度。</small>
-                    </div>
+                    <span>额度限制</span>
+                    {renderLimitFields(createForm.limit, (updater) => setCreateForm((current) => ({
+                      ...current,
+                      limit: typeof updater === "function" ? updater(current.limit) : updater,
+                    })))}
                   </div>
 
                   <div className="api-expiry-field">
@@ -714,6 +899,29 @@ export default function ApiManagementPage() {
                 </footer>
               </>
             )}
+          </div>
+        </div>
+      ) : null}
+
+      {limitEditorKey ? (
+        <div className="api-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setLimitEditorKey(null); }}>
+          <div className="api-modal api-key-limit-modal">
+            <header>
+              <div>
+                <span>调整额度</span>
+                <h2>{limitEditorKey.label || "API Key 额度"}</h2>
+              </div>
+              <button type="button" onClick={() => setLimitEditorKey(null)}>×</button>
+            </header>
+            <div className="api-modal-body">
+              {renderLimitFields(limitForm, setLimitForm)}
+            </div>
+            <footer>
+              <button type="button" className="api-action" onClick={() => setLimitEditorKey(null)}>取消</button>
+              <button type="button" className="api-action primary" disabled={savingLimit} onClick={saveLimitEditor}>
+                {savingLimit ? "保存中..." : "保存额度"}
+              </button>
+            </footer>
           </div>
         </div>
       ) : null}

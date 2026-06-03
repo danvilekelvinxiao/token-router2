@@ -33,7 +33,7 @@ export default function DashboardLogsPage() {
     } else {
       delete nextQuery.requestId;
     }
-    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true });
+    router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true, scroll: false });
   }
 
   useEffect(() => {
