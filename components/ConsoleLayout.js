@@ -94,6 +94,36 @@ function IconHelp() {
   );
 }
 
+function IconImage() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <rect x="2.5" y="3" width="15" height="14" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="7" cy="8" r="1.5" fill="currentColor" />
+      <path d="M4.5 14l3.8-3.8a1.2 1.2 0 011.7 0l1.6 1.6 1-1a1.2 1.2 0 011.7 0L17 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IconLogs() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <path d="M5 3.5h10A1.5 1.5 0 0116.5 5v10A1.5 1.5 0 0115 16.5H5A1.5 1.5 0 013.5 15V5A1.5 1.5 0 015 3.5z" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M6.5 7h7M6.5 10h7M6.5 13h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconTeam() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+      <circle cx="7" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="13.5" cy="8" r="2" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M3.5 16c0-2.3 2-4 4.5-4s4.5 1.7 4.5 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M12.5 15.5c.2-1.6 1.5-2.8 3.2-2.8 1.1 0 2 .4 2.8 1.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 const iconMap = {
   dashboard: IconDashboard,
   wallet: IconWallet,
@@ -103,14 +133,20 @@ const iconMap = {
   models: IconModels,
   admin: IconAdmin,
   help: IconHelp,
+  image: IconImage,
+  logs: IconLogs,
+  team: IconTeam,
 };
 
 const menuItems = [
   { key: "dashboard", label: "数据面板", href: "/dashboard", desc: "Token 消耗与资产总览" },
-  { key: "wallet", label: "充值", href: "/recharge", desc: "充值 Token" },
   { key: "key", label: "API 管理", href: "/api-management", desc: "创建和管理 API Key" },
-  { key: "models", label: "大模型接入", href: "/models", desc: "查看模型与模型 ID" },
+  { key: "models", label: "模型广场", href: "/models", desc: "查看模型与模型 ID" },
+  { key: "logs", label: "使用日志", href: "/dashboard/logs", desc: "查看图片与接口使用日志" },
+  { key: "team", label: "团队记账", href: "/team/billing", desc: "查看团队成员分别用了多少" },
+  { key: "wallet", label: "充值中心", href: "/recharge", desc: "充值 Token" },
   { key: "help", label: "帮助指南", href: "/help", desc: "配置教程与常见问题" },
+  { key: "image", label: "生成图片", href: "/images", desc: "统一图片生成工作台", badge: "HOT", accent: true },
   { key: "user", label: "个人资料", href: "/profile", desc: "编辑个人资料" },
   { key: "admin", label: "管理后台", href: "/admin", desc: "系统管理与精细化配置", adminOnly: true },
 ];
@@ -142,10 +178,11 @@ function Sidebar({ currentPath, customer }) {
             href={item.href}
             target={item.external ? "_blank" : undefined}
             rel={item.external ? "noopener noreferrer" : undefined}
-            className={`flow-console-menu-link${active ? " active" : ""}`}
+            className={`flow-console-menu-link${active ? " active" : ""}${item.accent ? " is-accent" : ""}`}
           >
             <span className="flow-console-menu-icon"><Icon /></span>
             <span className="flow-console-menu-label">{item.label}</span>
+            {item.badge ? <em className="flow-console-menu-badge">{item.badge}</em> : null}
           </Link>
         );
       })}

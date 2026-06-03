@@ -45,8 +45,8 @@ const subscribeClientSnapshot = (callback) => {
 
 function getClientLocalDemoMode() {
   if (typeof window === "undefined") return false;
-  const host = window.location.hostname;
-  return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  const params = new URLSearchParams(window.location.search || "");
+  return params.get("demo") === "1" || window.localStorage.getItem("flowapi_demo_mode") === "true";
 }
 
 function getClientGreeting() {
@@ -233,12 +233,15 @@ function safeChartNumber(value) {
 }
 
 function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip, theme }) {
-  const pastDates = Array.isArray(data?.pastDates) ? data.pastDates : [];
-  const futureDates = Array.isArray(data?.futureDates) ? data.futureDates : [];
-  const pastValues = Array.isArray(data?.pastValues) ? data.pastValues.map(safeChartNumber) : [];
-  const futureValues = Array.isArray(data?.futureValues) ? data.futureValues.map(safeChartNumber) : [];
-  const pastCosts = Array.isArray(data?.pastCosts) ? data.pastCosts.map(safeChartNumber) : [];
-  const futureCosts = Array.isArray(data?.futureCosts) ? data.futureCosts.map(safeChartNumber) : [];
+  const chartInput = useMemo(() => ({
+    pastDates: Array.isArray(data?.pastDates) ? data.pastDates : [],
+    futureDates: Array.isArray(data?.futureDates) ? data.futureDates : [],
+    pastValues: Array.isArray(data?.pastValues) ? data.pastValues.map(safeChartNumber) : [],
+    futureValues: Array.isArray(data?.futureValues) ? data.futureValues.map(safeChartNumber) : [],
+    pastCosts: Array.isArray(data?.pastCosts) ? data.pastCosts.map(safeChartNumber) : [],
+    futureCosts: Array.isArray(data?.futureCosts) ? data.futureCosts.map(safeChartNumber) : [],
+  }), [data]);
+  const { pastDates, futureDates, pastValues, futureValues, pastCosts, futureCosts } = chartInput;
   const primaryModel = data?.primaryModel || "DeepSeek V4 Flash";
   const allDates = useMemo(() => [...pastDates, ...futureDates], [pastDates, futureDates]);
   const allValues = useMemo(() => [...pastValues, ...futureValues], [pastValues, futureValues]);
@@ -269,6 +272,7 @@ function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip,
   });
 
   const [activeIndex, setActiveIndex] = useState(null);
+  const [activeX, setActiveX] = useState(null);
   const svgRef = useRef(null);
   const formatChartValue = useCallback((value) => {
     if (value === null || value === undefined || Number.isNaN(Number(value))) return "暂无实际数据";
@@ -343,13 +347,14 @@ function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip,
   const handleChartMouseMove = useCallback((e) => {
     const idx = findNearestIndex(e.clientX);
     if (idx >= 0) {
-      setActiveIndex(idx);
+      setActiveIndex((current) => current === idx ? current : idx);
       showTooltipForIndex(e, idx);
     }
   }, [findNearestIndex, showTooltipForIndex]);
 
   const handleChartMouseLeave = useCallback(() => {
     setActiveIndex(null);
+    setActiveX(null);
     onTooltip(null);
   }, [onTooltip]);
 
@@ -357,14 +362,19 @@ function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip,
     if (e.touches?.length) {
       const idx = findNearestIndex(e.touches[0].clientX);
       if (idx >= 0) {
-        setActiveIndex(idx);
+        const rect = svgRef.current?.getBoundingClientRect();
+        if (rect?.width) {
+          const viewX = ((e.touches[0].clientX - rect.left) / rect.width) * width;
+          setActiveX(Math.min(margin.left + chartW, Math.max(margin.left, viewX)));
+        }
+        setActiveIndex((current) => current === idx ? current : idx);
         showTooltipForIndex(e.touches[0], idx);
       }
     }
-  }, [findNearestIndex, showTooltipForIndex]);
+  }, [chartW, findNearestIndex, margin.left, showTooltipForIndex, width]);
 
   const handleTouchEnd = useCallback(() => {
-    setTimeout(() => { setActiveIndex(null); onTooltip(null); }, 2000);
+    setTimeout(() => { setActiveIndex(null); setActiveX(null); onTooltip(null); }, 2000);
   }, [onTooltip]);
 
   const handleOverlayMove = useCallback((e) => {
@@ -372,9 +382,10 @@ function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip,
     if (!rect.width) return;
     const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
     const idx = Math.min(totalPoints - 1, Math.max(0, Math.round(ratio * (totalPoints - 1))));
-    setActiveIndex(idx);
+    setActiveX(margin.left + ratio * chartW);
+    setActiveIndex((current) => current === idx ? current : idx);
     showTooltipForIndex(e, idx);
-  }, [showTooltipForIndex, totalPoints]);
+  }, [chartW, margin.left, showTooltipForIndex, totalPoints]);
 
   const refLineColor = theme === "light" ? "rgba(17,24,39,0.22)" : "rgba(255,255,255,0.22)";
   const gridColor = theme === "light" ? "rgba(17,24,39,0.06)" : "rgba(255,255,255,0.06)";
@@ -411,7 +422,7 @@ function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip,
       {/* Active highlight band */}
       {activeIndex !== null && (
         <rect
-          x={toX(activeIndex) - stepX / 2}
+          x={(activeX ?? toX(activeIndex)) - stepX / 2}
           y={margin.top}
           width={stepX}
           height={chartH}
@@ -456,8 +467,8 @@ function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip,
       {/* Vertical reference line on hover */}
       {activeIndex !== null && (
         <line
-          x1={toX(activeIndex)} y1={margin.top}
-          x2={toX(activeIndex)} y2={margin.top + chartH}
+          x1={activeX ?? toX(activeIndex)} y1={margin.top}
+          x2={activeX ?? toX(activeIndex)} y2={margin.top + chartH}
           stroke={refLineColor} strokeWidth="1.5" strokeDasharray="5,3"
           pointerEvents="none"
         />
@@ -3658,6 +3669,73 @@ function PortraitMetric({ label, value, sub, chartData = [], chartType = "line",
   );
 }
 
+function ImageCapabilitySection({ data }) {
+  if (!data?.summary) return null;
+  const chartImages = (data.trend7d || []).map((item) => Number(item.images || 0));
+  const chartTokens = (data.trend7d || []).map((item) => Number(item.tokenCost || 0));
+  const chartMoney = (data.trend7d || []).map((item) => Number(item.moneyCost || 0));
+
+  return (
+    <section className="dash3-section">
+      <SectionTitle
+        title="图片生成能力"
+        subtitle="让图片工作台和数据面板共用同一套真实账本，方便判断今天生成了多少、花了多少、还够用多久。"
+        right={<Link href="/images">进入图片工作台</Link>}
+      />
+      <div className="dash3-recommend-grid">
+        <article className="dash3-recommend-card">
+          <PortraitMetric
+            label="今日生成图片数"
+            value={String(data.summary.todayGenerations || 0)}
+            sub="最近 7 天图片生成趋势"
+            chartData={chartImages}
+            chartType="bar"
+            chartColor="cyan"
+          />
+        </article>
+        <article className="dash3-recommend-card">
+          <PortraitMetric
+            label="今日消耗 Token"
+            value={`${Number(data.summary.todayTokens || 0).toFixed(1)} Token`}
+            sub="最近 7 天图片 Token 消耗"
+            chartData={chartTokens}
+            chartType="line"
+            chartColor="yellow"
+          />
+        </article>
+        <article className="dash3-recommend-card">
+          <PortraitMetric
+            label="今日消耗金额"
+            value={`¥${Number(data.summary.todayMoney || 0).toFixed(2)}`}
+            sub="最近 7 天图片金额消耗"
+            chartData={chartMoney}
+            chartType="line"
+            chartColor="green"
+          />
+        </article>
+        <article className="dash3-recommend-card">
+          <span>图片生成成功率</span>
+          <h3>{Number(data.summary.successRate || 0).toFixed(1)}%</h3>
+          <p>失败会自动重试，最终失败则不扣费并保留 request_id 方便排查。</p>
+          <div><strong>最常用模型：{data.summary.topModel || "暂无"}</strong><Link href="/dashboard/logs">查看日志</Link></div>
+        </article>
+        <article className="dash3-recommend-card">
+          <span>预计还能生成多少张图</span>
+          <h3>{Number(data.summary.estimatedRemainingImages || 0)} 张</h3>
+          <p>按当前图片模型最低成本估算，仅供运营补货和预算判断参考。</p>
+          <div><strong>当前图片余额：¥{Number(data.summary.currentBalance || 0).toFixed(2)}</strong><Link href="/recharge">去充值</Link></div>
+        </article>
+        <article className="dash3-recommend-card">
+          <span>团队成员消耗排行</span>
+          <h3>{data.role === "owner" || data.role === "admin" ? "队长可看" : "仅自己可看"}</h3>
+          <p>队长 / 管理员可以查看团队成员分别用了多少、最近什么时候在用、成功率是否异常。</p>
+          <div><strong>{data.role === "owner" || data.role === "admin" ? "进入团队记账查看成员明细" : "普通成员只能看自己的日志和图片历史"}</strong><Link href="/team/billing">团队记账</Link></div>
+        </article>
+      </div>
+    </section>
+  );
+}
+
 /* ===================================================================
    MAIN PAGE
    =================================================================== */
@@ -3685,6 +3763,7 @@ export default function DashboardPage() {
   const [savingsOpen, setSavingsOpen] = useState(false);
   const [walletData, setWalletData] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
+  const [imageSummary, setImageSummary] = useState(null);
   const [announcementPopupData, setAnnouncementPopupData] = useState(null);
   const [announcementPopupOpen, setAnnouncementPopupOpen] = useState(false);
   const [announcementMarkingSeen, setAnnouncementMarkingSeen] = useState(false);
@@ -3761,25 +3840,51 @@ export default function DashboardPage() {
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     let cancelled = false;
-    setMarketRanksLoading(true);
-    fetch("/api/analytics/global-model-rank")
-      .then((r) => r.json())
-      .then((data) => { if (!cancelled) setMarketRanks(data); })
-      .catch(() => { if (!cancelled) setMarketRanks({ dataSource: "error", models: [] }); })
-      .finally(() => { if (!cancelled) setMarketRanksLoading(false); });
-    return () => { cancelled = true; };
+
+    async function loadMarketRanks({ silent = false } = {}) {
+      if (!silent) setMarketRanksLoading(true);
+      try {
+        const response = await fetch("/api/analytics/global-model-rank", { cache: "no-store" });
+        const data = await response.json();
+        if (!cancelled) setMarketRanks(data);
+      } catch {
+        if (!cancelled) setMarketRanks({ dataSource: "error", status: "error", models: [] });
+      } finally {
+        if (!cancelled) setMarketRanksLoading(false);
+      }
+    }
+
+    loadMarketRanks();
+    const timer = window.setInterval(() => loadMarketRanks({ silent: true }), 60000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, []);
 
   /* Load FlowAPI internal model ranks */
   useEffect(() => {
     let cancelled = false;
-    setFlowApiRanksLoading(true);
-    fetch(`/api/analytics/model-usage-rank?period=${flowApiRanksPeriod}`)
-      .then((r) => r.json())
-      .then((data) => { if (!cancelled) setFlowApiRanks(data); })
-      .catch(() => { if (!cancelled) setFlowApiRanks({ dataSource: "error", models: [] }); })
-      .finally(() => { if (!cancelled) setFlowApiRanksLoading(false); });
-    return () => { cancelled = true; };
+
+    async function loadFlowApiRanks({ silent = false } = {}) {
+      if (!silent) setFlowApiRanksLoading(true);
+      try {
+        const response = await fetch(`/api/analytics/model-usage-rank?period=${flowApiRanksPeriod}`, { cache: "no-store" });
+        const data = await response.json();
+        if (!cancelled) setFlowApiRanks(data);
+      } catch {
+        if (!cancelled) setFlowApiRanks({ dataSource: "error", status: "error", models: [] });
+      } finally {
+        if (!cancelled) setFlowApiRanksLoading(false);
+      }
+    }
+
+    loadFlowApiRanks();
+    const timer = window.setInterval(() => loadFlowApiRanks({ silent: true }), 60000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
   }, [flowApiRanksPeriod]);
 
   useEffect(() => {
@@ -3825,11 +3930,15 @@ export default function DashboardPage() {
           startedAt: startedAt.toISOString(),
           expiresAt: expiresAt.toISOString(),
           remainingDays: 12,
+          quotaText: "100 万",
         },
         membership: {
           status: "active",
           level: "black_gold",
+          name: "FLOWAPI 黑金会员",
+          startedAt: startedAt.toISOString(),
           dailyBonusTokens: 20000,
+          memberQuotaTokens: 300000,
           todayClaimed: true,
           expiresAt: expiresAt.toISOString(),
           memberQuotaCny: 2,
@@ -3860,6 +3969,23 @@ export default function DashboardPage() {
 
     return () => { cancelled = true; };
   }, [customer?.id, customer?.balance, localDemoMode]);
+
+  useEffect(() => {
+    if (!customer?.id || localDemoMode) {
+      setImageSummary(null);
+      return;
+    }
+    let cancelled = false;
+    fetch("/api/images/summary")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (!cancelled) setImageSummary(data);
+      })
+      .catch(() => {
+        if (!cancelled) setImageSummary(null);
+      });
+    return () => { cancelled = true; };
+  }, [customer?.id, localDemoMode]);
 
   useEffect(() => {
     if (!customer?.id) return;
@@ -5522,6 +5648,8 @@ export default function DashboardPage() {
               data={walletData}
               dashboardOverview={usage.overview}
             />
+
+            <ImageCapabilitySection data={imageSummary} />
           </section>
 
           <TodayAccountStatusSection
@@ -5610,14 +5738,14 @@ export default function DashboardPage() {
               />
 
               <ModelLeaderboard
-                title="全球模型热度排行"
-                subtitle="基于全球公开模型热度数据，仅供选型参考。"
-                sourceLabel={effectiveMarketRanks?.status === "local-demo" ? "全球 · 演示数据" : effectiveMarketRanks?.status === "synced" ? "全球 · 实时数据" : effectiveMarketRanks?.status === "cached" ? "全球 · 最近同步数据" : "全球 · 数据同步中"}
+                title={effectiveMarketRanks?.status === "catalog" || effectiveMarketRanks?.source === "openrouter-catalog" ? "全球模型目录参考" : "全球模型热度排行"}
+                subtitle={effectiveMarketRanks?.status === "catalog" || effectiveMarketRanks?.source === "openrouter-catalog" ? "OpenRouter 官方模型目录已同步，热度接口暂不可用，先展示可选模型、上下文和免费状态。" : "基于全球公开模型热度数据，仅供选型参考。"}
+                sourceLabel={effectiveMarketRanks?.status === "local-demo" ? "全球 · 演示数据" : effectiveMarketRanks?.status === "synced" && effectiveMarketRanks?.source !== "openrouter-catalog" ? "全球 · 实时数据" : effectiveMarketRanks?.source === "openrouter-catalog" ? "全球 · 模型目录缓存" : effectiveMarketRanks?.status === "cached" ? "全球 · 最近同步数据" : effectiveMarketRanks?.status === "catalog" ? "全球 · 模型目录" : "全球 · 数据同步中"}
                 updatedAt={effectiveMarketRanks?.updatedAt}
                 items={effectiveMarketRanks?.models || []}
                 loading={localDemoMode ? false : marketRanksLoading}
-                emptyText="全球模型热度数据同步中"
-                emptyDescription="系统正在同步全球公开模型热度数据，完成后会展示热门模型、Token 热度和趋势变化。"
+                emptyText="全球模型数据同步中"
+                emptyDescription="系统正在同步全球公开模型数据；排行榜接口可用时展示热度，暂不可用时展示 OpenRouter 官方模型目录。"
               />
             </div>
           </section>

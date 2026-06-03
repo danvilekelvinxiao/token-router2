@@ -36,7 +36,8 @@ function formatTrend(item: ModelLeaderboardRowProps["item"]) {
 
 export default function ModelLeaderboardRow({ item, showTooltip = false }: ModelLeaderboardRowProps) {
   const trend = formatTrend(item);
-  const tokenLabel = formatTokenCompact(item.tokens, "数据同步中");
+  const hasTokenNumber = item.tokens !== null && item.tokens !== undefined && Number.isFinite(Number(item.tokens)) && Number(item.tokens) > 0;
+  const tokenLabel = item.tokensLabel || formatTokenCompact(item.tokens, "数据同步中");
   const provider = item.provider || item.logo || "unknown";
   const hasTooltip = showTooltip && (item.requests !== undefined || item.costCny !== undefined || item.share !== undefined);
 
@@ -49,14 +50,14 @@ export default function ModelLeaderboardRow({ item, showTooltip = false }: Model
         <div className="model-leaderboard-provider" title={provider}>{provider}</div>
       </div>
       <div className="model-leaderboard-metric">
-        <div className="model-leaderboard-token">{tokenLabel}{tokenLabel === "数据同步中" ? null : <span>Token</span>}</div>
+        <div className="model-leaderboard-token">{tokenLabel}{hasTokenNumber ? <span>Token</span> : null}</div>
         {trend.label ? <div className={`model-leaderboard-trend ${trend.className}`}>{trend.label}</div> : null}
       </div>
       {hasTooltip ? (
         <div className="model-leaderboard-tooltip" role="tooltip">
           <strong>{item.model}</strong>
           <span>Provider：{provider}</span>
-          <span>Token：{tokenLabel} Token</span>
+          <span>{hasTokenNumber ? `Token：${tokenLabel} Token` : `状态：${tokenLabel}`}</span>
           <span>请求次数：{formatRequestCount(item.requests)}</span>
           <span>消耗金额：{formatSmallCny(item.costCny)}</span>
           <span>占比：{Number(item.share || 0).toFixed(1)}%</span>

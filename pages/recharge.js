@@ -857,16 +857,36 @@ export default function RechargePage() {
                         <SegmentedSelect options={cryptoNetworkOptions} value={cryptoNetwork} onChange={setCryptoNetwork} />
                       </div>
                     </div>
-                    <p>
-                      {L("使用 GMWallet 直接打开专属收银台：订单号、倒计时、二维码、地址复制和到账轮询会同步显示。仅支持 USDT / USDC。", "GMWallet opens a dedicated cashier directly with order number, countdown, QR code, address copy and payment polling. Only USDT / USDC are supported.")}
-                    </p>
+                    <div className="payment-method-config-note">
+                      <strong>{L("GMWallet 专属收银台", "GMWallet dedicated checkout")}</strong>
+                      <p>
+                        {L("下单后会同步展示订单号、倒计时、二维码、地址复制和到账轮询。仅支持 USDT / USDC。", "After order creation, the page syncs order number, countdown, QR code, address copy and payment polling. Only USDT / USDC are supported.")}
+                      </p>
+                    </div>
                   </div>
                 ) : null}
                 {paymentMethod === "taobao_code" && (
-                  <div className="activation-inline-box">
-                    <input value={activationCode} onChange={(event) => setActivationCode(event.target.value)} placeholder={L("粘贴淘宝自动发货的激活码", "Paste activation code from Taobao")} />
-                    <button type="button" className="btn-secondary" disabled={redeeming} onClick={redeemCode}>{redeeming ? L("激活中...", "Activating...") : L("激活充值", "Activate")}</button>
-                    {redeemResult ? <p className={redeemResult.success ? "pay-success" : "pay-error"}>{redeemResult.success ? L("激活成功，余额已更新", "Activated successfully, balance updated") : redeemResult.error}</p> : null}
+                  <div className="payment-method-config-card">
+                    <div className="payment-method-config-head">
+                      <strong>{L("淘宝激活码充值", "Taobao activation code")}</strong>
+                      <span>{L("下单后复制自动发货激活码，再回到这里激活到账", "Copy the auto-delivered activation code after purchase, then redeem it here")}</span>
+                    </div>
+                    <div className="payment-method-store-card">
+                      <span>{L("淘宝店铺", "Taobao Store")}</span>
+                      <strong>{L("刀塔电竞", "Daota Esports")}</strong>
+                      <p>{L("购买后会自动发货专属激活码，适合不方便扫码支付时使用。", "The store auto-delivers a dedicated activation code after purchase, ideal when QR payment is inconvenient.")}</p>
+                      <a href={TAOBAO_SHOP_URL} target="_blank" rel="noreferrer" className="btn-secondary payment-method-link">
+                        {L("打开淘宝店铺", "Open Taobao Store")}
+                      </a>
+                    </div>
+                    <div className="activation-inline-box">
+                      <label className="activation-inline-field">
+                        <span>{L("激活码", "Activation Code")}</span>
+                        <input value={activationCode} onChange={(event) => setActivationCode(event.target.value)} placeholder={L("粘贴淘宝自动发货的激活码", "Paste activation code from Taobao")} />
+                      </label>
+                      <button type="button" className="btn-secondary payment-method-link" disabled={redeeming} onClick={redeemCode}>{redeeming ? L("激活中...", "Activating...") : L("激活充值", "Activate")}</button>
+                      {redeemResult ? <p className={redeemResult.success ? "pay-success" : "pay-error"}>{redeemResult.success ? L("激活成功，余额已更新", "Activated successfully, balance updated") : redeemResult.error}</p> : null}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1208,20 +1228,13 @@ function Row({ label, value, strong = false }) {
 
 function SegmentedSelect({ options, value, onChange }) {
   return (
-    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+    <div className="segmented-select">
       {options.map((option) => (
         <button
           key={option}
           type="button"
-          className="btn-secondary"
+          className={`segmented-select-option ${value === option ? "selected" : ""}`}
           onClick={() => onChange(option)}
-          style={{
-            minWidth: 92,
-            padding: "8px 14px",
-            border: value === option ? "1px solid var(--page-brand)" : undefined,
-            background: value === option ? "var(--page-card-bg)" : undefined,
-            color: value === option ? "var(--page-brand)" : undefined,
-          }}
         >
           {option}
         </button>

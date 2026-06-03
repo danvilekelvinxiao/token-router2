@@ -6,7 +6,7 @@ const MODELS_URL = `${GLOBAL_ORIGIN}/api/v1/models`;
 const FALLBACK_ACTION_ID = "40824635c5eb77626bdf6795ffbf382c0862b321e1";
 const CACHE_TTL_MS = Number(process.env.MARKET_RANK_CACHE_TTL_MS || 10 * 60 * 1000);
 const MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const SYNC_TIMEOUT_MS = Number(process.env.MARKET_RANK_SYNC_TIMEOUT_MS || 12000);
+const SYNC_TIMEOUT_MS = Number(process.env.MARKET_RANK_SYNC_TIMEOUT_MS || 6000);
 
 let cachedRank = null;
 let cachedRankAt = 0;
@@ -87,6 +87,12 @@ async function fetchJson(url) {
 async function getRankingsActionId() {
   if (cachedActionId && isFresh(cachedActionAt, MODEL_CACHE_TTL_MS)) {
     return cachedActionId;
+  }
+
+  if (process.env.MARKET_RANK_DISCOVER_ACTION !== "true") {
+    cachedActionId = FALLBACK_ACTION_ID;
+    cachedActionAt = Date.now();
+    return FALLBACK_ACTION_ID;
   }
 
   try {
@@ -197,6 +203,47 @@ function buildModels(rows, catalog) {
     }));
 }
 
+function buildCatalogModels(catalog) {
+  const seen = new Set();
+  const models = Array.from(catalog.values())
+    .filter((model) => {
+      const id = String(model?.id || model?.canonical_slug || "").trim();
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    })
+    .map((model) => {
+      const slug = model.canonical_slug || model.id || "";
+      const promptPrice = Number(model?.pricing?.prompt || 0);
+      const completionPrice = Number(model?.pricing?.completion || 0);
+      const contextLength = Number(model?.context_length || 0);
+      const isFree = promptPrice === 0 && completionPrice === 0;
+      const score =
+        (model.id?.includes("openai/") ? 16 : 0) +
+        (model.id?.includes("anthropic/") ? 15 : 0) +
+        (model.id?.includes("google/") ? 14 : 0) +
+        (model.id?.includes("deepseek/") ? 13 : 0) +
+        (model.id?.includes("qwen/") ? 12 : 0) +
+        (isFree ? 6 : 0) +
+        Math.min(10, Math.log10(Math.max(1, contextLength)) * 1.8);
+
+      return {
+        model: compactModelName(model, slug),
+        provider: providerFromSlug(model.id || slug),
+        logo: providerFromSlug(model.id || slug),
+        tokens: null,
+        tokensLabel: isFree ? "免费可用" : contextLength ? `${Math.round(contextLength / 1000)}K 上下文` : "目录已同步",
+        changePercent: null,
+        isNew: false,
+        score,
+      };
+    })
+    .sort((a, b) => b.score - a.score || a.model.localeCompare(b.model))
+    .slice(0, 20);
+
+  return models.map(({ score, ...item }, index) => ({ ...item, rank: index + 1 }));
+}
+
 function emptyGlobalRank() {
   return {
     success: true,
@@ -243,6 +290,26 @@ export default async function handler(req, res) {
   } catch {
     if (cachedRank) {
       return res.status(200).json({ ...cachedRank, status: "cached" });
+    }
+
+    try {
+      const catalog = await getModelCatalog();
+      const models = buildCatalogModels(catalog);
+      if (models.length) {
+        cachedRank = {
+          success: true,
+          source: "openrouter-catalog",
+          sourceLabel: "全球",
+          updatedAt: new Date().toISOString(),
+          status: "catalog",
+          models,
+          message: "OpenRouter 官方模型目录已同步，排行榜热度接口暂不可用。",
+        };
+        cachedRankAt = Date.now();
+        return res.status(200).json(cachedRank);
+      }
+    } catch {
+      // Keep the truthful empty state below when both ranking and catalog sync fail.
     }
 
     return res.status(200).json(emptyGlobalRank());

@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
+import WalletProgressSection from "@/components/dashboard/wallet-progress-section";
 import LiveNumber from "@/components/ui/live-number";
 import { calculateWalletStatus } from "@/lib/wallet/calculate-wallet-status";
+import { buildWalletProgress } from "@/lib/wallet/build-wallet-progress";
 import { clampWalletProgress, formatWalletCny, formatWalletDate, formatWalletTokens } from "@/lib/wallet/format-wallet";
 import WalletDetailDrawer from "./wallet-detail-drawer";
 import WalletProgressBar from "./wallet-progress-bar";
@@ -115,6 +117,16 @@ export default function WalletProgressCard({
   const giftBalanceCny = Number(dashboardOverview?.giftBalance || data?.wallet?.giftBalanceCny || 0);
   const planRemainingCny = hasPlan ? Number(remaining || 0) : 0;
   const rechargeBalanceCny = Number(data?.wallet?.paidBalanceCny ?? dashboardOverview?.paidBalance ?? balanceCny ?? 0);
+  const walletProgress = useMemo(() => {
+    if (data?.walletProgress) return data.walletProgress;
+    return buildWalletProgress({
+      wallet: data?.wallet,
+      token: data?.token,
+      plan: data?.plan,
+      calls: data?.recentConsumptions || [],
+      membership: data?.membership,
+    });
+  }, [data]);
 
   useEffect(() => {
     if (data?.billingPreference?.priorityMode) {
@@ -235,20 +247,23 @@ export default function WalletProgressCard({
             </button>
           </div>
         ) : isRechargeMode ? (
-          <div className="wallet-summary-grid wallet-summary-grid-compact">
-            <WalletSummaryStat
-              label="当前余额"
-              value={Number(remaining || 0)}
-              prefix="¥"
-              decimals={2}
-              tone="primary"
-            />
-            <WalletSummaryStat
-              label="当前套餐"
-              value={planName || "普通余额钱包"}
-              tone={hasPlan ? "token" : "default"}
-            />
-          </div>
+          <>
+            <div className="wallet-summary-grid wallet-summary-grid-compact">
+              <WalletSummaryStat
+                label="当前余额"
+                value={Number(remaining || 0)}
+                prefix="¥"
+                decimals={2}
+                tone="primary"
+              />
+              <WalletSummaryStat
+                label="当前套餐"
+                value={planName || "普通余额钱包"}
+                tone={hasPlan ? "token" : "default"}
+              />
+            </div>
+            <WalletProgressSection walletProgress={walletProgress} onOpenDetail={openDetail} variant="compact" />
+          </>
         ) : (
           <div className="wallet-summary-grid">
             <WalletSummaryStat
@@ -278,13 +293,17 @@ export default function WalletProgressCard({
 
         {!isRechargeMode ? (
           <>
-            <button type="button" className="wallet-progress-wrap wallet-progress-click-target" onClick={() => openDetail("钱包与套餐进度")}>
-              <div className="wallet-progress-topline">
-                <span>{progressTitle}</span>
-                <strong>{hasPlan ? <LiveNumber value={progress} suffix="%" decimals={1} /> : "暂无套餐进度"}</strong>
-              </div>
-              <WalletProgressBar progressPercent={hasPlan ? progress : 0} tone={hasPlan ? status.tone : "none"} />
-            </button>
+            {mode === "dashboard" ? (
+              <WalletProgressSection walletProgress={walletProgress} onOpenDetail={openDetail} />
+            ) : (
+              <button type="button" className="wallet-progress-wrap wallet-progress-click-target" onClick={() => openDetail("钱包与套餐进度")}>
+                <div className="wallet-progress-topline">
+                  <span>{progressTitle}</span>
+                  <strong>{hasPlan ? <LiveNumber value={progress} suffix="%" decimals={1} /> : "暂无套餐进度"}</strong>
+                </div>
+                <WalletProgressBar progressPercent={hasPlan ? progress : 0} tone={hasPlan ? status.tone : "none"} />
+              </button>
+            )}
 
             <div className="wallet-billing-preference">
               <div>
@@ -298,57 +317,48 @@ export default function WalletProgressCard({
               {notice ? <em className={notice.includes("失败") ? "error" : "success"}>{notice}</em> : null}
             </div>
 
-            <div className={`wallet-member-strip ${membership?.status === "active" ? "active" : "inactive"}`}>
-              {membership?.status === "active" ? (
-                <>
-                  <strong><FlowApiBrandText text="FLOWAPI" size="sm" /> 黑金会员</strong>
-                  <span>今日赠送 {Number(membership.dailyBonusTokens || 0).toLocaleString()} Token · {membership.todayClaimed ? "已领取" : "未领取"}</span>
-                  <small>会员到期：{formatWalletDate(membership.expiresAt)}</small>
-                </>
-              ) : (
-                <>
-                  <strong>开通 <FlowApiBrandText text="FLOWAPI" size="sm" /> 黑金会员</strong>
-                  <span>每日领取免费 Token，并解锁会员专属模型和免费模型广场。</span>
-                  <Link href="/recharge">开通黑金会员</Link>
-                </>
-              )}
-            </div>
-
-            <div className="wallet-plan-detail">
-              <div>
-                <span>当前套餐</span>
-                <h3>{planName || "普通余额钱包"}</h3>
-                <p>{planAmountCny ? formatWalletCny(planAmountCny) : "按实际余额调用"} · <b className={`wallet-plan-state tone-${status.tone}`}>{planStatus === "expired" ? "已到期" : planStatus === "active" ? "生效中" : "暂无套餐"}</b></p>
-                <small>{planTimeline}</small>
-              </div>
-              <div className="wallet-plan-right">
-                <span>{hasPlan ? "使用进度" : "可用余额"}</span>
-                <strong>{usedTotalLabel}</strong>
-                <b><LiveNumber value={Number(remaining || 0)} prefix="¥" decimals={2} /></b>
-                <small>剩余额度</small>
-              </div>
-            </div>
-
-            <div className="wallet-token-row">
-              <span>已用 Token：{formatWalletTokens(usedTokens)}</span>
-              <span>剩余 Token：{tokenRemainingLabel}</span>
-            </div>
-
-            {wallets.length ? (
-              <div className="wallet-pool-preview">
-                {wallets.slice(0, 4).map((wallet: any) => (
-                  <span key={wallet.type} className={wallet.locked ? "locked" : ""}>
-                    {wallet.name}<b>{wallet.balanceTokens ? formatWalletTokens(wallet.balanceTokens) : formatWalletCny(wallet.balanceCnyEquivalent)}</b>
-                  </span>
-                ))}
+            {mode !== "dashboard" ? (
+              <div className={`wallet-member-strip ${membership?.status === "active" ? "active" : "inactive"}`}>
+                {membership?.status === "active" ? (
+                  <>
+                    <strong><FlowApiBrandText text="FLOWAPI" size="sm" /> 黑金会员</strong>
+                    <span>今日赠送 {Number(membership.dailyBonusTokens || 0).toLocaleString()} Token · {membership.todayClaimed ? "已领取" : "未领取"}</span>
+                    <small>会员到期：{formatWalletDate(membership.expiresAt)}</small>
+                  </>
+                ) : (
+                  <>
+                    <strong>开通 <FlowApiBrandText text="FLOWAPI" size="sm" /> 黑金会员</strong>
+                    <span>每日领取免费 Token，并解锁会员专属模型和免费模型广场。</span>
+                    <Link href="/recharge">开通黑金会员</Link>
+                  </>
+                )}
               </div>
             ) : null}
 
-            <div className="wallet-actions" onClick={(event) => event.stopPropagation()}>
-              <Link href={mode === "profile" ? "/dashboard#dash-recent-calls" : "/recharge"}>{copy.primary}</Link>
-              <Link href={mode === "dashboard" ? "/dashboard#dash-recent-calls" : "/recharge"}>{copy.secondary}</Link>
-              <button type="button" onClick={() => openDetail("钱包与套餐详情")}>查看详情</button>
-            </div>
+            {mode !== "dashboard" ? (
+              <>
+                <div className="wallet-token-row">
+                  <span>已用 Token：{formatWalletTokens(usedTokens)}</span>
+                  <span>剩余 Token：{tokenRemainingLabel}</span>
+                </div>
+
+                {wallets.length ? (
+                  <div className="wallet-pool-preview">
+                    {wallets.slice(0, 4).map((wallet: any) => (
+                      <span key={wallet.type} className={wallet.locked ? "locked" : ""}>
+                        {wallet.name}<b>{wallet.balanceTokens ? formatWalletTokens(wallet.balanceTokens) : formatWalletCny(wallet.balanceCnyEquivalent)}</b>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+
+                <div className="wallet-actions" onClick={(event) => event.stopPropagation()}>
+                  <Link href={mode === "profile" ? "/dashboard#dash-recent-calls" : "/recharge"}>{copy.primary}</Link>
+                  <Link href={mode === "dashboard" ? "/dashboard#dash-recent-calls" : "/recharge"}>{copy.secondary}</Link>
+                  <button type="button" onClick={() => openDetail("钱包与套餐详情")}>查看详情</button>
+                </div>
+              </>
+            ) : null}
           </>
         ) : null}
       </section>

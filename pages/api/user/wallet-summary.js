@@ -2,6 +2,7 @@ import { getDashboard, listRechargeOrders } from "@/lib/customer-store";
 import { requireCustomerSession } from "@/lib/session";
 import { getBillingPreference, resolveDeductionOrder } from "@/lib/billing/deduction-priority";
 import { claimDailyBonus, getMemberWallets, getUserMembership } from "@/lib/membership/store";
+import { buildWalletProgress, parseQuotaTokens } from "@/lib/wallet/build-wallet-progress";
 
 function parsePackageRef(ref = "") {
   const text = String(ref || "");
@@ -131,7 +132,7 @@ export default async function handler(req, res) {
   }
 
   const remainingQuotaCny = Math.max(0, Number((totalQuotaCny > 0 ? totalQuotaCny - usedQuotaCny : currentBalance).toFixed(6)));
-  const totalTokens = plan?.quotaText ? null : null;
+  const totalTokens = plan?.quotaText ? parseQuotaTokens(plan.quotaText) : null;
   const usedTokens = calls
     .filter((call) => (startedAt ? isWithin(call.createdAt, startedAt, expiresAt) : true))
     .reduce((sum, call) => sum + Number(call.tokens || 0), 0);
@@ -170,17 +171,18 @@ export default async function handler(req, res) {
     .sort((a, b) => Number(a.priority || 99) - Number(b.priority || 99));
 
   if (!wallets.length && !plan && currentBalance <= 0 && totalQuotaCny <= 0 && usedTokens <= 0) {
+    const emptyPayload = {
+      balanceCny: 0,
+      totalQuotaCny: 0,
+      usedQuotaCny: 0,
+      remainingQuotaCny: 0,
+      progressPercent: 0,
+    };
     return res.status(200).json({
       success: true,
       source: "empty",
       updatedAt: new Date().toISOString(),
-      wallet: {
-        balanceCny: 0,
-        totalQuotaCny: 0,
-        usedQuotaCny: 0,
-        remainingQuotaCny: 0,
-        progressPercent: 0,
-      },
+      wallet: emptyPayload,
       token: {
         totalTokens: null,
         usedTokens: 0,
@@ -194,30 +196,48 @@ export default async function handler(req, res) {
       wallets,
       billingPreference,
       membership,
+      walletProgress: buildWalletProgress({
+        wallet: emptyPayload,
+        token: { totalTokens: null, usedTokens: 0, remainingTokens: null },
+        plan: null,
+        calls: [],
+        membership,
+      }),
       message: "暂无钱包数据",
     });
   }
+
+  const walletPayload = {
+    balanceCny: currentBalance,
+    totalQuotaCny: Number(totalQuotaCny.toFixed(6)),
+    usedQuotaCny: Number(usedQuotaCny.toFixed(6)),
+    remainingQuotaCny,
+    progressPercent: Number(Math.max(0, Math.min(100, progressPercent)).toFixed(2)),
+  };
+  const tokenPayload = {
+    totalTokens,
+    usedTokens,
+    remainingTokens: totalTokens ? Math.max(0, totalTokens - usedTokens) : null,
+  };
+  const walletProgress = buildWalletProgress({
+    wallet: walletPayload,
+    token: tokenPayload,
+    plan,
+    calls,
+    membership,
+  });
 
   return res.status(200).json({
     success: true,
     source: "real",
     updatedAt: new Date().toISOString(),
-    wallet: {
-      balanceCny: currentBalance,
-      totalQuotaCny: Number(totalQuotaCny.toFixed(6)),
-      usedQuotaCny: Number(usedQuotaCny.toFixed(6)),
-      remainingQuotaCny,
-      progressPercent: Number(Math.max(0, Math.min(100, progressPercent)).toFixed(2)),
-    },
-    token: {
-      totalTokens,
-      usedTokens,
-      remainingTokens: totalTokens ? Math.max(0, totalTokens - usedTokens) : null,
-    },
+    wallet: walletPayload,
+    token: tokenPayload,
     plan,
     wallets,
     billingPreference,
     membership,
+    walletProgress,
     recentRecharges: (orders || []).slice(0, 5).map(mapBalanceLog),
     recentConsumptions: calls.slice(0, 5).map((call) => ({
       id: call.id,
