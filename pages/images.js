@@ -7,10 +7,11 @@ import UsageDeltaBadge from "@/components/common/usage-delta-badge";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import ImageCostIsland from "@/components/images/image-cost-island";
 
-const DEFAULT_MODEL_ID = "gpt-image-2";
+const DEFAULT_MODEL_ID = "flowapi-seedream-45";
 const MODEL_STORAGE_KEY = "flowapi_default_image_model";
 const DEFAULT_IMAGE_PROMPT = "请基于上传的参考图生成一张高质量图片，保留主体特征，画面干净清晰。";
 const MAX_ATTACHMENTS = 5;
+const IMAGE_MODEL_CATEGORIES = ["全部", "OpenAI 图片", "Google 图片", "Grok", "Seedream", "低成本", "高质量", "中文友好"];
 
 const ATTACHMENT_LIMITS = {
   image: 10 * 1024 * 1024,
@@ -88,13 +89,28 @@ function buildDownloadHref(item, index, src) {
   return src || "";
 }
 
+function modelMatchesCategory(model, category) {
+  if (!category || category === "全部") return true;
+  const haystack = [
+    model?.displayName,
+    model?.id,
+    model?.provider,
+    model?.sceneDescription,
+    ...(model?.labelTags || []),
+    ...(model?.tags || []),
+  ].join(" ");
+  if (category === "Google 图片") return haystack.includes("Google") || haystack.includes("Gemini");
+  if (category === "Grok") return haystack.includes("Grok");
+  if (category === "Seedream") return haystack.includes("Seedream");
+  return haystack.includes(category);
+}
+
 function getModelMark(model) {
-  const provider = String(model?.provider || model?.displayName || "AI").toLowerCase();
-  if (provider.includes("openai")) return "AI";
-  if (provider.includes("black") || provider.includes("flux")) return "FX";
-  if (provider.includes("stability") || String(model?.displayName || "").toLowerCase().includes("sdxl")) return "SD";
-  if (provider.includes("recraft")) return "RC";
-  if (provider.includes("ideogram")) return "ID";
+  const provider = String(`${model?.provider || ""} ${model?.displayName || ""} ${model?.id || ""}`).toLowerCase();
+  if (provider.includes("gpt") || provider.includes("openai")) return "AI";
+  if (provider.includes("gemini") || provider.includes("google")) return "GM";
+  if (provider.includes("grok") || provider.includes("x-ai")) return "GX";
+  if (provider.includes("seedream") || provider.includes("bytedance")) return "SD";
   return "IM";
 }
 
@@ -233,7 +249,7 @@ function ResultMessage({ item, model, onRefineFromImage, onRegenerateImage, onCo
           </div>
 
           {outputImages.length ? (
-            <div className={`image-result-grid image-result-grid-count-${Math.min(6, outputImages.length)}`}>
+            <div className={`image-result-grid image-result-grid-count-${Math.min(4, outputImages.length)}`}>
               {outputImages.map((src, index) => (
                 <div key={`${item.id}-output-${index}`} className="image-result-tile-card">
                   <button type="button" onClick={() => onPreview(src)} className="image-result-tile">
@@ -296,6 +312,7 @@ export default function ImagesPage() {
   const [sending, setSending] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [modelId, setModelId] = useState(DEFAULT_MODEL_ID);
+  const [modelCategory, setModelCategory] = useState("全部");
   const [attachments, setAttachments] = useState([]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [aspectRatio, setAspectRatio] = useState("1:1");
@@ -319,6 +336,7 @@ export default function ImagesPage() {
   const fileInputRef = useRef(null);
 
   const selectedModel = models.find((item) => item.id === modelId) || models[0] || null;
+  const filteredModels = models.filter((item) => modelMatchesCategory(item, modelCategory));
   const imageAttachments = attachments.filter((item) => item.kind === "image");
   const unsupportedAttachments = attachments.filter((item) => item.kind !== "image");
   const estimatedCost = estimateCost(selectedModel, quality, count, imageAttachments.length > 0);
@@ -549,7 +567,7 @@ export default function ImagesPage() {
           preview: src,
         }))
       : attachments.map((item) => ({ ...item, file: null }));
-    const outputCount = Math.max(1, Math.min(6, Number(forcedCount || count || 1)));
+    const outputCount = Math.max(1, Math.min(4, Number(forcedCount || count || 1)));
     setPendingMessage({ prompt: pendingLabel || userPrompt, attachments: pendingAttachments });
     setSending(true);
     setGenerationProgress(8);
@@ -770,6 +788,36 @@ export default function ImagesPage() {
                 {renderModelMenu("workspace")}
               </div>
 
+              <div className="image-model-shelf">
+                <div className="image-model-category-row" aria-label="图片模型分类">
+                  {IMAGE_MODEL_CATEGORIES.map((category) => (
+                    <button
+                      key={category}
+                      type="button"
+                      className={modelCategory === category ? "active" : ""}
+                      onClick={() => setModelCategory(category)}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+                <div className="image-model-card-grid">
+                  {filteredModels.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={item.id === modelId ? "selected" : ""}
+                      onClick={() => chooseModel(item.id)}
+                    >
+                      <span className="image-model-card-title"><ModelLogo model={item} />{item.displayName}</span>
+                      <small>{(item.labelTags || []).slice(0, 3).join(" / ") || "图片模型"}</small>
+                      <p>{item.sceneDescription || "适合商业图片生成场景。"}</p>
+                      <em>每张约 ¥{Number(item.unitPriceRmbTextToImage || 0).toFixed(2)} 起</em>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="image-chat-feed" ref={chatFeedRef}>
                 {loading ? <div className="image-studio-empty">正在加载图片历史...</div> : null}
                 {!loading && !chatHistory.length && !sending ? (
@@ -857,7 +905,6 @@ export default function ImagesPage() {
                           <option value={1}>1 张</option>
                           <option value={2}>2 张</option>
                           <option value={4}>4 张</option>
-                          <option value={6}>6 张</option>
                         </select>
                       </label>
                       <label>

@@ -26758,6 +26758,101 @@ body {
   width: min(430px, calc(100vw - 48px));
 }
 
+.image-model-shelf {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 14px;
+}
+
+.image-model-category-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.image-model-category-row button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  border: 1px solid var(--image-card-border);
+  border-radius: 999px;
+  background: var(--image-surface-soft);
+  color: var(--image-muted);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.image-model-category-row button.active {
+  border-color: rgba(99, 102, 241, 0.42);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(34, 211, 238, 0.1));
+  color: var(--image-text);
+}
+
+.image-model-card-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.image-model-card-grid button {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--image-card-border);
+  border-radius: 16px;
+  background: var(--image-surface);
+  color: var(--image-text);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.22s cubic-bezier(.2, .8, .2, 1), border-color 0.22s ease, box-shadow 0.22s ease;
+}
+
+.image-model-card-grid button:hover,
+.image-model-card-grid button.selected {
+  transform: translate3d(0, -1px, 0);
+  border-color: rgba(99, 102, 241, 0.35);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+}
+
+.image-model-card-title {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  color: var(--image-text);
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.image-model-card-grid small,
+.image-model-card-grid p {
+  margin: 0;
+  color: var(--image-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.image-model-card-grid p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.image-model-card-grid em {
+  justify-self: start;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--image-green);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+
 .image-chat-feed {
   min-height: clamp(460px, 58vh, 720px);
   max-height: 74vh;
@@ -27354,6 +27449,7 @@ body {
   .image-studio-top-cards,
   .team-billing-summary,
   .image-studio-side-metrics,
+  .image-model-card-grid,
   .image-help-api-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -27376,6 +27472,7 @@ body {
   .image-studio-top-cards,
   .team-billing-summary,
   .image-studio-side-metrics,
+  .image-model-card-grid,
   .image-help-api-grid,
   .image-studio-advanced-grid,
   .image-log-meta-grid {

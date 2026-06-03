@@ -61,7 +61,7 @@ export default function ImageHelpPage() {
             </article>
             <article>
               <h2>8. 如何通过 cc-switch 转接</h2>
-              <p>Base URL 填 `https://api.flowapi.fun/v1`，API Key 填你自己的 FlowAPI Key，Model 填图片模型名，比如 `gpt-image-2` 或 `flux-pro`。</p>
+              <p>Base URL 填 `https://api.flowapi.fun/v1`，API Key 填你自己的 FlowAPI Key，Model 填图片模型名，比如 `flowapi-seedream-45` 或 `flowapi-gpt-image-mini`。</p>
             </article>
             <article>
               <h2>9. 常见错误说明</h2>
@@ -82,7 +82,7 @@ export default function ImageHelpPage() {
             <div className="image-help-api-grid">
               <article><span>Base URL</span><code>{apiBase}</code></article>
               <article><span>API Key</span><code>{apiKey || "先去 API 管理创建你的 Key"}</code></article>
-              <article><span>推荐模型</span><code>gpt-image-2</code></article>
+              <article><span>推荐模型</span><code>flowapi-seedream-45</code></article>
             </div>
           </section>
         </main>
