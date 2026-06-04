@@ -18,6 +18,7 @@ export default function AdminModelsPage() {
   const [syncing, setSyncing] = useState(false);
   const [testingModel, setTestingModel] = useState("");
   const [togglingModel, setTogglingModel] = useState("");
+  const [releaseDrafts, setReleaseDrafts] = useState({});
   const [errorModal, setErrorModal] = useState(null);
   const [toast, setToast] = useState("");
   const [syncResult, setSyncResult] = useState(null);
@@ -37,6 +38,7 @@ export default function AdminModelsPage() {
       const configData = await configRes.json().catch(() => ({}));
       const healthData = await healthRes.json().catch(() => null);
       setProducts(configData.products || []);
+      setReleaseDrafts(Object.fromEntries((configData.products || []).map((product) => [product.id, product.officialReleaseDate || ""])));
       setUpstreamModels(configData.upstreamModels || []);
       setHealth(healthData);
     } catch {
@@ -48,6 +50,7 @@ export default function AdminModelsPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function syncUniApi() {
@@ -116,6 +119,30 @@ export default function AdminModelsPage() {
       showToast("操作失败");
     }
     setTogglingModel("");
+  }
+
+  async function saveReleaseDate(productId) {
+    const value = String(releaseDrafts[productId] || "").trim();
+    if (value && !/^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$/.test(value)) {
+      showToast("官方发布时间格式必须是 YYYY-MM-DD 或 YYYY-MM");
+      return;
+    }
+    try {
+      const res = await fetch("/api/admin/models-config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId, updates: { officialReleaseDate: value } }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.ok) {
+        showToast("官方发布时间已保存");
+        await loadData();
+      } else {
+        showToast(data?.error || "保存失败");
+      }
+    } catch {
+      showToast("保存请求失败");
+    }
   }
 
   async function runAllHealthChecks() {
@@ -222,6 +249,7 @@ export default function AdminModelsPage() {
                     <th>供应商</th>
                     <th>上游渠道</th>
                     <th>分组</th>
+                    <th>官方发布时间</th>
                     <th>状态</th>
                     <th>可用</th>
                     <th>可创建 Key</th>
@@ -243,6 +271,19 @@ export default function AdminModelsPage() {
                         <td>{p.provider}</td>
                         <td>{p.upstreamChannel || "uniapi"}</td>
                         <td><code style={{ fontSize: 11 }}>{p.group}</code></td>
+                        <td>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center", minWidth: 160 }}>
+                            <input
+                              value={releaseDrafts[p.id] || ""}
+                              onChange={(event) => setReleaseDrafts((current) => ({ ...current, [p.id]: event.target.value }))}
+                              placeholder="YYYY-MM 或 YYYY-MM-DD"
+                              style={{ width: 118, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 11 }}
+                            />
+                            <button type="button" className="redeem-btn small" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => saveReleaseDate(p.id)}>
+                              保存
+                            </button>
+                          </div>
+                        </td>
                         <td>
                           <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700, background: st.bg, color: st.color }}>
                             {p.statusLabel || st.label}

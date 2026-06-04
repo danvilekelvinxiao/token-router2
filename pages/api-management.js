@@ -231,12 +231,13 @@ export default function ApiManagementPage() {
   const [customer, setCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState([]);
+  const [apiGroups, setApiGroups] = useState([]);
   const [membership, setMembership] = useState(null);
   const [query, setQuery] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
   const [creating, setCreating] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ label: "", modelId: "", expiresAt: "never", customDate: "", limit: defaultLimitForm() });
+  const [createForm, setCreateForm] = useState({ label: "", modelId: "", groupId: "", expiresAt: "never", customDate: "", limit: defaultLimitForm() });
   const [createdKey, setCreatedKey] = useState(null);
   const [toast, setToast] = useState("");
   const [detail, setDetail] = useState(null);
@@ -259,15 +260,19 @@ export default function ApiManagementPage() {
     Promise.all([
       fetch(`/api/customer?customerId=${localCustomer.id}`).then((res) => res.ok ? res.json() : localCustomer),
       fetch("/api/content/models").then((res) => res.ok ? res.json() : { data: [] }),
+      fetch("/api/groups/available").then((res) => res.ok ? res.json() : { groups: [] }),
       fetch("/api/user/wallet-summary").then((res) => res.ok ? res.json() : null).catch(() => null),
-    ]).then(([freshCustomer, modelJson, walletJson]) => {
+    ]).then(([freshCustomer, modelJson, groupJson, walletJson]) => {
       if (cancelled) return;
       setCustomer(freshCustomer);
       localStorage.setItem("flowapi_customer", JSON.stringify(freshCustomer));
       const list = (modelJson.data || modelJson.models || []).map(normalizeModel).filter((model) => model.enabled);
+      const groups = groupJson.groups || [];
+      const defaultGroupId = groups.find((group) => group.recommended && group.available)?.id || groups.find((group) => group.available)?.id || groups[0]?.id || "";
       setModels(list);
+      setApiGroups(groups);
       setSelectedModelId((current) => current || list[0]?.modelId || "");
-      setCreateForm((current) => ({ ...current, modelId: current.modelId || list[0]?.modelId || "" }));
+      setCreateForm((current) => ({ ...current, modelId: current.modelId || list[0]?.modelId || "", groupId: current.groupId || defaultGroupId }));
       setMembership(walletJson?.membership || null);
     }).catch(() => {
       if (!cancelled) setToast("数据同步中，请稍后刷新。");
@@ -279,6 +284,8 @@ export default function ApiManagementPage() {
 
   const apiKeys = useMemo(() => customer?.apiKeys || [], [customer?.apiKeys]);
   const selectedModel = useMemo(() => models.find((model) => model.modelId === selectedModelId) || models[0] || null, [models, selectedModelId]);
+  const groupMap = useMemo(() => new Map(apiGroups.map((group) => [group.id, group])), [apiGroups]);
+  const selectedCreateGroup = useMemo(() => groupMap.get(createForm.groupId) || apiGroups.find((group) => group.recommended && group.available) || apiGroups[0] || null, [apiGroups, createForm.groupId, groupMap]);
   const isBlackGoldMember = membership?.status === "active" && membership?.level === "black_gold";
   const filteredKeys = useMemo(() => {
     const text = query.trim().toLowerCase();
@@ -448,8 +455,20 @@ export default function ApiManagementPage() {
     const model = models.find((item) => item.modelId === createForm.modelId) || selectedModel;
     if (!model?.modelId) return "模型配置同步中，请稍后再创建";
     if (!canSelectModel(model)) return "当前模型需要黑金会员权限";
+    if (!selectedCreateGroup?.id) return "请选择 API 分组后创建 API Key";
+    if (!selectedCreateGroup.available) return "当前 API 分组已停用，请选择其他分组";
+    if (!groupSupportsModel(selectedCreateGroup, model)) return "当前分组不支持所选模型，请更换分组或模型";
     if (createForm.expiresAt === "custom" && !createForm.customDate) return "请选择自定义过期日期";
     return getLimitValidationMessage(createForm.limit);
+  }
+
+  function groupSupportsModel(group, model) {
+    const supported = Array.isArray(group?.supportedModels) ? group.supportedModels : [];
+    if (!supported.length) return true;
+    const aliases = [model?.id, model?.modelId, model?.actualModelId, model?.displayName]
+      .map((item) => String(item || "").toLowerCase())
+      .filter(Boolean);
+    return supported.some((item) => aliases.includes(String(item || "").toLowerCase()));
   }
 
   function selectCreateModel(model) {
@@ -503,6 +522,7 @@ export default function ApiManagementPage() {
           expiresAt: resolveCreateExpiresAt(),
           locale,
           limit: buildLimitPayload(createForm.limit),
+          groupId: createForm.groupId,
         }),
       });
       const data = await res.json();
@@ -668,6 +688,7 @@ export default function ApiManagementPage() {
       const rows = [
         { label: "API Key", value: data.key?.maskedKey || maskToken(key.token) },
         { label: "绑定模型", value: key.modelDisplayName || key.publicModelId || "未绑定模型" },
+        { label: "分组", value: `${groupMap.get(key.modelGroup)?.displayName || key.modelGroup || "默认"} · ${Number(key.priceMultiplier || groupMap.get(key.modelGroup)?.billingMultiplier || 1)}x` },
         { label: "Base URL", value: API_BASE_URL },
         { label: "创建时间", value: formatDate(key.createdAt) },
         { label: "最近调用", value: formatDate(data.key?.lastUsedAt || key.lastUsedAt) },
@@ -810,6 +831,7 @@ export default function ApiManagementPage() {
                     </div>
                     <code>{maskToken(key.token)}</code>
                     <div className="api-key-card-meta">
+                      <span>分组：{groupMap.get(key.modelGroup)?.displayName || key.modelGroup || "默认"} · {Number(key.priceMultiplier || groupMap.get(key.modelGroup)?.billingMultiplier || 1)}x</span>
                       <span>今日使用：{formatToken(key.quotaLimit?.todayUsedTokens || 0)}</span>
                       <span>本月使用：{formatToken(key.quotaLimit?.monthUsedTokens || key.quotaLimit?.totalUsedTokens || 0)}</span>
                       <span>最后调用：{formatDate(key.lastUsedAt)}</span>
@@ -913,6 +935,39 @@ export default function ApiManagementPage() {
                         );
                       })}
                       {!models.length ? <div className="api-management-empty-text">模型配置同步中，请稍后刷新或到大模型接入页查看。</div> : null}
+                    </div>
+                  </div>
+
+                  <div className="api-expiry-field api-group-choice-field">
+                    <span>选择分组</span>
+                    <div className="api-group-choice-grid">
+                      {apiGroups.map((group) => {
+                        const model = models.find((item) => item.modelId === createForm.modelId) || selectedModel;
+                        const disabled = !group.available || !groupSupportsModel(group, model);
+                        return (
+                          <button
+                            key={group.id}
+                            type="button"
+                            className={`${createForm.groupId === group.id ? "active" : ""} ${disabled ? "disabled" : ""}`}
+                            aria-disabled={disabled}
+                            onClick={() => {
+                              if (disabled) {
+                                showToast(group.available ? "该分组不支持当前模型" : "该分组已停用");
+                                return;
+                              }
+                              setCreateForm((current) => ({ ...current, groupId: group.id }));
+                            }}
+                          >
+                            <span>
+                              <strong>{group.displayName}</strong>
+                              <em>{group.billingMultiplier}x</em>
+                            </span>
+                            <small>{group.recommended ? "系统推荐 · " : ""}{group.description || "自动调度分组"}</small>
+                            <code>{group.supportedModels?.length ? `${group.modelCount || group.supportedModels.length} 个模型` : "全部模型"}</code>
+                          </button>
+                        );
+                      })}
+                      {!apiGroups.length ? <div className="api-management-empty-text">分组配置同步中，请稍后刷新。</div> : null}
                     </div>
                   </div>
 

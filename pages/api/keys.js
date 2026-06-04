@@ -55,6 +55,7 @@ export default async function handler(req, res) {
         {
           localePriceMultiplier: getLocalePriceMultiplier(normalizeLocale(req.body?.locale)),
           limit: req.body?.limit || req.body?.quotaLimit || {},
+          groupId: req.body?.groupId || req.body?.modelGroup || "",
           teamId: req.body?.teamId || req.body?.team_id || "",
           usagePurpose: req.body?.usagePurpose || req.body?.usage_purpose || "",
           usageScope: req.body?.usageScope || req.body?.usage_scope || "",
@@ -80,6 +81,14 @@ export default async function handler(req, res) {
           error: {
             message: error.message,
             type: "invalid_api_key_limit",
+          },
+        });
+      }
+      if (["group_unavailable", "group_model_not_supported"].includes(error?.type)) {
+        return res.status(400).json({
+          error: {
+            message: error.message,
+            type: error.type,
           },
         });
       }

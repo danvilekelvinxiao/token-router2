@@ -396,13 +396,27 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   const [modal, setModal] = useState(null);
   const [openMoreKeyId, setOpenMoreKeyId] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ label: "", expiresAt: "never", customDate: "" });
+  const [form, setForm] = useState({ label: "", expiresAt: "never", customDate: "", modelId: "", groupId: "" });
+  const [apiGroups, setApiGroups] = useState([]);
   const [detailKey, setDetailKey] = useState(null);
   const [detailData, setDetailData] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => setApiBaseUrl(getPublicApiBaseUrl()));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/groups/available")
+      .then((res) => res.ok ? res.json() : { groups: [] })
+      .then((data) => {
+        if (!cancelled) setApiGroups(data.groups || []);
+      })
+      .catch(() => {
+        if (!cancelled) setApiGroups([]);
+      });
+    return () => { cancelled = true; };
   }, []);
 
   const apiKeys = useMemo(() => customer?.apiKeys || [], [customer]);
@@ -480,9 +494,10 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   }
 
   const openCreateModal = useCallback(() => {
-    setForm({ label: `API 密匙 ${apiKeys.length + 1}`, expiresAt: "never", customDate: "", modelId: "" });
+    const defaultGroupId = apiGroups.find((group) => group.recommended && group.available)?.id || apiGroups.find((group) => group.available)?.id || apiGroups[0]?.id || "";
+    setForm({ label: `API 密匙 ${apiKeys.length + 1}`, expiresAt: "never", customDate: "", modelId: "", groupId: defaultGroupId });
     setModal({ type: "create" });
-  }, [apiKeys.length]);
+  }, [apiGroups, apiKeys.length]);
 
   useEffect(() => {
     if (createSignal <= 0 || !customer) return;
@@ -518,6 +533,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       customerId: customer.id, label: form.label.trim() || fallbackLabel,
       expiresAt: computeExpiry(form.expiresAt, form.customDate),
       modelId: form.modelId,
+      groupId: form.groupId,
     };
     try {
       const res = await fetch("/api/keys", {
@@ -581,8 +597,18 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
     if (!customer) return "请先登录后创建 API Key";
     if (saving) return "";
     if (modal.type !== "edit" && !form.modelId) return "请选择默认模型后创建 API Key";
+    if (modal.type !== "edit" && !form.groupId) return "请选择 API 分组后创建 API Key";
     if (form.expiresAt === "custom" && !form.customDate) return "请选择自定义过期日期";
     return "";
+  }
+
+  function groupSupportsProduct(group, product) {
+    const supported = Array.isArray(group?.supportedModels) ? group.supportedModels : [];
+    if (!supported.length) return true;
+    const aliases = [product?.id, product?.publicModelId, product?.actualModelId, product?.displayName]
+      .map((item) => String(item || "").toLowerCase())
+      .filter(Boolean);
+    return supported.some((item) => aliases.includes(String(item || "").toLowerCase()));
   }
 
   function toggleSelected(keyId) {
@@ -837,6 +863,36 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
                         </small>
                       </button>
                     ))}
+                  </div>
+                </div>
+              ) : null}
+              {modal.type !== "edit" ? (
+                <div className="api-expiry-field api-group-choice-field">
+                  <span>选择分组</span>
+                  <div className="api-group-choice-grid">
+                    {apiGroups.map((group) => {
+                      const product = MODEL_PRODUCT_OPTIONS.find((item) => item.id === form.modelId || item.publicModelId === form.modelId);
+                      const disabled = !group.available || !groupSupportsProduct(group, product);
+                      return (
+                        <button
+                          key={group.id}
+                          type="button"
+                          className={`${form.groupId === group.id ? "active" : ""} ${disabled ? "disabled" : ""}`}
+                          aria-disabled={disabled}
+                          onClick={() => {
+                            if (disabled) {
+                              showMessage(group.available ? "该分组不支持当前模型" : "该分组已停用");
+                              return;
+                            }
+                            setForm((current) => ({ ...current, groupId: group.id }));
+                          }}
+                        >
+                          <span><strong>{group.displayName}</strong><em>{group.billingMultiplier}x</em></span>
+                          <small>{group.recommended ? "系统推荐 · " : ""}{group.description || "自动调度分组"}</small>
+                        </button>
+                      );
+                    })}
+                    {!apiGroups.length ? <div className="api-management-empty-text">分组配置同步中，请稍后刷新。</div> : null}
                   </div>
                 </div>
               ) : null}

@@ -25,6 +25,7 @@ const adminMenuItems = [
   { key: "settings", label: "系统设置", href: "/admin/settings", icon: IconSettings },
   { key: "recharges", label: "充值审核", href: "/admin/recharges", icon: IconRecharges },
   { key: "newapi", label: "New API 管理", href: "/admin/new-api", icon: IconNewApi },
+  { key: "groups", label: "API 分组管理", href: "/admin/groups", icon: IconRouting },
   { key: "passthrough", label: "Token 直通白名单", href: "/admin/newapi-passthrough", icon: IconPassthrough },
   { key: "importToken", label: "导入 New API Token", href: "/admin/api-keys/import-newapi-token", icon: IconImportToken },
   { key: "redeemCodes", label: "激活码管理", href: "/admin/redeem-codes", icon: IconRedeem },

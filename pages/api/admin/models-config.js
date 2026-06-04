@@ -61,6 +61,7 @@ export default async function handler(req, res) {
       "lastError",
       "canCreateKey",
       "upstreamChannel",
+      "officialReleaseDate",
     ];
 
     const filtered = {};
@@ -79,6 +80,17 @@ export default async function handler(req, res) {
         filtered.status = filtered.status || "coming_soon";
         filtered.statusLabel = filtered.statusLabel || "即将开放";
       }
+    }
+
+    if (filtered.officialReleaseDate !== undefined) {
+      const value = String(filtered.officialReleaseDate || "").trim();
+      if (value && !/^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$/.test(value)) {
+        return res.status(400).json({
+          ok: false,
+          error: "官方发布时间格式必须是 YYYY-MM-DD 或 YYYY-MM，留空表示待确认",
+        });
+      }
+      filtered.officialReleaseDate = value;
     }
 
     try {
