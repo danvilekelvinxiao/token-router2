@@ -7,6 +7,8 @@ const adminMenuItems = [
   { key: "overview", label: "管理概览", href: "/admin", icon: IconOverview },
   { key: "channels", label: "上游渠道管理", href: "/admin/channels", icon: IconChannels },
   { key: "tokenPool", label: "团队 Token 池", href: "/admin/token-pool", icon: IconTokenPool },
+  { key: "tokenMaintenance", label: "Token 池维护中心", href: "/admin/token-pool/maintenance", icon: IconMaintenance },
+  { key: "maintenanceTasks", label: "维护任务中心", href: "/admin/maintenance-tasks", icon: IconMaintenance },
   { key: "teams", label: "团队管理", href: "/admin/teams", icon: IconUsers },
   { key: "rateLimits", label: "限流规则", href: "/admin/rate-limits", icon: IconRouting },
   { key: "teamReports", label: "团队报表", href: "/admin/team-reports", icon: IconLogs },
@@ -32,6 +34,8 @@ const adminMenuItems = [
 function IconModels() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="4" rx="1"/><rect x="14" y="3" width="7" height="4" rx="1"/><rect x="3" y="10" width="7" height="4" rx="1"/><rect x="14" y="10" width="7" height="4" rx="1"/><rect x="3" y="17" width="7" height="4" rx="1"/><rect x="14" y="17" width="7" height="4" rx="1"/></svg>; }
 
 function IconTokenPool() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/></svg>; }
+
+function IconMaintenance() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3v3M12 18v3M4.6 6.6l2.1 2.1M17.3 15.3l2.1 2.1M3 12h3M18 12h3M4.6 17.4l2.1-2.1M17.3 8.7l2.1-2.1"/><circle cx="12" cy="12" r="4"/></svg>; }
 
 function IconRedeem() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M8 10l3 3 5-5"/><line x1="12" y1="18" x2="12" y2="13"/></svg>; }
 
