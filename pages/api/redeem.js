@@ -1,7 +1,8 @@
 import { redeemCode } from "@/lib/redeem-codes";
-import { getCustomer, rechargeCustomer, logActivity } from "@/lib/customer-store";
+import { getCustomer, rechargeCustomer, logActivity, grantTemporaryCredit } from "@/lib/customer-store";
 import { assertCustomerOwner } from "@/lib/session";
 import { seedMockData } from "@/lib/redeem-codes";
+import { upsertUserMembership } from "@/lib/membership/store";
 
 // Only seed mock data in development mode, never in production
 const ALLOW_MOCK_REDEEM_CODES = process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_REDEEM_MOCK !== "false";
@@ -25,7 +26,7 @@ export default async function handler(req, res) {
   if (!customer) return res.status(404).json({ error: "用户信息不存在" });
 
   // Redeem validation
-  const result = redeemCode(code.trim(), customer, ip);
+  const result = await redeemCode(code.trim(), customer, ip);
 
   if (!result.success) {
     return res.status(400).json({ success: false, error: result.error });
@@ -35,13 +36,37 @@ export default async function handler(req, res) {
   if (result.amountCny > 0) {
     await rechargeCustomer(session.customerId, result.amountCny);
   }
+  if (result.tokenAmount > 0) {
+    await grantTemporaryCredit(session.customerId, {
+      amount: Number((Number(result.tokenAmount || 0) / 10000).toFixed(6)),
+      reason: `redeem_token_code:${result.record?.codeId || code.trim()}`,
+      detail: `激活码兑换 ${Number(result.tokenAmount || 0).toLocaleString()} Token 额度`,
+    });
+  }
+  if (result.packageId) {
+    const now = new Date();
+    const expiresAt = new Date(now);
+    const days = result.packageId === "weekly_plan" ? 7 : 30;
+    expiresAt.setDate(expiresAt.getDate() + days);
+    upsertUserMembership(session.customerId, {
+      status: "active",
+      startedAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    });
+  }
 
   // Log activity
+  const redeemDetail = result.packageId
+    ? `激活码兑换成功: ${code.trim()}，套餐/服务 ${result.packageId}`
+    : result.tokenAmount > 0
+      ? `激活码兑换成功: ${code.trim()}，到账 ${Number(result.tokenAmount).toLocaleString()} Token`
+      : `激活码兑换成功: ${code.trim()}，到账 ¥${Number(result.amountCny).toFixed(2)}`;
+
   await logActivity({
     customerId: session.customerId,
     action: "redeem_code",
     category: "payment",
-    detail: `激活码兑换成功: ${code.trim()}，到账 ¥${Number(result.amountCny).toFixed(2)}`,
+    detail: redeemDetail,
     amount: result.amountCny,
     ip,
     userAgent: req.headers["user-agent"] || "",
@@ -71,8 +96,14 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     success: true,
-    message: `兑换成功，已为你的账户增加 ¥${result.amountCny.toFixed(2)} 余额。`,
+    message: result.packageId
+      ? `兑换成功，已为你的账户开通 ${result.packageId}。`
+      : result.tokenAmount > 0
+        ? `兑换成功，已为你的账户增加 ${Number(result.tokenAmount).toLocaleString()} Token 额度。`
+        : `兑换成功，已为你的账户增加 ¥${result.amountCny.toFixed(2)} 余额。`,
     amountCny: result.amountCny,
+    tokenAmount: result.tokenAmount || 0,
+    packageId: result.packageId || "",
     newBalanceCny: result.newBalanceCny,
     customer: updatedCustomer,
   });

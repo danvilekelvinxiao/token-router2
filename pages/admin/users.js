@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
 function StatusBadge({ status }) {
-  const map = { active: { label: "正常", color: "#22c55e", bg: "rgba(34,197,94,0.1)" }, blocked: { label: "已封禁", color: "#ef4444", bg: "rgba(239,68,68,0.1)" }, disabled: { label: "已禁用", color: "#f59e0b", bg: "rgba(245,158,11,0.1)" } };
+  const map = { active: { label: "正常", color: "#22c55e", bg: "rgba(34,197,94,0.1)" }, blocked: { label: "已封禁", color: "#ef4444", bg: "rgba(239,68,68,0.1)" }, disabled: { label: "已禁用", color: "#f59e0b", bg: "rgba(245,158,11,0.1)" }, deleted: { label: "已删除", color: "#64748b", bg: "rgba(100,116,139,0.14)" } };
   const s = map[status] || map.active;
   return <span style={{ padding: "3px 10px", borderRadius: 999, background: s.bg, color: s.color, fontSize: 11, fontWeight: 700 }}>{s.label}</span>;
 }
@@ -39,11 +39,23 @@ function buildLimitPayload(form = {}) {
   };
 }
 
+function friendlyAdminError(message = "") {
+  const raw = String(message || "");
+  if (/expected pattern|Invalid ID/i.test(raw)) return "请求参数格式错误，请刷新页面后重试。";
+  if (/Unauthorized/i.test(raw)) return "未登录或登录已过期。";
+  if (/Forbidden/i.test(raw)) return "当前账号无权限操作。";
+  if (/Validation failed/i.test(raw)) return "请检查表单必填项。";
+  if (/Network/i.test(raw)) return "网络异常，请稍后重试。";
+  if (/database|SQL|relation|column/i.test(raw)) return "数据库操作失败，请稍后重试。";
+  return raw || "操作失败，请稍后重试。";
+}
+
 export default function AdminUsers() {
   const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+  const [msgTone, setMsgTone] = useState("error");
   const [selectedUser, setSelectedUser] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({});
@@ -65,8 +77,8 @@ export default function AdminUsers() {
       if (res.ok) {
         list = data.customers || [];
         setUsers(list);
-      } else setMsg(data.error || "加载失败");
-    } catch { setMsg("网络错误"); }
+      } else { setMsgTone("error"); setMsg(data.error || "加载失败"); }
+    } catch { setMsgTone("error"); setMsg("网络错误"); }
     setLoading(false);
     return list;
   }
@@ -77,7 +89,7 @@ export default function AdminUsers() {
       method: "POST", headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(body),
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "请求失败");
+    if (!res.ok) throw new Error(friendlyAdminError(data.error || "请求失败"));
     return data;
   }
 
@@ -95,7 +107,7 @@ export default function AdminUsers() {
       await fetchUsers(secret);
       setEditMode(false);
       setSelectedUser(null);
-    } catch (e) { setMsg(e.message); }
+    } catch (e) { setMsgTone("error"); setMsg(e.message); }
     setSaving(false);
   }
 
@@ -106,7 +118,29 @@ export default function AdminUsers() {
       await apiPost({ action: isBlocked ? "unblockUser" : "blockUser", data: { id: user.id } });
       await fetchUsers(secret);
       if (selectedUser?.id === user.id) setSelectedUser(null);
-    } catch (e) { setMsg(e.message); }
+    } catch (e) { setMsgTone("error"); setMsg(e.message); }
+  }
+
+  async function handleDeleteUser(user) {
+    if (!user?.id) {
+      setMsg("删除失败，请检查用户 ID 或稍后重试。");
+      return;
+    }
+    const label = user.email || user.name || user.id;
+    if (!confirm(`确认软删除用户 ${label}？\n\n删除后该用户将无法登录，名下 API Key 会自动禁用，账单和日志会保留用于审计。`)) return;
+    try {
+      await apiPost({ action: "deleteCustomer", data: { id: user.id } });
+      await fetchUsers(secret);
+      if (selectedUser?.id === user.id) {
+        setSelectedUser(null);
+        setEditMode(false);
+      }
+      setMsgTone("success");
+      setMsg("用户已软删除，API Key 已禁用。");
+    } catch (e) {
+      setMsgTone("error");
+      setMsg(friendlyAdminError(e.message || "删除失败，请检查用户 ID 或稍后重试。"));
+    }
   }
 
   function openKeyLimitEdit(key) {
@@ -122,8 +156,10 @@ export default function AdminUsers() {
       const refreshed = await fetchUsers(secret);
       setSelectedUser(refreshed.find((user) => user.id === selectedUser?.id) || selectedUser);
       setKeyLimitEdit(null);
+      setMsgTone("success");
       setMsg("API Key 额度已更新");
     } catch (e) {
+      setMsgTone("error");
       setMsg(e.message);
     }
     setSaving(false);
@@ -131,7 +167,7 @@ export default function AdminUsers() {
 
   function handleSecretSave() {
     const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
+    if (!s) { setMsgTone("error"); return setMsg("请输入管理密钥"); }
     localStorage.setItem("flowapi_admin_secret", s);
     setMsg("");
     fetchUsers(s);
@@ -168,7 +204,7 @@ export default function AdminUsers() {
             </div>
           </header>
 
-          {msg && <div style={{ padding: "10px 16px", borderRadius: 8, background: "rgba(239,68,68,0.1)", color: "#ef4444", fontSize: 13, marginBottom: 14, fontWeight: 600 }}>{msg}</div>}
+          {msg && <div style={{ padding: "10px 16px", borderRadius: 8, background: msgTone === "success" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.1)", color: msgTone === "success" ? "#16a34a" : "#ef4444", fontSize: 13, marginBottom: 14, fontWeight: 600 }}>{msg}</div>}
 
           {loading ? (
             <div style={{ textAlign: "center", padding: 40, color: "var(--dash-sub)" }}>加载中...</div>
@@ -198,6 +234,7 @@ export default function AdminUsers() {
                             <div style={{ display: "flex", gap: 6 }}>
                               <button onClick={() => openEdit(u)} style={btnSmStyle}>编辑</button>
                               <button onClick={() => handleBlockUser(u)} style={{ ...btnSmStyle, color: u.status === "blocked" ? "#22c55e" : "#ef4444" }}>{u.status === "blocked" ? "解封" : "封禁"}</button>
+                              <button onClick={() => handleDeleteUser(u)} disabled={u.status === "deleted"} style={{ ...btnSmStyle, color: "#ef4444", opacity: u.status === "deleted" ? 0.45 : 1 }}>删除</button>
                             </div>
                           </td>
                         </tr>
@@ -287,6 +324,7 @@ export default function AdminUsers() {
                   <div style={{ display: "flex", gap: 8, marginTop: 18 }}>
                     <button onClick={handleSaveUser} disabled={saving} style={{ flex: 1, padding: "9px 14px", borderRadius: 7, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", opacity: saving ? 0.7 : 1 }}>{saving ? "保存中..." : "保存配置"}</button>
                     <button onClick={() => handleBlockUser(selectedUser)} style={{ padding: "9px 14px", borderRadius: 7, border: "none", background: selectedUser.status === "blocked" ? "#22c55e" : "#ef4444", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>{selectedUser.status === "blocked" ? "解封用户" : "封禁用户"}</button>
+                    <button onClick={() => handleDeleteUser(selectedUser)} disabled={selectedUser.status === "deleted"} style={{ padding: "9px 14px", borderRadius: 7, border: "none", background: "#991b1b", color: "#fff", fontSize: 12, fontWeight: 700, cursor: selectedUser.status === "deleted" ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: selectedUser.status === "deleted" ? 0.55 : 1 }}>软删除</button>
                   </div>
                 </div>
               )}

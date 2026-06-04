@@ -1,5 +1,5 @@
 import Head from "next/head";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
 /* ==================== Helpers ==================== */
@@ -30,7 +30,7 @@ const SOURCE_MAP = {
   gift: "客服补偿",
 };
 
-const TYPE_LABELS = { balance: "余额", token: "Token" };
+const TYPE_LABELS = { balance: "金额额度", token: "Token 额度", package: "套餐服务" };
 
 const AMOUNT_OPTIONS = [20, 50, 100, 200, 500, 1000];
 const TOKEN_OPTIONS = [
@@ -45,6 +45,12 @@ const EXPIRE_OPTIONS = [
   { label: "30 天", value: "30d" },
   { label: "90 天", value: "90d" },
   { label: "自定义日期", value: "custom" },
+];
+const PACKAGE_OPTIONS = [
+  { label: "周卡", value: "weekly_plan" },
+  { label: "月卡", value: "monthly_plan" },
+  { label: "黑金会员", value: "black_gold_membership" },
+  { label: "附加服务", value: "addon_service" },
 ];
 
 function computeExpiry(option, customDate) {
@@ -73,73 +79,90 @@ export default function RedeemCodesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showBatch, setShowBatch] = useState(false);
   const [createResult, setCreateResult] = useState(null);
+  const [createError, setCreateError] = useState("");
 
   // Form states
-  const [form, setForm] = useState({ name: "淘宝 ¥100 充值码", type: "balance", amountCny: 100, tokenAmount: "", priceCny: 100, source: "taobao", note: "", expireOption: "", expireDate: "" });
-  const [batchForm, setBatchForm] = useState({ name: "", type: "balance", amountCny: 100, tokenAmount: "", priceCny: 100, source: "taobao", quantity: 10, note: "", expireOption: "", expireDate: "" });
+  const [form, setForm] = useState({ name: "淘宝 ¥100 充值码", type: "balance", amountCny: 100, tokenAmount: "", packageId: "weekly_plan", priceCny: 100, source: "taobao", note: "", expireOption: "", expireDate: "", maxRedemptionsPerCode: 1, enabled: true });
+  const [batchForm, setBatchForm] = useState({ name: "", type: "balance", amountCny: 100, tokenAmount: "", packageId: "weekly_plan", priceCny: 100, source: "taobao", quantity: 10, note: "", expireOption: "", expireDate: "", maxRedemptionsPerCode: 1, enabled: true });
 
-  async function loadData() {
+  function adminHeaders(extra = {}) {
+    const secret = typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || "";
+    return { ...extra, ...(secret ? { "x-admin-secret": secret } : {}) };
+  }
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [codesRes, recordsRes, batchesRes] = await Promise.all([
-        fetch(`/api/admin/activation-codes?${new URLSearchParams({ status: filterStatus, source: filterSource, search })}`),
-        fetch("/api/admin/activation-codes?action=records"),
-        fetch("/api/admin/activation-codes?action=batches"),
+        fetch(`/api/admin/activation-codes?${new URLSearchParams({ status: filterStatus, source: filterSource, search })}`, { headers: adminHeaders() }),
+        fetch("/api/admin/activation-codes?action=records", { headers: adminHeaders() }),
+        fetch("/api/admin/activation-codes?action=batches", { headers: adminHeaders() }),
       ]);
       if (codesRes.ok) setCodes((await codesRes.json()).codes || []);
       if (recordsRes.ok) setRecords((await recordsRes.json()).records || []);
       if (batchesRes.ok) setBatches((await batchesRes.json()).batches || []);
     } catch {}
     setLoading(false);
-  }
+  }, [filterStatus, filterSource, search]);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { loadData(); }, [filterStatus, filterSource]);
+  useEffect(() => { queueMicrotask(() => loadData()); }, [loadData]);
 
   async function handleCreate() {
-    if (!form.amountCny && !form.tokenAmount) return;
+    setCreateError("");
     const body = {
       name: form.name,
       type: form.type,
       amountCny: form.type === "balance" ? Number(form.amountCny) : 0,
       tokenAmount: form.type === "token" ? Number(form.tokenAmount) : 0,
+      packageId: form.type === "package" ? form.packageId : "",
       priceCny: Number(form.priceCny) || Number(form.amountCny),
       source: form.source,
       note: form.note,
       expiredAt: computeExpiry(form.expireOption, form.expireDate),
+      maxRedemptionsPerCode: Number(form.maxRedemptionsPerCode) || 1,
+      enabled: form.enabled !== false,
     };
     const res = await fetch("/api/admin/activation-codes", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: adminHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     });
     const data = await res.json();
     if (res.ok && data.code) {
       setCreateResult(data.code);
+    } else {
+      setCreateError(data.error || "激活码创建失败，请检查表单。");
     }
     loadData();
   }
 
   async function handleBatch() {
+    setCreateError("");
     const body = {
       name: batchForm.name || `淘宝 ¥${batchForm.amountCny} 激活码批次`,
       type: batchForm.type,
       amountCny: batchForm.type === "balance" ? Number(batchForm.amountCny) : 0,
       tokenAmount: batchForm.type === "token" ? Number(batchForm.tokenAmount) : 0,
+      packageId: batchForm.type === "package" ? batchForm.packageId : "",
       priceCny: Number(batchForm.priceCny) || Number(batchForm.amountCny),
       source: batchForm.source,
       quantity: Number(batchForm.quantity),
       note: batchForm.note,
       expiredAt: computeExpiry(batchForm.expireOption, batchForm.expireDate),
+      maxRedemptionsPerCode: Number(batchForm.maxRedemptionsPerCode) || 1,
+      enabled: batchForm.enabled !== false,
     };
     const res = await fetch("/api/admin/activation-codes?action=batch", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: adminHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     });
     const data = await res.json();
     if (res.ok) {
       setCreateResult({ batch: true, codes: data.codes, count: data.codes?.length });
+    } else {
+      setCreateError(data.error || "激活码批量创建失败，请检查表单。");
+      return;
     }
     setShowBatch(false);
     loadData();
@@ -149,7 +172,7 @@ export default function RedeemCodesPage() {
     if (!confirm("确认禁用该激活码？")) return;
     await fetch("/api/admin/activation-codes", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: adminHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ id }),
     });
     loadData();
@@ -159,7 +182,7 @@ export default function RedeemCodesPage() {
     if (!confirm("确认删除该激活码？此操作不可撤销。")) return;
     await fetch("/api/admin/activation-codes", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers: adminHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ id }),
     });
     loadData();
@@ -195,8 +218,8 @@ export default function RedeemCodesPage() {
               <p>创建、发放和管理淘宝激活码，用户可在充值页自助兑换余额或 Token 额度。</p>
             </div>
             <div className="redeem-admin-actions">
-              <button type="button" className="redeem-btn primary" onClick={() => { setShowCreate(true); setCreateResult(null); }}>创建激活码</button>
-              <button type="button" className="redeem-btn" onClick={() => { setShowBatch(true); setCreateResult(null); }}>批量生成</button>
+              <button type="button" className="redeem-btn primary" onClick={() => { setShowCreate(true); setCreateResult(null); setCreateError(""); }}>创建激活码</button>
+              <button type="button" className="redeem-btn" onClick={() => { setShowBatch(true); setCreateResult(null); setCreateError(""); }}>批量生成</button>
               <button type="button" className="redeem-btn" onClick={() => exportCSV(codes, `激活码_${new Date().toISOString().slice(0,10)}.csv`)}>导出激活码</button>
               <button type="button" className="redeem-btn" onClick={() => setTab("records")}>查看兑换记录</button>
             </div>
@@ -269,7 +292,7 @@ export default function RedeemCodesPage() {
                           </td>
                           <td>{c.name}</td>
                           <td>{TYPE_LABELS[c.type] || c.type}</td>
-                          <td>{c.type === "balance" ? `¥${c.amountCny}` : `${(c.tokenAmount / 1000).toFixed(0)}K Token`}</td>
+                          <td>{c.type === "balance" ? `¥${c.amountCny}` : c.type === "token" ? `${(c.tokenAmount / 1000).toFixed(0)}K Token` : (PACKAGE_OPTIONS.find((opt) => opt.value === c.packageId)?.label || c.packageId || "套餐服务")}</td>
                           <td>¥{c.priceCny}</td>
                           <td>{SOURCE_MAP[c.source] || c.source}</td>
                           <td><span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: displayStatus.bg, color: displayStatus.color }}>{displayStatus.label}</span></td>
@@ -318,7 +341,7 @@ export default function RedeemCodesPage() {
                         <td>{r.userName || r.userId}</td>
                         <td><code>{maskCode(r.code)}</code></td>
                         <td>{TYPE_LABELS[r.type] || r.type}</td>
-                        <td>{r.type === "balance" ? `¥${r.amountCny}` : `${(r.tokenAmount / 1000).toFixed(0)}K Token`}</td>
+                        <td>{r.type === "balance" ? `¥${r.amountCny}` : r.type === "token" ? `${(r.tokenAmount / 1000).toFixed(0)}K Token` : (PACKAGE_OPTIONS.find((opt) => opt.value === r.packageId)?.label || r.packageId || "套餐服务")}</td>
                         <td>{SOURCE_MAP[r.source] || r.source}</td>
                       </tr>
                     ))}
@@ -379,7 +402,7 @@ export default function RedeemCodesPage() {
                     <div className="redeem-result-actions">
                       <button type="button" onClick={() => copyText(createResult.code)}>{copied === createResult.code ? "已复制" : "复制激活码"}</button>
                       <button type="button" onClick={() => { setShowCreate(false); loadData(); }}>查看列表</button>
-                      <button type="button" onClick={() => { setCreateResult(null); setForm({ name: "淘宝 ¥100 充值码", type: "balance", amountCny: 100, tokenAmount: "", priceCny: 100, source: "taobao", note: "", expireOption: "", expireDate: "" }); }}>继续创建</button>
+                      <button type="button" onClick={() => { setCreateResult(null); setCreateError(""); setForm({ name: "淘宝 ¥100 充值码", type: "balance", amountCny: 100, tokenAmount: "", packageId: "weekly_plan", priceCny: 100, source: "taobao", note: "", expireOption: "", expireDate: "", maxRedemptionsPerCode: 1, enabled: true }); }}>继续创建</button>
                     </div>
                   </div>
                 ) : (
@@ -387,8 +410,9 @@ export default function RedeemCodesPage() {
                     <label>名称 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
                     <label>兑换类型
                       <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                        <option value="balance">余额</option>
-                        <option value="token">Token</option>
+                        <option value="balance">金额额度</option>
+                        <option value="token">Token 额度</option>
+                        <option value="package">套餐服务</option>
                       </select>
                     </label>
                     {form.type === "balance" ? (
@@ -401,7 +425,7 @@ export default function RedeemCodesPage() {
                           <input type="number" placeholder="自定义" value={form.amountCny === 0 || !AMOUNT_OPTIONS.includes(form.amountCny) ? form.amountCny : ""} onChange={(e) => setForm({ ...form, amountCny: Number(e.target.value) || 0 })} />
                         </div>
                       </div>
-                    ) : (
+                    ) : form.type === "token" ? (
                       <div className="redeem-amount-grid">
                         <span>Token 额度</span>
                         <div>
@@ -411,8 +435,15 @@ export default function RedeemCodesPage() {
                           <input type="number" placeholder="自定义" value={form.tokenAmount && !TOKEN_OPTIONS.find((o) => o.value === form.tokenAmount) ? form.tokenAmount : ""} onChange={(e) => setForm({ ...form, tokenAmount: Number(e.target.value) || 0 })} />
                         </div>
                       </div>
+                    ) : (
+                      <label>套餐 / 服务
+                        <select value={form.packageId} onChange={(e) => setForm({ ...form, packageId: e.target.value })}>
+                          {PACKAGE_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+                        </select>
+                      </label>
                     )}
                     <label>售卖价格 <input type="number" value={form.priceCny} onChange={(e) => setForm({ ...form, priceCny: Number(e.target.value) || 0 })} placeholder="¥100" /></label>
+                    <label>单码可使用次数 <input type="number" min={1} value={form.maxRedemptionsPerCode} onChange={(e) => setForm({ ...form, maxRedemptionsPerCode: Number(e.target.value) || 1 })} /></label>
                     <label>有效期
                       <select value={form.expireOption} onChange={(e) => setForm({ ...form, expireOption: e.target.value })}>
                         {EXPIRE_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
@@ -427,7 +458,9 @@ export default function RedeemCodesPage() {
                         <option value="gift">客服补偿</option>
                       </select>
                     </label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="checkbox" checked={form.enabled !== false} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} /> 启用该激活码</label>
                     <label>备注 <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="淘宝订单号 / 活动名称" /></label>
+                    {createError && <p className="redeem-empty" style={{ color: "#ef4444", textAlign: "left", padding: 0 }}>{createError}</p>}
                     <footer>
                       <button type="button" className="redeem-btn" onClick={() => setShowCreate(false)}>取消</button>
                       <button type="button" className="redeem-btn primary" onClick={handleCreate}>保存并生成</button>
@@ -461,20 +494,26 @@ export default function RedeemCodesPage() {
                     <label>生成数量 <input type="number" min={1} max={500} value={batchForm.quantity} onChange={(e) => setBatchForm({ ...batchForm, quantity: Number(e.target.value) || 0 })} /></label>
                     <label>兑换类型
                       <select value={batchForm.type} onChange={(e) => setBatchForm({ ...batchForm, type: e.target.value })}>
-                        <option value="balance">余额</option>
-                        <option value="token">Token</option>
+                        <option value="balance">金额额度</option>
+                        <option value="token">Token 额度</option>
+                        <option value="package">套餐服务</option>
                       </select>
                     </label>
                     {batchForm.type === "balance" ? (
                       <div className="redeem-amount-grid"><span>兑换金额</span><div>{AMOUNT_OPTIONS.map((v) => (<button key={v} type="button" className={batchForm.amountCny === v ? "active" : ""} onClick={() => setBatchForm({ ...batchForm, amountCny: v })}>¥{v}</button>))}<input type="number" placeholder="自定义" value={batchForm.amountCny === 0 || !AMOUNT_OPTIONS.includes(batchForm.amountCny) ? batchForm.amountCny : ""} onChange={(e) => setBatchForm({ ...batchForm, amountCny: Number(e.target.value) || 0 })} /></div></div>
-                    ) : (
+                    ) : batchForm.type === "token" ? (
                       <div className="redeem-amount-grid"><span>Token 额度</span><div>{TOKEN_OPTIONS.map((opt) => (<button key={opt.value} type="button" className={batchForm.tokenAmount === opt.value ? "active" : ""} onClick={() => setBatchForm({ ...batchForm, tokenAmount: opt.value })}>{opt.label}</button>))}<input type="number" placeholder="自定义" value={batchForm.tokenAmount && !TOKEN_OPTIONS.find((o) => o.value === batchForm.tokenAmount) ? batchForm.tokenAmount : ""} onChange={(e) => setBatchForm({ ...batchForm, tokenAmount: Number(e.target.value) || 0 })} /></div></div>
+                    ) : (
+                      <label>套餐 / 服务 <select value={batchForm.packageId} onChange={(e) => setBatchForm({ ...batchForm, packageId: e.target.value })}>{PACKAGE_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></label>
                     )}
                     <label>售卖价格 <input type="number" value={batchForm.priceCny} onChange={(e) => setBatchForm({ ...batchForm, priceCny: Number(e.target.value) || 0 })} /></label>
+                    <label>单码可使用次数 <input type="number" min={1} value={batchForm.maxRedemptionsPerCode} onChange={(e) => setBatchForm({ ...batchForm, maxRedemptionsPerCode: Number(e.target.value) || 1 })} /></label>
                     <label>有效期 <select value={batchForm.expireOption} onChange={(e) => setBatchForm({ ...batchForm, expireOption: e.target.value })}>{EXPIRE_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></label>
                     {batchForm.expireOption === "custom" && <label>自定义日期 <input type="date" value={batchForm.expireDate} onChange={(e) => setBatchForm({ ...batchForm, expireDate: e.target.value })} /></label>}
                     <label>来源 <select value={batchForm.source} onChange={(e) => setBatchForm({ ...batchForm, source: e.target.value })}><option value="taobao">淘宝</option><option value="manual">手动发放</option><option value="promo">活动赠送</option><option value="gift">客服补偿</option></select></label>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8 }}><input type="checkbox" checked={batchForm.enabled !== false} onChange={(e) => setBatchForm({ ...batchForm, enabled: e.target.checked })} /> 启用该批次</label>
                     <label>备注 <input value={batchForm.note} onChange={(e) => setBatchForm({ ...batchForm, note: e.target.value })} /></label>
+                    {createError && <p className="redeem-empty" style={{ color: "#ef4444", textAlign: "left", padding: 0 }}>{createError}</p>}
                     <footer>
                       <button type="button" className="redeem-btn" onClick={() => setShowBatch(false)}>取消</button>
                       <button type="button" className="redeem-btn primary" onClick={handleBatch}>批量生成</button>

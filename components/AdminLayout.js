@@ -10,6 +10,7 @@ const adminMenuItems = [
   { key: "tokenPool", label: "团队 Token 池", href: "/admin/token-pool", icon: IconTokenPool },
   { key: "tokenMaintenance", label: "Token 池维护中心", href: "/admin/token-pool/maintenance", icon: IconMaintenance },
   { key: "maintenanceTasks", label: "维护任务中心", href: "/admin/maintenance-tasks", icon: IconMaintenance },
+  { key: "healthCheck", label: "功能健康检查", href: "/admin/health-check", icon: IconMaintenance },
   { key: "teams", label: "团队管理", href: "/admin/teams", icon: IconUsers },
   { key: "rateLimits", label: "限流规则", href: "/admin/rate-limits", icon: IconRouting },
   { key: "teamReports", label: "团队报表", href: "/admin/team-reports", icon: IconLogs },
