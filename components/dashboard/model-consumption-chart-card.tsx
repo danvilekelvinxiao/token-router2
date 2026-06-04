@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import type { MouseEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties, MouseEvent, Touch } from "react";
 import { createPortal } from "react-dom";
 import ModelLogo from "@/components/ModelLogo";
+import { getClampedTooltipPosition, getNearestChartIndex } from "@/components/charts/flowapi-chart-interaction";
 
 type ModelConsumptionPoint = {
   modelId?: string;
@@ -80,11 +81,15 @@ function ConsumptionTooltip({ tooltip }: { tooltip: TooltipState }) {
   const totalCost = rows.reduce((sum, item) => sum + safeNumber(item.costCny), 0);
   const totalTokens = rows.reduce((sum, item) => sum + safeNumber(item.tokens), 0);
   const totalRequests = rows.reduce((sum, item) => sum + safeNumber(item.requests), 0);
-  const left = Math.min(Math.max(tooltip.x + 16, 16), window.innerWidth - 320);
-  const top = Math.min(Math.max(tooltip.y - 24, 16), window.innerHeight - 260);
+  const pos = getClampedTooltipPosition({ clientX: tooltip.x, clientY: tooltip.y, width: 320, height: 260, offsetX: 0, offsetY: 0 });
 
   return createPortal(
-    <div className="model-consumption-tooltip" style={{ left, top }} role="tooltip">
+    <div
+      className="model-consumption-tooltip flowapi-chart-tooltip"
+      data-visible="true"
+      style={{ left: 0, top: 0, "--tooltip-x": `${pos.x}px`, "--tooltip-y": `${pos.y}px` } as CSSProperties}
+      role="tooltip"
+    >
       <strong>{tooltip.day.label}</strong>
       <div className="model-consumption-tooltip-list">
         {rows.slice(0, 8).map((item) => (
@@ -111,6 +116,11 @@ function ConsumptionTooltip({ tooltip }: { tooltip: TooltipState }) {
 export default function ModelConsumptionChartCard({ data }: Props) {
   const [hiddenIds, setHiddenIds] = useState<string[]>([]);
   const [tooltip, setTooltip] = useState<TooltipState>(null);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const pendingXRef = useRef<number | null>(null);
+  const activeRef = useRef<number | null>(null);
   const series = useMemo(() => Array.isArray(data?.series) ? data.series : [], [data]);
   const hasData = series.some((day) => (day.models || []).some((model) => safeNumber(model.costCny) > 0 || safeNumber(model.tokens) > 0 || safeNumber(model.requests) > 0));
 
@@ -157,6 +167,12 @@ export default function ModelConsumptionChartCard({ data }: Props) {
   const gap = Math.max(12, Math.min(24, chartW / Math.max(visibleSeries.length, 1) * 0.18));
   const barW = Math.max(28, (chartW - gap * Math.max(visibleSeries.length - 1, 0)) / Math.max(visibleSeries.length, 1));
 
+  useEffect(() => {
+    return () => {
+      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+    };
+  }, []);
+
   const toggleModel = (key: string) => {
     setHiddenIds((current) => {
       if (current.includes(key)) return current.filter((item) => item !== key);
@@ -165,8 +181,50 @@ export default function ModelConsumptionChartCard({ data }: Props) {
     });
   };
 
-  const handleMove = (event: MouseEvent<SVGGElement>, day: ModelConsumptionSeries) => {
-    setTooltip({ x: event.clientX, y: event.clientY, day });
+  const showDayTooltip = (index: number) => {
+    const day = visibleSeries[index];
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!day || !rect) return;
+    const x = margin.left + index * (barW + gap) + barW / 2;
+    const clientX = rect.left + (x / width) * rect.width;
+    const clientY = rect.top + ((margin.top + 18) / height) * rect.height;
+    setTooltip({ x: clientX, y: clientY, day });
+  };
+
+  const handleMove = (event: MouseEvent<SVGRectElement> | Touch) => {
+    pendingXRef.current = event.clientX;
+    if (frameRef.current !== null) return;
+    frameRef.current = window.requestAnimationFrame(() => {
+      frameRef.current = null;
+      const rect = svgRef.current?.getBoundingClientRect();
+      const clientX = pendingXRef.current;
+      if (!rect || clientX === null) return;
+      const index = getNearestChartIndex({
+        clientX,
+        rect,
+        count: visibleSeries.length,
+        viewWidth: width,
+        plotLeft: margin.left,
+        plotWidth: chartW,
+      });
+      if (index < 0) return;
+      if (activeRef.current !== index) {
+        activeRef.current = index;
+        setActiveIndex(index);
+      }
+      showDayTooltip(index);
+    });
+  };
+
+  const clearHover = () => {
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    pendingXRef.current = null;
+    activeRef.current = null;
+    setActiveIndex(null);
+    setTooltip(null);
   };
 
   return (
@@ -207,12 +265,13 @@ export default function ModelConsumptionChartCard({ data }: Props) {
         <>
           <div className="model-consumption-chart-wrap">
             <svg
+              ref={svgRef}
               width="100%"
               height={height}
               viewBox={`0 0 ${width} ${height}`}
               role="img"
               aria-label="近 7 天模型消耗堆叠柱状图"
-              onMouseLeave={() => setTooltip(null)}
+              onMouseLeave={clearHover}
             >
               {[0, 0.25, 0.5, 0.75, 1].map((tick) => {
                 const y = margin.top + chartH - chartH * tick;
@@ -230,19 +289,20 @@ export default function ModelConsumptionChartCard({ data }: Props) {
                 const x = margin.left + index * (barW + gap);
                 let y = margin.top + chartH;
                 const dayTotal = totals[index] || 0;
+                const isActive = activeIndex === index;
                 return (
                   <g
                     key={`${day.time}-${day.label}`}
-                    onMouseMove={(event) => handleMove(event, day)}
                     onFocus={(event) => {
                       const rect = event.currentTarget.getBoundingClientRect();
+                      setActiveIndex(index);
                       setTooltip({ x: rect.left + rect.width / 2, y: rect.top + 18, day });
                     }}
-                    onBlur={() => setTooltip(null)}
+                    onBlur={clearHover}
                     tabIndex={0}
                     aria-label={`${day.label} 总消耗 ${formatCny(dayTotal)}`}
                   >
-                    <rect x={x - 6} y={margin.top} width={barW + 12} height={chartH} rx="14" className="model-consumption-hit-area" />
+                    {isActive ? <rect x={x - 8} y={margin.top} width={barW + 16} height={chartH} rx="14" className="model-consumption-active-band" /> : null}
                     {(day.models || []).map((model) => {
                       const value = safeNumber(model.costCny);
                       const segmentH = Math.max(value > 0 ? 3 : 0, (value / maxTotal) * chartH);
@@ -257,6 +317,7 @@ export default function ModelConsumptionChartCard({ data }: Props) {
                           rx={Math.min(7, segmentH / 2)}
                           fill={model.color || "#8b5cf6"}
                           className="model-consumption-bar-segment"
+                          opacity={activeIndex === null || isActive ? 0.96 : 0.46}
                         />
                       );
                     })}
@@ -266,6 +327,19 @@ export default function ModelConsumptionChartCard({ data }: Props) {
                   </g>
                 );
               })}
+              <rect
+                x={margin.left}
+                y={margin.top}
+                width={chartW}
+                height={chartH}
+                fill="transparent"
+                className="model-consumption-hit-area"
+                onMouseMove={handleMove}
+                onTouchMove={(event) => {
+                  if (event.touches?.[0]) handleMove(event.touches[0]);
+                }}
+                onTouchEnd={() => window.setTimeout(clearHover, 1800)}
+              />
             </svg>
           </div>
 

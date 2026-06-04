@@ -11774,8 +11774,21 @@ pre {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  transition: opacity 0.15s ease;
+  transition: opacity 0.14s ease, transform 0.12s ease;
   font-size: 14px;
+}
+
+.flowapi-chart-tooltip {
+  left: 0;
+  top: 0;
+  transform: translate3d(var(--tooltip-x, 0px), var(--tooltip-y, 0px), 0);
+  will-change: transform, opacity;
+  contain: layout paint style;
+  pointer-events: none;
+}
+
+.flowapi-chart-tooltip[data-visible="true"] {
+  opacity: 1;
 }
 
 /* --- Header --- */
@@ -13693,6 +13706,9 @@ pre {
   box-shadow: 0 14px 34px rgba(15, 23, 42, 0.22);
   transform: translate(-50%, -100%);
   pointer-events: none;
+  opacity: 1;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+  will-change: transform, opacity;
 }
 
 .mini-metric-tooltip strong,
@@ -14606,9 +14622,10 @@ pre {
 
 .model-consumption-hit-area {
   fill: transparent;
-  transition: fill 0.16s ease;
+  transition: fill 0.16s ease, opacity 0.16s ease;
 }
 
+.model-consumption-active-band,
 .model-consumption-hit-area:hover,
 g:focus-visible > .model-consumption-hit-area {
   fill: rgba(99, 102, 241, 0.08);
@@ -14616,7 +14633,8 @@ g:focus-visible > .model-consumption-hit-area {
 
 .model-consumption-bar-segment {
   opacity: 0.84;
-  transition: opacity 0.16s ease, filter 0.16s ease;
+  transition: opacity 0.18s ease, filter 0.18s ease;
+  will-change: opacity, filter;
 }
 
 g:hover > .model-consumption-bar-segment,

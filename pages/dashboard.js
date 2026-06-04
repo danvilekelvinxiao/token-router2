@@ -18,6 +18,7 @@ import SavingsCard from "@/components/analytics/savings-card";
 import SavingsDetailDrawer from "@/components/analytics/savings-detail-drawer";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
 import DashboardAnnouncementPopup from "@/components/announcements/dashboard-announcement-popup";
+import { getClampedTooltipPosition, getNearestChartIndex } from "@/components/charts/flowapi-chart-interaction";
 import { generateTokenForecast } from "@/lib/analytics/token-forecast";
 import { useLocale } from "@/components/providers/locale-provider";
 import { useSafePolling } from "@/hooks/useSafePolling";
@@ -139,11 +140,14 @@ function DashboardTooltip({ tooltip, theme }) {
   const c = TOOLTIP_COLORS[theme] || TOOLTIP_COLORS.dark;
   return (
     <div
-      className="dash3-tooltip"
+      className="dash3-tooltip flowapi-chart-tooltip"
+      data-visible="true"
       style={{
         position: "fixed",
-        left: tooltip.x,
-        top: tooltip.y,
+        left: 0,
+        top: 0,
+        "--tooltip-x": `${tooltip.x || 0}px`,
+        "--tooltip-y": `${tooltip.y || 0}px`,
         background: c.bg,
         border: `1px solid ${c.border}`,
         color: c.text,
@@ -299,18 +303,10 @@ function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip,
     const actualVal = isPast ? pastValues[idx] : null;
     const predictedVal = !isPast ? futureValues[idx - pastValues.length] ?? null : null;
     const focusValue = predictedVal ?? actualVal ?? 0;
-    const tooltipWidth = 280;
-    const tooltipHeight = 180;
-    let tooltipX = e.clientX + 16;
-    let tooltipY = e.clientY - 90;
-    if (typeof window !== "undefined") {
-      if (tooltipX + tooltipWidth > window.innerWidth - 12) tooltipX = e.clientX - tooltipWidth - 16;
-      if (tooltipY < 12) tooltipY = e.clientY + 18;
-      if (tooltipY + tooltipHeight > window.innerHeight - 12) tooltipY = window.innerHeight - tooltipHeight - 12;
-    }
+    const tooltipPos = getClampedTooltipPosition({ clientX: e.clientX, clientY: e.clientY, width: 280, height: 180, offsetY: -90 });
     onTooltip({
-      x: tooltipX,
-      y: tooltipY,
+      x: tooltipPos.x,
+      y: tooltipPos.y,
       content: (
         <div style={{ minWidth: 230 }}>
           <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 13, color: theme === "light" ? "#111827" : "#e5e5e7" }}>{date}</div>
@@ -2758,11 +2754,20 @@ function AssetOverviewSection({ overview, trendData, calls, tick, onOpenAsset, s
 function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
   const [activeIndex, setActiveIndex] = useState(null);
   const svgRef = useRef(null);
+  const activeIndexRef = useRef(null);
+  const moveFrameRef = useRef(null);
+  const pendingPointRef = useRef(null);
   const width = 720;
   const height = 320;
   const margin = { top: 28, right: 20, bottom: 44, left: 56 };
   const chartW = width - margin.left - margin.right;
   const chartH = height - margin.top - margin.bottom;
+
+  useEffect(() => {
+    return () => {
+      if (moveFrameRef.current) window.cancelAnimationFrame(moveFrameRef.current);
+    };
+  }, []);
 
   if (!data.length) {
     return (
@@ -2792,9 +2797,10 @@ function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
     const totalTokens = day.models.reduce((sum, item) => sum + item.tokens, 0);
     const totalRequests = day.models.reduce((sum, item) => sum + item.requests, 0);
     const mainModel = sorted[0]?.model || "-";
+    const tooltipPos = getClampedTooltipPosition({ clientX: event.clientX, clientY: event.clientY, width: 320, height: 260, offsetY: -76 });
     onTooltip({
-      x: event.clientX + 16,
-      y: event.clientY - 40,
+      x: tooltipPos.x,
+      y: tooltipPos.y,
       content: (
         <div className="dash3-flow-tooltip">
           <strong>{day.date}</strong>
@@ -2815,12 +2821,39 @@ function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
   };
 
   const handleMove = (event) => {
-    const rect = event.currentTarget?.getBoundingClientRect();
-    if (!rect) return;
-    const ratio = Math.min(1, Math.max(0, (event.clientX - rect.left) / Math.max(1, rect.width)));
-    const nearest = Math.min(data.length - 1, Math.max(0, Math.round(ratio * (data.length - 1))));
-    setActiveIndex(nearest);
-    showTooltip(event, nearest);
+    pendingPointRef.current = { clientX: event.clientX, clientY: event.clientY };
+    if (moveFrameRef.current) return;
+    moveFrameRef.current = window.requestAnimationFrame(() => {
+      moveFrameRef.current = null;
+      const point = pendingPointRef.current;
+      const rect = svgRef.current?.getBoundingClientRect();
+      if (!point || !rect) return;
+      const nearest = getNearestChartIndex({
+        clientX: point.clientX,
+        rect,
+        count: data.length,
+        viewWidth: width,
+        plotLeft: margin.left,
+        plotWidth: chartW,
+      });
+      if (nearest < 0) return;
+      if (activeIndexRef.current !== nearest) {
+        activeIndexRef.current = nearest;
+        setActiveIndex(nearest);
+      }
+      showTooltip(point, nearest);
+    });
+  };
+
+  const handleLeave = () => {
+    if (moveFrameRef.current) {
+      window.cancelAnimationFrame(moveFrameRef.current);
+      moveFrameRef.current = null;
+    }
+    pendingPointRef.current = null;
+    activeIndexRef.current = null;
+    setActiveIndex(null);
+    onTooltip(null);
   };
 
   return (
@@ -2919,7 +2952,11 @@ function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
         width={chartW} height={chartH}
         fill="transparent"
         onMouseMove={handleMove}
-        onMouseLeave={() => { setActiveIndex(null); onTooltip(null); }}
+        onMouseLeave={handleLeave}
+        onTouchMove={(event) => {
+          if (event.touches?.[0]) handleMove(event.touches[0]);
+        }}
+        onTouchEnd={() => window.setTimeout(handleLeave, 1800)}
         style={{ cursor: "crosshair" }}
       />
     </svg>
@@ -3767,8 +3804,23 @@ export default function DashboardPage() {
   const [heatmapYear, setHeatmapYear] = useState(() => new Date().getFullYear());
   const [heatmapMonth, setHeatmapMonth] = useState(() => new Date().getMonth());
   const greeting = useSyncExternalStore(subscribeClientSnapshot, getClientGreeting, () => "你好");
+  const tooltipFrameRef = useRef(null);
+  const pendingTooltipRef = useRef(null);
 
-  const handleTooltip = useCallback((t) => setTooltip(t), []);
+  const handleTooltip = useCallback((nextTooltip) => {
+    pendingTooltipRef.current = nextTooltip;
+    if (tooltipFrameRef.current) return;
+    tooltipFrameRef.current = window.requestAnimationFrame(() => {
+      tooltipFrameRef.current = null;
+      setTooltip(pendingTooltipRef.current);
+    });
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (tooltipFrameRef.current) window.cancelAnimationFrame(tooltipFrameRef.current);
+    };
+  }, []);
 
   const loadCustomer = useCallback(async (customerInput) => {
     const customerId = typeof customerInput === "string" ? customerInput : customerInput?.id;
@@ -5274,13 +5326,13 @@ export default function DashboardPage() {
           font-size: 12px;
           font-weight: 850;
           cursor: pointer;
-          transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+          transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
         }
 
         .activity-heatmap-cell:hover,
         .activity-heatmap-cell:focus-visible {
           transform: translateY(-1px);
-          border-color: rgba(99, 102, 241, 0.36);
+          box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.45), 0 8px 18px rgba(99, 102, 241, 0.12);
           outline: none;
         }
 
@@ -5307,7 +5359,9 @@ export default function DashboardPage() {
           color: var(--dash-text);
           box-shadow: 0 18px 42px rgba(15, 23, 42, 0.24);
           pointer-events: none;
-          transform: translate(0, -100%);
+          transform: translate3d(var(--tooltip-x, 0px), var(--tooltip-y, 0px), 0);
+          transition: opacity 0.14s ease, transform 0.12s ease;
+          will-change: transform, opacity;
         }
 
         .activity-heatmap-tooltip strong {

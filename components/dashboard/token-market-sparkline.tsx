@@ -44,6 +44,7 @@ export default function TokenMarketSparkline({
       color={color}
       height={height}
       emptyText=""
+      showTooltip={false}
       valueFormatter={(value) => formatValue(value, metric)}
       tooltipRenderer={(point) => {
         const meta = point.meta || {};

@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import type { MouseEvent, ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent, ReactNode, Touch } from "react";
 
 export type MiniMetricChartPoint = {
   label: string;
@@ -51,6 +51,9 @@ export default function MiniMetricChart({
   showTooltip = true,
 }: MiniMetricChartProps) {
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const pendingClientXRef = useRef<number | null>(null);
+  const activeRef = useRef<number | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const width = 260;
   const pad = { top: 8, right: 10, bottom: 12, left: 10 };
@@ -80,14 +83,39 @@ export default function MiniMetricChart({
   const areaPath = coords.length ? `${path} L ${coords[coords.length - 1].x.toFixed(2)} ${(pad.top + plotH).toFixed(2)} L ${coords[0].x.toFixed(2)} ${(pad.top + plotH).toFixed(2)} Z` : "";
   const active = activeIndex !== null ? coords[activeIndex] : null;
 
-  const handleMove = (event: MouseEvent<HTMLDivElement>) => {
+  useEffect(() => {
+    return () => {
+      if (frameRef.current !== null) window.cancelAnimationFrame(frameRef.current);
+    };
+  }, []);
+
+  const handleMove = (event: MouseEvent<HTMLDivElement> | Touch) => {
     if (!hasData || !showTooltip) return;
-    const rect = wrapRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const viewX = ((event.clientX - rect.left) / Math.max(1, rect.width)) * width;
-    const ratio = clamp((viewX - pad.left) / Math.max(1, plotW), 0, 1);
-    const nearest = Math.round(ratio * (points.length - 1));
-    setActiveIndex(clamp(nearest, 0, points.length - 1));
+    pendingClientXRef.current = event.clientX;
+    if (frameRef.current !== null) return;
+    frameRef.current = window.requestAnimationFrame(() => {
+      frameRef.current = null;
+      const rect = wrapRef.current?.getBoundingClientRect();
+      const clientX = pendingClientXRef.current;
+      if (!rect || clientX === null) return;
+      const viewX = ((clientX - rect.left) / Math.max(1, rect.width)) * width;
+      const ratio = clamp((viewX - pad.left) / Math.max(1, plotW), 0, 1);
+      const nearest = clamp(Math.round(ratio * (points.length - 1)), 0, points.length - 1);
+      if (activeRef.current !== nearest) {
+        activeRef.current = nearest;
+        setActiveIndex(nearest);
+      }
+    });
+  };
+
+  const clearActive = () => {
+    if (frameRef.current !== null) {
+      window.cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    pendingClientXRef.current = null;
+    activeRef.current = null;
+    setActiveIndex(null);
   };
 
   if (!hasData) {
@@ -107,7 +135,11 @@ export default function MiniMetricChart({
       className={`mini-metric-chart tone-${color}`}
       style={{ height }}
       onMouseMove={handleMove}
-      onMouseLeave={() => setActiveIndex(null)}
+      onMouseLeave={clearActive}
+      onTouchMove={(event) => {
+        if (event.touches?.[0]) handleMove(event.touches[0]);
+      }}
+      onTouchEnd={() => window.setTimeout(clearActive, 1600)}
     >
       <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
         <defs>
