@@ -124,6 +124,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [qqCopied, setQqCopied] = useState(false);
+  const [qqQrFailed, setQqQrFailed] = useState(false);
   const [showAnnouncements, setShowAnnouncements] = useState(false);
   const [assetRanking, setAssetRanking] = useState(null);
   const [referral, setReferral] = useState(null);
@@ -520,7 +521,14 @@ export default function ProfilePage() {
               <span>下载协助</span>
             </div>
             <div className="profile-qq-qr-wrap">
-              <Image src="/images/qrcode/flowapi-qq-group.png" alt="FlowAPI QQ 交流群二维码" width={190} height={190} />
+              {qqQrFailed ? (
+                <div className="profile-qq-fallback">
+                  <strong>QQ 群：217637139</strong>
+                  <button type="button" onClick={copyQqGroup}>{qqCopied ? "已复制" : "复制群号"}</button>
+                </div>
+              ) : (
+                <Image src="/images/qrcode/flowapi-qq-group.png" alt="FlowAPI QQ 交流群二维码" width={190} height={190} onError={() => setQqQrFailed(true)} />
+              )}
             </div>
             <div className="profile-qq-number">
               <span>群号</span>

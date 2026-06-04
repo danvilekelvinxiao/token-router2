@@ -160,7 +160,7 @@ function ApiManagementGuideHero({ onCreateKey }) {
         <span>查看用量</span>
       </div>
       <div className="api-management-guide-actions">
-        <button type="button" onClick={onCreateKey}>选择模型创建 API Key</button>
+        <button type="button" className="flowapi-action-button" onClick={onCreateKey}>选择模型创建 API Key</button>
         <Link href="/models">前往模型广场</Link>
       </div>
     </section>
@@ -170,17 +170,17 @@ function ApiManagementGuideHero({ onCreateKey }) {
 function ApiManagementGuideSteps({ onCreateKey, onAutoConfig, onOpenDetail }) {
   return (
     <section className="guide-three-steps api-management-guide-steps">
-      <InteractiveCard className="guide-step-wide" title="下载 CC" hint="点击查看安装说明" onClick={() => onOpenDetail("download")}>
+      <InteractiveCard className="guide-step-wide" title="下载 CC-Switch 自动配置" hint="点击查看安装说明" onClick={() => onOpenDetail("download")}>
         <div className="guide-step-wide-top">
           <div className="guide-step-wide-num">01</div>
-          <h3>下载 CC</h3>
+          <h3>下载 CC-Switch 自动配置</h3>
           <p>先下载并安装客户端 / 配置工具，准备好本地调用环境。</p>
         </div>
         <div className="guide-step-wide-bottom">
           <div className="guide-dl-btns">
-            <a className="guide-step-action guide-dl-btn" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>Windows 下载</a>
-            <a className="guide-step-action guide-dl-btn" href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>macOS 下载</a>
-            <a className="guide-step-action guide-dl-btn" href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>全部版本</a>
+            <a className="guide-step-action guide-dl-btn flowapi-action-button" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>Windows 自动配置</a>
+            <a className="guide-step-action guide-dl-btn flowapi-action-button" href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>macOS 自动配置</a>
+            <a className="guide-step-action guide-dl-btn flowapi-action-button" href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>全部版本</a>
           </div>
           <p className="guide-dl-hint">无法访问 GitHub？请优先使用上方站内下载按钮。</p>
         </div>
@@ -193,7 +193,7 @@ function ApiManagementGuideSteps({ onCreateKey, onAutoConfig, onOpenDetail }) {
           <p>创建你的专属 API Key，用于在客户端或代码中调用模型。</p>
         </div>
         <div className="guide-step-wide-bottom">
-          <button className="guide-step-action" type="button" onClick={(event) => { event.stopPropagation(); onCreateKey(); }}>选择模型创建</button>
+          <button className="guide-step-action flowapi-action-button" type="button" onClick={(event) => { event.stopPropagation(); onCreateKey(); }}>选择模型创建</button>
         </div>
       </InteractiveCard>
 
@@ -204,7 +204,7 @@ function ApiManagementGuideSteps({ onCreateKey, onAutoConfig, onOpenDetail }) {
           <p>启动 CC-Switch 后，填入 Base URL、API Key 和 Model ID。</p>
         </div>
         <div className="guide-step-wide-bottom">
-          <button className="guide-step-action" type="button" onClick={(event) => { event.stopPropagation(); onAutoConfig(); }}>启动 CC-Switch</button>
+          <button className="guide-step-action flowapi-action-button" type="button" onClick={(event) => { event.stopPropagation(); onAutoConfig(); }}>启动 CC-Switch</button>
           <p className="guide-autoconfig-hint">
             <Link href="/help#manual-config" onClick={(event) => event.stopPropagation()}>自动配置失败？查看手动配置教程</Link>
           </p>
@@ -218,7 +218,7 @@ function ApiManagementGuideSteps({ onCreateKey, onAutoConfig, onOpenDetail }) {
           <p>完成配置后发起第一次调用，并在数据面板查看 Token 消耗。</p>
         </div>
         <div className="guide-step-wide-bottom guide-step-links">
-          <Link className="guide-step-action" href="/dashboard" onClick={(event) => event.stopPropagation()}>查看用量</Link>
+          <Link className="guide-step-action flowapi-action-button" href="/dashboard" onClick={(event) => event.stopPropagation()}>查看用量</Link>
           <Link className="guide-step-action secondary" href="/models" onClick={(event) => event.stopPropagation()}>选择模型</Link>
         </div>
       </InteractiveCard>
@@ -383,14 +383,14 @@ export default function ApiManagementPage() {
        "messages": [{"role":"user","content":"你好"}]}'`;
     const configs = {
       download: {
-        title: "01 下载 CC-Switch",
+        title: "01 下载 CC-Switch 自动配置",
         description: "先下载并安装配置工具，准备好本地调用环境。",
         rows: [
           { label: "Windows 下载", value: "CC-Switch-v3.15.0-Windows.msi" },
           { label: "全部版本", value: CC_SWITCH_RELEASE_URL },
           { label: "下一步", value: "回到本页选择模型并创建 API Key" },
         ],
-        actions: <a href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer">下载 Windows 版本</a>,
+        actions: <a className="flowapi-action-button" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer">下载 CC-Switch 自动配置</a>,
       },
       createKey: {
         title: "02 创建 API Key",
@@ -1059,7 +1059,7 @@ export default function ApiManagementPage() {
             <footer>
               <button type="button" className="api-action" onClick={() => setCcSwitchFallback(null)}>取消</button>
               {ccSwitchFallback.url ? <button type="button" className="api-action primary flowapi-primary-action" onClick={() => window.open(ccSwitchFallback.url, "_blank", "noopener,noreferrer")}>重试打开</button> : null}
-              <a className="api-action" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noreferrer">下载 CC-Switch</a>
+              <a className="api-action flowapi-action-button" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noreferrer">下载 CC-Switch 自动配置</a>
               {ccSwitchFallback.manualConfig ? <button type="button" className="api-action" onClick={() => copyText(ccSwitchFallback.manualConfig.config, "备用配置已复制")}>复制备用配置</button> : null}
               <a className="api-action" href="/help/images#cc-switch" target="_blank" rel="noreferrer">查看手动教程</a>
             </footer>

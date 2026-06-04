@@ -2,13 +2,16 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
-import DataExportCenter from "@/components/DataExportCenter";
 
 const TABS = [
-  { id: "", label: "全部" },
-  { id: "text_to_image", label: "图片生成" },
-  { id: "image_to_image", label: "图片编辑" },
-  { id: "failed", label: "失败记录" },
+  { id: "all", label: "全部" },
+  { id: "recharge", label: "充值" },
+  { id: "consume", label: "消费" },
+  { id: "purchase", label: "购买记录" },
+  { id: "withdraw", label: "提款" },
+  { id: "refund", label: "退款" },
+  { id: "image", label: "图片" },
+  { id: "failed", label: "失败" },
 ];
 
 export default function DashboardLogsPage() {
@@ -23,8 +26,21 @@ export default function DashboardLogsPage() {
     }
   });
   const [items, setItems] = useState([]);
-  const [tab, setTab] = useState("");
+  const [apiKeys, setApiKeys] = useState([]);
+  const [filters, setFilters] = useState({
+    type: "all",
+    apiKeyId: "",
+    model: "",
+    group: "",
+    status: "",
+    startDate: "",
+    endDate: "",
+    minAmount: "",
+    maxAmount: "",
+  });
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [message, setMessage] = useState("");
   const requestId = router.isReady && typeof router.query.requestId === "string" ? router.query.requestId : "";
 
   function updateRequestId(nextValue) {
@@ -37,35 +53,72 @@ export default function DashboardLogsPage() {
     router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true, scroll: false });
   }
 
+  function updateFilter(key, value) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
+
+  function buildParams() {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value !== "all") params.set(key, value);
+    });
+    if (requestId.trim()) params.set("requestId", requestId.trim());
+    return params;
+  }
+
   useEffect(() => {
     let cancelled = false;
     async function loadLogs() {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (tab === "failed") {
-        params.set("status", "failed");
-      } else if (tab) {
-        params.set("type", tab);
-      }
-      if (requestId.trim()) {
-        params.set("requestId", requestId.trim());
-      }
-      const response = await fetch(`/api/logs/images${params.toString() ? `?${params.toString()}` : ""}`);
-      const json = await response.json();
-      if (!cancelled) {
-        setItems(Array.isArray(json.items) ? json.items : []);
-        setLoading(false);
+      try {
+        const params = buildParams();
+        const response = await fetch(`/api/usage-logs${params.toString() ? `?${params.toString()}` : ""}`);
+        const json = await response.json();
+        if (!cancelled) {
+          setItems(Array.isArray(json.items) ? json.items : []);
+          setApiKeys(Array.isArray(json.apiKeys) ? json.apiKeys : []);
+        }
+      } catch {
+        if (!cancelled) setMessage("日志加载失败，请刷新后重试。");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     }
     loadLogs();
     return () => { cancelled = true; };
-  }, [tab, requestId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, requestId]);
 
-  function getStatusLabel(status) {
-    if (status === "success") return "成功";
-    if (status === "partial_success") return "部分成功";
-    if (status === "retrying") return "重试中";
-    return "失败";
+  function filenameFromDisposition(disposition) {
+    const encoded = String(disposition || "").match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+    return encoded ? decodeURIComponent(encoded) : `FlowAPI_使用日志_${Date.now()}.xlsx`;
+  }
+
+  async function exportCurrentLogs() {
+    setExporting(true);
+    setMessage("正在生成 Excel...");
+    try {
+      const params = buildParams();
+      const response = await fetch(`/api/usage-logs/export${params.toString() ? `?${params.toString()}` : ""}`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "导出失败，请稍后重试。");
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filenameFromDisposition(response.headers.get("content-disposition"));
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+      setMessage("Excel 已生成并开始下载。");
+    } catch (error) {
+      setMessage(error.message || "导出失败，请稍后重试。");
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -77,12 +130,12 @@ export default function DashboardLogsPage() {
             <div>
               <span>Usage Logs</span>
               <h1>使用日志</h1>
-              <p>普通用户只能看自己的图片生成、扣费和失败记录。</p>
+              <p>普通用户只能看自己的充值、消费、图片、购买、提款、退款和失败记录。</p>
             </div>
             <div className="image-logs-controls">
               <div className="image-history-filters">
                 {TABS.map((item) => (
-                  <button key={item.id || "all"} type="button" className={tab === item.id ? "active" : ""} onClick={() => setTab(item.id)}>
+                  <button key={item.id} type="button" className={filters.type === item.id ? "active" : ""} onClick={() => updateFilter("type", item.id)}>
                     {item.label}
                   </button>
                 ))}
@@ -103,7 +156,62 @@ export default function DashboardLogsPage() {
             </div>
           </section>
 
-          <DataExportCenter variant="logs" />
+          <section className="usage-log-filter-panel">
+            <div className="usage-log-filter-grid">
+              <label>
+                <span>API Key</span>
+                <select value={filters.apiKeyId} onChange={(event) => updateFilter("apiKeyId", event.target.value)}>
+                  <option value="">全部 API Key</option>
+                  {apiKeys.map((key) => (
+                    <option key={key.id} value={key.id}>{key.label} · {key.masked}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>模型</span>
+                <input value={filters.model} onChange={(event) => updateFilter("model", event.target.value)} placeholder="模型名称 / ID" />
+              </label>
+              <label>
+                <span>分组</span>
+                <input value={filters.group} onChange={(event) => updateFilter("group", event.target.value)} placeholder="分组名称" />
+              </label>
+              <label>
+                <span>状态</span>
+                <select value={filters.status} onChange={(event) => updateFilter("status", event.target.value)}>
+                  <option value="">全部状态</option>
+                  <option value="成功">成功</option>
+                  <option value="失败">失败</option>
+                  <option value="待处理">待处理</option>
+                  <option value="已退款">已退款</option>
+                </select>
+              </label>
+              <label>
+                <span>开始日期</span>
+                <input type="date" value={filters.startDate} onChange={(event) => updateFilter("startDate", event.target.value)} />
+              </label>
+              <label>
+                <span>结束日期</span>
+                <input type="date" value={filters.endDate} onChange={(event) => updateFilter("endDate", event.target.value)} />
+              </label>
+              <label>
+                <span>最小金额</span>
+                <input type="number" value={filters.minAmount} onChange={(event) => updateFilter("minAmount", event.target.value)} placeholder="￥0.00" />
+              </label>
+              <label>
+                <span>最大金额</span>
+                <input type="number" value={filters.maxAmount} onChange={(event) => updateFilter("maxAmount", event.target.value)} placeholder="￥999.00" />
+              </label>
+            </div>
+            <div className="usage-log-filter-actions">
+              <button type="button" onClick={() => setFilters({ type: "all", apiKeyId: "", model: "", group: "", status: "", startDate: "", endDate: "", minAmount: "", maxAmount: "" })}>
+                重置筛选
+              </button>
+              <button type="button" className="primary" onClick={exportCurrentLogs} disabled={exporting}>
+                {exporting ? "正在生成 Excel..." : "导出当前筛选 Excel"}
+              </button>
+            </div>
+            {message ? <p className="usage-log-filter-message">{message}</p> : null}
+          </section>
 
           <div className="image-logs-table-wrap">
             {loading ? <div className="image-studio-empty">正在加载日志...</div> : null}
@@ -113,9 +221,10 @@ export default function DashboardLogsPage() {
                   <tr>
                     <th>时间</th>
                     <th>请求 ID</th>
+                    <th>API Key</th>
                     <th>模型</th>
                     <th>类型</th>
-                    <th>输出张数</th>
+                    <th>分组</th>
                     <th>消耗 Token</th>
                     <th>消耗金额</th>
                     <th>状态</th>
@@ -127,17 +236,23 @@ export default function DashboardLogsPage() {
                   {items.map((item) => (
                     <tr key={item.id}>
                       <td>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
-                      <td>{item.requestId}</td>
-                      <td>{item.modelDisplayName}</td>
-                      <td>{item.mode === "image_to_image" ? "图生图 / 改图" : "文生图"}</td>
-                      <td>{item.outputImageCount}</td>
-                      <td>{Number(item.tokenCost || 0).toFixed(1)}</td>
+                      <td>{item.id}</td>
+                      <td>{item.apiKeyLabel ? `${item.apiKeyLabel} · ${item.apiKeyMasked}` : "-"}</td>
+                      <td>{item.model || "-"}</td>
+                      <td>{TABS.find((entry) => entry.id === item.type)?.label || item.type}</td>
+                      <td>{item.group || "-"}</td>
+                      <td>{Number(item.totalTokens || 0).toFixed(1)}</td>
                       <td>￥{Number(item.moneyCost || 0).toFixed(2)}</td>
-                      <td>{getStatusLabel(item.status)}</td>
-                      <td>{item.latencyMs} ms</td>
-                      <td><a href={`/images/history?requestId=${encodeURIComponent(item.requestId)}`}>查看图片</a></td>
+                      <td>{item.status}</td>
+                      <td>{item.latencyMs ? `${item.latencyMs} ms` : "-"}</td>
+                      <td><a href={item.type === "image" || item.id?.startsWith("img_") ? `/images/history?requestId=${encodeURIComponent(item.id)}` : `/dashboard?callId=${encodeURIComponent(item.id || "")}`}>查看</a></td>
                     </tr>
                   ))}
+                  {items.length === 0 ? (
+                    <tr>
+                      <td colSpan={11} className="usage-log-zero-row">0</td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             ) : null}

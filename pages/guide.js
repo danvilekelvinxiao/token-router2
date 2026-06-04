@@ -130,7 +130,7 @@ function QuickConnectPanel({ apiBaseUrl, onCreateKey }) {
 
 function TutorialSteps({ apiBaseUrl }) {
   const steps = [
-    ["01", "下载 CC-Switch", "先下载并安装 CC-Switch，准备好本地调用环境。"],
+    ["01", "下载 CC-Switch 自动配置", "先下载并安装 CC-Switch，准备好本地调用环境。"],
     ["02", "进入模型广场", "先选择你要使用的模型或套餐，再创建对应的 API Key。"],
     ["03", "创建该模型 API Key", "在模型卡片或下方弹窗中确认模型后创建，避免把 Codex / GPT 任务误绑定到 DeepSeek。"],
     ["04", "填写配置", <>供应商名称：<b>FlowAPI</b><br />API 请求地址：<code>{apiBaseUrl}</code><br />API Key：填写刚创建的密钥<br />模型名称：填写你选择的 Model ID，例如 <code>{defaultModel}</code></>],
@@ -178,7 +178,7 @@ function CcSwitchConfigPanel({ apiBaseUrl, onCreateKey, onAutoConfig, onCopyConf
         </div>
       </div>
       <div className="ccswitch-download-card">
-        <strong>下载 CC-Switch</strong>
+        <strong>下载 CC-Switch 自动配置</strong>
         <p>下载区域放在这里备用。Windows 用户优先下载 .msi 安装包，不要下载 .sig 文件。</p>
         <div>
           <a href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer">Windows .msi</a>
@@ -204,7 +204,7 @@ function buildGuideStepDetail(step, apiBaseUrl, onCreateKey) {
        "messages": [{"role":"user","content":"你好"}]}'`;
   const configs = {
     download: {
-      title: "01 下载 CC 配置工具",
+      title: "01 下载 CC-Switch 自动配置",
       description: "先选择自动配置或手动配置，准备好本地调用环境。",
       rows: [
         { label: "Mac 下载", value: CC_SWITCH_RELEASE_URL },
@@ -282,7 +282,7 @@ function buildGuideStepDetail(step, apiBaseUrl, onCreateKey) {
       title: "04 开始使用",
       description: "完成配置后先跑一次最短测试，再去数据面板看 Token 消耗。",
       rows: [
-        { label: "最短流程", value: "下载 CC → 创建密匙 → 自动配置 → 发起测试" },
+        { label: "最短流程", value: "下载 CC-Switch 自动配置 → 创建密匙 → 自动配置 → 发起测试" },
         { label: "成功标志", value: "返回 200 或模型回复内容" },
         { label: "常见错误", value: "余额不足、API 密匙错误、模型名写错、网络超时" },
         { label: "下一步", value: "查看数据面板和模型广场" },
@@ -324,16 +324,16 @@ function StepCards({ onCreateKey, onAutoConfig, onOpenDetail }) {
   return (
     <section className="guide-three-steps">
       {/* Card 01 */}
-      <InteractiveCard className="guide-step-wide" title="下载 CC" hint="点击查看安装说明" onClick={() => onOpenDetail("download")}>
+      <InteractiveCard className="guide-step-wide" title="下载 CC-Switch 自动配置" hint="点击查看安装说明" onClick={() => onOpenDetail("download")}>
         <div className="guide-step-wide-top">
           <div className="guide-step-wide-num">01</div>
-          <h3>下载 CC</h3>
+          <h3>下载 CC-Switch 自动配置</h3>
           <p>先下载并安装客户端/配置工具，准备好本地调用环境。</p>
         </div>
         <div className="guide-step-wide-bottom">
           <div className="guide-dl-btns">
-            <a className="guide-step-action guide-dl-btn" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>⊞ Windows 下载</a>
-            <a className="guide-step-action guide-dl-btn" href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>⌘ macOS 下载</a>
+            <a className="guide-step-action guide-dl-btn flowapi-action-button" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>Windows 自动配置</a>
+            <a className="guide-step-action guide-dl-btn flowapi-action-button" href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>macOS 自动配置</a>
             <a className="guide-step-action guide-dl-btn" href={CC_SWITCH_RELEASE_URL} target="_blank" rel="noopener noreferrer" onClick={(event) => event.stopPropagation()}>⇣ 全部版本</a>
           </div>
           <p className="guide-dl-hint">无法访问 GitHub？请优先使用上方站内下载按钮。</p>
@@ -656,7 +656,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
           <p>为不同模型创建独立 API 密钥，方便管理额度、权限和消耗。请先选择你要使用的模型，再创建对应的 API 密钥。</p>
         </div>
         <div className="api-hero-actions">
-          <a href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer">下载 CC-Switch</a>
+          <a href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer">下载 CC-Switch 自动配置</a>
           <Link href="/models">前往模型广场</Link>
           <button type="button" onClick={openCreateModal}>选择模型创建</button>
         </div>
@@ -664,7 +664,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
 
       <div className="api-flow-steps">
         {[
-          ["01", "下载 CC-Switch", "先安装配置工具"],
+          ["01", "下载 CC-Switch 自动配置", "先安装配置工具"],
           ["02", "选择模型", "到模型广场选 DeepSeek / Codex / GPT"],
           ["03", "创建该模型 Key", "不同模型独立管理"],
           ["04", "导入并测试", "自动写入 CC-Switch"],
@@ -1000,7 +1000,7 @@ export default function GuidePage() {
 
   const guideExportSheets = [
     { sheetName: "操作步骤", data: [
-      { step: "01", title: "下载 CC", description: "先下载并安装客户端/配置工具，准备好本地调用环境。" },
+      { step: "01", title: "下载 CC-Switch 自动配置", description: "先下载并安装客户端/配置工具，准备好本地调用环境。" },
       { step: "02", title: "创建 API 密匙", description: "创建你的专属 API Key，用于客户端或代码调用模型。" },
       { step: "03", title: "配置调用地址", description: "Base URL 和模型名按 FlowAPI 说明填写。" },
       { step: "04", title: "开始使用", description: "发起测试调用，并在数据面板查看用量。" },

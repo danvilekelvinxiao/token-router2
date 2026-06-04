@@ -1176,6 +1176,7 @@ export default function RechargePage() {
 }
 
 function RechargeSupportCard({ copied, onCopy }) {
+  const [qqQrFailed, setQqQrFailed] = useState(false);
   return (
     <div className="recharge-summary-card recharge-support-card">
       <span>人工兜底支持</span>
@@ -1194,7 +1195,15 @@ function RechargeSupportCard({ copied, onCopy }) {
         </div>
       </div>
       <div className="recharge-support-qr">
-        <Image src="/images/qq-group-qr.png" alt="FlowAPI QQ 群二维码" width={148} height={148} />
+        {qqQrFailed ? (
+          <div className="recharge-support-qr-fallback">
+            <strong>QQ 群</strong>
+            <code>{QQ_GROUP_NUMBER}</code>
+            <button type="button" onClick={() => onCopy(QQ_GROUP_NUMBER)}>{copied === QQ_GROUP_NUMBER ? "已复制" : "复制群号"}</button>
+          </div>
+        ) : (
+          <Image src="/images/qrcode/flowapi-qq-group.png" alt="FlowAPI QQ 群二维码" width={148} height={148} onError={() => setQqQrFailed(true)} />
+        )}
         <small>扫码加入 QQ 群，充值异常和 API 配置问题都可以在群里问。</small>
       </div>
     </div>

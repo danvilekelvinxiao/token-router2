@@ -260,15 +260,15 @@ export default function HomePage() {
 
             <div className="community-right">
               <div className="qr-placeholder">
-                {/* QQ 群二维码图片：请将图片放到 public/images/qq-group-qr.png */}
+                {/* QQ 群二维码图片：主路径 public/images/qrcode/flowapi-qq-group.png，失败时显示群号卡片 */}
                 {/* eslint-disable-next-line @next/next/no-img-element -- 需要 onError 回退占位 */}
                 <img
-                  src="/images/qq-group-qr.png"
+                  src="/images/qrcode/flowapi-qq-group.png"
                   alt="FlowAPI QQ 群二维码"
                   onError={(e) => {
                     e.target.style.display = "none";
                     e.target.parentElement.innerHTML =
-                      '<div class="qr-placeholder-empty">请将 QQ 群二维码<br/>保存为<br/>public/images/qq-group-qr.png</div>';
+                      `<div class="qr-placeholder-empty"><strong>QQ 群：217637139</strong><br/><button type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText('217637139')">复制群号</button></div>`;
                   }}
                 />
               </div>

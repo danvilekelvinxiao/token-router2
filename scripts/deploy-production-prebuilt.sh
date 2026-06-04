@@ -30,7 +30,9 @@ ssh $SSH_OPTS "$SERVER" "
   grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
   cd '$APP_DIR'
   export NODE_OPTIONS=--max-old-space-size=512
-  npm install --omit=dev
+  # Repair partially installed ExcelJS transitive packages without rebuilding all node_modules on 1GB servers.
+  rm -rf node_modules/exceljs node_modules/unzipper node_modules/binary node_modules/bluebird
+  npm install --omit=dev --no-audit --no-fund
   if pm2 describe flowapi >/dev/null 2>&1; then
     pm2 restart flowapi --update-env
   else
