@@ -136,6 +136,7 @@ const iconMap = {
   image: IconImage,
   logs: IconLogs,
   team: IconTeam,
+  teamBilling: IconTeam,
 };
 
 const menuItems = [
@@ -143,7 +144,8 @@ const menuItems = [
   { key: "key", label: "API 管理", href: "/api-management", desc: "创建和管理 API Key" },
   { key: "models", label: "模型广场", href: "/models", desc: "查看模型与模型 ID" },
   { key: "logs", label: "使用日志", href: "/dashboard/logs", desc: "查看图片与接口使用日志" },
-  { key: "team", label: "团队记账", href: "/team/billing", desc: "查看团队成员分别用了多少" },
+  { key: "team", label: "团队空间", href: "/team", desc: "团队 Token 池与团队用量" },
+  { key: "teamBilling", label: "团队记账", href: "/team/billing", desc: "查看团队成员分别用了多少" },
   { key: "wallet", label: "充值中心", href: "/recharge", desc: "充值 Token" },
   { key: "help", label: "帮助指南", href: "/help", desc: "配置教程与常见问题" },
   { key: "image", label: "生成图片", href: "/images", desc: "统一图片生成工作台", badge: "HOT", accent: true },

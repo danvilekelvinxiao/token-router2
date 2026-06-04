@@ -55,6 +55,9 @@ export default async function handler(req, res) {
         {
           localePriceMultiplier: getLocalePriceMultiplier(normalizeLocale(req.body?.locale)),
           limit: req.body?.limit || req.body?.quotaLimit || {},
+          teamId: req.body?.teamId || req.body?.team_id || "",
+          usagePurpose: req.body?.usagePurpose || req.body?.usage_purpose || "",
+          usageScope: req.body?.usageScope || req.body?.usage_scope || "",
         }
       );
       const customer = await getDashboard(customerId);
@@ -120,6 +123,9 @@ export default async function handler(req, res) {
         disabled: req.body?.disabled,
         limit: req.body?.limit,
         quotaLimit: req.body?.quotaLimit,
+        teamId: req.body?.teamId,
+        usagePurpose: req.body?.usagePurpose,
+        usageScope: req.body?.usageScope,
       });
       if (!customer) return res.status(404).json({ error: "API Key 不存在" });
       return res.status(200).json(customer);

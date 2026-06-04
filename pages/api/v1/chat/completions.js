@@ -8,6 +8,14 @@ import { selectUpstream, STRATEGY } from "@/lib/smart-router";
 import { isTokenWhitelisted, logPassthroughCall } from "@/lib/new-api/passthrough";
 import { userCanUseMemberModel } from "@/lib/membership/store";
 import { getContent } from "@/lib/content-cms";
+import {
+  buildRequestCacheKey,
+  enforceTeamRateLimits,
+  getCachedTeamResponse,
+  recordTeamUsageLog,
+  saveCachedTeamResponse,
+  selectTeamTokenForRequest,
+} from "@/lib/team-token-pool";
 import { Readable } from "stream";
 
 function setCors(res) {
@@ -321,6 +329,9 @@ export default async function handler(req, res) {
   }
 
   const body = req.body && typeof req.body === "object" ? req.body : {};
+  const requestedTeamId = String(req.headers["x-flowapi-team-id"] || body.teamId || body.team_id || customerMatch.apiKey.teamId || "").trim();
+  const requestedPurpose = String(req.headers["x-flowapi-purpose"] || body.purpose || body.usagePurpose || customerMatch.apiKey.usagePurpose || "").trim();
+  const clientName = String(req.headers["x-flowapi-client"] || req.headers["user-agent"] || "").slice(0, 160);
   const normalizedMessages = normalizeChatMessages(body);
   const prompt = getPromptFromMessages(normalizedMessages);
   const boundPublicModel = customerMatch.apiKey.publicModelId || "";
@@ -391,6 +402,95 @@ export default async function handler(req, res) {
     );
   }
   const upstreamBody = normalizeChatRequestBody(body, upstreamModelId);
+  delete upstreamBody.teamId;
+  delete upstreamBody.team_id;
+  delete upstreamBody.purpose;
+  delete upstreamBody.usagePurpose;
+
+  const teamRequestContext = {
+    teamId: requestedTeamId,
+    userId: customerMatch.customer.id,
+    apiKeyId: customerMatch.apiKey.id,
+    model: selected.modelId,
+    provider: selected.provider,
+    purpose: requestedPurpose,
+    body: upstreamBody,
+  };
+  const { cacheKey, requestHash } = buildRequestCacheKey(teamRequestContext);
+
+  if (requestedTeamId) {
+    const cached = await getCachedTeamResponse(teamRequestContext);
+    if (cached?.response) {
+      await recordTeamUsageLog({
+        requestId: makeRequestId("cache"),
+        userId: customerMatch.customer.id,
+        teamId: requestedTeamId,
+        apiKeyId: customerMatch.apiKey.id,
+        provider: selected.provider,
+        model: selected.modelId,
+        modelType: modelProduct?.group || "",
+        purpose: requestedPurpose,
+        requestSummary: prompt,
+        requestHash,
+        clientIp: ip,
+        clientName,
+        cacheHit: true,
+        cacheKey,
+        totalTokens: cached.savedTokens || 0,
+        savedCny: cached.savedCny || 0,
+        success: true,
+        finalStatus: "cache_hit",
+      });
+      releaseConcurrency(concurrencyKey);
+      return res.status(200).json({
+        ...cached.response,
+        token_router: {
+          ...(cached.response.token_router || {}),
+          cache_hit: true,
+          cache_key: cacheKey,
+          cache_saved_tokens: cached.savedTokens || 0,
+          cache_saved_cny: cached.savedCny || 0,
+          team_id: requestedTeamId,
+        },
+      });
+    }
+
+    const limited = await enforceTeamRateLimits({
+      teamId: requestedTeamId,
+      apiKeyId: customerMatch.apiKey.id,
+      model: selected.modelId,
+      provider: selected.provider,
+    });
+    if (limited.limited) {
+      await recordTeamUsageLog({
+        requestId: makeRequestId("rate"),
+        userId: customerMatch.customer.id,
+        teamId: requestedTeamId,
+        apiKeyId: customerMatch.apiKey.id,
+        provider: selected.provider,
+        model: selected.modelId,
+        purpose: requestedPurpose,
+        requestSummary: prompt,
+        requestHash,
+        clientIp: ip,
+        clientName,
+        rateLimited: true,
+        success: false,
+        errorCode: limited.code,
+        errorMessage: limited.message,
+        finalStatus: "rate_limited",
+      });
+      releaseConcurrency(concurrencyKey);
+      return res.status(429).json({
+        error: {
+          code: limited.code,
+          message: limited.message,
+          retryAfter: limited.retryAfter,
+        },
+      });
+    }
+  }
+
   const promptTokens = estimatePromptTokens(upstreamBody.messages || []);
   const estimatedCompletionTokens = Math.min(Number(upstreamBody.max_tokens || 1024) || 1024, Number(process.env.MAX_COMPLETION_TOKENS || 4096));
   const reserveCost = Number((estimateReserveCost(selected.modelId, upstreamBody, promptTokens) * localePriceMultiplier).toFixed(6));
@@ -435,7 +535,45 @@ export default async function handler(req, res) {
     let lastUpstreamError = null;
 
     // Try upstreams in smart order: primary first, then fallback chain
-    const orderedUpstreams = orderUpstreamsForFlowApiKey(routeDecision, upstreams);
+    let teamToken = null;
+    if (requestedTeamId) {
+      teamToken = await selectTeamTokenForRequest({
+        teamId: requestedTeamId,
+        userId: customerMatch.customer.id,
+        apiKeyId: customerMatch.apiKey.id,
+        model: selected.modelId,
+        provider: selected.provider,
+        purpose: requestedPurpose,
+      });
+      if (!teamToken) {
+        await recordTeamUsageLog({
+          requestId: makeRequestId("notok"),
+          userId: customerMatch.customer.id,
+          teamId: requestedTeamId,
+          apiKeyId: customerMatch.apiKey.id,
+          provider: selected.provider,
+          model: selected.modelId,
+          purpose: requestedPurpose,
+          requestSummary: prompt,
+          requestHash,
+          clientIp: ip,
+          clientName,
+          success: false,
+          errorCode: "TEAM_TOKEN_POOL_EMPTY",
+          errorMessage: "当前团队可用 Token 不足，请联系管理员。",
+          finalStatus: "failed",
+        });
+        throw new Error("TEAM_TOKEN_POOL_EMPTY");
+      }
+    }
+
+    const teamTokenUpstream = teamToken ? [{
+      name: "team-token-pool",
+      label: `团队 Token 池 / ${teamToken.name}`,
+      apiKey: teamToken.secret,
+      upstreamUrl: `${String(teamToken.baseUrl || "").replace(/\/+$/, "")}${String(teamToken.apiPath || "/v1/chat/completions").startsWith("/") ? teamToken.apiPath : `/${teamToken.apiPath}`}`,
+    }] : [];
+    const orderedUpstreams = teamTokenUpstream.length ? teamTokenUpstream : orderUpstreamsForFlowApiKey(routeDecision, upstreams);
 
     for (const candidate of orderedUpstreams) {
       const headers = {
@@ -504,7 +642,32 @@ export default async function handler(req, res) {
           completionTokens: 0,
           cost: billedEstimatedCost,
           grantUsageCredit: true,
-        }, reserve).catch((error) => console.error("[flowapi] stream record failed:", error));
+        }, reserve).then(() => {
+          if (requestedTeamId) {
+            return recordTeamUsageLog({
+              requestId: makeRequestId("stream"),
+              userId: customerMatch.customer.id,
+              teamId: requestedTeamId,
+              apiKeyId: customerMatch.apiKey.id,
+              tokenId: teamToken?.id || "",
+              provider: teamToken?.provider || selected.provider,
+              model: selected.modelId,
+              modelType: modelProduct?.group || "",
+              purpose: requestedPurpose,
+              requestSummary: prompt,
+              requestHash,
+              clientIp: ip,
+              clientName,
+              inputTokens: promptTokens,
+              outputTokens: 0,
+              totalTokens: promptTokens,
+              actualCostCny: billedEstimatedCost,
+              success: true,
+              finalStatus: "stream_success",
+            });
+          }
+          return null;
+        }).catch((error) => console.error("[flowapi] stream record failed:", error));
         releaseConcurrency(concurrencyKey);
       });
 
@@ -546,8 +709,48 @@ export default async function handler(req, res) {
         upstream: upstream.label,
         estimated_cost_cny: cost,
         balance_cny: customer?.balance,
+        team_id: requestedTeamId || undefined,
+        token_pool_id: teamToken?.id || undefined,
+        cache_hit: false,
       },
     };
+
+    if (requestedTeamId) {
+      await recordTeamUsageLog({
+        requestId: makeRequestId("team"),
+        userId: customerMatch.customer.id,
+        teamId: requestedTeamId,
+        apiKeyId: customerMatch.apiKey.id,
+        tokenId: teamToken?.id || "",
+        provider: teamToken?.provider || selected.provider,
+        model: selected.modelId,
+        modelType: modelProduct?.group || "",
+        purpose: requestedPurpose,
+        requestSummary: prompt,
+        requestHash,
+        clientIp: ip,
+        clientName,
+        requestParams: { temperature: upstreamBody.temperature, max_tokens: upstreamBody.max_tokens },
+        inputTokens: data.usage?.prompt_tokens || 0,
+        outputTokens: data.usage?.completion_tokens || 0,
+        totalTokens: data.usage?.total_tokens || 0,
+        officialCostCny: baseCost,
+        actualCostCny: cost,
+        success: upstreamResponse.ok,
+        durationMs: 0,
+        upstreamRequestId: upstreamResponse.headers.get("x-request-id") || data.id || "",
+        errorCode: upstreamResponse.ok ? "" : "UPSTREAM_ERROR",
+        errorMessage: upstreamResponse.ok ? "" : (typeof data.error === "string" ? data.error : data.error?.message || ""),
+        upstreamError: !upstreamResponse.ok,
+        finalStatus: upstreamResponse.ok ? "success" : "failed",
+      });
+      if (upstreamResponse.ok) {
+        await saveCachedTeamResponse(teamRequestContext, responsePayload, {
+          totalTokens: data.usage?.total_tokens || 0,
+          costCny: cost,
+        });
+      }
+    }
 
     if (!upstreamResponse.ok) {
       return res.status(upstreamResponse.status).json({
@@ -562,6 +765,26 @@ export default async function handler(req, res) {
 
     return res.status(upstreamResponse.status).json(responsePayload);
   } catch (error) {
+    if (requestedTeamId) {
+      await recordTeamUsageLog({
+        requestId: makeRequestId("err"),
+        userId: customerMatch.customer.id,
+        teamId: requestedTeamId,
+        apiKeyId: customerMatch.apiKey.id,
+        provider: selected.provider,
+        model: selected.modelId,
+        purpose: requestedPurpose,
+        requestSummary: prompt,
+        requestHash,
+        clientIp: ip,
+        clientName,
+        success: false,
+        errorCode: error.message === "TEAM_TOKEN_POOL_EMPTY" ? "TEAM_TOKEN_POOL_EMPTY" : "UPSTREAM_REQUEST_FAILED",
+        errorMessage: error.message || "upstream error",
+        upstreamError: error.message !== "TEAM_TOKEN_POOL_EMPTY",
+        finalStatus: "failed",
+      }).catch(() => {});
+    }
     await finalizeReservedCallByToken(clientToken, {
       endpoint: "/v1/chat/completions",
       requestedModel: body.model || "auto",
@@ -574,8 +797,18 @@ export default async function handler(req, res) {
     }, reserve);
 
     releaseConcurrency(concurrencyKey);
-    return sendApiError(res, 503, "UPSTREAM_REQUEST_FAILED", "上游模型服务暂时不可用", "上游模型服务暂时无法连接，请稍后重试；如果持续失败，请切换其他模型或联系 FlowAPI 客服。", {
+    return sendApiError(
+      res,
+      error.message === "TEAM_TOKEN_POOL_EMPTY" ? 503 : 503,
+      error.message === "TEAM_TOKEN_POOL_EMPTY" ? "TEAM_TOKEN_POOL_EMPTY" : "UPSTREAM_REQUEST_FAILED",
+      error.message === "TEAM_TOKEN_POOL_EMPTY" ? "当前团队可用 Token 不足，请联系管理员。" : "上游模型服务暂时不可用",
+      error.message === "TEAM_TOKEN_POOL_EMPTY" ? "该团队没有匹配当前模型/用途的可用 Token，请管理员到团队 Token 池录入或启用 Token。" : "上游模型服务暂时无法连接，请稍后重试；如果持续失败，请切换其他模型或联系 FlowAPI 客服。",
+      {
       upstreamError: error.message || "",
     });
   }
+}
+
+function makeRequestId(prefix = "req") {
+  return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(16).slice(2, 10)}`;
 }
