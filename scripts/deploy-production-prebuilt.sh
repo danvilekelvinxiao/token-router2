@@ -19,6 +19,12 @@ rsync -az --delete \
   --exclude .next/cache \
   ./ "$SERVER:$APP_DIR/"
 
+if [ "${FLOWAPI_SYNC_NODE_MODULES:-1}" = "1" ]; then
+  rsync -az --delete \
+    -e "ssh $SSH_OPTS" \
+    ./node_modules/ "$SERVER:$APP_DIR/node_modules/"
+fi
+
 ssh $SSH_OPTS "$SERVER" "
   set -e
   if [ ! -f /swapfile ]; then
@@ -30,9 +36,9 @@ ssh $SSH_OPTS "$SERVER" "
   grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
   cd '$APP_DIR'
   export NODE_OPTIONS=--max-old-space-size=512
-  # Repair partially installed ExcelJS transitive packages without rebuilding all node_modules on 1GB servers.
-  rm -rf node_modules/exceljs node_modules/unzipper node_modules/binary node_modules/bluebird
-  npm install --omit=dev --no-audit --no-fund
+  if [ ! -x node_modules/.bin/next ]; then
+    npm install --omit=dev --no-audit --no-fund
+  fi
   if pm2 describe flowapi >/dev/null 2>&1; then
     pm2 restart flowapi --update-env
   else

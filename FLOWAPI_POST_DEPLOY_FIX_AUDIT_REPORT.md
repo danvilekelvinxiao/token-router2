@@ -258,3 +258,19 @@ UI 设计师 Agent：
 - 在云服务器控制台重启当前香港服务器。
 - 或直接迁移到新加坡新机器后，用当前仓库执行 `npm run deploy:prebuilt`。
 
+## 2026-06-05 服务器恢复记录
+
+用户重启服务器后，已完成恢复：
+- SSH 恢复可连接。
+- 发现 PM2 报错 `next: not found`，原因是上一次服务器端安装依赖中断导致 `node_modules` 不完整。
+- 不再在服务器执行完整 `npm install`。
+- 改用从本地同步完整 `node_modules` 到服务器的轻量恢复方式。
+- 已重建 PM2 进程。
+- 服务器本机 `http://127.0.0.1:3000/api/health` 返回 OK。
+- 公网 `https://flowapi.fun/api/health` 返回 OK。
+- 公网 `/dashboard/logs`、`/api-management`、`/images`、`/recharge` 返回 200。
+- 公网二维码 `/images/qrcode/flowapi-qq-group.png` 返回 200。
+- 公网 `/api/usage-logs/export` 未登录返回 401，不再出现 500。
+
+未执行：
+- 未伪造生产管理员 session 做 Excel 导出，因为这会生成生产管理员会话并可能导出真实用户数据。完整线上登录态 Excel 测试需要使用浏览器真实登录或提供专用测试账号。
