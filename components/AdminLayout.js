@@ -5,6 +5,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 
 const adminMenuItems = [
   { key: "overview", label: "管理概览", href: "/admin", icon: IconOverview },
+  { key: "bossWizard", label: "老板后台向导", href: "/admin/boss-wizard", icon: IconBossWizard },
   { key: "channels", label: "上游渠道管理", href: "/admin/channels", icon: IconChannels },
   { key: "tokenPool", label: "团队 Token 池", href: "/admin/token-pool", icon: IconTokenPool },
   { key: "tokenMaintenance", label: "Token 池维护中心", href: "/admin/token-pool/maintenance", icon: IconMaintenance },
@@ -33,6 +34,7 @@ const adminMenuItems = [
 ];
 
 function IconModels() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="4" rx="1"/><rect x="14" y="3" width="7" height="4" rx="1"/><rect x="3" y="10" width="7" height="4" rx="1"/><rect x="14" y="10" width="7" height="4" rx="1"/><rect x="3" y="17" width="7" height="4" rx="1"/><rect x="14" y="17" width="7" height="4" rx="1"/></svg>; }
+function IconBossWizard() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 19h16"/><path d="M6 16l3-8 3 5 3-9 3 12"/><path d="M8 5h.01M16 5h.01"/><path d="M5 12h4M15 12h4"/></svg>; }
 
 function IconTokenPool() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01M11 7h6M11 17h6"/></svg>; }
 

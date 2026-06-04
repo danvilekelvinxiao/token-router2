@@ -1,5 +1,5 @@
 import { createApiKey, deleteApiKey, getDashboard, updateApiKey } from "@/lib/customer-store";
-import { getModelProduct } from "@/lib/model-products";
+import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { assertCustomerOwner } from "@/lib/session";
 import { getLocalePriceMultiplier, normalizeLocale } from "@/lib/pricing/locale-pricing";
 
@@ -28,7 +28,13 @@ export default async function handler(req, res) {
         });
       }
 
-      const modelProduct = getModelProduct(modelId);
+      const modelProducts = await listModelProductsWithConfig({ includeUnavailable: true });
+      const modelProduct = modelProducts.find((item) => (
+        item.id === modelId ||
+        item.publicModelId === modelId ||
+        item.actualModelId === modelId ||
+        item.modelId === modelId
+      ));
       if (!modelProduct) {
         return res.status(404).json({
           error: {
