@@ -86,6 +86,17 @@ function buildLimitPayload(form = {}) {
   };
 }
 
+function getLimitValidationMessage(form = {}) {
+  if (!form || form.type === "none") return "";
+  const amount = Number(form.amount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) return "请填写大于 0 的额度限制";
+  if (form.type !== "custom") return "";
+  const interval = Number(form.resetIntervalValue || 0);
+  if (!Number.isFinite(interval) || interval <= 0) return "请填写有效的自定义重置周期";
+  if (form.resetIntervalUnit === "minute" && interval < 60) return "自定义分钟周期不能少于 60 分钟";
+  return "";
+}
+
 function formatLimitValue(value, unit = "cny") {
   return unit === "token" ? formatToken(value) : formatCny(value);
 }
@@ -430,6 +441,17 @@ export default function ApiManagementPage() {
     return Boolean(model?.modelId) && (!model.isMemberOnly || isBlackGoldMember);
   }
 
+  function getCreateDisabledReason() {
+    if (!customer?.id) return "请先登录后创建 API Key";
+    if (creating) return "";
+    if (!createForm.modelId) return "请选择默认模型后创建 API Key";
+    const model = models.find((item) => item.modelId === createForm.modelId) || selectedModel;
+    if (!model?.modelId) return "模型配置同步中，请稍后再创建";
+    if (!canSelectModel(model)) return "当前模型需要黑金会员权限";
+    if (createForm.expiresAt === "custom" && !createForm.customDate) return "请选择自定义过期日期";
+    return getLimitValidationMessage(createForm.limit);
+  }
+
   function selectCreateModel(model) {
     if (!canSelectModel(model)) {
       showToast("该模型为黑金会员专属，开通会员后即可选择");
@@ -458,6 +480,15 @@ export default function ApiManagementPage() {
     if (!model?.modelId || creating) return;
     if (!canSelectModel(model)) {
       showToast("该模型为黑金会员专属，开通会员后即可选择");
+      return;
+    }
+    if (createForm.expiresAt === "custom" && !createForm.customDate) {
+      showToast("请选择自定义过期日期");
+      return;
+    }
+    const limitMessage = getLimitValidationMessage(createForm.limit);
+    if (limitMessage) {
+      showToast(limitMessage);
       return;
     }
     setCreating(true);
@@ -716,6 +747,9 @@ export default function ApiManagementPage() {
     );
   }
 
+  const createDisabledReason = getCreateDisabledReason();
+  const createButtonDisabled = creating || Boolean(createDisabledReason);
+
   return (
     <>
       <Head><title>API 管理 - FlowAPI</title></Head>
@@ -733,7 +767,7 @@ export default function ApiManagementPage() {
                 <h2>选择模型创建 API Key</h2>
                 <p>每个 Key 绑定一个模型，后续账单、扣费来源和调用记录更容易看懂。</p>
               </div>
-              <button type="button" className="btn-primary" disabled={!selectedModel || loading} onClick={() => openCreateModal(selectedModel)}>创建 API Key</button>
+              <button type="button" className="btn-primary flowapi-primary-action" disabled={!selectedModel || loading} onClick={() => openCreateModal(selectedModel)}>创建 API Key</button>
             </div>
             <div className="api-management-model-grid">
               {models.slice(0, 8).map((model) => (
@@ -809,7 +843,7 @@ export default function ApiManagementPage() {
               <div className="api-management-empty">
                 <strong>暂无 API Key</strong>
                 <p>先选择一个模型并创建 API Key。完成真实调用后，这里会展示每个 Key 的 Token 消耗和扣费来源。</p>
-                <button type="button" onClick={() => openCreateModal(selectedModel)} disabled={!selectedModel}>创建第一个 API Key</button>
+                <button type="button" className="flowapi-primary-action" onClick={() => openCreateModal(selectedModel)} disabled={!selectedModel}>创建第一个 API Key</button>
               </div>
             ) : null}
           </section>
@@ -834,7 +868,7 @@ export default function ApiManagementPage() {
                   <strong>{maskToken(createdKey.token)}</strong>
                   <p>完整 API Key 只在复制时使用，请妥善保存，不要公开发到群聊、论坛或截图中。</p>
                   <div>
-                    <button type="button" className="api-action primary" onClick={() => copyText(createdKey.token, "API Key 已复制")}>复制 API Key</button>
+                    <button type="button" className="api-action primary flowapi-primary-action" onClick={() => copyText(createdKey.token, "API Key 已复制")}>复制 API Key</button>
                     <Link href="/help" className="api-action">前往接入教程</Link>
                     <Link href="/models" className="api-action">选择模型</Link>
                   </div>
@@ -908,9 +942,11 @@ export default function ApiManagementPage() {
                   ) : null}
                 </div>
                 <footer>
+                  {createDisabledReason ? <p className="api-action-disabled-hint" role="status">{createDisabledReason}</p> : null}
                   <button type="button" className="api-action" onClick={() => setCreateModalOpen(false)}>取消</button>
-                  <button type="button" className="api-action primary" disabled={creating || !createForm.label.trim() || !createForm.modelId} onClick={createKey}>
-                    {creating ? "创建中..." : "创建 API Key"}
+                  <button type="button" className="api-action primary flowapi-primary-action" disabled={createButtonDisabled} data-loading={creating ? "true" : "false"} onClick={createKey}>
+                    {creating ? <span className="api-action-spinner" aria-hidden="true" /> : null}
+                    {creating ? "正在创建 API Key..." : "创建 API Key"}
                   </button>
                 </footer>
               </>
@@ -934,7 +970,8 @@ export default function ApiManagementPage() {
             </div>
             <footer>
               <button type="button" className="api-action" onClick={() => setLimitEditorKey(null)}>取消</button>
-              <button type="button" className="api-action primary" disabled={savingLimit} onClick={saveLimitEditor}>
+              <button type="button" className="api-action primary flowapi-primary-action" disabled={savingLimit} data-loading={savingLimit ? "true" : "false"} onClick={saveLimitEditor}>
+                {savingLimit ? <span className="api-action-spinner" aria-hidden="true" /> : null}
                 {savingLimit ? "保存中..." : "保存额度"}
               </button>
             </footer>
@@ -966,7 +1003,7 @@ export default function ApiManagementPage() {
             </div>
             <footer>
               <button type="button" className="api-action" onClick={() => setCcSwitchFallback(null)}>取消</button>
-              {ccSwitchFallback.url ? <button type="button" className="api-action primary" onClick={() => window.open(ccSwitchFallback.url, "_blank", "noopener,noreferrer")}>重试打开</button> : null}
+              {ccSwitchFallback.url ? <button type="button" className="api-action primary flowapi-primary-action" onClick={() => window.open(ccSwitchFallback.url, "_blank", "noopener,noreferrer")}>重试打开</button> : null}
               <a className="api-action" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noreferrer">下载 CC-Switch</a>
               {ccSwitchFallback.manualConfig ? <button type="button" className="api-action" onClick={() => copyText(ccSwitchFallback.manualConfig.config, "备用配置已复制")}>复制备用配置</button> : null}
               <a className="api-action" href="/help/images#cc-switch" target="_blank" rel="noreferrer">查看手动教程</a>

@@ -504,17 +504,18 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       showMessage("请先登录后再创建 API 密匙");
       return;
     }
-    if (!form.label.trim()) {
-      showMessage("请填写密匙名称");
-      return;
-    }
     if (modal?.type !== "edit" && !form.modelId) {
       showMessage("请先选择要使用的模型，再创建 API 密匙");
       return;
     }
+    if (form.expiresAt === "custom" && !form.customDate) {
+      showMessage("请选择自定义过期日期");
+      return;
+    }
     setSaving(true);
+    const fallbackLabel = modal?.type === "edit" ? "API 密匙" : `API 密匙 ${apiKeys.length + 1}`;
     const body = {
-      customerId: customer.id, label: form.label.trim(),
+      customerId: customer.id, label: form.label.trim() || fallbackLabel,
       expiresAt: computeExpiry(form.expiresAt, form.customDate),
       modelId: form.modelId,
     };
@@ -573,6 +574,15 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
     updateCustomer(latest);
     showMessage("API 密匙已删除");
     setSaving(false);
+  }
+
+  function getModalActionDisabledReason() {
+    if (!modal) return "";
+    if (!customer) return "请先登录后创建 API Key";
+    if (saving) return "";
+    if (modal.type !== "edit" && !form.modelId) return "请选择默认模型后创建 API Key";
+    if (form.expiresAt === "custom" && !form.customDate) return "请选择自定义过期日期";
+    return "";
   }
 
   function toggleSelected(keyId) {
@@ -847,8 +857,10 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
               )}
             </div>
             <footer>
+              {getModalActionDisabledReason() ? <p className="api-action-disabled-hint" role="status">{getModalActionDisabledReason()}</p> : null}
               <button type="button" className="api-action" onClick={() => setModal(null)}>取消</button>
-              <button type="button" className="api-action primary" disabled={saving || !form.label.trim() || (modal.type !== "edit" && !form.modelId)} onClick={submitKey}>
+              <button type="button" className="api-action primary flowapi-primary-action" disabled={saving || Boolean(getModalActionDisabledReason())} data-loading={saving ? "true" : "false"} onClick={submitKey}>
+                {saving ? <span className="api-action-spinner" aria-hidden="true" /> : null}
                 {saving ? "保存中..." : modal.type === "edit" ? "保存修改" : "创建 API 密匙"}
               </button>
             </footer>
