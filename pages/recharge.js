@@ -26,7 +26,7 @@ const amounts = [
 const paymentMethods = [
   { key: "wechat", name: "微信支付" },
   { key: "alipay", name: "支付宝" },
-  { key: "crypto", name: "USDT" },
+  { key: "crypto", name: "加密货币支付" },
   { key: "taobao_code", name: "淘宝激活码" },
 ];
 
@@ -161,6 +161,18 @@ function formatMoney(value) {
 
 function getPaymentPayload({ customerId, amount, paymentMethod, purchaseType, pkg, paymentRef = "" }) {
   return { customerId, amount, paymentMethod, purchaseType, packageId: pkg?.id || "", packageName: pkg ? `${pkg.name}${pkg.code ? ` ${pkg.code}` : ""}` : "", quotaText: pkg?.quotaText || "", validDays: pkg?.validDays || null, paymentRef };
+}
+
+async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 1500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    const data = await response.json().catch(() => ({}));
+    return { response, data };
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function calculateCryptoUsdAmount(amountCny) {
@@ -444,24 +456,23 @@ export default function RechargePage() {
       setLaunchVisible(false);
       if (customer && purchaseType !== "balance_recharge") {
         try {
-          const res = await fetch("/api/recharge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-          const data = await res.json();
+          const { response: res, data } = await fetchJsonWithTimeout("/api/recharge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
           if (res.ok && data.order) { setSubmittedOrder(data.order); setOrders((prev) => [data.order, ...prev]); setStep("pay"); }
-        } catch { setPaymentError(L("套餐订单创建失败，请稍后再试", "Package order creation failed. Please try again.")); }
+          else setPaymentError(data.error || L("套餐订单创建失败，请稍后再试", "Package order creation failed. Please try again."));
+        } catch { setPaymentError(L("支付订单创建失败，请稍后重试或联系客服。", "Payment order creation failed. Please try again or contact support.")); }
       }
       return;
     }
     if (paymentMethod === "crypto") {
       setPaying(true);
       try {
-        const res = await fetch("/api/payments/crypto/create", {
+        const { response: res, data } = await fetchJsonWithTimeout("/api/payments/crypto/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        const data = await res.json();
         if (!res.ok) {
-          setPaymentError(data.error || L("加密货币支付订单创建失败", "Failed to create crypto order"));
+          setPaymentError(data.error || L("支付订单创建失败，请稍后重试或联系客服。", "Payment order creation failed. Please try again or contact support."));
           setStep("choose");
         } else {
           setSubmittedOrder(data.order);
@@ -474,17 +485,11 @@ export default function RechargePage() {
             setCryptoExpireAt(null);
           } else {
             setCryptoExpireAt(data.payment?.expiresAt ? new Date(data.payment.expiresAt).getTime() : Date.now() + 10 * 60 * 1000);
-            if (data.payment?.checkoutUrl) {
-              setPaying(false);
-              setLaunchVisible(false);
-              window.location.assign(data.payment.checkoutUrl);
-              return;
-            }
           }
           setCryptoNow(Date.now());
         }
       } catch {
-        setPaymentError(L("网络异常，请稍后再试", "Network error. Please try again."));
+        setPaymentError(L("支付订单创建失败，请稍后重试或联系客服。", "Payment order creation failed. Please try again or contact support."));
         setStep("choose");
       }
       setLaunchVisible(false);
@@ -493,20 +498,19 @@ export default function RechargePage() {
     }
     setPaying(true);
     try {
-      const res = await fetch("/api/recharge/create-payment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-      const data = await res.json();
-      if (res.ok) {
+      const { response: res, data } = await fetchJsonWithTimeout("/api/recharge/create-payment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (res.ok && data.order) {
         setSubmittedOrder(data.order);
-        setPaymentSession(data.payment);
+        setPaymentSession(data.payment || { orderId: data.order.outTradeNo || data.order.id });
         setStep("pay");
         setActivePaymentModal("qr");
         if (data.mode === "manual") { setManualFallback(true); setPaymentError(data.reason || ""); }
       } else {
-        setPaymentError(data.error || L("支付订单生成失败", "Failed to create payment order"));
+        setPaymentError(data.error || L("支付订单创建失败，请稍后重试或联系客服。", "Payment order creation failed. Please try again or contact support."));
         setStep("choose");
       }
     } catch {
-      setPaymentError(L("网络异常，请稍后再试", "Network error. Please try again."));
+      setPaymentError(L("支付订单创建失败，请稍后重试或联系客服。", "Payment order creation failed. Please try again or contact support."));
       setStep("choose");
     }
     setLaunchVisible(false);

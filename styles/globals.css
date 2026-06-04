@@ -1684,6 +1684,24 @@
   color: #ef4444;
 }
 
+.api-key-card-actions button.primary {
+  border-color: transparent;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  box-shadow: 0 10px 22px rgba(99, 102, 241, 0.22);
+}
+
+.api-management-code-preview {
+  max-height: 220px;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--page-code-border);
+  border-radius: 12px;
+  color: var(--page-code-text);
+  background: var(--page-code-bg);
+  white-space: pre-wrap;
+}
+
 .api-management-empty {
   display: grid;
   justify-items: center;
@@ -25043,6 +25061,20 @@ body {
   color: var(--page-sub);
   font-size: 12px;
   line-height: 1.55;
+}
+
+.models-release-date {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--page-soft-border);
+  border-radius: 999px;
+  color: var(--page-sub);
+  background: var(--page-soft-bg);
+  font-size: 12px;
+  font-weight: 850;
+  overflow-wrap: anywhere;
 }
 
 .models-card-desc {

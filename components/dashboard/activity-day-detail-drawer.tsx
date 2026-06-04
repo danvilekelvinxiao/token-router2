@@ -1,3 +1,5 @@
+import { createPortal } from "react-dom";
+
 type ActivityDay = {
   date?: string;
   requests?: number;
@@ -31,8 +33,9 @@ function formatCny(value: unknown) {
 
 export default function ActivityDayDetailDrawer({ day, onClose }: ActivityDayDetailDrawerProps) {
   if (!day) return null;
+  if (typeof document === "undefined") return null;
 
-  return (
+  return createPortal((
     <div className="activity-day-drawer-layer" role="presentation" onClick={onClose}>
       <aside className="activity-day-drawer" role="dialog" aria-modal="true" aria-label="当日调用详情" onClick={(event) => event.stopPropagation()}>
         <button type="button" onClick={onClose}>关闭</button>
@@ -55,5 +58,5 @@ export default function ActivityDayDetailDrawer({ day, onClose }: ActivityDayDet
         <p>该数据来自真实 API 调用流水，用于核对当天的活跃情况和 Token 消耗。</p>
       </aside>
     </div>
-  );
+  ), document.body);
 }

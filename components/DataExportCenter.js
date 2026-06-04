@@ -9,24 +9,31 @@ const RANGE_OPTIONS = [
 const EXPORTS = [
   {
     key: "billing",
-    title: "账单记录",
-    description: "导出充值、套餐购买、激活码兑换、会员订单等账单数据。",
-    button: "导出账单记录",
+    title: "充值账单",
+    description: "充值时间、订单号、支付方式、订单内容、支付金额、状态。",
+    button: "导出充值账单",
     endpoint: "/api/user/export/billing-records",
   },
   {
     key: "usage",
     title: "使用记录",
-    description: "导出每一次 API 调用的模型、Token、价格、花费和节省数据。",
+    description: "使用时间、API Key、分组、模型、输入 Token、输出 Token、总 Token、花费、节省金额、套餐价格。",
     button: "导出使用记录",
     endpoint: "/api/user/export/usage-records",
   },
   {
     key: "model",
     title: "模型数据分析包",
-    description: "按模型维度导出 Token、花费、请求次数、节省金额和趋势分析。",
+    description: "使用时间、模型名、Token、花费、请求次数、成功率。",
     button: "导出模型分析包",
     endpoint: "/api/user/export/model-analysis",
+  },
+  {
+    key: "package",
+    title: "套餐与兑换记录",
+    description: "兑换时间、套餐名称、激活码、有效期、到账额度、状态。",
+    button: "导出套餐与兑换记录",
+    endpoint: "/api/user/export/package-records",
   },
 ];
 
@@ -95,8 +102,8 @@ export default function DataExportCenter({ variant = "default" }) {
     <section className={`data-export-center data-export-${variant}`}>
       <div className="data-export-head">
         <div>
-          <span>数据导出中心</span>
-          <h2>导出你的 FlowAPI 对账数据</h2>
+          <span>{variant === "logs" ? "导出记录" : "数据导出中心"}</span>
+          <h2>{variant === "logs" ? "导出记录" : "导出你的 FlowAPI 对账数据"}</h2>
           <p>账单、使用记录和模型分析都按当前登录用户生成，API Key 默认脱敏。</p>
         </div>
         <label>

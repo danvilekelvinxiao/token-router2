@@ -39,6 +39,7 @@ function normalizeModel(model) {
     provider: publicModel.provider || "FlowAPI",
     providerName: publicModel.provider || "FlowAPI",
     modelId: model.modelId || model.publicModelId || "",
+    officialReleaseDate: model.officialReleaseDate || model.releaseDate || "",
     categories: Array.isArray(model.categories) ? model.categories : ["all"],
     tags: Array.isArray(model.tags) ? model.tags : [],
     useCases: Array.isArray(model.useCases) ? model.useCases : [],
@@ -59,6 +60,11 @@ function normalizeModel(model) {
     visibleToNonMember: model.visibleToNonMember !== false,
     nonMemberPrompt: model.nonMemberPrompt || "该模型为 FLOWAPI 黑金会员专属模型，开通会员后即可使用。",
   };
+}
+
+function releaseDateLabel(value) {
+  const text = String(value || "").trim();
+  return text || "待确认";
 }
 
 function hasRealPrice(value) {
@@ -605,6 +611,10 @@ function ModelMarketCard({ model, showPrice, onCopy, onDetails, isMember = false
         <div><span>输出价格</span><strong>{showPrice ? priceLabel(model.flowapiOutputPricePerM || model.outputPricePerM) : "价格同步中"}</strong></div>
       </div>
 
+      <div className="models-release-date">
+        发布时间：{releaseDateLabel(model.officialReleaseDate)}
+      </div>
+
       <div className="models-discount-strip">
         <span>{discountText}</span>
         <small>官方：输入 {priceLabel(model.officialInputPricePerM)} · 输出 {priceLabel(model.officialOutputPricePerM)}</small>
@@ -674,6 +684,10 @@ function ModelDetailModal({ model, apiBaseUrl, curlExample, showCurlExamples, on
             <div>
               <span>输出价格</span>
               <strong>{priceLabel(model.outputPricePerM)}</strong>
+            </div>
+            <div>
+              <span>官方发布时间</span>
+              <strong>{releaseDateLabel(model.officialReleaseDate)}</strong>
             </div>
           </section>
 

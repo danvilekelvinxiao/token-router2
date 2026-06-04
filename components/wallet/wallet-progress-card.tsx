@@ -46,7 +46,7 @@ export type WalletProgressCardProps = {
 const MODE_COPY = {
   dashboard: {
     title: "钱包与套餐进度",
-    subtitle: "查看当前余额、套餐使用进度和到期时间。",
+    subtitle: "查看当前套餐 Token、使用进度和到期时间。",
     primary: "查看充值",
     secondary: "查看消费明细",
   },
@@ -83,7 +83,6 @@ export default function WalletProgressCard({
   loading = false,
   empty = false,
   data,
-  dashboardOverview,
 }: WalletProgressCardProps) {
   const [open, setOpen] = useState(false);
   const [detailFocus, setDetailFocus] = useState("钱包与套餐详情");
@@ -113,10 +112,7 @@ export default function WalletProgressCard({
       ? formatWalletTokens(remainingTokens)
       : "按实际余额折算";
   const isRechargeMode = mode === "recharge";
-  const memberGiftCny = Number(membership?.memberQuotaCny || membership?.balanceCnyEquivalent || 0);
-  const giftBalanceCny = Number(dashboardOverview?.giftBalance || data?.wallet?.giftBalanceCny || 0);
   const planRemainingCny = hasPlan ? Number(remaining || 0) : 0;
-  const rechargeBalanceCny = Number(data?.wallet?.paidBalanceCny ?? dashboardOverview?.paidBalance ?? balanceCny ?? 0);
   const walletProgress = useMemo(() => {
     if (data?.walletProgress) return data.walletProgress;
     return buildWalletProgress({
@@ -213,32 +209,17 @@ export default function WalletProgressCard({
           <div>
             <span>{renderEyebrow()}</span>
             <h2>{renderTitle()}</h2>
-            <p>{mode === "dashboard" ? "查看你的余额、套餐额度、会员赠送额度和消耗优先级。" : copy.subtitle}</p>
+            <p>{mode === "dashboard" ? "只查看当前套餐 Token、已用额度和到期进度。" : copy.subtitle}</p>
           </div>
           <em className={`wallet-status-pill tone-${status.tone}`}>{status.label}</em>
         </div>
 
         {mode === "dashboard" ? (
           <div className="wallet-dashboard-pools">
-            <button type="button" className="wallet-pool-card is-primary" onClick={() => openDetail("总可用资产")}>
-              <span>总可用资产</span>
-              <strong><LiveNumber value={Number(remaining || 0)} prefix="¥" decimals={2} /></strong>
-              <p>余额、套餐和会员额度汇总</p>
-            </button>
-            <button type="button" className="wallet-pool-card" onClick={() => openDetail("会员赠送额度")}>
-              <span>会员赠送额度</span>
-              <strong>{formatWalletCny(Number(memberGiftCny + giftBalanceCny))}</strong>
-              <p>黑金会员额度始终优先消耗</p>
-            </button>
-            <button type="button" className="wallet-pool-card" onClick={() => openDetail("套餐额度")}>
+            <button type="button" className="wallet-pool-card is-primary" onClick={() => openDetail("套餐额度")}>
               <span>套餐额度</span>
               <strong>{hasPlan ? formatWalletCny(planRemainingCny) : "暂无套餐"}</strong>
               <p>{hasPlan ? `${usedTotalLabel} · ${formatWalletDate(expiresAt)} 到期` : "购买套餐后显示额度和到期时间"}</p>
-            </button>
-            <button type="button" className="wallet-pool-card" onClick={() => openDetail("充值余额")}>
-              <span>充值余额</span>
-              <strong>{formatWalletCny(Number(rechargeBalanceCny))}</strong>
-              <p>普通模型调用按实际价格扣费</p>
             </button>
             <button type="button" className="wallet-pool-card" onClick={() => openDetail("最近到期时间")}>
               <span>最近到期时间</span>

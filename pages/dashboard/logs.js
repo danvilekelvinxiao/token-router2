@@ -2,6 +2,7 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
+import DataExportCenter from "@/components/DataExportCenter";
 
 const TABS = [
   { id: "", label: "全部" },
@@ -101,6 +102,8 @@ export default function DashboardLogsPage() {
               </div>
             </div>
           </section>
+
+          <DataExportCenter variant="logs" />
 
           <div className="image-logs-table-wrap">
             {loading ? <div className="image-studio-empty">正在加载日志...</div> : null}

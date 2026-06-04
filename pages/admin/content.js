@@ -18,6 +18,7 @@ const MODEL_FIELDS = [
   { key: "provider", label: "Provider", type: "text" },
   { key: "modelId", label: "Model ID", type: "text" },
   { key: "logo", label: "Logo / Provider Key", type: "text" },
+  { key: "officialReleaseDate", label: "官方发布时间", type: "text", help: "格式建议 YYYY-MM-DD；只知道月份可填 YYYY-MM；未知可留空。" },
   { key: "description", label: "描述", type: "textarea" },
   { key: "detailDescription", label: "详情介绍", type: "textarea" },
   { key: "inputPricePerM", label: "输入价格 ¥/M", type: "number" },
@@ -114,6 +115,7 @@ export default function AdminContentPage() {
       provider: "",
       modelId: "",
       logo: "",
+      officialReleaseDate: "",
       description: "",
       detailDescription: "",
       inputPricePerM: "",
@@ -210,6 +212,7 @@ export default function AdminContentPage() {
                 <th>模型名称</th>
                 <th>Provider</th>
                 <th>Model ID</th>
+                <th>官方发布时间</th>
                 <th>输入 ¥/M</th>
                 <th>输出 ¥/M</th>
                 <th>推荐</th>
@@ -227,6 +230,7 @@ export default function AdminContentPage() {
                   </td>
                   <td>{m.provider}</td>
                   <td><code>{m.modelId}</code></td>
+                  <td>{m.officialReleaseDate || "待确认"}</td>
                   <td>{Number(m.inputPricePerM) > 0 ? `¥${m.inputPricePerM}` : "价格同步中"}</td>
                   <td>{Number(m.outputPricePerM) > 0 ? `¥${m.outputPricePerM}` : "价格同步中"}</td>
                   <td><span style={{ color: m.isRecommended ? "#16a34a" : "#9ca3af" }}>{m.isRecommended ? "★" : "—"}</span></td>
@@ -238,7 +242,7 @@ export default function AdminContentPage() {
                   </td>
                 </tr>
               ))}
-              {list.length === 0 && <tr><td colSpan={9} style={{ textAlign: "center", padding: 32 }}>暂无模型</td></tr>}
+              {list.length === 0 && <tr><td colSpan={10} style={{ textAlign: "center", padding: 32 }}>暂无模型</td></tr>}
             </tbody>
           </table>
         </div>

@@ -5,7 +5,6 @@ import { useTheme } from "next-themes";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import MiniMetricChart from "@/components/charts/mini-metric-chart";
 import ConsoleLayout from "@/components/ConsoleLayout";
-import DataExportCenter from "@/components/DataExportCenter";
 import { calculateCallCost, formatSmallCny } from "@/lib/billing/calculate-call-cost";
 import ModelLogo, { ModelNameWithLogo, getModelProviderLabel } from "@/components/ModelLogo";
 import InteractiveCard from "@/components/InteractiveCard";
@@ -2584,18 +2583,18 @@ function WeekUsageSection({ data, onOpenDetail, onOpenSavings, titleText = "本�
   );
 }
 
-function TodayAccountStatusSection({ data, onOpenDetail, onOpenSavings, onOpenLedger, titleText = "钱包与今日账户状态", subtitleText = "查看当前可用资产、套餐进度、今日消耗、今日节省和最近调用。" }) {
+function TodayAccountStatusSection({ data, onOpenDetail, onOpenSavings, onOpenLedger, titleText = "今日使用情况", subtitleText = "查看今日消耗 Token、今日花费、今日已省、请求次数和最近调用。" }) {
   const hasToday = data.todayRequests > 0 || data.todaySpendCny > 0 || data.todayTokens > 0;
   const recent = data.recentCall;
   const open = (title, chartData, chartFormatter = moneyFormatter, chartColor = "purple") => onOpenDetail(buildSimpleMetricDetail({
     title,
     description: "查看今天的 Token 消耗、扣费金额、节省金额和最近调用。",
     rows: [
-      { label: "当前余额", value: `¥${data.balanceCny.toFixed(2)}` },
-      { label: "当前套餐", value: data.planName || "暂无套餐" },
       { label: "今日 Token", value: hasToday ? `${formatCompactToken(data.todayTokens)} Token` : "暂无数据" },
       { label: "今日花费", value: hasToday ? `¥${data.todaySpendCny.toFixed(2)}` : "暂无数据" },
       { label: "今日已省", value: data.todaySavedCny > 0 ? `¥${data.todaySavedCny.toFixed(2)}` : "完成真实调用后显示" },
+      { label: "今日请求次数", value: hasToday ? `${data.todayRequests} 次` : "暂无数据" },
+      { label: "今日最常用模型", value: data.todayTopModel || "暂无数据" },
     ],
     trend: chartData,
     chartFormatter,
@@ -2605,17 +2604,11 @@ function TodayAccountStatusSection({ data, onOpenDetail, onOpenSavings, onOpenLe
     <section className="dash3-section">
       <SectionTitle title={titleText} subtitle={subtitleText} />
       <div className="dash3-exchange-grid dash3-exchange-grid-six">
-        <DashboardExchangeCard label="当前余额" value={<MetricValueInline prefix="¥" value={<FlashValue value={data.balanceCny.toFixed(2)} tick={data.tick} />} />} detail={data.balanceDetail} chartData={data.balanceTrend} chartColor="purple" onClick={() => open("当前余额详情", data.balanceTrend)} />
-        <button type="button" className="dash3-exchange-card dash3-plan-card" onClick={() => open("当前套餐详情", [])}>
-          <span className="dash3-exchange-card-label">当前套餐</span>
-          <strong className="dash3-exchange-card-value">{data.planName || "暂无套餐"}</strong>
-          <p>{data.planDetail}</p>
-          <div className="dash3-plan-progress"><i style={{ width: `${Math.max(0, Math.min(100, data.planProgress || 0))}%` }} /></div>
-          <em>点击查看详情</em>
-        </button>
         <DashboardExchangeCard label="今日消耗 Token" value={hasToday ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.todayTokens)} tick={data.tick} />} unit="Token" /> : "暂无数据"} detail="今日输入 + 输出 Token" chartData={data.todayTokenTrend} chartType="bar" chartColor="cyan" chartFormatter={tokenFormatter} empty={!hasToday} onClick={() => open("今日 Token 详情", data.todayTokenTrend, tokenFormatter, "cyan")} />
-        <DashboardExchangeCard label="今日花费余额" value={hasToday ? <MetricValueInline prefix="¥" value={<FlashValue value={data.todaySpendCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"} detail="今日 FlowAPI 实际扣费" chartData={data.todaySpendTrend} chartType="step" chartColor="yellow" empty={!hasToday} onClick={() => open("今日花费详情", data.todaySpendTrend, moneyFormatter, "yellow")} />
+        <DashboardExchangeCard label="今日花费" value={hasToday ? <MetricValueInline prefix="¥" value={<FlashValue value={data.todaySpendCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"} detail="今日 FlowAPI 实际扣费" chartData={data.todaySpendTrend} chartType="step" chartColor="yellow" empty={!hasToday} onClick={() => open("今日花费详情", data.todaySpendTrend, moneyFormatter, "yellow")} />
         <DashboardExchangeCard label="今日已省" value={data.todaySavedCny > 0 ? <MetricValueInline prefix="¥" value={<FlashValue value={data.todaySavedCny.toFixed(2)} tick={data.tick} />} /> : "暂无数据"} detail={data.todaySavedCny > 0 ? `官方价 ¥${data.todayOfficialCny.toFixed(2)} / 实际价 ¥${data.todayActualCny.toFixed(2)}` : "完成今日真实调用后显示"} chartData={data.todaySavingTrend} chartColor="green" empty={data.todaySavedCny <= 0} onClick={onOpenSavings} />
+        <DashboardExchangeCard label="今日请求次数" value={hasToday ? <MetricValueInline value={data.todayRequests} unit="次" /> : "暂无数据"} detail="今天成功与失败请求总数" chartData={data.recentCallTrend} chartType="bar" chartColor="purple" chartFormatter={countFormatter} empty={!hasToday} onClick={() => open("今日请求次数详情", data.recentCallTrend, countFormatter, "purple")} />
+        <DashboardExchangeCard label="今日最常用模型" value={data.todayTopModel || "暂无数据"} detail="按今日真实调用次数统计" chartData={data.todayTopModelTrend || []} chartType="bar" chartColor="green" chartFormatter={countFormatter} empty={!data.todayTopModel} onClick={() => open("今日最常用模型详情", data.todayTopModelTrend || [], countFormatter, "green")} />
         <DashboardExchangeCard label="最近调用" value={recent ? (
           <span className="dash3-model-value-inline">
             <ModelLogo model={recent.model} provider={recent.provider} size={34} />
@@ -4159,6 +4152,12 @@ export default function DashboardPage() {
   const todayHourlyTokens = todayHourlySpend.map((item) => ({ label: item.label, value: Number(item.secondaryValue || 0), secondaryValue: Number(item.value || 0) }));
   const weekRequests = trendData.slice(-7).reduce((sum, item) => sum + Number(item.requests || 0), 0);
   const todayRequests = Number(dashboardStats.todayRequests || 0);
+  const todayCallsForModel = usage.calls.filter((call) => call.createdAt && isSameDay(new Date(call.createdAt), nowForDashboard));
+  const todayModelCounts = Array.from(todayCallsForModel.reduce((map, call) => {
+    const model = call.routedModel || call.requestedModel || call.model || "未知模型";
+    map.set(model, (map.get(model) || 0) + 1);
+    return map;
+  }, new Map()).entries()).sort((a, b) => b[1] - a[1]);
   const totalOverviewData = {
     tick,
     totalSpendCny: Number(dashboardStats.totalCost || 0),
@@ -4205,6 +4204,8 @@ export default function DashboardPage() {
     todayActualCny: Number(todaySavingsTotals.actual || dashboardStats.todayCost || 0),
     todaySavedCny: Number(todaySavingsTotals.saved || 0),
     todayRequests,
+    todayTopModel: todayModelCounts[0]?.[0] || "",
+    todayTopModelTrend: todayModelCounts.slice(0, 5).map(([label, value]) => ({ label, value })),
     recentCall: recentCallRows[0] || null,
     todayTokenTrend: hasMiniSeriesData(todayHourlyTokens) ? todayHourlyTokens : [],
     todaySpendTrend: hasMiniSeriesData(todayHourlySpend) ? todayHourlySpend : [],
@@ -5173,6 +5174,8 @@ export default function DashboardPage() {
           display: grid;
           gap: 18px;
           padding: 26px;
+          min-height: 520px;
+          contain: layout paint;
         }
 
         .activity-heatmap-head {
@@ -5269,6 +5272,14 @@ export default function DashboardPage() {
           font-size: 12px;
           font-weight: 850;
           cursor: pointer;
+          transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+        }
+
+        .activity-heatmap-cell:hover,
+        .activity-heatmap-cell:focus-visible {
+          transform: translateY(-1px);
+          border-color: rgba(99, 102, 241, 0.36);
+          outline: none;
         }
 
         .activity-heatmap-cell.is-empty {
@@ -5294,7 +5305,7 @@ export default function DashboardPage() {
           color: var(--dash-text);
           box-shadow: 0 18px 42px rgba(15, 23, 42, 0.24);
           pointer-events: none;
-          transform: translate(12px, -110%);
+          transform: translate(0, -100%);
         }
 
         .activity-heatmap-tooltip strong {
@@ -5691,8 +5702,8 @@ export default function DashboardPage() {
             data={todayOverviewData}
             onOpenDetail={setDetailModal}
             onOpenSavings={() => setSavingsOpen(true)}
-            titleText={t("dashboard.walletTodayTitle", "钱包与今日账户状态")}
-            subtitleText={t("dashboard.walletTodaySubtitle", "查看当前可用资产、套餐进度、今日消耗、今日节省和最近调用。")}
+            titleText={t("dashboard.walletTodayTitle", "今日使用情况")}
+            subtitleText={t("dashboard.walletTodaySubtitle", "查看今日消耗 Token、今日花费、今日已省、请求次数和最近调用。")}
             onOpenLedger={() => {
               if (typeof document !== "undefined") {
                 document.getElementById("dash-recent-calls")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -5718,8 +5729,6 @@ export default function DashboardPage() {
           />
 
           <RecentCallLedger rows={recentCallRows} />
-
-          <DataExportCenter variant="dashboard" />
 
           <TokenForecastDecisionSection
             data={predictionData}

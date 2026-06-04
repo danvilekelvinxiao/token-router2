@@ -6,7 +6,7 @@ import ConsoleLayout from "@/components/ConsoleLayout";
 import ModelLogo from "@/components/ModelLogo";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import InteractiveCard from "@/components/InteractiveCard";
-import { buildCcSwitchConfigUrl } from "@/lib/cc-switch";
+import { buildCcSwitchCodexConfig, buildCcSwitchConfigUrl } from "@/lib/cc-switch";
 import { formatDateTime, formatPercent, formatRequestCount, formatSmallCny, formatToken as formatUnifiedToken } from "@/lib/format/number-format";
 import { useLocale } from "@/components/providers/locale-provider";
 import { applyLocalePrice } from "@/lib/pricing/locale-pricing";
@@ -233,6 +233,7 @@ export default function ApiManagementPage() {
   const [limitEditorKey, setLimitEditorKey] = useState(null);
   const [limitForm, setLimitForm] = useState(defaultLimitForm());
   const [savingLimit, setSavingLimit] = useState(false);
+  const [ccSwitchFallback, setCcSwitchFallback] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -326,7 +327,16 @@ export default function ApiManagementPage() {
   }
 
   function launchCcSwitchWithKey(key) {
+    if (!key?.token || !String(key.token).startsWith("sk-")) {
+      setCcSwitchFallback({
+        key,
+        canImport: false,
+        message: "为了安全，完整 API Key 只在创建时显示一次。如需一键导入，请重新创建 API Key。",
+      });
+      return;
+    }
     const modelId = key?.publicModelId || selectedModel?.modelId || DEFAULT_MODEL_ID;
+    const manualConfig = buildCcSwitchCodexConfig({ apiKey: key.token, baseUrl: API_BASE_URL, model: modelId });
     const url = buildCcSwitchConfigUrl({
       apiKey: key?.token,
       baseUrl: API_BASE_URL,
@@ -334,6 +344,7 @@ export default function ApiManagementPage() {
       name: "FlowAPI",
       displayName: key?.modelDisplayName || modelId,
     });
+    setCcSwitchFallback({ key, canImport: true, url, manualConfig, modelId, message: "未检测到 CC-Switch 已打开，请先安装后重试。" });
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.target = "_blank";
@@ -341,6 +352,9 @@ export default function ApiManagementPage() {
     document.body.appendChild(anchor);
     anchor.click();
     document.body.removeChild(anchor);
+    window.setTimeout(() => {
+      setCcSwitchFallback((current) => current?.url === url ? current : current);
+    }, 1200);
   }
 
   function openGuideDetail(step) {
@@ -762,8 +776,9 @@ export default function ApiManagementPage() {
                     </div>
                     <code>{maskToken(key.token)}</code>
                     <div className="api-key-card-meta">
-                      <span>Model ID：{key.publicModelId || "同步中"}</span>
-                      <span>最近使用：{formatDate(key.lastUsedAt)}</span>
+                      <span>今日使用：{formatToken(key.quotaLimit?.todayUsedTokens || 0)}</span>
+                      <span>本月使用：{formatToken(key.quotaLimit?.monthUsedTokens || key.quotaLimit?.totalUsedTokens || 0)}</span>
+                      <span>最后调用：{formatDate(key.lastUsedAt)}</span>
                     </div>
                     <div className={`api-key-limit-summary tone-${limitCopy.tone}`}>
                       <div>
@@ -778,8 +793,9 @@ export default function ApiManagementPage() {
                       ) : null}
                     </div>
                     <div className="api-key-card-actions" onClick={(event) => event.stopPropagation()}>
+                      <button type="button" className="primary" onClick={() => launchCcSwitchWithKey(key)}>使用</button>
                       <button type="button" onClick={() => copyText(key.token, "API Key 已复制")}>复制 API Key</button>
-                      <button type="button" onClick={() => copyText(key.publicModelId || "", "Model ID 已复制")} disabled={!key.publicModelId}>复制 Model ID</button>
+                      <button type="button" onClick={() => openUsage(key)}>详情</button>
                       <button type="button" onClick={() => openLimitEditor(key)}>调整额度</button>
                       <button type="button" onClick={() => toggleKey(key)}>{key.disabledAt ? "启用" : "禁用"}</button>
                       <button type="button" className="danger" onClick={() => deleteKey(key)}>删除</button>
@@ -921,6 +937,39 @@ export default function ApiManagementPage() {
               <button type="button" className="api-action primary" disabled={savingLimit} onClick={saveLimitEditor}>
                 {savingLimit ? "保存中..." : "保存额度"}
               </button>
+            </footer>
+          </div>
+        </div>
+      ) : null}
+
+      {ccSwitchFallback ? (
+        <div className="api-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget) setCcSwitchFallback(null); }}>
+          <div className="api-modal api-key-limit-modal">
+            <header>
+              <div>
+                <span>CC-Switch</span>
+                <h2>使用 FlowAPI API Key</h2>
+              </div>
+              <button type="button" onClick={() => setCcSwitchFallback(null)}>×</button>
+            </header>
+            <div className="api-modal-body">
+              <p className="api-key-limit-note">{ccSwitchFallback.message}</p>
+              <DetailRows rows={[
+                { label: "Provider", value: "OpenAI Compatible" },
+                { label: "Base URL", value: API_BASE_URL },
+                { label: "默认模型", value: ccSwitchFallback.modelId || ccSwitchFallback.key?.publicModelId || DEFAULT_MODEL_ID },
+                { label: "API Key", value: ccSwitchFallback.canImport ? "已写入 deeplink，不在本地保存" : "完整 Key 不可取回" },
+              ]} />
+              {ccSwitchFallback.manualConfig ? (
+                <pre className="api-management-code-preview"><code>{ccSwitchFallback.manualConfig.config}</code></pre>
+              ) : null}
+            </div>
+            <footer>
+              <button type="button" className="api-action" onClick={() => setCcSwitchFallback(null)}>取消</button>
+              {ccSwitchFallback.url ? <button type="button" className="api-action primary" onClick={() => window.open(ccSwitchFallback.url, "_blank", "noopener,noreferrer")}>重试打开</button> : null}
+              <a className="api-action" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noreferrer">下载 CC-Switch</a>
+              {ccSwitchFallback.manualConfig ? <button type="button" className="api-action" onClick={() => copyText(ccSwitchFallback.manualConfig.config, "备用配置已复制")}>复制备用配置</button> : null}
+              <a className="api-action" href="/help/images#cc-switch" target="_blank" rel="noreferrer">查看手动教程</a>
             </footer>
           </div>
         </div>

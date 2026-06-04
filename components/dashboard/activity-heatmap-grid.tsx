@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { createPortal } from "react-dom";
 
 type ActivityDay = {
   date?: string;
@@ -36,6 +37,7 @@ function formatCny(value: unknown) {
 
 export default function ActivityHeatmapGrid({ weeks, onSelectDay }: ActivityHeatmapGridProps) {
   const [tooltip, setTooltip] = useState<{ day: ActivityDay; x: number; y: number } | null>(null);
+  const canPortal = typeof document !== "undefined";
 
   return (
     <div className="activity-heatmap-grid-wrap">
@@ -51,9 +53,13 @@ export default function ActivityHeatmapGrid({ weeks, onSelectDay }: ActivityHeat
                 key={day.date}
                 className={`activity-heatmap-cell level-${day.level || 0}`}
                 aria-label={`${formatDate(day.date)} 调用 ${day.requests || 0} 次`}
-                onClick={() => onSelectDay?.(day)}
-                onMouseEnter={(event) => setTooltip({ day, x: event.clientX, y: event.clientY })}
-                onMouseMove={(event) => setTooltip({ day, x: event.clientX, y: event.clientY })}
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.currentTarget.blur();
+                  onSelectDay?.(day);
+                }}
+                onMouseEnter={(event) => setTooltip({ day, x: event.clientX + 12, y: event.clientY + 12 })}
+                onMouseMove={(event) => setTooltip({ day, x: event.clientX + 12, y: event.clientY + 12 })}
                 onMouseLeave={() => setTooltip(null)}
               >
                 {day.day}
@@ -64,14 +70,14 @@ export default function ActivityHeatmapGrid({ weeks, onSelectDay }: ActivityHeat
           </div>
         ))}
       </div>
-      {tooltip ? (
+      {tooltip && canPortal ? createPortal((
         <div className="activity-heatmap-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
           <strong>{formatDate(tooltip.day.date)}</strong>
           <span>调用：{Number(tooltip.day.requests || 0)} 次</span>
           <span>Token：{formatToken(tooltip.day.tokens)}</span>
           <span>花费：{formatCny(tooltip.day.spend)}</span>
         </div>
-      ) : null}
+      ), document.body) : null}
     </div>
   );
 }
