@@ -29,7 +29,11 @@ type AssetProgressBarProps = {
 };
 
 function renderValue(value?: number | null, unit?: AssetProgressBarProps["unit"]) {
-  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "暂无数据";
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    if (unit === "CNY") return "￥0.00";
+    if (unit === "day") return "0 天";
+    return "0 Token";
+  }
   if (unit === "CNY") return formatWalletCny(value);
   if (unit === "day") return `${Math.max(0, Math.round(Number(value)))} 天`;
   return formatWalletTokens(value);
@@ -53,7 +57,7 @@ function renderHeadline({
     if (tokenPart && dayPart) return `${tokenPart} · ${dayPart}`;
     if (tokenPart) return `剩余 ${tokenPart}`;
     if (dayPart) return dayPart;
-    return title.includes("暂无") ? "购买套餐后这里会显示进度" : "暂无数据";
+    return title.includes("暂无") ? "0 Token" : "0";
   }
   if (Number.isFinite(Number(currentValue)) && Number.isFinite(Number(totalValue))) {
     return `剩余 ${renderValue(currentValue, unit)} / 总 ${renderValue(totalValue, unit)}`;
@@ -61,7 +65,7 @@ function renderHeadline({
   if (Number.isFinite(Number(currentValue))) {
     return `剩余 ${renderValue(currentValue, unit)}`;
   }
-  return "完成更多真实调用后会显示更准确的资产进度";
+  return "0 Token";
 }
 
 export default function AssetProgressBar({
@@ -122,8 +126,8 @@ export default function AssetProgressBar({
       </div>
 
       <div className="asset-progress-meta">
-        <span>{leftLabel || (Number.isFinite(Number(totalValue)) ? `已用 ${renderValue((Number(totalValue || 0) - Number(currentValue || 0)), unit)}` : "暂无已用数据")}</span>
-        <span>{rightLabel || (Number.isFinite(Number(currentValue)) ? `剩余 ${renderValue(currentValue, unit)}` : "等待真实数据")}</span>
+        <span>{leftLabel || (Number.isFinite(Number(totalValue)) ? `已用 ${renderValue((Number(totalValue || 0) - Number(currentValue || 0)), unit)}` : "已用 0")}</span>
+        <span>{rightLabel || (Number.isFinite(Number(currentValue)) ? `剩余 ${renderValue(currentValue, unit)}` : `剩余 ${renderValue(0, unit)}`)}</span>
       </div>
 
       {!compact && secondaryPercent !== null && secondaryPercent !== undefined ? (

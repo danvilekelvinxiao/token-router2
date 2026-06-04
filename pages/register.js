@@ -228,9 +228,9 @@ export default function RegisterPage() {
           {step === "done" && (
             <div style={{ textAlign: "center", marginTop: 40 }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
-              <p style={{ color: "var(--page-sub)", fontSize: 15 }}>邮箱验证成功，体验额度已发放到你的账户。下一步直接充值，或者马上开始生成第一张图。</p>
+              <p style={{ color: "var(--page-sub)", fontSize: 15 }}>邮箱验证成功，体验额度已发放到你的账户。下一步先创建 API Key，马上跑通第一次真实调用。</p>
               <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 24 }}>
-                <Link href="/recharge?next=%2Fimages&source=register" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "12px 24px", borderRadius: 10, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 15, fontWeight: 700, textDecoration: "none" }}>先去充值</Link>
+                <Link href="/api-management?source=register" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "12px 24px", borderRadius: 10, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 15, fontWeight: 700, textDecoration: "none" }}>立即使用</Link>
                 <Link href="/images" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "12px 24px", borderRadius: 10, border: "1px solid rgba(99,102,241,0.24)", background: "rgba(255,255,255,0.9)", color: "var(--page-heading)", fontSize: 15, fontWeight: 700, textDecoration: "none" }}>直接去生成图片</Link>
               </div>
             </div>

@@ -4,7 +4,6 @@ import { useRouter } from "next/router";
 import { useCallback, useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal from "@/components/CardDetailModal";
-import DataExportCenter from "@/components/DataExportCenter";
 import UserBadges from "@/components/profile/user-badges";
 import UserBadgeDrawer from "@/components/profile/user-badge-drawer";
 import LiveNumber from "@/components/ui/live-number";
@@ -469,8 +468,6 @@ export default function ProfilePage() {
           }}
         />
 
-        <DataExportCenter variant="profile" />
-
         <section className="profile-support-grid">
           <div
             role="button"
@@ -489,7 +486,7 @@ export default function ProfilePage() {
                 <span>系统消息</span>
                 <h2>系统公告</h2>
               </div>
-              <em>点击查看历史公告</em>
+              <em aria-hidden="true">↗</em>
             </div>
             <div className="profile-timeline">
               {announcements.slice(0, 3).map((item) => (
@@ -523,7 +520,7 @@ export default function ProfilePage() {
               <span>下载协助</span>
             </div>
             <div className="profile-qq-qr-wrap">
-              <Image src="/images/qq-group-qr.png" alt="FlowAPI QQ 交流群二维码" width={190} height={190} />
+              <Image src="/images/qrcode/flowapi-qq-group.png" alt="FlowAPI QQ 交流群二维码" width={190} height={190} />
             </div>
             <div className="profile-qq-number">
               <span>群号</span>
@@ -695,7 +692,7 @@ function ReferralProgram({
       <div className="profile-referral-summary">
         {[
           { label: "累计邀请", value: Number(referral?.totalInvites || 0), suffix: "人", hint: "通过你的链接注册的好友" },
-          { label: "有效充值", value: Number(referral?.validInvites || 0), suffix: "人", hint: "完成真实充值后计入奖励" },
+          { label: "有效邀请", value: Number(referral?.validInvites || 0), suffix: "人", hint: "累计充值满 ￥30 后计入" },
           { label: "可提现佣金", value: Number(referral?.withdrawableCommissionCny || 0), prefix: "¥", decimals: 2, hint: "可申请提现或购买 Token" },
         ].map((item) => (
           <div key={item.label} className="profile-referral-kpi">
@@ -708,7 +705,7 @@ function ReferralProgram({
           <span>佣金明细</span>
           <strong>查看完整返佣数据</strong>
           <p>累计佣金、已提现、奖励额度、购买 Token 记录都收进这里。</p>
-          <em>查看明细</em>
+          <em aria-hidden="true">↗</em>
         </button>
       </div>
 
@@ -770,7 +767,7 @@ function ReferralProgram({
         {visibleInvites.map((item) => (
           <article key={item.id} className="profile-referral-row">
             <div><strong>{item.name}</strong><span>注册时间：{formatDate(item.registeredAt)}</span></div>
-            <div><span>{item.firstRecharge ? "已首充" : "未充值"}</span><b>{formatMoney(item.totalRechargeCny)}</b></div>
+            <div><span>{item.firstRecharge ? "有效邀请" : Number(item.totalRechargeCny || 0) > 0 ? "待充值达标" : "已注册"}</span><b>{formatMoney(item.totalRechargeCny)}</b></div>
             <div><span>最近充值</span><b>{item.latestRechargeCny ? formatMoney(item.latestRechargeCny) : "-"}</b></div>
             <div><span>可提现佣金</span><b>{formatMoney(item.commissionCny)}</b></div>
             <div><span>奖励额度</span><b>{formatMoney(item.creditBonusCny)}</b></div>

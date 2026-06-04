@@ -12,6 +12,7 @@ type ModelLeaderboardRowProps = {
     tokensLabel?: string;
     changePercent?: number | null;
     isNew?: boolean;
+    isFree?: boolean;
     requests?: number;
     costCny?: number;
     share?: number;
@@ -21,7 +22,7 @@ type ModelLeaderboardRowProps = {
 
 function formatTrend(item: ModelLeaderboardRowProps["item"]) {
   if (item.isNew) {
-    return { label: "new", className: "is-new" };
+    return { label: "新", className: "is-new" };
   }
 
   const value = Number(item.changePercent);
@@ -37,7 +38,7 @@ function formatTrend(item: ModelLeaderboardRowProps["item"]) {
 export default function ModelLeaderboardRow({ item, showTooltip = false }: ModelLeaderboardRowProps) {
   const trend = formatTrend(item);
   const hasTokenNumber = item.tokens !== null && item.tokens !== undefined && Number.isFinite(Number(item.tokens)) && Number(item.tokens) > 0;
-  const tokenLabel = item.tokensLabel || formatTokenCompact(item.tokens, "数据同步中");
+  const tokenLabel = item.tokensLabel || formatTokenCompact(item.tokens, "0 Token");
   const provider = item.provider || item.logo || "unknown";
   const hasTooltip = showTooltip && (item.requests !== undefined || item.costCny !== undefined || item.share !== undefined);
 
@@ -46,7 +47,10 @@ export default function ModelLeaderboardRow({ item, showTooltip = false }: Model
       <div className="model-leaderboard-rank">{item.rank}</div>
       <ModelLogo model={item.model} provider={provider} size={36} />
       <div className="model-leaderboard-main">
-        <div className="model-leaderboard-name" title={item.model}>{item.model}</div>
+        <div className="model-leaderboard-name" title={item.model}>
+          {item.model}
+          {item.isFree ? <em className="model-leaderboard-free">Free</em> : null}
+        </div>
         <div className="model-leaderboard-provider" title={provider}>{provider}</div>
       </div>
       <div className="model-leaderboard-metric">

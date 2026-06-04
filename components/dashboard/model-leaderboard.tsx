@@ -9,6 +9,7 @@ export type ModelLeaderboardItem = {
   tokensLabel?: string;
   changePercent?: number | null;
   isNew?: boolean;
+  isFree?: boolean;
   requests?: number;
   costCny?: number;
   share?: number;

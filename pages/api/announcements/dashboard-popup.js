@@ -14,6 +14,7 @@ export default function handler(req, res) {
       success: true,
       source: "empty",
       shouldShow: false,
+      shouldPopup: false,
       announcementVersion: "",
       announcements: [],
       qqGroup: payload.qqGroup,
@@ -29,6 +30,7 @@ export default function handler(req, res) {
     source: "real",
     announcementVersion: payload.announcementVersion,
     shouldShow: !seen,
+    shouldPopup: !seen,
     announcements: payload.announcements,
     qqGroup: payload.qqGroup,
   });

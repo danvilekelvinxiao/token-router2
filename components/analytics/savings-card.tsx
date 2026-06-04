@@ -26,7 +26,7 @@ export default function SavingsCard({
   onClick,
 }: SavingsCardProps) {
   const hasRealData = source === "real" && amount !== null && amount !== undefined;
-  const formatted = hasRealData ? formatSmallCny(amount) : "暂无数据";
+  const formatted = hasRealData ? formatSmallCny(amount) : "￥0.00";
 
   return (
     <article
@@ -49,16 +49,20 @@ export default function SavingsCard({
         {loading ? "同步中" : hasRealData ? <LiveNumber value={formatted.replace("¥", "")} prefix="¥" /> : formatted}
       </strong>
       {rankText ? <p className="savings-card-rank">{rankText}</p> : null}
-      <p>{hasRealData ? description : "完成真实模型调用后，系统会根据官方价格和 FlowAPI 实际价格为你计算节省金额。"}</p>
+      <p>{hasRealData ? description : "￥0.00"}</p>
       <MiniMetricChart
         data={chartData}
         type="area"
         color="green"
         valueFormatter={(value) => `¥${Number(value || 0).toFixed(2)}`}
         height={62}
-        emptyText="节省趋势同步中"
+        emptyText=""
       />
-      <small>点击查看详情</small>
+      <span className="savings-card-detail-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <path d="M7 17 17 7M9 7h8v8" />
+        </svg>
+      </span>
     </article>
   );
 }

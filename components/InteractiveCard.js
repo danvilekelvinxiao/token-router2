@@ -2,7 +2,7 @@ export default function InteractiveCard({
   as: Tag = "article",
   className = "",
   title = "",
-  hint = "点击查看详情",
+  hint = "",
   selected = false,
   children,
   onClick,
@@ -39,7 +39,6 @@ export default function InteractiveCard({
         ↗
       </button>
       {children}
-      {hint ? <div className="interactive-card-hint">{hint}</div> : null}
     </Tag>
   );
 }

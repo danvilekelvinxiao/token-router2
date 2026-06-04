@@ -31,7 +31,7 @@ export default function LoginPage() {
     }
 
     localStorage.setItem("flowapi_customer", JSON.stringify(data.customer));
-    router.push("/dashboard");
+    router.push("/api-management?source=login");
   }
 
   return (

@@ -14463,19 +14463,56 @@ pre {
   margin-top: auto;
 }
 
-.dash3-exchange-card em {
-  margin-top: 2px;
-  color: var(--dash-sub);
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 850;
-  opacity: 0.86;
-}
-
 .dash3-exchange-card.is-empty .dash3-exchange-card-value {
   color: var(--dash-sub);
   font-size: clamp(24px, 2vw, 30px);
   letter-spacing: 0;
+}
+
+.dash3-detail-corner-icon {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dash-card-bg) 76%, transparent);
+  color: var(--dash-accent);
+  opacity: 0.72;
+  transform: translate3d(0, 0, 0);
+  transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  pointer-events: none;
+}
+
+.dash3-detail-corner-icon svg,
+.model-consumption-detail-link svg,
+.savings-card-detail-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.dash3-detail-corner-icon path,
+.model-consumption-detail-link path,
+.savings-card-detail-icon path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dash3-exchange-card:hover .dash3-detail-corner-icon,
+.dash3-exchange-card:focus-visible .dash3-detail-corner-icon,
+.dash3-asset-card:hover .dash3-detail-corner-icon,
+.dash3-asset-card:focus-visible .dash3-detail-corner-icon {
+  opacity: 1;
+  transform: translate3d(1px, -1px, 0);
+  border-color: rgba(99, 102, 241, 0.36);
+  background: rgba(99, 102, 241, 0.12);
 }
 
 .model-consumption-card {
@@ -14535,12 +14572,14 @@ pre {
 }
 
 .model-consumption-detail-link {
+  width: 34px;
   flex: none;
   display: inline-flex;
+  height: 34px;
   min-height: 34px;
   align-items: center;
   justify-content: center;
-  padding: 0 12px;
+  padding: 0;
   border: 1px solid rgba(99, 102, 241, 0.25);
   border-radius: 999px;
   background: rgba(99, 102, 241, 0.08);
@@ -19111,25 +19150,6 @@ g:focus-visible > .model-consumption-bar-segment {
   font-size: 15px;
 }
 
-.dash3-asset-card-hint {
-  position: absolute;
-  right: 16px;
-  bottom: 14px;
-  opacity: 0;
-  color: var(--dash-accent);
-  font-size: 12px;
-  font-style: normal;
-  font-weight: 780;
-  transition: opacity 0.18s ease, transform 0.18s ease;
-  transform: translateY(4px);
-}
-
-.dash3-asset-card:hover .dash3-asset-card-hint,
-.dash3-asset-card:focus-visible .dash3-asset-card-hint {
-  opacity: 1;
-  transform: translateY(0);
-}
-
 .dash3-shell .dash3-asset-overview-grid {
   grid-template-columns: 1.18fr repeat(3, minmax(0, 1fr));
   gap: 20px;
@@ -21652,13 +21672,37 @@ html {
   font-weight: 850;
 }
 
-.savings-card-head em,
-.savings-card small {
+.savings-card-head em {
   color: var(--dash-green, #16a34a);
   font-size: 12px;
   font-style: normal;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.savings-card-detail-icon {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.08);
+  color: var(--dash-green, #16a34a);
+  opacity: 0.74;
+  transition: opacity 0.18s ease, transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.savings-card:hover .savings-card-detail-icon,
+.savings-card:focus-visible .savings-card-detail-icon {
+  opacity: 1;
+  transform: translate3d(1px, -1px, 0);
+  border-color: rgba(34, 197, 94, 0.38);
+  background: rgba(34, 197, 94, 0.14);
 }
 
 .savings-card-value {
@@ -22391,6 +22435,21 @@ html {
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.model-leaderboard-free {
+  display: inline-flex;
+  margin-left: 8px;
+  padding: 2px 7px;
+  transform: translateY(-1px);
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.1);
+  color: #16a34a;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 900;
+  vertical-align: middle;
 }
 
 .model-leaderboard-provider {
@@ -29561,7 +29620,16 @@ body {
 }
 
 .api-modal footer {
+  position: sticky;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 4;
   flex-wrap: wrap;
+  margin: 16px -2px -2px;
+  padding-top: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--page-card-bg) 76%, transparent), var(--page-card-bg) 42%);
+  backdrop-filter: blur(14px);
 }
 
 .api-action-disabled-hint {

@@ -477,14 +477,21 @@ export default function RechargePage() {
         } else {
           setSubmittedOrder(data.order);
           setPaymentSession(data.payment || null);
-          setStep("pay");
-          setActivePaymentModal("crypto");
           if (data.mode === "manual") {
+            setStep("pay");
+            setActivePaymentModal("crypto");
             setManualFallback(true);
             setPaymentError(data.reason || L("当前链路暂未接通自动到账，已切换为人工确认。", "Automatic settlement is not available for this network yet. Switched to manual confirmation."));
             setCryptoExpireAt(null);
           } else {
             setCryptoExpireAt(data.payment?.expiresAt ? new Date(data.payment.expiresAt).getTime() : Date.now() + 10 * 60 * 1000);
+            if (data.payment?.checkoutUrl) {
+              window.location.assign(data.payment.checkoutUrl);
+              return;
+            }
+            setStep("pay");
+            setActivePaymentModal("");
+            setPaymentError(L("GMWallet 已创建订单但未返回收银台链接，请联系客服处理订单号。", "GMWallet order was created but no checkout URL was returned. Contact support with the order number."));
           }
           setCryptoNow(Date.now());
         }
@@ -1070,8 +1077,8 @@ export default function RechargePage() {
           amountLabel={formatMoney(finalAmount)}
           orderNumber={paymentOrderNumber}
           methodName={currentMethod.name}
-          qrSrc={paymentQrImages[paymentMethod]}
-          qrValue=""
+          qrSrc={paymentSession?.qrImage || paymentQrImages[paymentMethod]}
+          qrValue={paymentSession?.qrContent || ""}
           hint={L("请使用对应支付 App 扫码，支付后填写备注并提交，方便更快核对。", "Scan with the corresponding app, then submit your payment note for faster verification.")}
           notice={manualModeNotice || L("当前走人工确认模式，付款备注越清晰，到账越快。", "This payment is currently under manual confirmation. Clear notes help us credit it faster.")}
           statusLabel={paymentStatusLabel}
@@ -1223,7 +1230,10 @@ function PackageCard({ pkg, type, selected, onSelect, onDetail }) {
       <div className="recharge-package-scene">{isMonthly ? pkg.quotaText : pkg.scene}</div>
       <div className="recharge-package-price"><strong>¥{Number(pkg.price).toFixed(0)}</strong><span>{isMonthly ? "/ 月" : ` / ${pkg.quotaText}`}</span></div>
       <ul className="recharge-package-benefits">{pkg.benefits.map((benefit) => <li key={benefit}><span>✓</span>{benefit}</li>)}</ul>
-      <div className="recharge-package-actions"><span className={selected ? "recharge-package-action selected" : "recharge-package-action"}>{isMonthly ? "立即订阅" : "立即购买"}</span><span className="recharge-package-detail" onClick={(event) => { event.stopPropagation(); onDetail(); }}>查看详情</span></div>
+      <div className="recharge-package-actions">
+        <span className={selected ? "recharge-package-action selected" : "recharge-package-action"}>{isMonthly ? "立即订阅" : "立即购买"}</span>
+        <span className="recharge-package-detail" aria-label="查看套餐详情" onClick={(event) => { event.stopPropagation(); onDetail(); }}>↗</span>
+      </div>
     </button>
   );
 }

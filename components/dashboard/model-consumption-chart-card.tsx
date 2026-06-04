@@ -235,8 +235,10 @@ export default function ModelConsumptionChartCard({ data }: Props) {
           <h3>总计消耗模型</h3>
           <p>按真实调用日志汇总近 7 天各模型的金额、Token 和请求数。</p>
         </div>
-        <Link href="/dashboard/logs?range=7d&groupBy=model" className="model-consumption-detail-link">
-          查看明细
+        <Link href="/dashboard/logs?range=7d&groupBy=model" className="model-consumption-detail-link" aria-label="查看模型消耗明细">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M7 17 17 7M9 7h8v8" />
+          </svg>
         </Link>
       </header>
 
@@ -257,9 +259,8 @@ export default function ModelConsumptionChartCard({ data }: Props) {
 
       {!hasData ? (
         <div className="model-consumption-empty">
-          <strong>暂无真实调用数据</strong>
-          <span>完成第一次模型调用后，这里会自动展示每个模型花了多少钱。</span>
-          <Link href="/models">去调用模型</Link>
+          <strong>￥0.00</strong>
+          <span>0 Token</span>
         </div>
       ) : (
         <>

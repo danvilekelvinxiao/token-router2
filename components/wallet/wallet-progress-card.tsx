@@ -188,14 +188,18 @@ export default function WalletProgressCard({
       <>
         <section className={`wallet-progress-card wallet-mode-${mode} wallet-empty`}>
           <div className="wallet-card-head">
-            <div><span>{renderEyebrow()}</span><h2>{renderTitle()}</h2><p>{mode === "dashboard" ? "查看你的余额、套餐额度、会员赠送额度和消耗优先级。" : copy.subtitle}</p></div>
+            <div><span>{renderEyebrow()}</span><h2>{renderTitle()}</h2><p>{mode === "dashboard" ? "0 Token / 0 天" : copy.subtitle}</p></div>
             <em className="wallet-status-pill tone-none">暂无套餐</em>
           </div>
-          <div className="wallet-empty-state">
-            <strong>暂无钱包数据</strong>
-            <p>完成充值或兑换激活码后，这里会显示你的余额、套餐进度和到期时间。</p>
-            <Link href="/recharge">立即充值</Link>
-          </div>
+          {mode === "dashboard" ? (
+            <WalletProgressSection walletProgress={walletProgress} onOpenDetail={openDetail} />
+          ) : (
+            <div className="wallet-empty-state">
+              <strong>￥0.00</strong>
+              <p>0 Token</p>
+              <Link href="/recharge">立即充值</Link>
+            </div>
+          )}
         </section>
         <WalletDetailDrawer open={open} onClose={() => setOpen(false)} data={data} loading={loading} focusTitle={detailFocus} />
       </>
@@ -209,24 +213,13 @@ export default function WalletProgressCard({
           <div>
             <span>{renderEyebrow()}</span>
             <h2>{renderTitle()}</h2>
-            <p>{mode === "dashboard" ? "只查看当前套餐 Token、已用额度和到期进度。" : copy.subtitle}</p>
+            <p>{mode === "dashboard" ? "Token / 到期 / 黑金会员" : copy.subtitle}</p>
           </div>
           <em className={`wallet-status-pill tone-${status.tone}`}>{status.label}</em>
         </div>
 
         {mode === "dashboard" ? (
-          <div className="wallet-dashboard-pools">
-            <button type="button" className="wallet-pool-card is-primary" onClick={() => openDetail("套餐额度")}>
-              <span>套餐额度</span>
-              <strong>{hasPlan ? formatWalletCny(planRemainingCny) : "暂无套餐"}</strong>
-              <p>{hasPlan ? `${usedTotalLabel} · ${formatWalletDate(expiresAt)} 到期` : "购买套餐后显示额度和到期时间"}</p>
-            </button>
-            <button type="button" className="wallet-pool-card" onClick={() => openDetail("最近到期时间")}>
-              <span>最近到期时间</span>
-              <strong>{formatWalletDate(expiresAt)}</strong>
-              <p>{hasPlan ? planTimeline : "暂无套餐到期时间"}</p>
-            </button>
-          </div>
+          <WalletProgressSection walletProgress={walletProgress} onOpenDetail={openDetail} />
         ) : isRechargeMode ? (
           <>
             <div className="wallet-summary-grid wallet-summary-grid-compact">
@@ -274,9 +267,7 @@ export default function WalletProgressCard({
 
         {!isRechargeMode ? (
           <>
-            {mode === "dashboard" ? (
-              <WalletProgressSection walletProgress={walletProgress} onOpenDetail={openDetail} />
-            ) : (
+            {mode === "dashboard" ? null : (
               <button type="button" className="wallet-progress-wrap wallet-progress-click-target" onClick={() => openDetail("钱包与套餐进度")}>
                 <div className="wallet-progress-topline">
                   <span>{progressTitle}</span>
@@ -286,7 +277,7 @@ export default function WalletProgressCard({
               </button>
             )}
 
-            <div className="wallet-billing-preference">
+            {mode === "dashboard" ? null : <div className="wallet-billing-preference">
               <div>
                 <span>消耗优先级</span>
                 <p>会员赠送额度和黑金会员额度始终优先消耗。</p>
@@ -296,7 +287,7 @@ export default function WalletProgressCard({
                 <button type="button" className={priorityMode === "balance_first" ? "active" : ""} disabled={savingPreference} onClick={() => switchPriority("balance_first")}>优先使用余额</button>
               </div>
               {notice ? <em className={notice.includes("失败") ? "error" : "success"}>{notice}</em> : null}
-            </div>
+            </div>}
 
             {mode !== "dashboard" ? (
               <div className={`wallet-member-strip ${membership?.status === "active" ? "active" : "inactive"}`}>
@@ -336,7 +327,7 @@ export default function WalletProgressCard({
                 <div className="wallet-actions" onClick={(event) => event.stopPropagation()}>
                   <Link href={mode === "profile" ? "/dashboard#dash-recent-calls" : "/recharge"}>{copy.primary}</Link>
                   <Link href={mode === "dashboard" ? "/dashboard#dash-recent-calls" : "/recharge"}>{copy.secondary}</Link>
-                  <button type="button" onClick={() => openDetail("钱包与套餐详情")}>查看详情</button>
+                  <button type="button" aria-label="查看钱包与套餐详情" onClick={() => openDetail("钱包与套餐详情")}>↗</button>
                 </div>
               </>
             ) : null}

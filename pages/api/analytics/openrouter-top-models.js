@@ -66,7 +66,7 @@ function getModelId(row) {
 }
 
 function getDisplayName(row, modelId) {
-  return String(
+  const name = String(
     row?.displayName
     || row?.display_name
     || row?.name
@@ -74,6 +74,8 @@ function getDisplayName(row, modelId) {
     || row?.model?.name
     || displayNameFromModelId(modelId)
   ).replace(/^[^:]+:\s*/, "").trim();
+  if (!name || /^free$/i.test(name)) return displayNameFromModelId(modelId);
+  return name;
 }
 
 function getTokens(row) {
@@ -92,12 +94,39 @@ function getTokens(row) {
 function getTrendPercent(row) {
   const raw = row?.trendPercent ?? row?.trend_percent ?? row?.changePercent ?? row?.change_percent ?? row?.change;
   const number = Number(raw);
-  if (!Number.isFinite(number)) return 0;
+  if (!Number.isFinite(number)) return null;
   return Math.abs(number) <= 2 ? Math.round(number * 100) : Math.round(number);
 }
 
-function normalizeRows(rows) {
-  return rows
+function isFreeModel(row, modelId) {
+  const prompt = Number(row?.pricing?.prompt ?? row?.prompt_price ?? row?.price_prompt);
+  const completion = Number(row?.pricing?.completion ?? row?.completion_price ?? row?.price_completion);
+  return /:free\b|free/i.test(String(modelId || row?.name || row?.displayName || "")) || (prompt === 0 && completion === 0);
+}
+
+function withComputedTrend(items, previousModels = []) {
+  const previousByModel = new Map(previousModels.map((item) => [item.modelId || item.model, item]));
+  return items.map((item) => {
+    if (Number.isFinite(Number(item.changePercent))) return item;
+    const previous = previousByModel.get(item.modelId) || previousByModel.get(item.model);
+    const previousTokens = Number(previous?.tokens || 0);
+    if (previousTokens > 0) {
+      return {
+        ...item,
+        changePercent: Math.round(((Number(item.tokens || 0) - previousTokens) / previousTokens) * 100),
+        isNew: false,
+      };
+    }
+    return {
+      ...item,
+      changePercent: Number(item.tokens || 0) > 0 ? null : 0,
+      isNew: Number(item.tokens || 0) > 0,
+    };
+  });
+}
+
+function normalizeRows(rows, previousModels = []) {
+  const normalized = rows
     .map((row) => {
       const modelId = getModelId(row);
       const tokens = getTokens(row);
@@ -113,6 +142,7 @@ function normalizeRows(rows) {
         tokensLabel: formatTokens(tokens),
         changePercent: getTrendPercent(row),
         isNew: Boolean(row?.isNew || row?.is_new),
+        isFree: isFreeModel(row, modelId),
         sparkline: Array.isArray(row?.sparkline) ? row.sparkline : [],
       };
     })
@@ -120,6 +150,7 @@ function normalizeRows(rows) {
     .sort((a, b) => (Number(a.rank || 0) || 9999) - (Number(b.rank || 0) || 9999) || b.tokens - a.tokens)
     .slice(0, 10)
     .map((item, index) => ({ ...item, rank: index + 1 }));
+  return withComputedTrend(normalized, previousModels);
 }
 
 function emptyResult(syncStatus = "failed", message = "OpenRouter 数据同步中") {
@@ -155,7 +186,7 @@ async function fetchOpenRouterTopModels() {
   }
 
   const payload = await response.json();
-  const models = normalizeRows(extractRows(payload));
+  const models = normalizeRows(extractRows(payload), cachedResult?.models || []);
   return {
     success: true,
     source: "openrouter",
