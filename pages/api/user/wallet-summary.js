@@ -70,6 +70,159 @@ function buildSevenDaySpendTrend(calls = []) {
   });
 }
 
+const MODEL_CONSUMPTION_COLORS = [
+  "#3b82f6",
+  "#8b5cf6",
+  "#14b8a6",
+  "#f59e0b",
+  "#ec4899",
+  "#64748b",
+];
+
+function shanghaiDateKey(value) {
+  const date = new Date(value || Date.now());
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function buildShanghaiDateRange(days = 7) {
+  const now = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(now);
+    date.setUTCDate(now.getUTCDate() - ((days - 1) - index));
+    const key = date.toISOString().slice(0, 10);
+    return {
+      key,
+      label: key.slice(5).replace("-", "/"),
+    };
+  });
+}
+
+function getCallModelName(call) {
+  return call?.routedModel || call?.requestedModel || call?.model || "未知模型";
+}
+
+function getModelColor(modelName, index = 0) {
+  const name = String(modelName || "").toLowerCase();
+  if (name.includes("gpt") || name.includes("openai")) return "#3b82f6";
+  if (name.includes("deepseek")) return "#2563eb";
+  if (name.includes("claude") || name.includes("anthropic")) return "#8b5cf6";
+  if (name.includes("gemini") || name.includes("google")) return "#f59e0b";
+  if (name.includes("qwen") || name.includes("通义")) return "#f97316";
+  if (name.includes("seedream") || name.includes("doubao") || name.includes("字节")) return "#14b8a6";
+  return MODEL_CONSUMPTION_COLORS[index % MODEL_CONSUMPTION_COLORS.length];
+}
+
+function createModelBucket(modelName, call, index) {
+  return {
+    modelId: modelName,
+    displayName: modelName,
+    provider: call?.provider || "FlowAPI",
+    logo: null,
+    color: getModelColor(modelName, index),
+    costCny: 0,
+    tokens: 0,
+    requests: 0,
+  };
+}
+
+function buildModelConsumptionChart(calls = [], days = 7) {
+  const range = buildShanghaiDateRange(days);
+  const keys = new Set(range.map((item) => item.key));
+  const byDay = new Map(range.map((item) => [item.key, new Map()]));
+  const totals = new Map();
+
+  calls.forEach((call) => {
+    const dayKey = shanghaiDateKey(call.createdAt);
+    if (!keys.has(dayKey)) return;
+    const modelName = getCallModelName(call);
+    const totalIndex = totals.size;
+    const dayMap = byDay.get(dayKey);
+    if (!dayMap) return;
+    if (!totals.has(modelName)) totals.set(modelName, createModelBucket(modelName, call, totalIndex));
+    if (!dayMap.has(modelName)) dayMap.set(modelName, createModelBucket(modelName, call, totalIndex));
+
+    const add = (bucket) => {
+      bucket.costCny += Number(call.cost || 0);
+      bucket.tokens += Number(call.tokens || 0);
+      bucket.requests += 1;
+      if (!bucket.provider && call.provider) bucket.provider = call.provider;
+    };
+    add(totals.get(modelName));
+    add(dayMap.get(modelName));
+  });
+
+  const rankedModels = Array.from(totals.values())
+    .sort((a, b) => (b.costCny - a.costCny) || (b.tokens - a.tokens) || (b.requests - a.requests));
+  const topKeys = new Set(rankedModels.slice(0, 5).map((item) => item.modelId));
+
+  const series = range.map((day) => {
+    const dayModels = Array.from((byDay.get(day.key) || new Map()).values());
+    const visible = [];
+    const rest = createModelBucket("others", { provider: "FlowAPI" }, 5);
+    rest.displayName = "其他模型";
+    rest.color = "#64748b";
+
+    dayModels
+      .sort((a, b) => (b.costCny - a.costCny) || (b.tokens - a.tokens) || (b.requests - a.requests))
+      .forEach((model) => {
+        if (topKeys.has(model.modelId)) {
+          visible.push({
+            ...model,
+            costCny: Number(model.costCny.toFixed(6)),
+          });
+          return;
+        }
+        rest.costCny += model.costCny;
+        rest.tokens += model.tokens;
+        rest.requests += model.requests;
+      });
+
+    if (rest.costCny > 0 || rest.tokens > 0 || rest.requests > 0) {
+      visible.push({
+        ...rest,
+        costCny: Number(rest.costCny.toFixed(6)),
+      });
+    }
+
+    const total = visible.reduce((acc, model) => ({
+      costCny: acc.costCny + Number(model.costCny || 0),
+      tokens: acc.tokens + Number(model.tokens || 0),
+      requests: acc.requests + Number(model.requests || 0),
+    }), { costCny: 0, tokens: 0, requests: 0 });
+
+    return {
+      time: day.key,
+      label: day.label,
+      models: visible,
+      total: {
+        costCny: Number(total.costCny.toFixed(6)),
+        tokens: total.tokens,
+        requests: total.requests,
+      },
+    };
+  });
+
+  const summary = rankedModels.reduce((acc, model) => ({
+    totalCostCny: acc.totalCostCny + Number(model.costCny || 0),
+    totalTokens: acc.totalTokens + Number(model.tokens || 0),
+    totalRequests: acc.totalRequests + Number(model.requests || 0),
+  }), { totalCostCny: 0, totalTokens: 0, totalRequests: 0 });
+
+  const from = range[0]?.key ? `${range[0].key}T00:00:00+08:00` : null;
+  const to = range[range.length - 1]?.key ? `${range[range.length - 1].key}T23:59:59+08:00` : null;
+
+  return {
+    range: { from, to, timezone: "Asia/Shanghai" },
+    summary: {
+      totalCostCny: Number(summary.totalCostCny.toFixed(6)),
+      totalTokens: summary.totalTokens,
+      totalRequests: summary.totalRequests,
+    },
+    series,
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -203,6 +356,7 @@ export default async function handler(req, res) {
         calls: [],
         membership,
       }),
+      modelConsumptionChart: buildModelConsumptionChart([]),
       message: "暂无钱包数据",
     });
   }
@@ -248,6 +402,7 @@ export default async function handler(req, res) {
       createdAt: call.createdAt,
     })),
     spendTrend7d: buildSevenDaySpendTrend(calls),
+    modelConsumptionChart: buildModelConsumptionChart(calls),
     balanceLogs: [
       ...(orders || []).slice(0, 5).map(mapBalanceLog),
       ...calls.slice(0, 5).map((call) => ({

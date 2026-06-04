@@ -11,6 +11,7 @@ import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import ExportExcelButton from "@/components/ExportExcelButton";
 import ModelLeaderboard from "@/components/dashboard/model-leaderboard";
+import ModelConsumptionChartCard from "@/components/dashboard/model-consumption-chart-card";
 import TokenMarketPanel from "@/components/dashboard/token-market-panel";
 import ActivityHeatmapCard from "@/components/dashboard/activity-heatmap-card";
 import SavingsCard from "@/components/analytics/savings-card";
@@ -2447,7 +2448,7 @@ function DashboardExchangeCard({
   );
 }
 
-function TotalAssetOverviewSection({ data, onOpenDetail, onOpenModel, titleText = "AI Token 资产总览", subtitleText = "查看你在 FlowAPI 的累计花费、Token 消耗、节省金额和主要使用模型。" }) {
+function TotalAssetOverviewSection({ data, modelConsumptionChart, onOpenDetail, onOpenModel, titleText = "AI Token 资产总览", subtitleText = "查看你在 FlowAPI 的累计花费、Token 消耗、节省金额和主要使用模型。" }) {
   const hasCalls = data.totalRequests > 0;
   const commonRows = [
     { label: "总花费", value: hasCalls ? `¥${data.totalSpendCny.toFixed(2)}` : "暂无数据" },
@@ -2550,6 +2551,7 @@ function TotalAssetOverviewSection({ data, onOpenDetail, onOpenModel, titleText 
           empty={!data.mostExpensiveModel}
           onClick={() => data.mostExpensiveModel ? onOpenModel(data.mostExpensiveModel) : open("最耗费模型详情", [])}
         />
+        <ModelConsumptionChartCard data={modelConsumptionChart} />
       </div>
     </section>
   );
@@ -5649,6 +5651,7 @@ export default function DashboardPage() {
 
             <TotalAssetOverviewSection
               data={totalOverviewData}
+              modelConsumptionChart={walletData?.modelConsumptionChart}
               onOpenDetail={setDetailModal}
               onOpenModel={(model) => setDetailModal(buildModelUsageDetail(model, trendData, recentCallRows))}
               titleText={t("dashboard.totalOverviewTitle", "AI Token 资产总览")}
