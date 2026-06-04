@@ -3,6 +3,7 @@ import { getCustomer, rechargeCustomer, logActivity, grantTemporaryCredit } from
 import { assertCustomerOwner } from "@/lib/session";
 import { seedMockData } from "@/lib/redeem-codes";
 import { upsertUserMembership } from "@/lib/membership/store";
+import { grantUserPackage } from "@/lib/packages/store";
 
 // Only seed mock data in development mode, never in production
 const ALLOW_MOCK_REDEEM_CODES = process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_REDEEM_MOCK !== "false";
@@ -48,6 +49,15 @@ export default async function handler(req, res) {
     const expiresAt = new Date(now);
     const days = result.packageId === "weekly_plan" ? 7 : 30;
     expiresAt.setDate(expiresAt.getDate() + days);
+    await grantUserPackage({
+      userId: session.customerId,
+      packageId: result.packageId,
+      packageName: result.packageId === "weekly_plan" ? "周卡激活码套餐" : result.packageId === "monthly_plan" ? "月卡激活码套餐" : result.packageId,
+      purchaseType: "activation_code",
+      validDays: days,
+      source: "redeem_code",
+      metadata: { codeId: result.record?.codeId || "", code: code.trim() },
+    });
     upsertUserMembership(session.customerId, {
       status: "active",
       startedAt: now.toISOString(),

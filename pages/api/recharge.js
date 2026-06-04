@@ -42,7 +42,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { customerId, amount, paymentMethod = "wechat", purchaseType = "balance_recharge" } = req.body || {};
+  const { customerId, amount, paymentMethod = "wechat", purchaseType = "balance_recharge", packageId = "", packageName = "", quotaText = "", validDays = null } = req.body || {};
   const session = assertCustomerOwner(req, res, customerId);
   if (!session) return;
   if (!amount) {
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
   }
 
   const paymentRef = buildPurchaseRef(req.body);
-  const result = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef });
+  const result = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef, purchaseType, packageId, packageName, quotaText, validDays });
   if (result.error) return res.status(400).json({ error: result.error });
 
   await logActivity({

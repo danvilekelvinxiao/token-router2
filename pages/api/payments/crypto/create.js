@@ -28,7 +28,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { customerId, amount, cryptoToken = "USDT", cryptoNetwork = "TRON" } = req.body || {};
+  const { customerId, amount, cryptoToken = "USDT", cryptoNetwork = "TRON", purchaseType = "balance_recharge", packageId = "", packageName = "", quotaText = "", validDays = null } = req.body || {};
   const session = assertCustomerOwner(req, res, customerId);
   if (!session) return;
 
@@ -42,6 +42,11 @@ export default async function handler(req, res) {
     amount: value,
     paymentMethod: "crypto",
     paymentRef: buildPurchaseRef(req.body),
+    purchaseType,
+    packageId,
+    packageName,
+    quotaText,
+    validDays,
   });
   if (created.error) return res.status(400).json({ error: created.error });
 

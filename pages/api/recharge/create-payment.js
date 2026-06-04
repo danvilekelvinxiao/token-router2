@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { customerId, amount, paymentMethod } = req.body || {};
+  const { customerId, amount, paymentMethod, purchaseType = "balance_recharge", packageId = "", packageName = "", quotaText = "", validDays = null } = req.body || {};
   const session = assertCustomerOwner(req, res, customerId);
   if (!session) return;
   const value = Number(amount);
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
   }
 
   if (paymentMethod === "wechat" && !isWechatConfigured()) {
-    const created = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef: buildPurchaseRef(req.body) });
+    const created = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef: buildPurchaseRef(req.body), purchaseType, packageId, packageName, quotaText, validDays });
     if (created.error) return res.status(400).json({ error: created.error });
     await recordOrderFlow(created.order);
     return res.status(200).json({
@@ -67,7 +67,7 @@ export default async function handler(req, res) {
   }
 
   if (paymentMethod === "alipay" && !isAlipayConfigured()) {
-    const created = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef: buildPurchaseRef(req.body) });
+    const created = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef: buildPurchaseRef(req.body), purchaseType, packageId, packageName, quotaText, validDays });
     if (created.error) return res.status(400).json({ error: created.error });
     await recordOrderFlow(created.order);
     return res.status(200).json({
@@ -78,7 +78,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const created = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef: buildPurchaseRef(req.body) });
+  const created = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef: buildPurchaseRef(req.body), purchaseType, packageId, packageName, quotaText, validDays });
   if (created.error) {
     return res.status(400).json({ error: created.error });
   }

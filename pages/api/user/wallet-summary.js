@@ -2,6 +2,7 @@ import { getDashboard, listRechargeOrders } from "@/lib/customer-store";
 import { requireCustomerSession } from "@/lib/session";
 import { getBillingPreference, resolveDeductionOrder } from "@/lib/billing/deduction-priority";
 import { claimDailyBonus, getMemberWallets, getUserMembership } from "@/lib/membership/store";
+import { listUserPackages } from "@/lib/packages/store";
 import { buildWalletProgress, parseQuotaTokens } from "@/lib/wallet/build-wallet-progress";
 
 function parsePackageRef(ref = "") {
@@ -236,13 +237,15 @@ export default async function handler(req, res) {
   if (!customer) return res.status(404).json({ error: "用户不存在" });
 
   const orders = await listRechargeOrders({ customerId: session.customerId, limit: 50 });
+  const userPackages = await listUserPackages(session.customerId).catch(() => []);
   const approvedOrders = (orders || []).filter(isApproved);
   const packageOrders = approvedOrders
     .map((order) => ({ order, packageInfo: parsePackageRef(order.paymentRef) }))
     .filter((item) => item.packageInfo)
     .sort((a, b) => new Date(b.order.approvedAt || b.order.createdAt) - new Date(a.order.approvedAt || a.order.createdAt));
 
-  const latestPackage = packageOrders[0] || null;
+  const latestUserPackage = userPackages[0] || null;
+  const latestPackage = latestUserPackage || packageOrders[0] || null;
   const now = new Date();
   const calls = Array.isArray(customer.calls) ? customer.calls : [];
   const currentBalance = Number(customer.balance || 0);
@@ -254,7 +257,27 @@ export default async function handler(req, res) {
   let startedAt = null;
   let expiresAt = null;
 
-  if (latestPackage) {
+  if (latestUserPackage) {
+    startedAt = latestUserPackage.startedAt;
+    expiresAt = latestUserPackage.expiresAt || null;
+    totalQuotaCny = Number((Number(latestUserPackage.quotaTokens || 0) / 10000).toFixed(6));
+    usedQuotaCny = calls
+      .filter((call) => isWithin(call.createdAt, startedAt, expiresAt))
+      .reduce((sum, call) => sum + Number(call.cost || 0), 0);
+    progressPercent = totalQuotaCny > 0 ? (usedQuotaCny / totalQuotaCny) * 100 : 0;
+    const remainingDays = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now.getTime()) / 86_400_000)) : null;
+    plan = {
+      planName: latestUserPackage.packageName,
+      planAmountCny: totalQuotaCny,
+      status: expiresAt && new Date(expiresAt).getTime() < now.getTime() ? "expired" : "active",
+      startedAt,
+      expiresAt,
+      remainingDays,
+      quotaText: latestUserPackage.quotaText,
+      quotaTokens: Number(latestUserPackage.quotaTokens || 0),
+      remainingTokens: Number(latestUserPackage.remainingTokens || 0),
+    };
+  } else if (latestPackage) {
     startedAt = latestPackage.order.approvedAt || latestPackage.order.createdAt;
     expiresAt = latestPackage.packageInfo.validDays ? addDays(startedAt, latestPackage.packageInfo.validDays) : null;
     totalQuotaCny = Number(latestPackage.order.amount || 0);
@@ -285,7 +308,7 @@ export default async function handler(req, res) {
   }
 
   const remainingQuotaCny = Math.max(0, Number((totalQuotaCny > 0 ? totalQuotaCny - usedQuotaCny : currentBalance).toFixed(6)));
-  const totalTokens = plan?.quotaText ? parseQuotaTokens(plan.quotaText) : null;
+  const totalTokens = plan?.quotaTokens || (plan?.quotaText ? parseQuotaTokens(plan.quotaText) : null);
   const usedTokens = calls
     .filter((call) => (startedAt ? isWithin(call.createdAt, startedAt, expiresAt) : true))
     .reduce((sum, call) => sum + Number(call.tokens || 0), 0);
