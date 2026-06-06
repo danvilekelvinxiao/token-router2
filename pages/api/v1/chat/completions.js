@@ -191,6 +191,43 @@ function orderUpstreamsForFlowApiKey(routeDecision, upstreams) {
   return [newApi];
 }
 
+function normalizeEnvKey(value = "") {
+  return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9]+/g, "_");
+}
+
+function getNewApiGroupToken(group = "") {
+  const normalizedGroup = normalizeEnvKey(group || process.env.NEW_API_DEFAULT_GROUP || "default");
+  const candidates = [
+    `NEW_API_KEY_${normalizedGroup}`,
+    `NEW_API_${normalizedGroup}_KEY`,
+    "NEW_API_KEY_ALL_MODELS",
+  ];
+
+  for (const key of candidates) {
+    const value = String(process.env[key] || "").trim();
+    if (value) return value;
+  }
+
+  return "";
+}
+
+function shouldUseServerNewApiToken(apiKey = {}) {
+  const modelGroup = String(apiKey.modelGroup || "").trim().toLowerCase();
+  const usagePurpose = String(apiKey.usagePurpose || "").trim().toLowerCase();
+  const usageScope = String(apiKey.usageScope || "").trim().toLowerCase();
+
+  return modelGroup === "all-models"
+    || usagePurpose === "all-models-test"
+    || usageScope === "monitoring";
+}
+
+function getNewApiAuthorizationToken({ apiKey, clientToken, modelProduct } = {}) {
+  if (!shouldUseServerNewApiToken(apiKey)) return clientToken;
+
+  const executionGroup = modelProduct?.executionGroup || modelProduct?.group || process.env.NEW_API_DEFAULT_GROUP || "default";
+  return getNewApiGroupToken(executionGroup) || String(process.env.NEW_API_KEY || "").trim() || clientToken;
+}
+
 export default async function handler(req, res) {
   setCors(res);
 
@@ -577,7 +614,7 @@ export default async function handler(req, res) {
 
     for (const candidate of orderedUpstreams) {
       const headers = {
-        Authorization: `Bearer ${candidate.name === "new-api" ? clientToken : candidate.apiKey}`,
+        Authorization: `Bearer ${candidate.name === "new-api" ? getNewApiAuthorizationToken({ apiKey: customerMatch.apiKey, clientToken, modelProduct }) : candidate.apiKey}`,
         "Content-Type": "application/json",
       };
 
