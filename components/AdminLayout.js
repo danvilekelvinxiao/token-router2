@@ -11,6 +11,7 @@ const adminMenuItems = [
   { key: "tokenMaintenance", label: "Token 池维护中心", href: "/admin/token-pool/maintenance", icon: IconMaintenance },
   { key: "maintenanceTasks", label: "维护任务中心", href: "/admin/maintenance-tasks", icon: IconMaintenance },
   { key: "healthCheck", label: "功能健康检查", href: "/admin/health-check", icon: IconMaintenance },
+  { key: "commercialHealth", label: "商业闭环检查", href: "/admin/commercial-health", icon: IconMaintenance },
   { key: "teams", label: "团队管理", href: "/admin/teams", icon: IconUsers },
   { key: "rateLimits", label: "限流规则", href: "/admin/rate-limits", icon: IconRouting },
   { key: "teamReports", label: "团队报表", href: "/admin/team-reports", icon: IconLogs },
@@ -31,7 +32,8 @@ const adminMenuItems = [
   { key: "passthrough", label: "Token 直通白名单", href: "/admin/newapi-passthrough", icon: IconPassthrough },
   { key: "importToken", label: "导入 New API Token", href: "/admin/api-keys/import-newapi-token", icon: IconImportToken },
   { key: "redeemCodes", label: "激活码管理", href: "/admin/redeem-codes", icon: IconRedeem },
-  { key: "models", label: "模型与上游管理", href: "/admin/models", icon: IconModels },
+  { key: "modelMarket", label: "模型广场管理", href: "/admin/model-market", icon: IconModels },
+  { key: "models", label: "模型诊断", href: "/admin/models", icon: IconModels },
 ];
 
 function IconModels() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="4" rx="1"/><rect x="14" y="3" width="7" height="4" rx="1"/><rect x="3" y="10" width="7" height="4" rx="1"/><rect x="14" y="10" width="7" height="4" rx="1"/><rect x="3" y="17" width="7" height="4" rx="1"/><rect x="14" y="17" width="7" height="4" rx="1"/></svg>; }

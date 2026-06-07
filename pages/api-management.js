@@ -259,7 +259,7 @@ export default function ApiManagementPage() {
     queueMicrotask(() => setCustomer(localCustomer));
     Promise.all([
       fetch(`/api/customer?customerId=${localCustomer.id}`).then((res) => res.ok ? res.json() : localCustomer),
-      fetch("/api/content/models").then((res) => res.ok ? res.json() : { data: [] }),
+      fetch("/api/models/api-key-options").then((res) => res.ok ? res.json() : { data: [] }),
       fetch("/api/groups/available").then((res) => res.ok ? res.json() : { groups: [] }),
       fetch("/api/user/wallet-summary").then((res) => res.ok ? res.json() : null).catch(() => null),
     ]).then(([freshCustomer, modelJson, groupJson, walletJson]) => {

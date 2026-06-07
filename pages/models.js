@@ -230,7 +230,7 @@ export default function ModelsPage() {
       setError("");
       try {
         const [modelsRes, categoriesRes, settingsRes] = await Promise.all([
-          fetch("/api/content/models"),
+          fetch("/api/models/market"),
           fetch("/api/content/model-categories"),
           fetch("/api/content/page-settings").catch(() => null),
         ]);

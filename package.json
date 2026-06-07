@@ -14,6 +14,7 @@
     "recover": "bash scripts/recover-and-deploy.sh",
     "verify:newapi": "node scripts/verify-new-api-env.mjs",
     "check:admin-sync": "node scripts/check-admin-sync-consistency.mjs",
+    "test:commercial-loop": "node scripts/e2e-commercial-loop.mjs",
     "send:audit-email": "node scripts/send-commercialization-audit-email.mjs",
     "lint": "eslint"
   },
