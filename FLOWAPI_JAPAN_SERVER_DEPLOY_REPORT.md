@@ -4,7 +4,7 @@
 
 ## 当前结论
 
-日本服务器已完成基础部署与域名切换：
+日本服务器已完成基础部署、域名切换，并跑通最小真实 API 商业闭环：
 
 - 日本服务器公网 IP：`8.209.211.209`
 - `https://flowapi.fun` 已通过 Cloudflare 指向日本服务器并返回 `200`
@@ -14,8 +14,26 @@
 - Nginx 已配置反向代理
 - Let's Encrypt 源站证书已签发，覆盖 `flowapi.fun`、`www.flowapi.fun`、`api.flowapi.fun`
 - `/v1/models` 未带 FlowAPI API Key 返回 `401 Invalid FlowAPI API Key`，说明没有裸通上游
+- PostgreSQL 已在日本服务器本机部署并接入 FlowAPI
+- `/api/health` 返回 `ok: true`，数据库 `ok`，OpenRouter 上游 `ok`
+- 已配置 OpenRouter 上游 Key，但未在报告中记录明文
+- 已为 OpenRouter 映射核心低成本模型：
+  - `deepseek-chat` -> `deepseek/deepseek-v4-flash`
+  - `deepseek-reasoner` -> `deepseek/deepseek-r1-0528`
+  - `flowapi-gpt4o-mini` -> `openai/gpt-4o-mini`
+  - `flowapi-gemini-flash` -> `google/gemini-2.5-flash`
+  - `flowapi-gemini-pro` -> `google/gemini-2.5-pro`
+  - `qwen/qwen3-32b` -> `qwen/qwen3-32b`
+- 使用服务器内置 FlowAPI 测试 Key 完成真实 `/v1/chat/completions` 调用：
+  - 请求模型：`deepseek-chat`
+  - 实际上游模型：`deepseek/deepseek-v4-flash`
+  - HTTP 状态：`200`
+  - 本地 `calls` 表写入：`22` tokens
+  - 本地余额扣费：`0.000030` CNY
 
-但这次不能标记为“完整生产闭环已完成”，因为日本服务器当前没有旧香港服务器的生产 `.env`、数据库、New API 配置和真实账本数据。当前站点是“代码和域名可运行”，不是“真实生产数据完全迁移完成”。
+当前可以标记为“最小真实调用闭环已完成”：正式域名、数据库、FlowAPI 本地 API Key、余额扣费、调用日志、OpenRouter 上游调用均已跑通。
+
+但还不能标记为“完整生产迁移完成”，因为旧香港服务器的历史生产 `.env`、历史用户数据库、支付商户配置、New API 渠道配置尚未恢复。当前日本服是“新数据库 + 真实上游 + 可调用闭环”，不是“旧生产数据完整搬迁”。
 
 用户提供的两个值：
 
@@ -70,7 +88,7 @@
 
 - `https://flowapi.fun`：`200 OK`
 - `https://flowapi.fun/v1/models` 未带 Key：`401 Unauthorized`
-- `https://flowapi.fun/api/health`：`500`，返回原因是未配置上游 API / 数据库
+- `https://flowapi.fun/api/health`：`200 OK`，数据库 `ok`，OpenRouter 上游 `ok`
 - `https://api.flowapi.fun/v1/models`：Cloudflare + Nginx 可达
 - `http://8.209.211.209`：`200 OK`
 
@@ -146,33 +164,53 @@
    - `www.flowapi.fun`
    - `api.flowapi.fun`
 17. 验证正式 HTTPS 访问恢复。
+18. 安装并启动 PostgreSQL。
+19. 创建本机数据库和用户：
+   - 数据库：`flowapi`
+   - 数据库用户：`flowapi`
+   - 数据库密码：服务器侧随机生成，未写入报告
+20. 写入生产 `.env.local`，包含：
+   - `DATABASE_URL`
+   - `DATABASE_SSL=false`
+   - `PROXY_ACCESS_TOKEN`
+   - `VERIFY_SECRET`
+   - `SESSION_SECRET`
+   - `ADMIN_CONFIG_ENCRYPTION_KEY`
+   - `OPENROUTER_API_KEY`
+   - `ALLOW_NEW_API_TOKEN_PASSTHROUGH=false`
+21. 执行 `npm run build`，构建成功。
+22. 执行 `pm2 restart flowapi --update-env` 和 `pm2 save`。
+23. 写入 OpenRouter 真实模型映射，避免前台友好模型名无法被上游识别。
+24. 完成真实 E2E：
+   - 带 FlowAPI Key 的 `/v1/models` 返回 `200`
+   - 带 FlowAPI Key 的 `/v1/chat/completions` 返回 `200`
+   - PostgreSQL `customers` 余额发生扣费
+   - PostgreSQL `calls` 写入调用记录
 
 ## 仍需执行的部署步骤
 
-生产闭环仍需补齐：
+完整生产迁移仍需补齐：
 
 1. 从旧香港服务器或本地备份恢复生产 `.env`。
 2. 从旧香港服务器或数据库备份恢复真实生产数据库。
-3. 配置 `DATABASE_URL` 或真实数据库连接。
-4. 配置 `OPENROUTER_API_KEY` 或 `NEW_API_BASE_URL + NEW_API_KEY`。
-5. 部署 / 恢复 New API，但仅允许本机访问或通过 FlowAPI 管理员代理访问。
-6. 恢复支付配置：
+3. 如需使用 Supabase，需要补充 Supabase Postgres 直连 `DATABASE_URL`，仅 REST URL / anon key / service_role key 不能直接替代当前项目的 Postgres 连接串。
+4. 部署 / 恢复 New API，但仅允许本机访问或通过 FlowAPI 管理员代理访问。
+5. 恢复支付配置：
    - GM Wallet / EPUSDT
    - 支付宝 / 微信
    - 回调地址仍为 `https://flowapi.fun`
-7. 用真实 FlowAPI API Key 测试 `/v1/models`。
-8. 用真实 FlowAPI API Key 测试 `/v1/chat/completions` 并确认扣费 / 日志 / 数据面板。
-9. 测试注册、登录、充值、图片生成、使用日志、管理员后台。
+6. 测试注册、登录、充值、图片生成、使用日志、管理员后台。
+7. 如要恢复旧用户资产，必须从旧库或备份导入，不能覆盖当前日本服数据库前不备份。
 
 ## 需要用户补充的信息
 
 继续完整生产闭环还缺这些关键数据：
 
 1. 旧香港服务器可用 SSH，或旧服务器项目 + `.env` + 数据库备份。
-2. 生产 `DATABASE_URL`。
-3. 生产上游配置：`OPENROUTER_API_KEY` 或 `NEW_API_BASE_URL + NEW_API_KEY`。
-4. 支付回调密钥和商户配置。
-5. New API 管理 token / 数据库配置。
+2. 旧生产数据库备份，如果要保留历史用户、余额、API Key 和调用记录。
+3. 支付回调密钥和商户配置。
+4. New API 管理 token / 数据库配置。
+5. Supabase Postgres 连接串和数据库密码，如果要把本机 Postgres 迁移到 Supabase。
 
 ## 当前验收状态
 
@@ -182,29 +220,31 @@
 | 系统版本 | 已确认 | Ubuntu 20.04.6 LTS |
 | 部署目录 | 已确认 | `/var/www/flowapi` |
 | 部署方式 | 已确认 | PM2 + Nginx |
-| FlowAPI 服务状态 | 部分完成 | PM2 在线，首页 200 |
+| FlowAPI 服务状态 | 已完成 | PM2 在线，首页 200，健康检查 200 |
 | New API 服务状态 | 未完成 | 日本服未发现旧配置，未部署真实 New API |
 | Nginx 配置 | 已完成 | 80/443 反代到 `127.0.0.1:3000` |
 | HTTPS 状态 | 已完成 | Let's Encrypt 源站证书已签发 |
 | DNS 指向 | 已完成 | `flowapi.fun` / `api.flowapi.fun` 指向日本 IP |
-| 数据库连接状态 | 未完成 | 日本服没有旧生产数据库 / `.env` |
-| `/v1/models` | 部分完成 | 未带 Key 返回 401；未用真实 Key 测试 |
-| `/v1/chat/completions` | 未完成 | 缺真实上游和生产 API Key |
-| API Key 鉴权 | 部分完成 | 未知 Key 返回 401 |
+| 数据库连接状态 | 已完成 | 本机 PostgreSQL 已接入，`/api/health` 显示 `database: ok` |
+| `/v1/models` | 已完成 | 未带 Key 返回 401；带 FlowAPI Key 返回 200 |
+| `/v1/chat/completions` | 已完成 | `deepseek-chat` 真实调用 OpenRouter 成功，HTTP 200 |
+| API Key 鉴权 | 已完成 | 未知 Key 返回 401，本地 FlowAPI Key 通过 |
+| 扣费与日志 | 已完成 | `customers.balance` 扣费，`calls` 写入 22 tokens / 0.000030 CNY |
 | 充值测试 | 未完成 | 缺生产支付配置 |
-| 图片生成测试 | 未完成 | 缺生产上游配置 |
-| 使用日志导出 | 未完成 | 缺生产数据库 |
-| 管理员后台 | 未完整验收 | 页面可由应用提供，但缺生产数据 |
+| 图片生成测试 | 未完成 | 需继续测试图片模型和图片上游真实出图 |
+| 使用日志导出 | 部分完成 | 聊天调用日志已入库；导出功能未单独验收 |
+| 管理员后台 | 未完整验收 | 页面可由应用提供，但旧生产数据未迁移 |
 | 安全检查 | 部分完成 | New API 未公开；3001 未监听；仍需配置防火墙策略 |
 
 ## 风险与建议
 
-1. 当前正式域名已经切到日本服，但生产数据没有迁移完成。
-2. 不要让真实用户充值或大量调用，直到生产 `.env`、数据库、上游和支付配置补齐。
+1. 当前正式域名已经切到日本服，最小真实调用闭环可用，但旧生产数据没有迁移完成。
+2. 充值和支付回调未验收前，不建议引导真实用户充值。
 3. 旧香港服务器 SSH 当前超时，无法自动拉取旧数据。
-4. `api.flowapi.fun` 已切到日本服；如果有老用户依赖该域名，必须尽快恢复生产上游和数据库。
+4. `api.flowapi.fun` 已切到日本服；如果有老用户依赖旧 API Key，必须导入旧数据库或重新发 Key。
 5. 不要开放 New API 原生后台公网入口。
 6. 不要把 `check-cx`、`pincc`、`sub2api-admin` 也切到日本服，除非这些服务也完成迁移。
+7. 当前服务器公网 SSH 仍然不能从本机直接登录，Workbench 可用；已确认阿里云防火墙 22/80/443 开放、系统防火墙 inactive、sshd 监听正常，后续仍建议继续排查公网 SSH 认证早期断开问题。
 
 ## 下一步执行命令模板
 
