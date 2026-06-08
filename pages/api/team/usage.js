@@ -6,5 +6,14 @@ export default async function handler(req, res) {
   if (!session) return;
   const teamId = String(req.query.teamId || "");
   const overview = await getTeamOverviewForUser(session.customerId, teamId);
-  return res.status(200).json({ ok: true, metrics: overview.metrics, tokens: overview.tokens });
+  if (overview?.error) {
+    return res.status(403).json({ ok: false, error: overview.error });
+  }
+  return res.status(200).json({
+    ok: true,
+    metrics: overview.metrics,
+    quotaPools: overview.tokens,
+    tokens: overview.tokens,
+    logs: overview.logs,
+  });
 }

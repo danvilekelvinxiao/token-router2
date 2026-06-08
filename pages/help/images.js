@@ -26,7 +26,7 @@ export default function ImageHelpPage() {
             <div>
               <span>Image Guide</span>
               <h1>生成图片使用指南</h1>
-              <p>不需要知道 OpenRouter 是什么，也不需要研究图片接口。你只需要注册、充值、输入需求、点击发送。</p>
+              <p>不需要知道任何上游平台是什么，也不需要研究图片接口。你只需要注册、充值、输入需求、点击发送。</p>
             </div>
           </section>
 

@@ -51,7 +51,7 @@ function friendlyAdminError(message = "") {
 }
 
 export default function AdminUsers() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -64,7 +64,7 @@ export default function AdminUsers() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const s = localStorage.getItem("flowapi_admin_secret") || "";
+    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
     fetchUsers(s);
   }, []);
 
@@ -84,7 +84,7 @@ export default function AdminUsers() {
   }
 
   async function apiPost(body) {
-    const s = secret || localStorage.getItem("flowapi_admin_secret") || "";
+    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     const res = await fetch("/api/admin/users", {
       method: "POST", headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(body),
     });
@@ -168,7 +168,7 @@ export default function AdminUsers() {
   function handleSecretSave() {
     const s = secret.trim();
     if (!s) { setMsgTone("error"); return setMsg("请输入管理密钥"); }
-    localStorage.setItem("flowapi_admin_secret", s);
+    sessionStorage.setItem("flowapi_admin_secret", s);
     setMsg("");
     fetchUsers(s);
   }

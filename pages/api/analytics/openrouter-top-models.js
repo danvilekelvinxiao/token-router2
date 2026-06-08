@@ -13,7 +13,7 @@ function isFresh() {
 
 function providerFromModelId(modelId = "") {
   const provider = String(modelId || "").split("/")[0].trim().toLowerCase();
-  if (!provider) return "OpenRouter";
+  if (!provider) return "Global";
   if (provider === "anthropic") return "Anthropic";
   if (provider === "openai") return "OpenAI";
   if (provider === "google") return "Google";
@@ -153,10 +153,10 @@ function normalizeRows(rows, previousModels = []) {
   return withComputedTrend(normalized, previousModels);
 }
 
-function emptyResult(syncStatus = "failed", message = "OpenRouter 数据同步中") {
+function emptyResult(syncStatus = "failed", message = "全球模型数据同步中") {
   return {
     success: true,
-    source: "openrouter",
+    source: "global-model-directory",
     syncStatus,
     updatedAt: null,
     models: [],
@@ -167,7 +167,7 @@ function emptyResult(syncStatus = "failed", message = "OpenRouter 数据同步�
 async function fetchOpenRouterTopModels() {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    return emptyResult("failed", "OPENROUTER_API_KEY 未配置，OpenRouter 排行榜暂未同步。");
+    return emptyResult("failed", "全球模型排行榜暂未同步。");
   }
 
   const controller = new AbortController();
@@ -182,14 +182,14 @@ async function fetchOpenRouterTopModels() {
   }).finally(() => clearTimeout(timeout));
 
   if (!response.ok) {
-    throw new Error(`OpenRouter sync failed: ${response.status}`);
+    throw new Error(`Global model sync failed: ${response.status}`);
   }
 
   const payload = await response.json();
   const models = normalizeRows(extractRows(payload), cachedResult?.models || []);
   return {
     success: true,
-    source: "openrouter",
+    source: "global-model-directory",
     syncStatus: models.length ? "synced" : "empty",
     updatedAt: new Date().toISOString(),
     models,
@@ -214,6 +214,6 @@ export default async function handler(req, res) {
     if (cachedResult?.models?.length) {
       return res.status(200).json({ ...cachedResult, syncStatus: "failed" });
     }
-    return res.status(200).json(emptyResult("failed", "OpenRouter 排行榜同步失败，稍后会自动重试。"));
+    return res.status(200).json(emptyResult("failed", "全球模型排行榜同步失败，稍后会自动重试。"));
   }
 }

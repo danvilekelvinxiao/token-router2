@@ -298,12 +298,12 @@ export default async function handler(req, res) {
       if (models.length) {
         cachedRank = {
           success: true,
-          source: "openrouter-catalog",
+          source: "global-model-catalog",
           sourceLabel: "全球",
           updatedAt: new Date().toISOString(),
           status: "catalog",
           models,
-          message: "OpenRouter 官方模型目录已同步，排行榜热度接口暂不可用。",
+          message: "全球模型目录已同步，排行榜热度接口暂不可用。",
         };
         cachedRankAt = Date.now();
         return res.status(200).json(cachedRank);

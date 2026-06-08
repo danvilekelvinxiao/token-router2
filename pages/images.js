@@ -834,7 +834,7 @@ export default function ImagesPage() {
             <div>
               <span className="image-studio-kicker">Image Studio</span>
               <h1><FlowApiBrandText className="image-title-brand" /> 生成图片</h1>
-              <p>输入文字或上传图片，直接生成。无需注册 OpenRouter，无需研究接口，小白也能直接用。</p>
+              <p>输入文字或上传图片，直接生成。无需注册任何上游平台，无需研究接口，小白也能直接用。</p>
             </div>
             <div className="image-studio-hero-actions">
               <IconLink href="/images/history" icon="clock" label="历史记录" />

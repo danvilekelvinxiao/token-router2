@@ -1,6 +1,7 @@
 import { getContent } from "@/lib/content-cms";
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { listPublishedModels, listModelPricing } from "@/lib/admin-commercial-config";
+import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -25,14 +26,14 @@ export default async function handler(req, res) {
       const key = [model.id, model.modelId, model.publicModelId, model.displayName]
         .map((item) => String(item || "").toLowerCase())
         .find((item) => releaseMap.has(item));
-      return key ? { ...model, officialReleaseDate: releaseMap.get(key) || model.officialReleaseDate || "" } : model;
+      return sanitizePublicModelForClient(key ? { ...model, officialReleaseDate: releaseMap.get(key) || model.officialReleaseDate || "" } : model);
     });
     const existingIds = new Set(payload.flatMap((model) => [model.id, model.modelId, model.publicModelId].filter(Boolean)));
     const appended = publishedModels
       .filter((model) => !existingIds.has(model.modelId))
       .map((model) => {
         const pricing = pricingMap.get(model.modelId);
-        return {
+        return sanitizePublicModelForClient({
           id: model.modelId,
           modelId: model.modelId,
           publicModelId: model.modelId,
@@ -55,11 +56,11 @@ export default async function handler(req, res) {
           imageSellPricePerImageCny: pricing?.imageSellPricePerImageCny || 0,
           primaryButtonText: "立即接入",
           primaryButtonHref: "/api-management",
-        };
+        });
       });
     payload = [...payload, ...appended].sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
   } catch {
-    payload = data;
+    payload = data.map((model) => sanitizePublicModelForClient(model));
   }
 
   return res.status(200).json({

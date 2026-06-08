@@ -10,7 +10,7 @@ function LevelBadge({ level }) {
 }
 
 export default function AdminSecurity() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [blacklist, setBlacklist] = useState([]);
   const [riskRules, setRiskRules] = useState([]);
   const [riskEvents, setRiskEvents] = useState([]);
@@ -24,7 +24,7 @@ export default function AdminSecurity() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const s = localStorage.getItem("flowapi_admin_secret") || "";
+    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
     fetchData(s);
   }, []);
 
@@ -43,7 +43,7 @@ export default function AdminSecurity() {
   }
 
   async function apiPost(body) {
-    const s = secret || localStorage.getItem("flowapi_admin_secret") || "";
+    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     const res = await fetch("/api/admin/security", {
       method: "POST", headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(body),
     });
@@ -90,7 +90,7 @@ export default function AdminSecurity() {
   function handleSecretSave() {
     const s = secret.trim();
     if (!s) return setMsg("请输入管理密钥");
-    localStorage.setItem("flowapi_admin_secret", s);
+    sessionStorage.setItem("flowapi_admin_secret", s);
     setMsg("");
     fetchData(s);
   }

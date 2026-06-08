@@ -4,7 +4,8 @@ function publicHealthPayload(health = {}) {
   return {
     ok: Boolean(health.ok),
     service: "flowapi",
-    upstream: health.ok ? "ok" : "degraded",
+    modelService: health.ok ? "ok" : "degraded",
+    serviceStatus: health.ok ? "ok" : "degraded",
     message: health.ok ? "FlowAPI 模型服务可用" : "FlowAPI 模型服务暂时不可用",
     suggestion: health.ok
       ? "至少一个模型服务通道正常，正式调用可继续使用。"
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
     return res.status(405).json({
       code: "METHOD_NOT_ALLOWED",
       error: "Method not allowed",
-      suggestion: "请使用 GET 请求检测上游 API 健康状态。",
+      suggestion: "请使用 GET 请求检测 FlowAPI 模型服务健康状态。",
     });
   }
 

@@ -4,14 +4,14 @@ import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
 export default function AdminSettings() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    const s = localStorage.getItem("flowapi_admin_secret") || "";
+    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
     fetchSettings(s);
   }, []);
 
@@ -29,7 +29,7 @@ export default function AdminSettings() {
   async function handleSave() {
     setSaving(true);
     setMsg("");
-    const s = secret || localStorage.getItem("flowapi_admin_secret") || "";
+    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     try {
       const res = await fetch("/api/admin/settings", {
         method: "POST", headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(settings),
@@ -57,7 +57,7 @@ export default function AdminSettings() {
   function handleSecretSave() {
     const s = secret.trim();
     if (!s) return setMsg("请输入管理密钥");
-    localStorage.setItem("flowapi_admin_secret", s);
+    sessionStorage.setItem("flowapi_admin_secret", s);
     setMsg("");
     fetchSettings(s);
   }

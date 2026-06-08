@@ -63,7 +63,7 @@ export default function AdminRechargesPage() {
         router.push("/login");
         return;
       }
-      const savedSecret = localStorage.getItem("flowapi_admin_secret") || "";
+      const savedSecret = sessionStorage.getItem("flowapi_admin_secret") || "";
       setSecret(savedSecret);
       if (savedSecret) loadOrders(savedSecret, "pending");
     }
@@ -101,7 +101,7 @@ export default function AdminRechargesPage() {
     }
     setLoading(true);
     setMessage("");
-    localStorage.setItem("flowapi_admin_secret", nextSecret);
+    sessionStorage.setItem("flowapi_admin_secret", nextSecret);
     try {
       const query = nextStatus ? `?status=${encodeURIComponent(nextStatus)}` : "";
       const res = await fetch(`/api/admin/recharges${query}`, {
@@ -127,7 +127,7 @@ export default function AdminRechargesPage() {
     }
     setLoading(true);
     setMessage("");
-    localStorage.setItem("flowapi_admin_secret", nextSecret);
+    sessionStorage.setItem("flowapi_admin_secret", nextSecret);
     try {
       const query = nextStatus ? `?status=${encodeURIComponent(nextStatus)}` : "";
       const res = await fetch(`/api/admin/activation-codes${query}`, {
@@ -178,7 +178,7 @@ export default function AdminRechargesPage() {
     }
     setLoading(true);
     setMessage("");
-    localStorage.setItem("flowapi_admin_secret", nextSecret);
+    sessionStorage.setItem("flowapi_admin_secret", nextSecret);
     try {
       const params = new URLSearchParams();
       if (category) params.set("category", category);

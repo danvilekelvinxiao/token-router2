@@ -1259,7 +1259,7 @@ function buildRecentCallRows(calls, apiKeys = []) {
       // Channel / pricing info
       channelName: call.channelName || call.channel || "官方",
       channelType: call.channelType || "official",
-      upstreamHost: call.upstreamHost || call.host || "api.uniapi.io",
+      upstreamHost: call.upstreamHost || call.host || "flowapi.fun",
       finishReason: call.finishReason || "stop",
       requestIp: call.requestIp || call.ip || "",
       inputPricePerM: inputPricePerM || null,
@@ -3880,11 +3880,11 @@ export default function DashboardPage() {
   const loadMarketRanks = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setMarketRanksLoading(true);
     try {
-      const response = await fetch("/api/analytics/openrouter-top-models", { cache: "no-store" });
+      const response = await fetch("/api/analytics/global-model-rank", { cache: "no-store" });
       const data = await response.json();
       setMarketRanks(data);
     } catch {
-      setMarketRanks({ source: "openrouter", syncStatus: "failed", models: [] });
+      setMarketRanks({ source: "global-model-directory", syncStatus: "failed", models: [] });
     } finally {
       setMarketRanksLoading(false);
     }
@@ -4170,12 +4170,12 @@ export default function DashboardPage() {
     ? marketUpdatedAt.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })
     : "";
   const openRouterSourceLabel = localDemoMode
-    ? "OpenRouter · 演示数据"
+    ? "全球模型 · 演示数据"
     : marketSyncStatus === "synced"
-      ? `OpenRouter · 最近同步${marketUpdatedTime ? ` ${marketUpdatedTime}` : ""}`
+      ? `全球模型 · 最近同步${marketUpdatedTime ? ` ${marketUpdatedTime}` : ""}`
       : marketSyncStatus === "failed"
-        ? "OpenRouter · 同步失败"
-        : "OpenRouter · 0";
+        ? "全球模型 · 同步失败"
+        : "全球模型 · 0";
   const mostUsedModel = modelSpend.ranking[0];
   const mostExpensiveModel = [...modelSpend.ranking].sort((a, b) => b.spend - a.spend)[0];
   const savingsRows = Array.isArray(effectiveSavingsData?.callSavings) ? effectiveSavingsData.callSavings : [];
@@ -5845,12 +5845,12 @@ export default function DashboardPage() {
 
               <ModelLeaderboard
                 title="全球模型目录参考"
-                subtitle="同步 OpenRouter 当前热门模型排行，仅供选型参考。"
+                subtitle="同步全球模型目录热度，仅供选型参考。"
                 sourceLabel={openRouterSourceLabel}
                 updatedAt={null}
                 items={(effectiveMarketRanks?.models || []).slice(0, 10)}
                 loading={localDemoMode ? false : marketRanksLoading}
-                emptyText={marketSyncStatus === "failed" ? "OpenRouter 同步失败" : "0"}
+                emptyText={marketSyncStatus === "failed" ? "全球模型同步失败" : "0"}
                 emptyDescription="0"
               />
             </div>

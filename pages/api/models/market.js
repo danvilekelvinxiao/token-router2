@@ -1,6 +1,7 @@
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { listModelPricing, listPublishedModels } from "@/lib/admin-commercial-config";
 import { getContent } from "@/lib/content-cms";
+import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
 
 const CATEGORY_META = {
   chatgpt: { providerId: "openai", providerName: "ChatGPT" },
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
     const pricingMap = new Map(pricingConfigs.map((item) => [item.modelId, item]));
     const staticModels = products
       .filter((p) => p.isAvailable)
-      .map((p) => normalizeMarketModel({
+      .map((p) => sanitizePublicModelForClient(normalizeMarketModel({
         id: p.id,
         modelId: p.publicModelId || p.id,
         displayName: p.displayName,
@@ -34,11 +35,11 @@ export default async function handler(req, res) {
         officialReleaseDate: p.officialReleaseDate || "",
         sortOrder: p.sortOrder || 999,
         pricing: p.pricing,
-      }));
+      })));
     const existing = new Set(staticModels.map((model) => model.modelId));
     const adminModels = publishedModels
       .filter((model) => model.enabled && model.showInModelSquare && !existing.has(model.modelId))
-      .map((model) => normalizeMarketModel({ ...model, pricing: pricingMap.get(model.modelId) }));
+      .map((model) => sanitizePublicModelForClient(normalizeMarketModel({ ...model, pricing: pricingMap.get(model.modelId) })));
 
     const models = [...staticModels, ...adminModels]
       .sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));

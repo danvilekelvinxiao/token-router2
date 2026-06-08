@@ -10,7 +10,7 @@ const LEVEL_META = {
 };
 
 export default function CommercialHealthPage() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
@@ -23,7 +23,7 @@ export default function CommercialHealthPage() {
   async function runCheck() {
     setLoading(true);
     try {
-      localStorage.setItem("flowapi_admin_secret", secret);
+      sessionStorage.setItem("flowapi_admin_secret", secret);
       const response = await fetch("/api/admin/commercial-health", {
         headers: secret ? { "x-admin-secret": secret } : {},
       });
@@ -64,7 +64,7 @@ export default function CommercialHealthPage() {
               <input
                 value={secret}
                 onChange={(event) => setSecret(event.target.value)}
-                onBlur={() => localStorage.setItem("flowapi_admin_secret", secret)}
+                onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)}
                 type="password"
                 placeholder="管理密钥"
                 aria-label="管理密钥"

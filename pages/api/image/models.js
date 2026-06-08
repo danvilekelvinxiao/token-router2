@@ -1,4 +1,4 @@
-import { listImageModels } from "@/lib/image-studio";
+import { listImageModels, mapPublicImageModel } from "@/lib/image-studio";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -6,7 +6,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const models = await listImageModels();
+  const models = (await listImageModels()).map(mapPublicImageModel);
   return res.status(200).json({
     success: true,
     models,

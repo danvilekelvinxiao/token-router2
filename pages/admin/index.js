@@ -10,7 +10,7 @@ function StatusDot({ status }) {
 }
 
 export default function AdminOverview() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [stats, setStats] = useState([
     { label: "今日调用", value: "-" },
     { label: "今日 Token", value: "-" },
@@ -21,7 +21,7 @@ export default function AdminOverview() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const s = localStorage.getItem("flowapi_admin_secret") || "";
+    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
     fetchOverview(s);
   }, []);
 
@@ -93,7 +93,7 @@ export default function AdminOverview() {
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={() => { const s = secret.trim(); if (s) { localStorage.setItem("flowapi_admin_secret", s); fetchOverview(s); } }} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
+              <button onClick={() => { const s = secret.trim(); if (s) { sessionStorage.setItem("flowapi_admin_secret", s); fetchOverview(s); } }} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
             </div>
           </header>
 

@@ -15,7 +15,7 @@ const STRATEGY_INFO = {
 };
 
 export default function AdminRouting() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -32,7 +32,7 @@ export default function AdminRouting() {
   const [simRunning, setSimRunning] = useState(false);
 
   useEffect(() => {
-    const s = localStorage.getItem("flowapi_admin_secret") || "";
+    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
     fetchData(s);
   }, []);
 
@@ -48,7 +48,7 @@ export default function AdminRouting() {
   }
 
   async function apiCall(method, body) {
-    const s = secret || localStorage.getItem("flowapi_admin_secret") || "";
+    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     const res = await fetch("/api/admin/routing", {
       method, headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(body),
     });
@@ -85,7 +85,7 @@ export default function AdminRouting() {
   function handleSecretSave() {
     const s = secret.trim();
     if (!s) return setMsg("请输入管理密钥");
-    localStorage.setItem("flowapi_admin_secret", s);
+    sessionStorage.setItem("flowapi_admin_secret", s);
     setMsg("");
     fetchData(s);
   }
@@ -93,7 +93,7 @@ export default function AdminRouting() {
   async function runSimulation() {
     setSimRunning(true);
     setSimResult(null);
-    const s = secret || localStorage.getItem("flowapi_admin_secret") || "";
+    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     try {
       const res = await fetch("/api/admin/smart-routing", {
         method: "POST",

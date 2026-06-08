@@ -13,7 +13,7 @@ function StatusBadge({ status }) {
 }
 
 export default function AdminChannels() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -23,7 +23,7 @@ export default function AdminChannels() {
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    const s = localStorage.getItem("flowapi_admin_secret") || "";
+    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
     fetchChannels(s);
   }, []);
 
@@ -39,7 +39,7 @@ export default function AdminChannels() {
   }
 
   async function apiCall(method, body) {
-    const s = secret || localStorage.getItem("flowapi_admin_secret") || "";
+    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     const res = await fetch("/api/admin/channels", {
       method, headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(body),
     });
@@ -77,7 +77,7 @@ export default function AdminChannels() {
   function handleSecretSave() {
     const s = secret.trim();
     if (!s) return setMsg("请输入管理密钥");
-    localStorage.setItem("flowapi_admin_secret", s);
+    sessionStorage.setItem("flowapi_admin_secret", s);
     setMsg("");
     fetchChannels(s);
   }

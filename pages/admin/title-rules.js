@@ -22,14 +22,14 @@ function categoryLabel(key) {
 }
 
 export default function AdminTitleRules() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [rules, setRules] = useState([]);
   const [metrics, setMetrics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    queueMicrotask(() => fetchRules(localStorage.getItem("flowapi_admin_secret") || ""));
+    queueMicrotask(() => fetchRules(sessionStorage.getItem("flowapi_admin_secret") || ""));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -90,7 +90,7 @@ export default function AdminTitleRules() {
               <p>根据真实调用、充值、图片生成、邀请返佣和 API Key 配置自动授予称号。新增功能只要注册指标，就能进入排行体系。</p>
             </div>
             <div className="admin-title-rules-actions">
-              <input value={secret} onChange={(event) => setSecret(event.target.value)} onBlur={() => localStorage.setItem("flowapi_admin_secret", secret)} type="password" placeholder="管理密钥" />
+              <input value={secret} onChange={(event) => setSecret(event.target.value)} onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)} type="password" placeholder="管理密钥" />
               <button type="button" onClick={() => fetchRules()}>刷新</button>
               <button type="button" onClick={recalculateAll}>全站重算</button>
             </div>

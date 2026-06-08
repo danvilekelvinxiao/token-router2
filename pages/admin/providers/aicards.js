@@ -97,6 +97,7 @@ export default function AdminAicardsProviderPage() {
   const [review, setReview] = useState(emptyReview);
   const [secret, setSecret] = useState(getSessionAdminSecret);
   const [statusFilter, setStatusFilter] = useState("全部");
+  const [bulkResult, setBulkResult] = useState(null);
 
   function adminHeaders() {
     return {
@@ -171,6 +172,33 @@ export default function AdminAicardsProviderPage() {
       await load();
     } catch (error) {
       setMessage(error.message || "健康检查失败");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function bulkPublishReadyModels() {
+    setBusy("bulk-publish");
+    setMessage("");
+    setBulkResult(null);
+    try {
+      rememberSessionAdminSecret(secret);
+      const res = await fetch("/api/admin/providers/aicards/bulk-publish", {
+        method: "POST",
+        headers: adminHeaders(),
+        body: JSON.stringify({
+          modelIds: models
+            .filter((model) => getModelStage(model) === "可发布" || model.channelEnabled)
+            .map((model) => model.id),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setBulkResult(data);
+      if (!res.ok || !data.ok) throw new Error(data.error || data.message || "批量发布失败");
+      setMessage(data.message || `已发布 ${data.publishedCount || 0} 个 FlowAPI 模型。`);
+      await load();
+    } catch (error) {
+      setMessage(error.message || "批量发布失败");
     } finally {
       setBusy("");
     }
@@ -256,12 +284,25 @@ export default function AdminAicardsProviderPage() {
               <button onClick={() => runHealthCheck(review.actualModelId)} disabled={busy.startsWith("health:")} style={ghostButton}>
                 {busy.startsWith("health:") ? "检查中..." : "健康检查"}
               </button>
+              <button onClick={bulkPublishReadyModels} disabled={busy === "bulk-publish"} style={ghostButton}>
+                {busy === "bulk-publish" ? "发布中..." : "批量发布达标模型"}
+              </button>
             </div>
             {health && (
               <p style={{ margin: "12px 0 0", color: health.ok ? "#22c55e" : "#f97316", fontSize: 12, fontWeight: 800 }}>
                 最近检查：{health.ok ? "可用" : "失败"}，模型数 {health.modelCount || 0}，HTTP {health.modelsStatusCode || 0}，耗时 {health.modelsLatencyMs || 0}ms。
               </p>
             )}
+            {bulkResult?.skipped?.length ? (
+              <div style={{ marginTop: 12, color: "var(--dash-sub)", fontSize: 12, lineHeight: 1.7 }}>
+                <strong style={{ color: "var(--dash-text)" }}>跳过 {bulkResult.skipped.length} 个未达标候选：</strong>
+                {bulkResult.skipped.slice(0, 5).map((item) => (
+                  <span key={`${item.id}:${item.reason}`} style={mutedBlock}>
+                    {item.publicModelId || item.displayName || item.id}：{item.reason}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </section>
 
           <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.3fr) minmax(360px, .7fr)", gap: 16, marginTop: 16 }}>

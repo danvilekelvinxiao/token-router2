@@ -106,7 +106,7 @@ const buttonBase = {
 
 export default function BossWizardPage() {
   const [step, setStep] = useState(0);
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [upstream, setUpstream] = useState(initialUpstream);
   const [savedUpstream, setSavedUpstream] = useState(null);
   const [connection, setConnection] = useState(null);
@@ -306,7 +306,7 @@ export default function BossWizardPage() {
               <input
                 value={secret}
                 onChange={(event) => setSecret(event.target.value)}
-                onBlur={() => localStorage.setItem("flowapi_admin_secret", secret)}
+                onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)}
                 type="password"
                 placeholder="管理密钥"
                 style={{ ...inputStyle, width: 150, minHeight: 36, fontSize: 12 }}

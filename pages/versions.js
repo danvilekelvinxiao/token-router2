@@ -17,7 +17,7 @@ const versions = [
     href: "/v3",
     label: "版本 B",
     title: "深色简洁稳重",
-    text: "更贴近 aheapi 的骨架，首页先讲核心能力，再讲三步接入与帮助文档。",
+    text: "更贴近成熟 API 平台的骨架，首页先讲核心能力，再讲三步接入与帮助文档。",
   },
   {
     href: "/v4",

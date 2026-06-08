@@ -4,7 +4,7 @@ import { useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
 export default function AdminLogs() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -41,14 +41,14 @@ export default function AdminLogs() {
   function handleSearch() {
     const s = secret.trim();
     if (!s) return setMsg("请输入管理密钥");
-    localStorage.setItem("flowapi_admin_secret", s);
+    sessionStorage.setItem("flowapi_admin_secret", s);
     setAppliedFilters({ ...filters });
     setPage(0);
     fetchLogs(s, filters, 0);
   }
 
   function handlePageChange(newPage) {
-    const s = secret || localStorage.getItem("flowapi_admin_secret") || "";
+    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     setPage(newPage);
     fetchLogs(s, appliedFilters, newPage);
   }
@@ -56,7 +56,7 @@ export default function AdminLogs() {
   function handleSecretSave() {
     const s = secret.trim();
     if (!s) return setMsg("请输入管理密钥");
-    localStorage.setItem("flowapi_admin_secret", s);
+    sessionStorage.setItem("flowapi_admin_secret", s);
     setMsg("");
     setAppliedFilters({ user: "", model: "", status: "", channel: "" });
     setPage(0);

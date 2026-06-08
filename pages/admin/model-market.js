@@ -90,7 +90,7 @@ export default function AdminModelMarketPage() {
   const [toast, setToast] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
 
   function showToast(message) {
     setToast(message);
@@ -162,7 +162,7 @@ export default function AdminModelMarketPage() {
     if (!draft.displayName.trim()) return showToast("请先填写前台展示名");
     setSaving(true);
     try {
-      localStorage.setItem("flowapi_admin_secret", secret);
+      sessionStorage.setItem("flowapi_admin_secret", secret);
       const payload = {
         ...draft,
         tags: draft.tags,
@@ -251,7 +251,7 @@ export default function AdminModelMarketPage() {
               <input
                 value={secret}
                 onChange={(event) => setSecret(event.target.value)}
-                onBlur={() => localStorage.setItem("flowapi_admin_secret", secret)}
+                onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)}
                 type="password"
                 placeholder="管理密钥"
                 aria-label="管理密钥"

@@ -86,7 +86,7 @@ export default function RedeemCodesPage() {
   const [batchForm, setBatchForm] = useState({ name: "", type: "balance", amountCny: 100, tokenAmount: "", packageId: "weekly_plan", priceCny: 100, source: "taobao", quantity: 10, note: "", expireOption: "", expireDate: "", maxRedemptionsPerCode: 1, enabled: true });
 
   function adminHeaders(extra = {}) {
-    const secret = typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || "";
+    const secret = typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || "";
     return { ...extra, ...(secret ? { "x-admin-secret": secret } : {}) };
   }
 

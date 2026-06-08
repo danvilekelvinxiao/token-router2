@@ -24,7 +24,7 @@ export default function AdminHealthCheckPage() {
     setLoading(true);
     setError("");
     try {
-      const s = nextSecret || secret || localStorage.getItem("flowapi_admin_secret") || "";
+      const s = nextSecret || secret || sessionStorage.getItem("flowapi_admin_secret") || "";
       const res = await fetch("/api/admin/health-check", { headers: { "x-admin-secret": s } });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error || "后台功能健康检查失败");
@@ -37,7 +37,7 @@ export default function AdminHealthCheckPage() {
 
   useEffect(() => {
     queueMicrotask(() => {
-      const s = localStorage.getItem("flowapi_admin_secret") || "";
+      const s = sessionStorage.getItem("flowapi_admin_secret") || "";
       setSecret(s);
       runCheck(s);
     });
@@ -55,7 +55,7 @@ export default function AdminHealthCheckPage() {
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <input type="password" value={secret} onChange={(event) => setSecret(event.target.value)} placeholder="管理密钥" style={{ padding: "9px 12px", borderRadius: 8, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)" }} />
-              <button type="button" onClick={() => { localStorage.setItem("flowapi_admin_secret", secret); runCheck(secret); }} disabled={loading} style={{ border: 0, borderRadius: 8, padding: "9px 14px", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", fontWeight: 800, cursor: loading ? "wait" : "pointer" }}>{loading ? "检查中..." : "一键检查"}</button>
+              <button type="button" onClick={() => { sessionStorage.setItem("flowapi_admin_secret", secret); runCheck(secret); }} disabled={loading} style={{ border: 0, borderRadius: 8, padding: "9px 14px", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff", fontWeight: 800, cursor: loading ? "wait" : "pointer" }}>{loading ? "检查中..." : "一键检查"}</button>
             </div>
           </header>
 

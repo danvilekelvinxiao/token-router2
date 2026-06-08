@@ -9,7 +9,7 @@ function statusText(item) {
 }
 
 export default function UpstreamStatusPage() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : localStorage.getItem("flowapi_admin_secret") || ""));
+  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -31,7 +31,7 @@ export default function UpstreamStatusPage() {
   }
 
   useEffect(() => {
-    const stored = localStorage.getItem("flowapi_admin_secret") || "";
+    const stored = sessionStorage.getItem("flowapi_admin_secret") || "";
     queueMicrotask(() => load(stored));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -50,8 +50,8 @@ export default function UpstreamStatusPage() {
               <p>这里看 FlowAPI 当前能不能连到 New API、sub2api、OpenRouter 或备用聚合路由。红色异常会直接影响用户调用成功率。</p>
             </div>
             <div>
-              <input value={secret} onChange={(event) => setSecret(event.target.value)} onBlur={() => localStorage.setItem("flowapi_admin_secret", secret)} type="password" placeholder="管理密钥" />
-              <button type="button" disabled={loading} onClick={() => { localStorage.setItem("flowapi_admin_secret", secret); load(secret); }}>{loading ? "检查中..." : "刷新状态"}</button>
+              <input value={secret} onChange={(event) => setSecret(event.target.value)} onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)} type="password" placeholder="管理密钥" />
+              <button type="button" disabled={loading} onClick={() => { sessionStorage.setItem("flowapi_admin_secret", secret); load(secret); }}>{loading ? "检查中..." : "刷新状态"}</button>
             </div>
           </header>
 

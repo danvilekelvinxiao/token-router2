@@ -1,5 +1,6 @@
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { getContent } from "@/lib/content-cms";
+import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed" });
@@ -12,7 +13,7 @@ export default async function handler(req, res) {
         const fallbackPrice = findContentPrice(model);
         const inputSellPrice = model.pricing?.inputSellPricePerMTokens ?? fallbackPrice.inputPricePerM ?? null;
         const outputSellPrice = model.pricing?.outputSellPricePerMTokens ?? fallbackPrice.outputPricePerM ?? null;
-        return {
+        return sanitizePublicModelForClient({
           id: model.id,
           modelId: model.publicModelId || model.id,
           publicModelId: model.publicModelId || model.id,
@@ -34,7 +35,7 @@ export default async function handler(req, res) {
           hot: Boolean(model.hot),
           blackGoldOnly: Boolean(model.blackGoldOnly),
           sortOrder: model.sortOrder || 999,
-        };
+        });
       })
       .sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
 
