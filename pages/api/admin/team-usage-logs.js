@@ -6,5 +6,5 @@ export default async function handler(req, res) {
   if (!admin) return;
   const teamId = String(req.query.teamId || "");
   const limit = Number(req.query.limit || 100);
-  return res.status(200).json({ ok: true, logs: await listTeamUsageLogs({ teamId, limit }) });
+  return res.status(200).json({ ok: true, logs: await listTeamUsageLogs({ teamId, limit, includeInternal: true }) });
 }

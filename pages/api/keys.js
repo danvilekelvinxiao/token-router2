@@ -3,6 +3,7 @@ import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { assertCustomerOwner } from "@/lib/session";
 import { getLocalePriceMultiplier, normalizeLocale } from "@/lib/pricing/locale-pricing";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
+import { assertCanCreateTeamApiKey, linkTeamApiKey } from "@/lib/team-management";
 
 function parseBody(body) {
   if (!body) return {};
@@ -46,7 +47,6 @@ export default async function handler(req, res) {
       const modelProduct = modelProducts.find((item) => (
         item.id === modelId ||
         item.publicModelId === modelId ||
-        item.actualModelId === modelId ||
         item.modelId === modelId
       ));
       if (!modelProduct) {
@@ -67,6 +67,20 @@ export default async function handler(req, res) {
         });
       }
 
+      const teamId = body?.teamId || body?.team_id || "";
+      const sharedTeamKey = body?.shared === true || body?.usageScope === "team_shared" || body?.usage_scope === "team_shared";
+      if (teamId) {
+        const teamPermission = await assertCanCreateTeamApiKey(customerId, teamId, { shared: sharedTeamKey });
+        if (!teamPermission.ok) {
+          return res.status(403).json({
+            error: {
+              message: teamPermission.error || "你没有权限在这个团队创建 API Key。",
+              type: "team_key_forbidden",
+            },
+          });
+        }
+      }
+
       const createdKey = await createApiKey(
         customerId,
         body?.label || `${modelProduct.displayName} Key`,
@@ -76,11 +90,20 @@ export default async function handler(req, res) {
           localePriceMultiplier: getLocalePriceMultiplier(normalizeLocale(body?.locale)),
           limit: body?.limit || body?.quotaLimit || {},
           groupId: body?.groupId || body?.modelGroup || "",
-          teamId: body?.teamId || body?.team_id || "",
+          teamId,
           usagePurpose: body?.usagePurpose || body?.usage_purpose || "",
-          usageScope: body?.usageScope || body?.usage_scope || "",
+          usageScope: sharedTeamKey ? "team_shared" : (body?.usageScope || body?.usage_scope || ""),
         }
       );
+      if (teamId) {
+        await linkTeamApiKey({
+          teamId,
+          userId: customerId,
+          apiKeyId: createdKey.id,
+          scope: sharedTeamKey ? "team_shared" : "member",
+          shared: sharedTeamKey,
+        });
+      }
       const customer = await getDashboard(customerId);
       return res.status(200).json({
         ...customer,
@@ -155,6 +178,19 @@ export default async function handler(req, res) {
 
   if (req.method === "PATCH") {
     try {
+      if (body?.teamId) {
+        const teamPermission = await assertCanCreateTeamApiKey(customerId, body.teamId, {
+          shared: body?.shared === true || body?.usageScope === "team_shared",
+        });
+        if (!teamPermission.ok) {
+          return res.status(403).json({
+            error: {
+              message: teamPermission.error || "你没有权限把 API Key 绑定到这个团队。",
+              type: "team_key_forbidden",
+            },
+          });
+        }
+      }
       const customer = await updateApiKey(customerId, keyId, {
         label: body?.label,
         expiresAt: body?.expiresAt,
@@ -166,6 +202,15 @@ export default async function handler(req, res) {
         usageScope: body?.usageScope,
       });
       if (!customer) return res.status(404).json({ error: "API Key 不存在" });
+      if (body?.teamId) {
+        await linkTeamApiKey({
+          teamId: body.teamId,
+          userId: customerId,
+          apiKeyId: keyId,
+          scope: body?.usageScope === "team_shared" ? "team_shared" : "member",
+          shared: body?.usageScope === "team_shared",
+        });
+      }
       return res.status(200).json(customer);
     } catch (error) {
       if (error?.code === "INVALID_API_KEY_LIMIT") {

@@ -99,7 +99,7 @@ function modelMatchesCategory(model, category) {
 
 function ModelLogo({ model }) {
   const modelName = model?.upstreamModel || model?.modelId || model?.displayName || model?.id || "";
-  return <ModelBrandIcon model={modelName} provider={model?.provider || model?.upstreamProvider || ""} size={28} className="image-model-logo" />;
+  return <ModelBrandIcon model={modelName} provider="FlowAPI" size={28} className="image-model-logo" />;
 }
 
 function IconGlyph({ name }) {
@@ -337,7 +337,7 @@ function ResultMessage({ item, model, onRefineFromImage, onRegenerateImage, onCo
             </div>
             <div className="image-result-side">
               <div className="image-result-model">
-                <ModelLogo model={model || { displayName: item.modelDisplayName, provider: item.upstreamProvider }} />
+	                <ModelLogo model={model || { displayName: item.modelDisplayName }} />
                 <span>{item.modelDisplayName || "数据同步中"}</span>
               </div>
               {item.status === "failed" ? null : (
@@ -731,8 +731,7 @@ export default function ImagesPage() {
             requestId: json.requestId || json.generationId || "",
             mode: (linkedImages.length || activeImageAttachments.length) ? "image_to_image" : "text_to_image",
             modelDisplayName: json.modelDisplayName || selectedModel?.displayName || "",
-            upstreamProvider: json.provider || selectedModel?.provider || "",
-            prompt: effectivePrompt,
+	            prompt: effectivePrompt,
             promptPreview: effectivePrompt,
             inputImageUrls: linkedImages.length ? linkedImages : activeImageAttachments.map((item) => item.preview).filter(Boolean),
             outputImageUrls: outputImages,

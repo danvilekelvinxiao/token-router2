@@ -1,146 +1,397 @@
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+const tabs = [
+  ["overview", "团队总览"],
+  ["members", "成员额度"],
+  ["keys", "团队 Key"],
+  ["logs", "调用日志"],
+  ["billing", "团队账单"],
+];
+
+const roleOptions = [
+  ["member", "成员"],
+  ["finance", "财务"],
+  ["admin", "管理员"],
+];
+
+const limitTypeOptions = [
+  ["none", "不限额"],
+  ["daily", "每日额度"],
+  ["weekly", "每周额度"],
+  ["monthly", "每月额度"],
+  ["total", "总额度"],
+];
+
+const limitUnitOptions = [
+  ["cny", "金额 ¥"],
+  ["token", "Token"],
+  ["request", "请求次数"],
+];
+
+function money(value) {
+  return `¥${Number(value || 0).toFixed(4)}`;
+}
+
+function money2(value) {
+  return `¥${Number(value || 0).toFixed(2)}`;
+}
+
+function tokens(value) {
+  return Number(value || 0).toLocaleString("zh-CN");
+}
+
+function time(value) {
+  if (!value) return "暂无";
+  return new Date(value).toLocaleString("zh-CN");
+}
+
+function limitText(limit) {
+  if (!limit?.enabled) return "不限额";
+  const typeLabel = Object.fromEntries(limitTypeOptions)[limit.limitType] || "额度";
+  const unitLabel = Object.fromEntries(limitUnitOptions)[limit.limitUnit] || "";
+  const used = limit.limitUnit === "token"
+    ? tokens(limit.usedTokens)
+    : limit.limitUnit === "request"
+      ? tokens(limit.usedRequests)
+      : money2(limit.usedCny);
+  const amount = limit.limitUnit === "token" || limit.limitUnit === "request"
+    ? tokens(limit.limitAmount)
+    : money2(limit.limitAmount);
+  return `${typeLabel}：${used} / ${amount} ${unitLabel}`;
+}
 
 export default function TeamSpaceConsole({ initialTab = "overview" }) {
   const [tab, setTab] = useState(initialTab);
-  const [data, setData] = useState({ teams: [], tokens: [], logs: [], reports: [], members: [], metrics: {} });
+  const [data, setData] = useState({ teams: [], team: null, members: [], logs: [], modelCosts: [], apiKeyCosts: [], summary: {}, wallet: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [teamId, setTeamId] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({ name: "", type: "工作室", scenario: "综合使用", teamSize: "1-5人" });
+  const [inviteForm, setInviteForm] = useState({ role: "member", type: "daily", unit: "cny", amount: "10", maxUses: "5" });
+  const [lastInvite, setLastInvite] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-  async function load() {
+  const load = useCallback(async (nextTeamId = "") => {
     setLoading(true);
     try {
-      const [overviewRes, memberRes] = await Promise.all([
-        fetch("/api/team/overview"),
-        fetch("/api/team/members"),
-      ]);
-      const [overview, members] = await Promise.all([
-        overviewRes.json().catch(() => ({})),
-        memberRes.json().catch(() => ({})),
-      ]);
-      if (!overviewRes.ok) throw new Error(overview.error || "团队空间加载失败");
-      setData({ ...overview, members: members.members || [] });
+      const query = nextTeamId ? `?teamId=${encodeURIComponent(nextTeamId)}` : "";
+      const response = await fetch(`/api/team/overview${query}`);
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || "团队空间加载失败");
+      const selectedTeamId = json.team?.id || json.teams?.[0]?.id || "";
+      setTeamId(selectedTeamId);
+      if (selectedTeamId) {
+        try { localStorage.setItem("flowapi_active_team_id", selectedTeamId); } catch {}
+      }
+      setData(json);
       setError("");
     } catch (err) {
       setError(err.message || "团队空间加载失败");
     }
     setLoading(false);
-  }
-
-  useEffect(() => {
-    queueMicrotask(() => {
-      load();
-    });
   }, []);
 
+  useEffect(() => {
+    let stored = "";
+    try { stored = localStorage.getItem("flowapi_active_team_id") || ""; } catch {}
+    queueMicrotask(() => load(stored));
+    const onSpaceChange = (event) => load(event.detail?.teamId || "");
+    window.addEventListener("flowapi-space-change", onSpaceChange);
+    return () => window.removeEventListener("flowapi-space-change", onSpaceChange);
+  }, [load]);
+
+  const canManageMembers = ["owner", "admin"].includes(data.role);
+  const canExport = ["owner", "finance"].includes(data.role);
+  const activeTeam = data.team || data.teams?.find((team) => team.id === teamId);
+  const logs = data.logs || [];
+  const failedLogs = logs.filter((log) => log.success === false);
+
+  const health = useMemo(() => {
+    const rate = Number(data.summary?.successRate || 100);
+    if (rate >= 98) return ["稳定", "success"];
+    if (rate >= 90) return ["需观察", "warn"];
+    return ["需处理", "danger"];
+  }, [data.summary?.successRate]);
+
+  async function createTeam() {
+    setSaving(true);
+    try {
+      const response = await fetch("/api/team/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createForm),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || "团队创建失败");
+      setCreateOpen(false);
+      await load(json.team?.id || "");
+    } catch (err) {
+      setError(err.message || "团队创建失败");
+    }
+    setSaving(false);
+  }
+
+  async function createInvite() {
+    if (!teamId) return;
+    setSaving(true);
+    try {
+      const response = await fetch("/api/team/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "invite",
+          teamId,
+          role: inviteForm.role,
+          type: inviteForm.type,
+          unit: inviteForm.unit,
+          amount: Number(inviteForm.amount || 0),
+          maxUses: Number(inviteForm.maxUses || 0),
+          enabled: inviteForm.type !== "none",
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || "邀请链接生成失败");
+      setLastInvite(json.invite);
+    } catch (err) {
+      setError(err.message || "邀请链接生成失败");
+    }
+    setSaving(false);
+  }
+
+  async function updateLimit(member, next = {}) {
+    if (!teamId || !member?.userId) return;
+    setSaving(true);
+    try {
+      const response = await fetch("/api/team/members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_limit",
+          teamId,
+          userId: member.userId,
+          limit: {
+            enabled: next.type !== "none",
+            type: next.type || member.limit?.limitType || "daily",
+            unit: next.unit || member.limit?.limitUnit || "cny",
+            amount: Number(next.amount ?? member.limit?.limitAmount ?? 10),
+          },
+        }),
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(json.error || "额度保存失败");
+      await load(teamId);
+    } catch (err) {
+      setError(err.message || "额度保存失败");
+    }
+    setSaving(false);
+  }
+
+  if (loading) return <main className="team-console"><section className="team-console-panel">正在读取团队数据...</section></main>;
+
   return (
-    <main style={{ display: "grid", gap: 16 }}>
-      <section style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start" }}>
+    <main className="team-console">
+      <section className="team-console-hero">
         <div>
-          <span style={{ fontSize: 12, fontWeight: 900, color: "var(--dash-accent)", letterSpacing: "0.08em" }}>TEAM SPACE</span>
-          <h1 style={{ margin: "4px 0 6px", fontSize: 28, fontWeight: 950, color: "var(--page-heading)" }}>团队空间</h1>
-          <p style={{ margin: 0, color: "var(--dash-sub)", fontSize: 14 }}>查看团队 Token 池状态、团队用量、调用日志和日报表。上游 Token 原文永远不会展示给成员。</p>
+          <span>Team Workspace</span>
+          <h1>{activeTeam?.name || "团队空间"}</h1>
+          <p>统一查看团队 API 消耗、成员用量和额度。普通成员只能看到自己的数据，队长和财务可以对账导出。</p>
         </div>
-        <button type="button" onClick={load} style={primaryBtn}>刷新</button>
+        <div className="team-console-actions">
+          <select value={teamId} onChange={(event) => load(event.target.value)} aria-label="切换团队空间">
+            {(data.teams || []).map((team) => <option key={team.id} value={team.id}>{team.name} · {team.roleLabel}</option>)}
+          </select>
+          <button type="button" onClick={() => setCreateOpen((value) => !value)}>创建团队</button>
+          <button type="button" onClick={() => load(teamId)}>刷新</button>
+        </div>
       </section>
 
-      {error ? <div style={notice}>{error}</div> : null}
-      {loading ? <div style={panel}>加载中...</div> : null}
+      {error ? <div className="team-console-notice">{error}</div> : null}
 
-      {!loading ? (
+      {!activeTeam ? (
+        <section className="team-console-empty">
+          <h2>还没有团队空间</h2>
+          <p>创建一个团队后，你就可以邀请成员、分配额度、创建团队 API Key，并按成员对账。</p>
+          <button type="button" onClick={() => setCreateOpen(true)}>创建第一个团队</button>
+        </section>
+      ) : null}
+
+      {createOpen ? (
+        <section className="team-console-panel">
+          <h2>创建团队</h2>
+          <div className="team-console-form-grid">
+            <label>团队名称<input value={createForm.name} onChange={(event) => setCreateForm({ ...createForm, name: event.target.value })} placeholder="例如：小红书内容工作室" /></label>
+            <label>团队类型<select value={createForm.type} onChange={(event) => setCreateForm({ ...createForm, type: event.target.value })}><option>工作室</option><option>企业</option><option>内容团队</option><option>技术团队</option><option>学校 / 教育</option></select></label>
+            <label>使用场景<select value={createForm.scenario} onChange={(event) => setCreateForm({ ...createForm, scenario: event.target.value })}><option>综合使用</option><option>AI 文案</option><option>代码开发</option><option>图片生成</option><option>客户服务</option></select></label>
+            <label>团队规模<select value={createForm.teamSize} onChange={(event) => setCreateForm({ ...createForm, teamSize: event.target.value })}><option>1-5人</option><option>6-20人</option><option>21-50人</option><option>50人以上</option></select></label>
+          </div>
+          <button type="button" onClick={createTeam} disabled={saving || !createForm.name.trim()}>{saving ? "创建中..." : "确认创建团队"}</button>
+        </section>
+      ) : null}
+
+      {activeTeam ? (
         <>
-          <section style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12 }}>
-            <Metric label="团队数" value={data.metrics?.teamCount || 0} />
-            <Metric label="Token 数" value={data.metrics?.tokenCount || 0} />
-            <Metric label="正常 Token" value={data.metrics?.normalTokenCount || 0} />
-            <Metric label="今日调用" value={data.metrics?.todayCalls || 0} />
-            <Metric label="今日 Token" value={Number(data.metrics?.todayTokens || 0).toLocaleString()} />
-            <Metric label="今日花费" value={`¥${Number(data.metrics?.todayCostCny || 0).toFixed(4)}`} />
+          <section className="team-console-metrics">
+            <Metric label="团队余额" value={money2(data.wallet?.balanceCny || data.summary?.walletBalanceCny || 0)} />
+            <Metric label="总花费" value={money2(data.summary?.totalCostCny || 0)} />
+            <Metric label="总 Token" value={tokens(data.summary?.totalTokens || 0)} />
+            <Metric label="请求次数" value={tokens(data.summary?.requestCount || 0)} />
+            <Metric label="成功率" value={`${Number(data.summary?.successRate || 100).toFixed(1)}%`} tone={health[1]} />
+            <Metric label="最耗费成员" value={data.summary?.mostExpensiveMember || "暂无"} />
           </section>
 
-          <nav style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {[
-              ["overview", "团队概览"],
-              ["usage", "团队用量"],
-              ["logs", "团队日志"],
-              ["reports", "团队报表"],
-              ["members", "团队成员"],
-            ].map(([key, label]) => (
-              <button key={key} type="button" onClick={() => setTab(key)} style={tab === key ? activeTabBtn : tabBtn}>{label}</button>
-            ))}
+          <nav className="team-console-tabs">
+            {tabs.map(([key, label]) => <button key={key} type="button" onClick={() => setTab(key)} className={tab === key ? "active" : ""}>{label}</button>)}
           </nav>
 
           {tab === "overview" ? (
-            <section style={panel}>
-              <h2 style={panelTitle}>团队 Token 池状态</h2>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(240px,1fr))", gap: 12 }}>
-                {(data.tokens || []).map((token) => (
-                  <article key={token.id} style={miniCard}>
-                    <strong>{token.name}</strong>
-                    <span>{token.provider} · {token.modelType || "通用"}</span>
-                    <small>状态：{token.runtimeStatus?.label || token.status}</small>
-                    <small>余额：{Number(token.quotaRemaining || 0).toLocaleString()} / {Number(token.quotaTotal || 0).toLocaleString()}</small>
-                    <small>用途：{(token.allowedPurposes || []).join("、") || "全部用途"}</small>
-                  </article>
-                ))}
-                {!data.tokens?.length ? <p style={{ color: "var(--dash-sub)" }}>当前账号暂无可查看的团队 Token 池数据。</p> : null}
-              </div>
+            <section className="team-console-grid">
+              <Panel title="团队现在发生了什么">
+                <MiniRow label="当前角色" value={data.roleLabel || "成员"} />
+                <MiniRow label="团队类型" value={activeTeam.type || "工作室"} />
+                <MiniRow label="主要场景" value={activeTeam.scenario || "综合使用"} />
+                <MiniRow label="常用模型" value={data.summary?.topModel || "暂无"} />
+                <MiniRow label="异常请求" value={`${failedLogs.length} 条`} />
+              </Panel>
+              <Panel title="模型花费排行">
+                <RankList rows={data.modelCosts || []} nameKey="model" value={(item) => `${money2(item.costCny)} · ${tokens(item.tokens)} Token`} empty="还没有模型消费记录" />
+              </Panel>
+              <Panel title="API Key 花费排行">
+                <RankList rows={data.apiKeyCosts || []} nameKey="apiKeyId" value={(item) => `${money2(item.costCny)} · ${item.requests} 次`} empty="还没有团队 Key 消费记录" />
+              </Panel>
             </section>
           ) : null}
 
-          {tab === "usage" ? <DataTable title="团队用量" rows={data.tokens || []} columns={["name", "provider", "todayCalls", "todayTokens", "monthTokens", "todayCostCny", "monthCostCny", "successRate"]} /> : null}
-          {tab === "logs" ? <DataTable title="团队日志" rows={data.logs || []} columns={["requestId", "model", "purpose", "cacheHit", "totalTokens", "actualCostCny", "success", "durationMs", "errorCode"]} /> : null}
-          {tab === "reports" ? <DataTable title="团队报表" rows={data.reports || []} columns={["reportDate", "teamName", "calls", "successRate", "totalTokens", "actualCostCny", "savedCny", "recommendation"]} /> : null}
-          {tab === "members" ? <DataTable title="团队成员" rows={data.members || []} columns={["memberName", "role", "status", "userId"]} /> : null}
+          {tab === "members" ? (
+            <section className="team-console-panel">
+              <div className="team-console-panel-head">
+                <div><h2>团队成员与额度</h2><p>邀请和管理团队成员，设置他们每天、每月或总共能用多少额度。</p></div>
+                {canManageMembers ? <button type="button" onClick={createInvite} disabled={saving}>{saving ? "生成中..." : "生成邀请链接"}</button> : null}
+              </div>
+              {canManageMembers ? (
+                <div className="team-console-invite-row">
+                  <select value={inviteForm.role} onChange={(event) => setInviteForm({ ...inviteForm, role: event.target.value })}>{roleOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+                  <select value={inviteForm.type} onChange={(event) => setInviteForm({ ...inviteForm, type: event.target.value })}>{limitTypeOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+                  <select value={inviteForm.unit} onChange={(event) => setInviteForm({ ...inviteForm, unit: event.target.value })}>{limitUnitOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+                  <input value={inviteForm.amount} onChange={(event) => setInviteForm({ ...inviteForm, amount: event.target.value })} inputMode="decimal" aria-label="默认额度" />
+                </div>
+              ) : null}
+              {lastInvite ? <div className="team-console-invite-result">邀请链接：<code>{`${typeof window !== "undefined" ? window.location.origin : ""}/invite/team/${lastInvite.inviteCode || lastInvite.invite_code}`}</code></div> : null}
+              <Table
+                columns={["成员", "角色", "今日花费", "本月 Token", "剩余额度", "成功率", "最近使用", "操作"]}
+                rows={(data.members || []).map((member) => ({
+                  key: member.userId,
+                  cells: [
+                    member.memberName || member.userId,
+                    member.roleLabel,
+                    money2(member.usage?.todayCostCny || 0),
+                    tokens(member.usage?.monthTokens || 0),
+                    limitText(member.limit),
+                    `${Number(member.usage?.successRate || 100).toFixed(1)}%`,
+                    time(member.usage?.lastUsedAt),
+                    canManageMembers ? <InlineLimitEditor key={member.userId} member={member} onSave={updateLimit} saving={saving} /> : "仅查看",
+                  ],
+                }))}
+                empty="还没有团队成员，先生成邀请链接。"
+              />
+            </section>
+          ) : null}
+
+          {tab === "keys" ? (
+            <section className="team-console-panel">
+              <div className="team-console-panel-head">
+                <div><h2>团队 API Key</h2><p>不同项目或成员用不同 Key，队长可以按 Key 追踪 Token 和花费。</p></div>
+                <Link href="/api-management">去创建团队 Key</Link>
+              </div>
+              <Table
+                columns={["API Key", "请求次数", "Token", "花费", "说明"]}
+                rows={(data.apiKeyCosts || []).map((item) => ({
+                  key: item.apiKeyId,
+                  cells: [item.apiKeyId, item.requests, tokens(item.tokens), money2(item.costCny), "所有调用都会写入团队账本"],
+                }))}
+                empty="还没有团队 Key 消费记录。创建 API Key 时选择当前团队即可归入团队账本。"
+              />
+            </section>
+          ) : null}
+
+          {tab === "logs" ? (
+            <section className="team-console-panel">
+              <div className="team-console-panel-head"><div><h2>团队调用日志</h2><p>每一笔 Token 花在哪里、谁用了、哪个模型、是否成功，都在这里追踪。</p></div></div>
+              <Table
+                columns={["时间", "成员", "模型", "Token", "花费", "状态", "Request ID"]}
+                rows={logs.map((log) => ({
+                  key: log.id || log.requestId,
+                  cells: [time(log.createdAt), log.userId || "成员", log.model || "未知模型", tokens(log.totalTokens), money(log.actualCostCny), log.success === false ? `失败：${log.errorCode || "未知"}` : "成功", log.requestId],
+                }))}
+                empty="还没有团队调用日志。"
+              />
+            </section>
+          ) : null}
+
+          {tab === "billing" ? (
+            <section className="team-console-panel">
+              <div className="team-console-panel-head">
+                <div><h2>团队账单</h2><p>团队充值、模型调用、成员消费、失败请求都按同一个团队维度对账。</p></div>
+                {canExport ? <a href={`/api/team/billing/export?teamId=${encodeURIComponent(teamId)}`}>导出 CSV</a> : null}
+              </div>
+              <Table
+                columns={["时间", "成员", "类型", "金额", "Token", "说明", "Request ID"]}
+                rows={(data.transactions || []).map((item) => ({
+                  key: item.id,
+                  cells: [time(item.createdAt), item.userId || "团队", item.type, money2(item.amountCny), tokens(item.tokens), item.description || "团队账本流水", item.requestId || "-"],
+                }))}
+                empty="还没有团队账单流水。真实调用成功后会自动写入。"
+              />
+            </section>
+          ) : null}
         </>
       ) : null}
     </main>
   );
 }
 
-function Metric({ label, value }) {
+function Metric({ label, value, tone = "" }) {
+  return <article className={`team-console-metric ${tone}`}><span>{label}</span><strong>{value}</strong></article>;
+}
+
+function Panel({ title, children }) {
+  return <section className="team-console-panel"><h2>{title}</h2>{children}</section>;
+}
+
+function MiniRow({ label, value }) {
+  return <div className="team-console-mini-row"><span>{label}</span><strong>{value}</strong></div>;
+}
+
+function RankList({ rows = [], nameKey, value, empty }) {
+  if (!rows.length) return <p className="team-console-empty-text">{empty}</p>;
+  return <div className="team-console-rank">{rows.slice(0, 6).map((item, index) => <div key={item[nameKey] || index}><span>{index + 1}. {item[nameKey] || "未知"}</span><strong>{value(item)}</strong></div>)}</div>;
+}
+
+function Table({ columns = [], rows = [], empty = "暂无数据" }) {
   return (
-    <article style={metricCard}>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </article>
+    <div className="team-console-table-wrap">
+      <table className="team-console-table">
+        <thead><tr>{columns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
+        <tbody>
+          {rows.map((row) => <tr key={row.key}>{row.cells.map((cell, index) => <td key={index}>{cell}</td>)}</tr>)}
+          {!rows.length ? <tr><td colSpan={columns.length} className="team-console-empty-cell">{empty}</td></tr> : null}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
-function DataTable({ title, rows = [], columns = [] }) {
+function InlineLimitEditor({ member, onSave, saving }) {
+  const [type, setType] = useState(member.limit?.limitType || "daily");
+  const [unit, setUnit] = useState(member.limit?.limitUnit || "cny");
+  const [amount, setAmount] = useState(String(member.limit?.limitAmount || 10));
   return (
-    <section style={panel}>
-      <h2 style={panelTitle}>{title}</h2>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", minWidth: 760, borderCollapse: "collapse" }}>
-          <thead><tr>{columns.map((key) => <th key={key} style={thStyle}>{key}</th>)}</tr></thead>
-          <tbody>
-            {rows.map((row, index) => (
-              <tr key={row.id || index}>
-                {columns.map((key) => <td key={key} style={tdStyle}>{format(row[key])}</td>)}
-              </tr>
-            ))}
-            {!rows.length ? <tr><td colSpan={columns.length} style={{ ...tdStyle, textAlign: "center", color: "var(--dash-sub)" }}>暂无数据</td></tr> : null}
-          </tbody>
-        </table>
-      </div>
-    </section>
+    <div className="team-console-inline-editor">
+      <select value={type} onChange={(event) => setType(event.target.value)}>{limitTypeOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+      <select value={unit} onChange={(event) => setUnit(event.target.value)}>{limitUnitOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+      <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" aria-label="成员额度" />
+      <button type="button" onClick={() => onSave(member, { type, unit, amount })} disabled={saving}>保存</button>
+    </div>
   );
 }
-
-function format(value) {
-  if (typeof value === "boolean") return value ? "是" : "否";
-  if (typeof value === "number") return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(4);
-  if (Array.isArray(value)) return value.join("、");
-  return String(value ?? "");
-}
-
-const panel = { padding: 20, borderRadius: 12, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)" };
-const panelTitle = { margin: "0 0 14px", fontSize: 16, fontWeight: 900, color: "var(--dash-text)" };
-const metricCard = { padding: "16px 18px", borderRadius: 10, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", display: "grid", gap: 6, color: "var(--dash-text)" };
-const miniCard = { padding: 14, borderRadius: 10, border: "1px solid var(--dash-border)", background: "var(--dash-card-hover)", display: "grid", gap: 5, color: "var(--dash-text)" };
-const primaryBtn = { border: "none", borderRadius: 8, padding: "10px 16px", color: "#fff", background: "linear-gradient(135deg,#6366f1,#8b5cf6)", fontSize: 13, fontWeight: 800, cursor: "pointer" };
-const tabBtn = { border: "1px solid var(--dash-border)", borderRadius: 8, padding: "8px 13px", color: "var(--dash-text)", background: "transparent", fontSize: 12, fontWeight: 800, cursor: "pointer" };
-const activeTabBtn = { ...primaryBtn, padding: "8px 13px", fontSize: 12 };
-const notice = { padding: "10px 14px", borderRadius: 8, marginBottom: 12, background: "rgba(239,68,68,0.1)", color: "#ef4444", fontWeight: 800, fontSize: 13 };
-const thStyle = { textAlign: "left", padding: "10px 12px", fontSize: 11, color: "var(--dash-sub)", borderBottom: "1px solid var(--dash-border)", whiteSpace: "nowrap" };
-const tdStyle = { padding: "12px", fontSize: 12, borderBottom: "1px solid var(--dash-border)", color: "var(--dash-text)", verticalAlign: "top", overflowWrap: "anywhere" };

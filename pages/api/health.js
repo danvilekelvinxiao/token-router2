@@ -11,7 +11,9 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const requireDatabase = process.env.FLOWAPI_REQUIRE_DATABASE === "true" || process.env.NODE_ENV === "production";
+  const requireDatabase = process.env.FLOWAPI_REQUIRE_DATABASE === "false"
+    ? false
+    : process.env.FLOWAPI_REQUIRE_DATABASE === "true" || process.env.NODE_ENV === "production";
   let database = "disabled";
 
   if (hasDatabase()) {
@@ -31,11 +33,11 @@ export default async function handler(req, res) {
     ? upstream.ok
     : false;
 
-  return res.status(ok ? 200 : 500).json({
-    ok,
-    service: "flowapi",
-    database,
-    upstream,
-    time: new Date().toISOString(),
-  });
-}
+	  return res.status(ok ? 200 : 500).json({
+	    ok,
+	    service: "flowapi",
+	    database,
+	    upstream: upstream.ok ? "ok" : "degraded",
+	    time: new Date().toISOString(),
+	  });
+	}

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ThemeToggle from "@/components/ThemeToggle";
 import LanguageSwitcher from "@/components/common/language-switcher";
@@ -166,6 +166,13 @@ function getVisibleMenuItems(customer) {
   return menuItems.filter((item) => !item.adminOnly || isAdmin);
 }
 
+function isMenuActive(item, currentPath) {
+  if (item.href === "/team") {
+    return currentPath === "/team" || ["/team/usage", "/team/logs", "/team/reports", "/team/members", "/team/keys"].some((path) => currentPath.startsWith(path));
+  }
+  return currentPath === item.href || (item.key !== "dashboard" && currentPath.startsWith(`${item.href}/`));
+}
+
 function Sidebar({ currentPath, customer }) {
   const visibleMenuItems = getVisibleMenuItems(customer);
 
@@ -173,7 +180,7 @@ function Sidebar({ currentPath, customer }) {
     <aside className="flow-console-sidebar" aria-label="控制台导航">
       {visibleMenuItems.map((item) => {
         const Icon = iconMap[item.key];
-        const active = currentPath === item.href || (item.key !== "dashboard" && currentPath.startsWith(item.href));
+        const active = isMenuActive(item, currentPath);
         return (
           <Link
             key={item.key}
@@ -189,6 +196,58 @@ function Sidebar({ currentPath, customer }) {
         );
       })}
     </aside>
+  );
+}
+
+function SpaceSwitcher() {
+  const [open, setOpen] = useState(false);
+  const [teams, setTeams] = useState([]);
+  const [activeTeamId, setActiveTeamId] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try { return localStorage.getItem("flowapi_active_team_id") || ""; } catch { return ""; }
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/team/list")
+      .then((response) => response.ok ? response.json() : { teams: [] })
+      .then((json) => {
+        if (!cancelled) setTeams(Array.isArray(json.teams) ? json.teams : []);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  function selectSpace(teamId = "") {
+    setActiveTeamId(teamId);
+    try {
+      if (teamId) localStorage.setItem("flowapi_active_team_id", teamId);
+      else localStorage.removeItem("flowapi_active_team_id");
+      window.dispatchEvent(new CustomEvent("flowapi-space-change", { detail: { teamId } }));
+    } catch {}
+    setOpen(false);
+  }
+
+  const activeTeam = teams.find((team) => team.id === activeTeamId);
+
+  return (
+    <div className="flow-space-switcher">
+      <button type="button" className="flow-space-trigger" onClick={() => setOpen((value) => !value)} aria-haspopup="menu" aria-expanded={open}>
+        <span>{activeTeam ? "团队空间" : "个人空间"}</span>
+        <strong>{activeTeam?.name || "个人使用"}</strong>
+      </button>
+      {open ? (
+        <div className="flow-space-menu" role="menu">
+          <button type="button" onClick={() => selectSpace("")} className={!activeTeamId ? "active" : ""}>个人空间<small>只看自己的余额、Key 和日志</small></button>
+          {teams.map((team) => (
+            <button key={team.id} type="button" onClick={() => selectSpace(team.id)} className={team.id === activeTeamId ? "active" : ""}>
+              团队：{team.name}<small>{team.roleLabel || "成员"} · 查看团队用量和成员额度</small>
+            </button>
+          ))}
+          <Link href="/team" onClick={() => setOpen(false)}>创建或管理团队</Link>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -314,6 +373,7 @@ export default function ConsoleLayout({ customer, currentPath, children, content
             <FlowApiBrandText />
           </Link>
           <div className="flow-console-nav-actions">
+            <SpaceSwitcher />
             <ThemeToggle />
             <LanguageSwitcher />
             <AccountMenu customer={customer} />

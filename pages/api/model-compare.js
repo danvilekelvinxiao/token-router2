@@ -30,13 +30,12 @@ function findKeyForModel(customer = {}, modelId = "") {
   return active.find((key) => {
     const aliases = [
       key.publicModelId,
-      key.actualModelId,
-      key.modelProductId,
+	      key.modelProductId,
       key.modelDisplayName,
       ...(key.allowedModels || []),
     ].filter(Boolean).map((item) => String(item).trim().toLowerCase());
     return aliases.includes(wanted);
-  }) || active.find((key) => !key.publicModelId && !key.actualModelId) || null;
+	  }) || active.find((key) => !key.publicModelId) || null;
 }
 
 function getInternalOrigin(req) {
@@ -67,15 +66,13 @@ async function insertResult(result) {
   }
   await query(
     `INSERT INTO model_compare_results (
-       id, session_id, public_model_id, actual_model_id, upstream_channel, response_text,
+       id, session_id, public_model_id, response_text,
        input_tokens, output_tokens, latency_ms, first_token_ms, cost, status, error_message
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
     [
       result.id,
       result.sessionId,
       result.publicModelId,
-      result.actualModelId,
-      result.upstreamChannel,
       result.responseText,
       result.inputTokens,
       result.outputTokens,
@@ -144,8 +141,6 @@ export default async function handler(req, res) {
       id: makeId("cmp_res"),
       sessionId,
       publicModelId: modelId,
-      actualModelId: "",
-      upstreamChannel: "",
       responseText: "",
       inputTokens: 0,
       outputTokens: 0,
@@ -184,8 +179,6 @@ export default async function handler(req, res) {
       result.latencyMs = Date.now() - start;
       result.status = upstreamRes.ok ? "success" : "failed";
       result.responseText = upstreamRes.ok ? textFromResponse(payload) : "";
-      result.actualModelId = router.routed_model_id || modelId;
-      result.upstreamChannel = router.upstream_channel || "";
       result.inputTokens = Number(usage.prompt_tokens || 0);
       result.outputTokens = Number(usage.completion_tokens || 0);
       result.cost = Number(router.estimated_cost_cny || 0);
@@ -212,5 +205,5 @@ export default async function handler(req, res) {
     sessionId,
     status,
     results,
-  });
-}
+	  });
+	}

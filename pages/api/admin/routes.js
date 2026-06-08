@@ -59,7 +59,7 @@ async function seedRouteChannel(body = {}) {
       Number(body.priority ?? 10),
       Number(body.qualityScore ?? body.quality_score ?? 80),
       String(body.routeStrategy || body.route_strategy || "balanced"),
-      body.isEnabled !== false && body.is_enabled !== false,
+      body.isEnabled === true || body.is_enabled === true,
     ]
   );
   invalidateRouteCaches(publicModelId);

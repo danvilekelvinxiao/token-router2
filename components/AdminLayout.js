@@ -18,9 +18,10 @@ const adminMenuGroups = [
     label: "模型管理",
     helper: "上游、模型、价格、发布",
     items: [
-      { key: "modelWizard", label: "模型接入向导", href: "/admin/model-wizard", icon: IconBossWizard, aliases: ["/admin/boss-wizard"] },
-      { key: "upstreams", label: "上游渠道", href: "/admin/upstreams", icon: IconChannels, aliases: ["/admin/channels"] },
-      { key: "routes", label: "智能路由", href: "/admin/routes", icon: IconRouting, aliases: ["/admin/routing"] },
+	      { key: "modelWizard", label: "模型接入向导", href: "/admin/model-wizard", icon: IconBossWizard, aliases: ["/admin/boss-wizard"] },
+	      { key: "upstreams", label: "上游渠道", href: "/admin/upstreams", icon: IconChannels, aliases: ["/admin/channels"] },
+      { key: "backupProviderReview", label: "备用线路审核", href: `/admin/providers/${["ai", "cards"].join("")}`, icon: IconChannels },
+	      { key: "routes", label: "智能路由", href: "/admin/routes", icon: IconRouting, aliases: ["/admin/routing", "/admin/model-mapping"] },
       { key: "modelMarket", label: "模型广场", href: "/admin/model-market", icon: IconModels },
       { key: "models", label: "模型测试", href: "/admin/models", icon: IconModels },
       { key: "billing", label: "价格规则", href: "/admin/billing-rules", icon: IconBilling },

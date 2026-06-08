@@ -1,4 +1,5 @@
 import { findCustomerByToken } from "@/lib/customer-store";
+import { sanitizeSecretText } from "@/lib/safe-upstream-url";
 
 const MODEL_MAP = {
   DeepSeek: "deepseek-chat",
@@ -69,7 +70,9 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       return res.status(response.status).json({
-        error: data.error?.message || "模型服务请求失败，请稍后重试。",
+        error: "FlowAPI 请求未完成，请稍后重试或联系管理员排查。",
+        code: data.error?.type || data.error?.code || "FLOWAPI_CHAT_FAILED",
+        requestId: data.token_router?.request_id || data.request_id || "",
       });
     }
 
@@ -82,7 +85,8 @@ export default async function handler(req, res) {
     return res.status(200).json({ content });
   } catch (error) {
     return res.status(500).json({
-      error: error.message || "服务暂时不可用",
+      error: "FlowAPI 服务暂时不可用，请稍后重试。",
+      detail: process.env.NODE_ENV === "production" ? undefined : sanitizeSecretText(error.message || ""),
     });
   }
 }

@@ -136,8 +136,8 @@ try {
   await exec(`
     ALTER TABLE calls ADD COLUMN IF NOT EXISTS error_message TEXT DEFAULT '';
   `);
-  await exec(`
-    CREATE TABLE IF NOT EXISTS upstream_channels (
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS upstream_channels (
       id TEXT PRIMARY KEY,
       provider_name TEXT NOT NULL DEFAULT '',
       channel_name TEXT NOT NULL DEFAULT '',
@@ -161,8 +161,96 @@ try {
       profit_protection_hits INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
+	    );
+	  `);
+	  await exec(`
+	    ALTER TABLE upstream_channels ADD COLUMN IF NOT EXISTS provider_key TEXT DEFAULT '';
+	    ALTER TABLE upstream_channels ADD COLUMN IF NOT EXISTS channel_type TEXT DEFAULT 'OpenAI Compatible';
+	    ALTER TABLE upstream_channels ADD COLUMN IF NOT EXISTS is_user_visible BOOLEAN NOT NULL DEFAULT false;
+	    ALTER TABLE upstream_channels ADD COLUMN IF NOT EXISTS requires_admin_review BOOLEAN NOT NULL DEFAULT false;
+	  `);
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS upstream_models (
+	      id TEXT PRIMARY KEY,
+	      provider TEXT NOT NULL DEFAULT '',
+	      provider_key TEXT DEFAULT '',
+	      upstream_channel TEXT NOT NULL DEFAULT '',
+	      channel_id TEXT DEFAULT '',
+	      public_model_id TEXT DEFAULT '',
+	      actual_model_id TEXT NOT NULL DEFAULT '',
+	      display_name TEXT NOT NULL DEFAULT '',
+	      raw_model_name TEXT DEFAULT '',
+	      raw_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+	      normalized_capabilities JSONB NOT NULL DEFAULT '{}'::jsonb,
+	      input_cost_per_million NUMERIC(14, 6) NOT NULL DEFAULT 0,
+	      output_cost_per_million NUMERIC(14, 6) NOT NULL DEFAULT 0,
+	      currency TEXT NOT NULL DEFAULT 'CNY',
+	      is_detected BOOLEAN NOT NULL DEFAULT true,
+	      is_available BOOLEAN NOT NULL DEFAULT false,
+	      requires_admin_review BOOLEAN NOT NULL DEFAULT true,
+	      last_synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	    );
+	  `);
+	  await exec(`
+	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS provider_key TEXT DEFAULT '';
+	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS channel_id TEXT DEFAULT '';
+	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS public_model_id TEXT DEFAULT '';
+	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS raw_model_name TEXT DEFAULT '';
+	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS raw_data JSONB NOT NULL DEFAULT '{}'::jsonb;
+	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS normalized_capabilities JSONB NOT NULL DEFAULT '{}'::jsonb;
+	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS input_cost_per_million NUMERIC(14, 6) NOT NULL DEFAULT 0;
+	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS output_cost_per_million NUMERIC(14, 6) NOT NULL DEFAULT 0;
+	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'CNY';
+	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS is_available BOOLEAN NOT NULL DEFAULT false;
+	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS requires_admin_review BOOLEAN NOT NULL DEFAULT true;
+	  `);
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS model_routes (
+	      id TEXT PRIMARY KEY,
+	      public_model_id TEXT NOT NULL,
+	      display_name TEXT NOT NULL DEFAULT '',
+	      display_provider TEXT NOT NULL DEFAULT 'FlowAPI',
+	      category TEXT NOT NULL DEFAULT 'general',
+	      sell_input_price_per_million NUMERIC(14, 6) NOT NULL DEFAULT 0,
+	      sell_output_price_per_million NUMERIC(14, 6) NOT NULL DEFAULT 0,
+	      min_profit_margin NUMERIC(8, 4) NOT NULL DEFAULT 0.2,
+	      is_public BOOLEAN NOT NULL DEFAULT false,
+	      is_available BOOLEAN NOT NULL DEFAULT false,
+	      requires_admin_review BOOLEAN NOT NULL DEFAULT true,
+	      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	    );
+	  `);
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS route_candidates (
+	      id TEXT PRIMARY KEY,
+	      public_model_id TEXT NOT NULL,
+	      upstream_channel_id TEXT NOT NULL DEFAULT '',
+	      actual_model_id TEXT NOT NULL DEFAULT '',
+	      provider_key TEXT NOT NULL DEFAULT '',
+	      priority INTEGER NOT NULL DEFAULT 90,
+	      weight INTEGER NOT NULL DEFAULT 1,
+	      is_enabled BOOLEAN NOT NULL DEFAULT false,
+	      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	    );
+	  `);
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS data_sync_logs (
+	      id TEXT PRIMARY KEY,
+	      provider_key TEXT NOT NULL DEFAULT '',
+	      channel_name TEXT NOT NULL DEFAULT '',
+	      action TEXT NOT NULL DEFAULT '',
+	      status TEXT NOT NULL DEFAULT '',
+	      total_items INTEGER NOT NULL DEFAULT 0,
+	      added_count INTEGER NOT NULL DEFAULT 0,
+	      updated_count INTEGER NOT NULL DEFAULT 0,
+	      error_message TEXT DEFAULT '',
+	      raw_summary_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+	      created_by TEXT DEFAULT '',
+	      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	    );
+	  `);
   await exec(`
     CREATE TABLE IF NOT EXISTS route_attempts (
       id TEXT PRIMARY KEY,
@@ -256,8 +344,8 @@ try {
       last_used_at TIMESTAMPTZ
     );
   `);
-  await exec(`
-    CREATE TABLE IF NOT EXISTS passthrough_logs (
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS passthrough_logs (
       id SERIAL PRIMARY KEY,
       token_preview TEXT NOT NULL DEFAULT '',
       model TEXT NOT NULL DEFAULT '',
@@ -268,11 +356,161 @@ try {
       total_tokens INTEGER NOT NULL DEFAULT 0,
       latency_ms INTEGER NOT NULL DEFAULT 0,
       error_message TEXT NOT NULL DEFAULT '',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
+	      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	    );
+	  `);
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS teams (
+	      id TEXT PRIMARY KEY,
+	      name TEXT NOT NULL,
+	      code TEXT UNIQUE NOT NULL,
+	      description TEXT DEFAULT '',
+	      owner_user_id TEXT DEFAULT '',
+	      type TEXT DEFAULT '工作室',
+	      scenario TEXT DEFAULT '综合使用',
+	      team_size TEXT DEFAULT '',
+	      monthly_budget_cny NUMERIC(18, 6) NOT NULL DEFAULT 0,
+	      monthly_token_budget NUMERIC(20, 0) NOT NULL DEFAULT 0,
+	      allow_member_personal_balance BOOLEAN NOT NULL DEFAULT false,
+	      allow_member_create_keys BOOLEAN NOT NULL DEFAULT true,
+	      status TEXT NOT NULL DEFAULT 'active',
+	      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	    );
+	  `);
+	  await exec(`
+	    ALTER TABLE teams ADD COLUMN IF NOT EXISTS type TEXT DEFAULT '工作室';
+	    ALTER TABLE teams ADD COLUMN IF NOT EXISTS scenario TEXT DEFAULT '综合使用';
+	    ALTER TABLE teams ADD COLUMN IF NOT EXISTS team_size TEXT DEFAULT '';
+	    ALTER TABLE teams ADD COLUMN IF NOT EXISTS allow_member_personal_balance BOOLEAN NOT NULL DEFAULT false;
+	    ALTER TABLE teams ADD COLUMN IF NOT EXISTS allow_member_create_keys BOOLEAN NOT NULL DEFAULT true;
+	  `);
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS team_members (
+	      id TEXT PRIMARY KEY,
+	      team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+	      user_id TEXT NOT NULL,
+	      role TEXT NOT NULL DEFAULT 'member',
+	      member_name TEXT DEFAULT '',
+	      status TEXT NOT NULL DEFAULT 'active',
+	      invited_by TEXT DEFAULT '',
+	      joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	    );
+	  `);
+	  await exec(`
+	    ALTER TABLE team_members ADD COLUMN IF NOT EXISTS invited_by TEXT DEFAULT '';
+	    ALTER TABLE team_members ADD COLUMN IF NOT EXISTS joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+	    ALTER TABLE team_members ADD COLUMN IF NOT EXISTS member_name TEXT DEFAULT '';
+	  `);
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS team_member_limits (
+	      id TEXT PRIMARY KEY,
+	      team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+	      user_id TEXT NOT NULL,
+	      limit_type TEXT NOT NULL DEFAULT 'none',
+	      limit_unit TEXT NOT NULL DEFAULT 'cny',
+	      limit_amount NUMERIC(20, 6) NOT NULL DEFAULT 0,
+	      period_start TIMESTAMPTZ,
+	      period_end TIMESTAMPTZ,
+	      used_cny NUMERIC(18, 6) NOT NULL DEFAULT 0,
+	      used_tokens NUMERIC(20, 0) NOT NULL DEFAULT 0,
+	      used_requests INTEGER NOT NULL DEFAULT 0,
+	      enabled BOOLEAN NOT NULL DEFAULT false,
+	      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	      UNIQUE(team_id, user_id)
+	    );
+	  `);
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS team_api_keys (
+	      id TEXT PRIMARY KEY,
+	      team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+	      user_id TEXT NOT NULL,
+	      api_key_id TEXT NOT NULL,
+	      scope TEXT NOT NULL DEFAULT 'member',
+	      shared BOOLEAN NOT NULL DEFAULT false,
+	      status TEXT NOT NULL DEFAULT 'active',
+	      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	      UNIQUE(team_id, api_key_id)
+	    );
+	  `);
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS team_wallets (
+	      id TEXT PRIMARY KEY,
+	      team_id TEXT UNIQUE NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+	      balance_cny NUMERIC(18, 6) NOT NULL DEFAULT 0,
+	      gift_balance_cny NUMERIC(18, 6) NOT NULL DEFAULT 0,
+	      package_tokens NUMERIC(20, 0) NOT NULL DEFAULT 0,
+	      membership_tokens NUMERIC(20, 0) NOT NULL DEFAULT 0,
+	      status TEXT NOT NULL DEFAULT 'active',
+	      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	    );
+	  `);
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS team_wallet_transactions (
+	      id TEXT PRIMARY KEY,
+	      team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+	      user_id TEXT DEFAULT '',
+	      type TEXT NOT NULL,
+	      amount_cny NUMERIC(18, 6) NOT NULL DEFAULT 0,
+	      tokens NUMERIC(20, 0) NOT NULL DEFAULT 0,
+	      description TEXT DEFAULT '',
+	      related_order_id TEXT DEFAULT '',
+	      request_id TEXT DEFAULT '',
+	      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	    );
+	  `);
+	  await exec(`
+	    CREATE TABLE IF NOT EXISTS team_usage_logs (
+	      id TEXT PRIMARY KEY,
+	      request_id TEXT NOT NULL,
+	      user_id TEXT DEFAULT '',
+	      team_id TEXT DEFAULT '',
+	      api_key_id TEXT DEFAULT '',
+	      token_pool_id TEXT DEFAULT '',
+	      token_id TEXT DEFAULT '',
+	      provider TEXT DEFAULT '',
+	      model TEXT DEFAULT '',
+	      model_type TEXT DEFAULT '',
+	      purpose TEXT DEFAULT '',
+	      request_summary TEXT DEFAULT '',
+	      request_hash TEXT DEFAULT '',
+	      request_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	      client_ip TEXT DEFAULT '',
+	      client_name TEXT DEFAULT '',
+	      request_params_json TEXT DEFAULT '',
+	      cache_hit BOOLEAN NOT NULL DEFAULT false,
+	      cache_key TEXT DEFAULT '',
+	      input_tokens INTEGER NOT NULL DEFAULT 0,
+	      output_tokens INTEGER NOT NULL DEFAULT 0,
+	      total_tokens INTEGER NOT NULL DEFAULT 0,
+	      official_cost_cny NUMERIC(18, 6) NOT NULL DEFAULT 0,
+	      actual_cost_cny NUMERIC(18, 6) NOT NULL DEFAULT 0,
+	      saved_cny NUMERIC(18, 6) NOT NULL DEFAULT 0,
+	      balance_source TEXT DEFAULT '',
+	      success BOOLEAN NOT NULL DEFAULT true,
+	      duration_ms INTEGER NOT NULL DEFAULT 0,
+	      upstream_request_id TEXT DEFAULT '',
+	      error_code TEXT DEFAULT '',
+	      error_message TEXT DEFAULT '',
+	      rate_limited BOOLEAN NOT NULL DEFAULT false,
+	      token_expired BOOLEAN NOT NULL DEFAULT false,
+	      balance_insufficient BOOLEAN NOT NULL DEFAULT false,
+	      upstream_error BOOLEAN NOT NULL DEFAULT false,
+	      fallback_token_used BOOLEAN NOT NULL DEFAULT false,
+	      fallback_token_id TEXT DEFAULT '',
+	      retry_count INTEGER NOT NULL DEFAULT 0,
+	      final_status TEXT DEFAULT 'success',
+	      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+	    );
+	  `);
 
-  await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_calls_created_at ON calls(created_at DESC);");
+	  await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_calls_created_at ON calls(created_at DESC);");
   await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_calls_request_id ON calls(request_id);");
   await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_calls_profit_created ON calls(profit_cny, created_at DESC);");
   await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_calls_first_token_created ON calls(first_token_ms, created_at DESC);");
@@ -284,7 +522,16 @@ try {
   await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_model_compare_results_session ON model_compare_results(session_id, created_at DESC);");
   await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_whitelist_enabled ON new_api_token_whitelist(enabled);");
   await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_whitelist_hash ON new_api_token_whitelist(token_hash);");
-  await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_passthrough_logs_created ON passthrough_logs(created_at DESC);");
+	  await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_passthrough_logs_created ON passthrough_logs(created_at DESC);");
+	  await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_upstream_channels_provider_key ON upstream_channels(provider_key, is_enabled);");
+	  await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_upstream_models_provider ON upstream_models(provider_key, last_synced_at DESC);");
+	  await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_route_candidates_public_model ON route_candidates(public_model_id, is_enabled, priority);");
+	  await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_data_sync_logs_provider ON data_sync_logs(provider_key, created_at DESC);");
+	  await exec("CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_team_members_unique_active ON team_members(team_id, user_id);");
+	  await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_team_limits_team_user ON team_member_limits(team_id, user_id);");
+	  await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_team_key_links_team ON team_api_keys(team_id, user_id);");
+	  await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_team_wallet_transactions_team ON team_wallet_transactions(team_id, created_at DESC);");
+	  await exec("CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_team_usage_logs_team ON team_usage_logs(team_id, created_at DESC);");
 
   console.log("[migrate] 商业化账本迁移完成。");
 } catch (error) {

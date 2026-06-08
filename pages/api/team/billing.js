@@ -1,5 +1,5 @@
-import { getTeamBilling } from "@/lib/image-studio";
 import { requireCustomerSession } from "@/lib/session";
+import { getTeamBillingForUser } from "@/lib/team-management";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -10,13 +10,11 @@ export default async function handler(req, res) {
   const session = requireCustomerSession(req, res);
   if (!session) return;
 
-  const result = await getTeamBilling({
-    viewerId: session.customerId,
-    workspaceId: String(req.query.workspaceId || ""),
-  });
+  const result = await getTeamBillingForUser(session.customerId, String(req.query.teamId || req.query.workspaceId || ""));
 
   if (result.error) return res.status(403).json({ error: result.error });
   return res.status(200).json({
+    ok: true,
     success: true,
     ...result,
   });

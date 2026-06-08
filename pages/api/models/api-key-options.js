@@ -51,7 +51,7 @@ export default async function handler(req, res) {
 }
 
 function findContentPrice(model = {}) {
-  const aliases = [model.publicModelId, model.id, model.actualModelId, model.displayName]
+  const aliases = [model.publicModelId, model.id, model.displayName]
     .filter(Boolean)
     .map((item) => String(item).trim().toLowerCase());
   const item = getContent("models").find((candidate) => {

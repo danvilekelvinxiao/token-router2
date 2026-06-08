@@ -605,7 +605,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   function groupSupportsProduct(group, product) {
     const supported = Array.isArray(group?.supportedModels) ? group.supportedModels : [];
     if (!supported.length) return true;
-    const aliases = [product?.id, product?.publicModelId, product?.actualModelId, product?.displayName]
+    const aliases = [product?.id, product?.publicModelId, product?.displayName]
       .map((item) => String(item || "").toLowerCase())
       .filter(Boolean);
     return supported.some((item) => aliases.includes(String(item || "").toLowerCase()));

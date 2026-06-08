@@ -1,12 +1,23 @@
-import { assertCustomerOwner } from "@/lib/session";
-import { getUserTeamIds, listTeamUsageLogs } from "@/lib/team-token-pool";
+import { requireCustomerSession } from "@/lib/session";
+import { getTeamBillingForUser } from "@/lib/team-management";
 
 export default async function handler(req, res) {
-  const session = assertCustomerOwner(req, res, req.query?.customerId || req.body?.customerId);
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET");
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
+  }
+
+  const session = requireCustomerSession(req, res);
   if (!session) return;
-  const allowedTeamIds = await getUserTeamIds(session.customerId);
-  const requestedTeamId = String(req.query.teamId || "");
-  const teamId = requestedTeamId && allowedTeamIds.includes(requestedTeamId) ? requestedTeamId : allowedTeamIds[0] || "";
-  if (!teamId) return res.status(200).json({ ok: true, logs: [] });
-  return res.status(200).json({ ok: true, logs: await listTeamUsageLogs({ teamId, limit: Number(req.query.limit || 100) }) });
+
+  const data = await getTeamBillingForUser(session.customerId, String(req.query.teamId || req.query.workspaceId || ""));
+  if (data.error) return res.status(403).json({ ok: false, error: data.error });
+  const limit = Math.min(Math.max(Number(req.query.limit || 100), 1), 500);
+  return res.status(200).json({
+    ok: true,
+    team: data.team,
+    role: data.role,
+    canViewAll: data.canViewAll,
+    logs: (data.logs || []).slice(0, limit),
+  });
 }

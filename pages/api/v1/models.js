@@ -64,7 +64,7 @@ export default async function handler(req, res) {
       id: model.publicModelId || model.id,
       object: "model",
       created,
-      owned_by: String(model.provider || "flowapi").toLowerCase(),
+      owned_by: "flowapi",
       name: model.displayName || model.publicModelId || model.id,
     })),
   ];

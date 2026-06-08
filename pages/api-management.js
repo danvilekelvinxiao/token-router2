@@ -498,7 +498,7 @@ export default function ApiManagementPage() {
   function groupSupportsModel(group, model) {
     const supported = Array.isArray(group?.supportedModels) ? group.supportedModels : [];
     if (!supported.length) return true;
-    const aliases = [model?.id, model?.modelId, model?.actualModelId, model?.displayName]
+    const aliases = [model?.id, model?.modelId, model?.displayName]
       .map((item) => String(item || "").toLowerCase())
       .filter(Boolean);
     return supported.some((item) => aliases.includes(String(item || "").toLowerCase()));

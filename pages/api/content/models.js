@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     const releaseMap = new Map();
     products.forEach((product) => {
       const value = product.officialReleaseDate || "";
-      [product.id, product.publicModelId, product.actualModelId, product.displayName]
+      [product.id, product.publicModelId, product.displayName]
         .filter(Boolean)
         .forEach((key) => releaseMap.set(String(key).toLowerCase(), value));
     });

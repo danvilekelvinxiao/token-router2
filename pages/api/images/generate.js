@@ -157,7 +157,7 @@ export default async function handler(req, res) {
     generationId: result.requestId,
     conversationId: fields.conversationId || "",
     model: result.modelId || payload.modelId,
-    provider: result.upstreamProvider || "OpenRouter",
+    provider: "FlowAPI",
     images: Array.isArray(result.images) ? result.images.map((url) => ({ url, width: 0, height: 0 })) : [],
     firstImage,
     usage: {
