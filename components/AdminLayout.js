@@ -3,37 +3,91 @@ import { useEffect, useState } from "react";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ThemeToggle from "@/components/ThemeToggle";
 
-const adminMenuItems = [
-  { key: "overview", label: "管理概览", href: "/admin", icon: IconOverview },
-  { key: "bossWizard", label: "老板后台向导", href: "/admin/boss-wizard", icon: IconBossWizard },
-  { key: "channels", label: "上游渠道管理", href: "/admin/channels", icon: IconChannels },
-  { key: "tokenPool", label: "团队 Token 池", href: "/admin/token-pool", icon: IconTokenPool },
-  { key: "tokenMaintenance", label: "Token 池维护中心", href: "/admin/token-pool/maintenance", icon: IconMaintenance },
-  { key: "maintenanceTasks", label: "维护任务中心", href: "/admin/maintenance-tasks", icon: IconMaintenance },
-  { key: "healthCheck", label: "功能健康检查", href: "/admin/health-check", icon: IconMaintenance },
-  { key: "commercialHealth", label: "商业闭环检查", href: "/admin/commercial-health", icon: IconMaintenance },
-  { key: "teams", label: "团队管理", href: "/admin/teams", icon: IconUsers },
-  { key: "rateLimits", label: "限流规则", href: "/admin/rate-limits", icon: IconRouting },
-  { key: "teamReports", label: "团队报表", href: "/admin/team-reports", icon: IconLogs },
-  { key: "users", label: "用户与 Token 权限", href: "/admin/users", icon: IconUsers },
-  { key: "billing", label: "计费规则", href: "/admin/billing-rules", icon: IconBilling },
-  { key: "routing", label: "全局转发规则", href: "/admin/routing", icon: IconRouting },
-  { key: "security", label: "安全风控", href: "/admin/security", icon: IconSecurity },
-  { key: "insights", label: "用户画像分析", href: "/admin/user-insights", icon: IconInsights },
-  { key: "logs", label: "调用日志", href: "/admin/logs", icon: IconLogs },
-  { key: "announcements", label: "系统公告管理", href: "/admin/announcements", icon: IconAnnouncements },
-  { key: "referrals", label: "邀请返佣管理", href: "/admin/referrals", icon: IconReferrals },
-  { key: "titleRules", label: "称号规则", href: "/admin/title-rules", icon: IconHonors },
-  { key: "membership", label: "会员管理", href: "/admin/membership", icon: IconBilling },
-  { key: "settings", label: "系统设置", href: "/admin/settings", icon: IconSettings },
-  { key: "recharges", label: "充值审核", href: "/admin/recharges", icon: IconRecharges },
-  { key: "newapi", label: "New API 管理", href: "/admin/new-api", icon: IconNewApi },
-  { key: "groups", label: "API 分组管理", href: "/admin/groups", icon: IconRouting },
-  { key: "passthrough", label: "Token 直通白名单", href: "/admin/newapi-passthrough", icon: IconPassthrough },
-  { key: "importToken", label: "导入 New API Token", href: "/admin/api-keys/import-newapi-token", icon: IconImportToken },
-  { key: "redeemCodes", label: "激活码管理", href: "/admin/redeem-codes", icon: IconRedeem },
-  { key: "modelMarket", label: "模型广场管理", href: "/admin/model-market", icon: IconModels },
-  { key: "models", label: "模型诊断", href: "/admin/models", icon: IconModels },
+const adminMenuGroups = [
+  {
+    key: "home",
+    label: "后台首页",
+    helper: "今天赚了多少、系统是否正常",
+    items: [
+      { key: "overview", label: "管理概览", href: "/admin", icon: IconOverview },
+      { key: "commercialHealth", label: "商业闭环检查", href: "/admin/commercial-health", icon: IconMaintenance },
+    ],
+  },
+  {
+    key: "models",
+    label: "模型管理",
+    helper: "上游、模型、价格、发布",
+    items: [
+      { key: "modelWizard", label: "模型接入向导", href: "/admin/model-wizard", icon: IconBossWizard, aliases: ["/admin/boss-wizard"] },
+      { key: "upstreams", label: "上游渠道", href: "/admin/upstreams", icon: IconChannels, aliases: ["/admin/channels"] },
+      { key: "modelMarket", label: "模型广场", href: "/admin/model-market", icon: IconModels },
+      { key: "models", label: "模型测试", href: "/admin/models", icon: IconModels },
+      { key: "billing", label: "价格规则", href: "/admin/billing-rules", icon: IconBilling },
+    ],
+  },
+  {
+    key: "users",
+    label: "用户管理",
+    helper: "用户、团队、API Key、邀请",
+    items: [
+      { key: "users", label: "用户与 API Key", href: "/admin/users", icon: IconUsers },
+      { key: "teams", label: "团队管理", href: "/admin/teams", icon: IconUsers },
+      { key: "insights", label: "用户画像", href: "/admin/user-insights", icon: IconInsights },
+      { key: "referrals", label: "邀请返佣", href: "/admin/referrals", icon: IconReferrals },
+    ],
+  },
+  {
+    key: "orders",
+    label: "订单与支付",
+    helper: "充值、套餐、激活码",
+    items: [
+      { key: "recharges", label: "充值审核", href: "/admin/recharges", icon: IconRecharges },
+      { key: "membership", label: "套餐会员", href: "/admin/membership", icon: IconBilling },
+      { key: "redeemCodes", label: "激活码", href: "/admin/redeem-codes", icon: IconRedeem },
+    ],
+  },
+  {
+    key: "ops",
+    label: "运营配置",
+    helper: "前台内容、公告、称号",
+    items: [
+      { key: "contentMap", label: "前后台对应", href: "/admin/content-map", icon: IconAnnouncements },
+      { key: "content", label: "前台内容", href: "/admin/content", icon: IconAnnouncements },
+      { key: "announcements", label: "系统公告", href: "/admin/announcements", icon: IconAnnouncements },
+      { key: "titleRules", label: "称号规则", href: "/admin/title-rules", icon: IconHonors },
+    ],
+  },
+  {
+    key: "logs",
+    label: "数据与日志",
+    helper: "调用、团队、导出",
+    items: [
+      { key: "logs", label: "调用日志", href: "/admin/logs", icon: IconLogs },
+      { key: "teamReports", label: "团队报表", href: "/admin/team-reports", icon: IconLogs },
+      { key: "teamUsageLogs", label: "团队日志", href: "/admin/team-usage-logs", icon: IconLogs },
+    ],
+  },
+  {
+    key: "monitor",
+    label: "系统监控",
+    helper: "健康、渠道、告警",
+    items: [
+      { key: "healthCheck", label: "功能健康检查", href: "/admin/health-check", icon: IconMaintenance },
+      { key: "upstreamStatus", label: "上游状态", href: "/admin/upstream-status", icon: IconTokenPool, aliases: ["/admin/token-pool/status"] },
+      { key: "tokenAlerts", label: "Token 告警", href: "/admin/token-alerts", icon: IconSecurity },
+      { key: "operatorGuide", label: "老板操作指南", href: "/admin/operator-guide", icon: IconBossWizard },
+    ],
+  },
+  {
+    key: "settings",
+    label: "系统设置",
+    helper: "安全与高级技术入口",
+    items: [
+      { key: "settings", label: "站点设置", href: "/admin/settings", icon: IconSettings },
+      { key: "security", label: "安全风控", href: "/admin/security", icon: IconSecurity },
+      { key: "advanced", label: "高级技术入口", href: "/admin/advanced", icon: IconRouting },
+    ],
+  },
 ];
 
 function IconModels() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="4" rx="1"/><rect x="14" y="3" width="7" height="4" rx="1"/><rect x="3" y="10" width="7" height="4" rx="1"/><rect x="14" y="10" width="7" height="4" rx="1"/><rect x="3" y="17" width="7" height="4" rx="1"/><rect x="14" y="17" width="7" height="4" rx="1"/></svg>; }
@@ -124,24 +178,33 @@ export default function AdminLayout({ currentPath, children }) {
         </div>
       </nav>
 
-      <aside style={{ position: "fixed", top: 65, left: 0, bottom: 0, width: 210, background: "var(--dash-card-bg)", borderRight: "1px solid var(--dash-border)", padding: "24px 12px 16px", zIndex: 80, overflowY: "auto" }}>
-        {adminMenuItems.map((item) => {
-          const Icon = item.icon;
-          const active = currentPath === item.href || (item.key !== "overview" && currentPath.startsWith(item.href));
-          return (
-            <Link key={item.key} href={item.href} style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, marginBottom: 2,
-              color: active ? "var(--dash-accent)" : "var(--dash-sub)", background: active ? "var(--dash-card-hover)" : "transparent",
-              fontWeight: active ? 700 : 500, fontSize: 13, textDecoration: "none", transition: "all 0.15s ease",
-            }}>
-              <span style={{ display: "flex", flex: "none", opacity: active ? 1 : 0.65 }}><Icon /></span>
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+      <aside style={{ position: "fixed", top: 65, left: 0, bottom: 0, width: 236, background: "var(--dash-card-bg)", borderRight: "1px solid var(--dash-border)", padding: "18px 12px 16px", zIndex: 80, overflowY: "auto" }}>
+        {adminMenuGroups.map((group) => (
+          <section key={group.key} style={{ marginBottom: 14 }}>
+            <div style={{ padding: "6px 10px 7px" }}>
+              <strong style={{ display: "block", fontSize: 12, fontWeight: 900, color: "var(--dash-text)" }}>{group.label}</strong>
+              <span style={{ display: "block", marginTop: 2, fontSize: 10, lineHeight: 1.4, color: "var(--dash-sub)" }}>{group.helper}</span>
+            </div>
+            {group.items.map((item) => {
+              const Icon = item.icon;
+              const paths = [item.href, ...(item.aliases || [])];
+              const active = paths.some((path) => currentPath === path || (path !== "/admin" && currentPath.startsWith(path)));
+              return (
+                <Link key={item.key} href={item.href} style={{
+                  display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 8, marginBottom: 2,
+                  color: active ? "var(--dash-accent)" : "var(--dash-sub)", background: active ? "var(--dash-card-hover)" : "transparent",
+                  fontWeight: active ? 800 : 600, fontSize: 12, textDecoration: "none", transition: "transform .15s ease, background .15s ease, color .15s ease",
+                }}>
+                  <span style={{ display: "flex", flex: "none", opacity: active ? 1 : 0.68 }}><Icon /></span>
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </section>
+        ))}
       </aside>
 
-      <div style={{ padding: "24px 28px 32px 240px" }}>
+      <div style={{ padding: "24px 28px 32px 268px" }}>
         {children}
       </div>
     </main>
