@@ -39,11 +39,13 @@ ssh $SSH_OPTS "$SERVER" "
   FLOWAPI_REQUIRE_DATABASE=\"\${FLOWAPI_REQUIRE_DATABASE:-true}\" node scripts/run-production-migrations.mjs
   export NODE_OPTIONS=--max-old-space-size=512
   npm install --omit=dev --no-audit --no-fund
-  if pm2 describe flowapi >/dev/null 2>&1; then
-    pm2 restart flowapi --update-env
-  else
-    pm2 start npm --name flowapi -- start -- -p 3000
+  pm2 delete flowapi >/dev/null 2>&1 || true
+  PORT_PIDS=\"\$(ss -ltnp 'sport = :3000' 2>/dev/null | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | sort -u || true)\"
+  if [ -n \"\$PORT_PIDS\" ]; then
+    kill \$PORT_PIDS 2>/dev/null || true
+    sleep 1
   fi
+  pm2 start node_modules/next/dist/bin/next --name flowapi -- start -p 3000
   pm2 save >/dev/null
   systemctl start nginx 2>/dev/null || true
   nginx -t && systemctl reload nginx
