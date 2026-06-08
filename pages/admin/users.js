@@ -196,7 +196,7 @@ export default function AdminUsers() {
           <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
             <div>
               <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>用户与 Token 权限</h1>
-              <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>管理用户账号、余额、API 密匙权限和调用限制</p>
+              <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>管理用户账号、余额、API Key权限和调用限制</p>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />

@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { deletePublishedModel, upsertPublishedModel } from "@/lib/admin-commercial-config";
+import { invalidateModelCaches } from "@/lib/cache-manager";
 
 export default async function handler(req, res) {
   const admin = await requireAdmin(req, res);
@@ -14,11 +15,13 @@ export default async function handler(req, res) {
         { ...(req.body || {}), modelId: req.body?.modelId || modelId },
         admin.customer?.id || admin.customer?.email || "admin"
       );
+      invalidateModelCaches();
       return res.status(200).json({ ok: true, message: "模型已更新，并同步到前台", ...result });
     }
 
     if (req.method === "DELETE") {
       const result = await deletePublishedModel(modelId, admin.customer?.id || admin.customer?.email || "admin");
+      invalidateModelCaches();
       return res.status(200).json({ ok: true, message: "模型已删除", ...result });
     }
 

@@ -1,7 +1,6 @@
 import { findCustomerByToken } from "@/lib/customer-store";
-import { isTokenWhitelisted } from "@/lib/new-api/passthrough";
-import { getUpstreamConfigs } from "@/lib/upstream";
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
+import { CACHE_TTLS, getCacheManager } from "@/lib/cache-manager";
 
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -38,31 +37,18 @@ export default async function handler(req, res) {
   const isLocalKey = !!(clientToken && await findCustomerByToken(clientToken));
 
   if (!isLocalKey) {
-    // Only admin-whitelisted New API tokens may query upstream models.
-    // Unknown New API tokens must not bypass FlowAPI's local api_keys table.
-    if (!(clientToken && await isTokenWhitelisted(clientToken))) {
-      return res.status(401).json({
-        error: { message: "Invalid FlowAPI API Key", type: "invalid_api_key" },
-      });
-    }
-    // Forward to New API /v1/models
-    const upstreams = getUpstreamConfigs();
-    if (upstreams.length > 0) {
-      try {
-        const upRes = await fetch(upstreams[0].modelsUrl, {
-          headers: { Authorization: `Bearer ${clientToken}` },
-        });
-        const upData = await upRes.json().catch(() => null);
-        res.status(upRes.status);
-        res.setHeader("Content-Type", upRes.headers.get("content-type") || "application/json");
-        return res.send(JSON.stringify(upData));
-      } catch {
-        // Fall through to local catalog
-      }
-    }
+    return res.status(401).json({
+      error: { message: "Invalid FlowAPI API Key", type: "invalid_api_key" },
+    });
   }
 
   const created = Math.floor(Date.now() / 1000);
+  const cache = getCacheManager();
+  const cached = cache.get("modelList", "v1-models");
+  if (cached) {
+    res.setHeader("X-FlowAPI-Cache", "HIT");
+    return res.status(200).json(cached);
+  }
   const products = await listModelProductsWithConfig({ includeUnavailable: false }).catch(() => []);
   const models = [
     {
@@ -83,8 +69,11 @@ export default async function handler(req, res) {
     })),
   ];
 
-  return res.status(200).json({
+  const payload = {
     object: "list",
     data: models,
-  });
+  };
+  cache.set("modelList", "v1-models", payload, CACHE_TTLS.modelList);
+  res.setHeader("X-FlowAPI-Cache", "MISS");
+  return res.status(200).json(payload);
 }

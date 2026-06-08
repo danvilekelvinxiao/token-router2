@@ -1255,7 +1255,7 @@ function buildRecentCallRows(calls, apiKeys = []) {
       statusKey: status.key,
       latency: latencySeconds > 0 ? `${latencySeconds.toFixed(1)}s` : "-",
       latencySeconds: latencySeconds || 0,
-      error: status.key === "success" ? "" : "上游返回异常，请检查余额、模型名或稍后重试。",
+      error: status.key === "success" ? "" : "模型服务返回异常，请检查余额、模型名或稍后重试。",
       // Channel / pricing info
       channelName: call.channelName || call.channel || "官方",
       channelType: call.channelType || "official",
@@ -2218,7 +2218,7 @@ function buildModelUsageDetail(model, trendData, recentRows) {
   const calls = recentRows.filter((row) => row.model === model.model || model.model.includes(row.model));
   const rows = [
     { label: "模型名称", value: model.model },
-    { label: "上游供应商", value: model.provider || "FlowAPI" },
+    { label: "模型服务", value: model.provider || "FlowAPI" },
     { label: "请求次数", value: `${model.requests} 次` },
     { label: "总 Token", value: `${formatCompactToken(model.tokens)} Token` },
     { label: "总成本", value: `¥${model.cost.toFixed(2)}` },
@@ -3307,7 +3307,7 @@ function RecentCallLedger({ rows }) {
     <section className="dash3-section" id="dash-recent-calls">
       <SectionTitle
         title="API 调用流水"
-        subtitle="每一次模型调用都会记录 Token、渠道、价格、折扣和最终扣费，方便你核对成本。"
+        subtitle="每一次模型调用都会记录 Token、线路、价格、折扣和最终扣费，方便你核对成本。"
         right={canExpand ? (
           <button type="button" className="dash3-ledger-toggle" onClick={toggleExpanded}>
             {expanded ? "收起记录" : `展开记录（每页 10 行）`}
@@ -3375,14 +3375,14 @@ function RecentCallLedger({ rows }) {
                             <div><span>原输入价格</span><b>{formatSmallCny(row.originalInputPricePerM)} / M Token</b></div>
                             <div><span>原输出价格</span><b>{formatSmallCny(row.originalOutputPricePerM)} / M Token</b></div>
                           </div>
-                          <small>渠道原始模型价格，用于计算原始理论费用。</small>
+                          <small>模型线路原始价格，用于计算原始理论费用。</small>
                         </div>
 
                         {/* Discount */}
                         <div className="call-billing-pricing-card">
                           <strong>折扣信息</strong>
                           <div className="call-billing-pricing-rows">
-                            <div><span>渠道折扣</span><b>{discountLabel}</b></div>
+                            <div><span>线路折扣</span><b>{discountLabel}</b></div>
                             <div><span>总折扣</span><b>{discountLabel}</b></div>
                           </div>
                           <small>{row.savedPercent > 0 ? `节省 ${row.savedPercent}%` : "暂无折扣"}</small>

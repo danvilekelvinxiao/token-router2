@@ -121,7 +121,7 @@ export default function CryptoPaymentModal({
           <div className="payment-modal-side-card">
             <strong>收款地址</strong>
             <div className="payment-modal-address-card">
-              <code>{address || "GMWallet 地址同步中，可先打开收银台链接"}</code>
+              <code>{address || "收款地址同步中，可先打开收银台链接"}</code>
               <button type="button" className="btn-secondary" disabled={!address} onClick={() => onCopy(address)}>
                 {copied === address ? "已复制" : "复制地址"}
               </button>
@@ -129,7 +129,7 @@ export default function CryptoPaymentModal({
             <ul>
               <li>请确认币种和网络完全一致。</li>
               <li>仅接收对应链上的资产，选错链会导致资产丢失。</li>
-              <li>{manualFallback ? "当前为人工确认兜底，请提交转账信息。" : "GMWallet 正在自动轮询到账，链上确认后会自动入账。"}</li>
+              <li>{manualFallback ? "当前为人工确认，请提交转账信息。" : "系统正在自动轮询到账，链上确认后会自动入账。"}</li>
             </ul>
 
             {manualFallback ? (

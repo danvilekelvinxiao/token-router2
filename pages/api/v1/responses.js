@@ -16,7 +16,7 @@ const SUPPORTED_MODEL_IDS = new Set(MODEL_CATALOG.map((model) => model.modelId))
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, x-api-key, idempotency-key, x-request-id");
   res.setHeader("Access-Control-Max-Age", "86400");
 }
 
@@ -143,13 +143,11 @@ function chatCompletionToResponse(chatBody, chatResponse) {
   };
 }
 
-function getInternalChatUrl(req) {
+function getInternalChatUrl() {
   const configured = process.env.INTERNAL_FLOWAPI_BASE_URL?.replace(/\/+$/, "");
   if (configured) return `${configured}/api/v1/chat/completions`;
-
-  const host = req.headers.host || "localhost:3000";
-  const protocol = host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https";
-  return `${protocol}://${host}/api/v1/chat/completions`;
+  const port = process.env.FLOWAPI_INTERNAL_PORT || process.env.PORT || "3000";
+  return `http://127.0.0.1:${port}/api/v1/chat/completions`;
 }
 
 export default async function handler(req, res) {
@@ -172,11 +170,13 @@ export default async function handler(req, res) {
   const chatBody = responsesToChatCompletions(req.body || {});
 
   try {
-    const chatRes = await fetch(getInternalChatUrl(req), {
+    const chatRes = await fetch(getInternalChatUrl(), {
       method: "POST",
       headers: {
-        Authorization: req.headers.authorization || "",
+        Authorization: req.headers.authorization || (req.headers["x-api-key"] ? `Bearer ${req.headers["x-api-key"]}` : ""),
         "Content-Type": "application/json",
+        ...(req.headers["idempotency-key"] ? { "Idempotency-Key": req.headers["idempotency-key"] } : {}),
+        ...(req.headers["x-request-id"] ? { "x-request-id": req.headers["x-request-id"] } : {}),
       },
       body: JSON.stringify(chatBody),
     });

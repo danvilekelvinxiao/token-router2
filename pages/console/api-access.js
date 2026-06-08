@@ -30,7 +30,7 @@ export default function ApiAccessPage() {
   const selectedModel = useMemo(() => getSelectedModel(router.query.model), [router.query.model]);
 
   const requestExample = `curl ${apiBaseUrl}/chat/completions \\
-  -H "Authorization: Bearer 你的控制台 API 密匙" \\
+  -H "Authorization: Bearer 替换成你的 FlowAPI API Key" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "${selectedModel.modelId}",
@@ -94,9 +94,9 @@ export default function ApiAccessPage() {
                   <button type="button" onClick={() => copyText("Base URL", apiBaseUrl)}>复制</button>
                 </div>
                 <div>
-                  <span>API 密匙</span>
-                  <code>你的控制台 API 密匙</code>
-                  <button type="button" onClick={() => copyText("API 密匙", "你的控制台 API 密匙")}>复制</button>
+                  <span>API Key</span>
+                  <code>在 API 管理页复制真实 API Key</code>
+                  <Link href="/api-management">去复制</Link>
                 </div>
                 <div>
                   <span>Model</span>

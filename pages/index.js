@@ -1,8 +1,9 @@
 import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { getPublicApiBaseUrl } from "@/lib/public-api";
 
-const apiBaseUrl = "https://flowapi.fun/v1";
+const apiBaseUrl = getPublicApiBaseUrl();
 
 const features = [
   {
@@ -41,7 +42,7 @@ const steps = [
   {
     number: "03",
     title: "自动配置",
-    desc: "自动填入 Base URL、模型和 API 密匙，几分钟完成接入。",
+    desc: "自动填入 Base URL、模型和 API Key，几分钟完成接入。",
   },
 ];
 
@@ -74,10 +75,10 @@ export default function HomePage() {
   return (
     <>
       <Head>
-        <title>FlowAPI - 全球第一家 AI Token 资产管理平台</title>
+        <title>FlowAPI - AI API Token 充值与统一调用平台</title>
         <meta
           name="description"
-          content="FlowAPI 是全球第一家 AI Token 资产管理平台。三步接入统一调用 Claude、GPT、Gemini、DeepSeek 等全球 AI 模型实时追踪 Token 消耗与成本。"
+          content="FlowAPI 提供 AI API Token 充值、统一 Base URL、API Key 管理、模型调用、扣费记录和用量日志。三步接入 Claude、GPT、Gemini、DeepSeek 等 AI 模型。"
         />
       </Head>
 
@@ -120,7 +121,7 @@ export default function HomePage() {
 
         {/* ======== 第一部分：Hero ======== */}
         <section className="hero-wrap">
-          <h1 className="hero-title">全球第一家 AI Token 资产管理平台</h1>
+          <h1 className="hero-title">AI API Token 充值与统一调用平台</h1>
           <p className="hero-subtitle">
             <strong>注册即送 ¥5 体验额度</strong>
             <br />
@@ -159,9 +160,9 @@ export default function HomePage() {
           {/* 数据条 */}
           <div className="hero-stats">
             {[
-              ["200B", "消耗Token"],
-              ["1.4s", "平均响应"],
-              ["100+", "主流模型"],
+              ["¥5", "注册送额度"],
+              ["3 步", "完成接入"],
+              ["多模型", "统一调用"],
               ["1 Key", "统一接入"],
             ].map(([v, l]) => (
               <div key={l}>
@@ -280,7 +281,7 @@ export default function HomePage() {
 
         {/* ---- Footer ---- */}
         <footer className="landing-footer">
-          FlowAPI · 全球第一家 AI Token 资产管理平台
+          FlowAPI · AI API Token 充值与统一调用平台
         </footer>
       </main>
     </>

@@ -70,7 +70,7 @@ export default function V4Page() {
                 智流 FlowAPI
               </h1>
               <h2 style={{ margin: "18px 0 0", fontSize: 34, lineHeight: 1.16, maxWidth: 720 }}>
-                一个 API 密匙，调用全球主流 AI 模型
+                一个 API Key，调用全球主流 AI 模型
               </h2>
               <p style={{ margin: "18px 0 0", color: "#4b5563", fontSize: 18, lineHeight: 1.9, maxWidth: 720 }}>
                 面向中国用户的 AI API 中转站。用户打开首页后，
@@ -155,7 +155,7 @@ export default function V4Page() {
               },
               {
                 title: "接入流程非常简单",
-                text: "复制 Base URL、复制 API 密匙、选择模型名，就能接入大多数兼容客户端。",
+                text: "复制 Base URL、复制 API Key、选择模型名，就能接入大多数兼容客户端。",
               },
               {
                 title: "开发者和小白都能看懂",
@@ -223,7 +223,7 @@ export default function V4Page() {
                 <div style={{ ...panel, padding: 18 }}>
                   <div style={{ color: "#111827", fontWeight: 700 }}>推荐接入方式</div>
                   <p style={{ margin: "10px 0 0", color: "#4b5563", lineHeight: 1.8 }}>
-                    登录后进入控制台创建 API 密匙，点击 CC Switch，一键填入 Base URL、模型和 API 密匙。
+                    登录后进入控制台创建 API Key，点击 CC Switch，一键填入 Base URL、模型和 API Key。
                   </p>
                 </div>
               </div>

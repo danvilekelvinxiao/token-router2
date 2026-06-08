@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/admin-auth";
+import { sanitizeSecretText } from "@/lib/safe-upstream-url";
 
 const ALLOWED_ENDPOINTS = [
   "chat/completions",
@@ -78,13 +79,13 @@ export default async function handler(req, res) {
       body: JSON.stringify(body),
     });
 
-    const text = await upstreamResponse.text();
+    const text = sanitizeSecretText(await upstreamResponse.text());
     res.status(upstreamResponse.status);
     res.setHeader("Content-Type", upstreamResponse.headers.get("content-type") || "application/json");
     return res.send(text);
   } catch (error) {
     return res.status(502).json({
-      error: error?.message || "Upstream request failed",
+      error: sanitizeSecretText(error?.message || "Upstream request failed"),
     });
   }
 }

@@ -41,7 +41,7 @@ export default function ImageHelpPage() {
             </article>
             <article>
               <h2>3. 如何切换模型</h2>
-              <p>在输入框上方切换模型即可。前台只显示适合小白的名称和标签，不需要理解上游 provider。</p>
+              <p>在输入框上方切换模型即可。前台只显示适合小白的名称和标签，不需要理解技术参数。</p>
             </article>
             <article>
               <h2>4. 如何看每次消耗</h2>
@@ -65,7 +65,7 @@ export default function ImageHelpPage() {
             </article>
             <article>
               <h2>9. 常见错误说明</h2>
-              <p>余额不足、图片过大、图片格式错误、内容审核失败、上游超时，都会在页面上给出友好提示和请求 ID。</p>
+              <p>余额不足、图片过大、图片格式错误、内容审核失败、模型服务超时，都会在页面上给出友好提示和请求 ID。</p>
             </article>
             <article>
               <h2>10. 失败为什么不扣费</h2>

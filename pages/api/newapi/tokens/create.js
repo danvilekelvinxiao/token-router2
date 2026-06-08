@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     }
 
     const token = await createNewApiToken({
-      name: name || "API 密匙",
+      name: name || "API Key",
       group,
       quota: quota ? Number(quota) : undefined,
       models,

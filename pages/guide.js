@@ -8,7 +8,7 @@ import { getPublicApiBaseUrl } from "@/lib/public-api";
 import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import { listModelProducts } from "@/lib/model-products";
-const API_BASE_URL = "https://flowapi.fun/v1";
+const API_BASE_URL = getPublicApiBaseUrl();
 const defaultModel = "deepseek-chat";
 const CC_SWITCH_RELEASE_URL = "https://github.com/farion1231/cc-switch/releases/tag/v3.15.0";
 const CC_SWITCH_WINDOWS_URL = "https://github.com/farion1231/cc-switch/releases/download/v3.15.0/CC-Switch-v3.15.0-Windows.msi";
@@ -93,7 +93,7 @@ function CompactAccessAnimation() {
           </div>
         ))}
       </div>
-      <p>不要选择 OpenAI Official 预设栏，建议添加自定义供应商。</p>
+      <p>不要选择 OpenAI Official 预设栏，建议添加自定义接入。</p>
     </div>
   );
 }
@@ -133,7 +133,7 @@ function TutorialSteps({ apiBaseUrl }) {
     ["01", "下载 CC-Switch 自动配置", "先下载并安装 CC-Switch，准备好本地调用环境。"],
     ["02", "进入模型广场", "先选择你要使用的模型或套餐，再创建对应的 API Key。"],
     ["03", "创建该模型 API Key", "在模型卡片或下方弹窗中确认模型后创建，避免把 Codex / GPT 任务误绑定到 DeepSeek。"],
-    ["04", "填写配置", <>供应商名称：<b>FlowAPI</b><br />API 请求地址：<code>{apiBaseUrl}</code><br />API Key：填写刚创建的密钥<br />模型名称：填写你选择的 Model ID，例如 <code>{defaultModel}</code></>],
+    ["04", "填写配置", <>名称：<b>FlowAPI</b><br />API 请求地址：<code>{apiBaseUrl}</code><br />API Key：填写刚创建的 API Key<br />模型名称：填写你选择的 Model ID，例如 <code>{defaultModel}</code></>],
     ["05", "点击测试", "测试成功后，即可在支持 OpenAI-Compatible API 的工具中使用 FlowAPI。"],
   ];
 
@@ -142,7 +142,7 @@ function TutorialSteps({ apiBaseUrl }) {
       <div className="guide-section-title">
         <span className="flow-access-kicker">小白步骤教程</span>
         <h2>按这 5 步填写，不用理解复杂 API</h2>
-        <p>重点记住三件事：Base URL 填 https://flowapi.fun/v1，先选模型，再创建该模型专用 API Key。</p>
+        <p>重点记住三件事：Base URL 填 {API_BASE_URL}，先选模型，再创建该模型专用 API Key。</p>
       </div>
       <div className="guide-clear-step-list">
         {steps.map(([num, title, desc]) => (
@@ -156,9 +156,9 @@ function TutorialSteps({ apiBaseUrl }) {
         ))}
       </div>
       <div className="guide-error-strip">
-        <div><b>401</b><span>API Key 错误，或密钥没有同步到 New API。</span></div>
+        <div><b>401</b><span>API Key 填错或已停用，请回到 API 管理页面重新复制。</span></div>
         <div><b>404</b><span>Base URL 错误，通常少了 /v1，或工具走了错误路径。</span></div>
-        <div><b>503</b><span>模型路由或上游渠道失败，可先换模型再重试。</span></div>
+        <div><b>503</b><span>模型服务暂时不可用，可先换模型再重试。</span></div>
       </div>
     </section>
   );
@@ -198,7 +198,7 @@ function CcSwitchConfigPanel({ apiBaseUrl, onCreateKey, onAutoConfig, onCopyConf
 
 function buildGuideStepDetail(step, apiBaseUrl, onCreateKey) {
   const curl = `curl ${apiBaseUrl}/chat/completions \\
-  -H "Authorization: Bearer 你的 API 密匙" \\
+  -H "Authorization: Bearer 你的 API Key" \\
   -H "Content-Type: application/json" \\
   -d '{"model": "${defaultModel}",
        "messages": [{"role":"user","content":"你好"}]}'`;
@@ -210,12 +210,12 @@ function buildGuideStepDetail(step, apiBaseUrl, onCreateKey) {
         { label: "Mac 下载", value: CC_SWITCH_RELEASE_URL },
         { label: "Windows 下载", value: "CC-Switch-v3.15.0-Windows.msi" },
         { label: "安装步骤", value: "下载 → 安装 → 打开 CC-Switch → 允许浏览器拉起" },
-        { label: "下一步", value: "创建 API 密匙" },
+        { label: "下一步", value: "创建 API Key" },
       ],
       table: [
         { step: "1", title: "下载客户端", description: "按电脑系统选择 Mac 或 Windows 版本" },
         { step: "2", title: "安装并打开", description: "首次打开时按系统提示允许运行" },
-        { step: "3", title: "回到 FlowAPI", description: "创建 API 密匙后点击 CC Switch 自动配置" },
+        { step: "3", title: "回到 FlowAPI", description: "创建 API Key 后点击 CC Switch 自动配置" },
       ],
       customSection: {
         title: "配置方式",
@@ -230,7 +230,7 @@ function buildGuideStepDetail(step, apiBaseUrl, onCreateKey) {
             <article className="guide-config-choice-card">
               <span>选项二</span>
               <h4>手动配置</h4>
-              <p>适合已经熟悉 Claude Code / Cursor / Cherry Studio 等客户端的用户，可查看 Base URL、API 密匙和模型 ID 后自行配置。</p>
+              <p>适合已经熟悉 Claude Code / Cursor / Cherry Studio 等客户端的用户，可查看 Base URL、API Key 和模型 ID 后自行配置。</p>
               <div className="guide-manual-config-box">
                 <div><small>Base URL</small><code>{apiBaseUrl}</code></div>
                 <div><small>Model ID 示例</small><code>{defaultModel}</code></div>
@@ -247,20 +247,20 @@ function buildGuideStepDetail(step, apiBaseUrl, onCreateKey) {
       actions: <><a href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer">下载自动配置工具</a><Link href="/help#manual-config">查看帮助指南</Link></>,
     },
     createKey: {
-      title: "02 创建 API 密匙",
-      description: "API 密匙是你的调用凭证，复制到客户端或代码里才能使用模型。",
+      title: "02 创建 API Key",
+      description: "API Key 是你的调用凭证，复制到客户端或代码里才能使用模型。",
       rows: [
         { label: "API Key 是什么", value: "用于识别你的账户和扣费记录的访问凭证" },
-        { label: "如何创建", value: "点击 API 管理区里的“添加密匙”" },
+        { label: "如何创建", value: "点击 API 管理区里的“创建 API Key”" },
         { label: "如何保管", value: "不要发到公开群、截图或代码仓库" },
         { label: "泄露风险", value: "别人拿到后可能消耗你的余额" },
       ],
       table: [
         { step: "1", title: "点击创建", description: "建议命名为 Cursor / Claude Code / 项目名" },
-        { step: "2", title: "复制密匙", description: "只复制给你自己的工具或服务器" },
+        { step: "2", title: "复制 API Key", description: "只复制给你自己的工具或服务器" },
         { step: "3", title: "定期检查", description: "发现异常消耗可以立即禁用或删除" },
       ],
-      actions: <button type="button" onClick={onCreateKey}>创建 API 密匙</button>,
+      actions: <button type="button" onClick={onCreateKey}>创建 API Key</button>,
     },
     config: {
       title: "03 配置调用地址",
@@ -272,9 +272,9 @@ function buildGuideStepDetail(step, apiBaseUrl, onCreateKey) {
         { label: "推荐模型", value: defaultModel },
       ],
       table: [
-        { step: "Base URL", title: apiBaseUrl, description: "统一接入地址，不需要改成上游地址" },
+        { step: "Base URL", title: apiBaseUrl, description: "FlowAPI 统一接入地址，直接复制使用" },
         { step: "Model", title: defaultModel, description: "可在模型广场复制其他模型 ID" },
-        { step: "Curl", title: curl, description: "复制后替换你的 API 密匙即可测试" },
+        { step: "Curl", title: curl, description: "复制后替换你的 API Key 即可测试" },
       ],
       actions: <><button type="button" onClick={() => navigator.clipboard.writeText(apiBaseUrl)}>复制 Base URL</button><Link href="/help#manual-config">手动配置</Link></>,
     },
@@ -282,14 +282,14 @@ function buildGuideStepDetail(step, apiBaseUrl, onCreateKey) {
       title: "04 开始使用",
       description: "完成配置后先跑一次最短测试，再去数据面板看 Token 消耗。",
       rows: [
-        { label: "最短流程", value: "下载 CC-Switch 自动配置 → 创建密匙 → 自动配置 → 发起测试" },
+        { label: "最短流程", value: "下载 CC-Switch 自动配置 → 创建 API Key → 自动配置 → 发起测试" },
         { label: "成功标志", value: "返回 200 或模型回复内容" },
-        { label: "常见错误", value: "余额不足、API 密匙错误、模型名写错、网络超时" },
+        { label: "常见错误", value: "余额不足、API Key 错误、模型名写错、网络超时" },
         { label: "下一步", value: "查看数据面板和模型广场" },
       ],
       table: [
-        { step: "测试命令", title: curl, description: "确认 API 密匙、余额和模型链路可用" },
-        { step: "调用失败", title: "查看中文错误提示", description: "按 suggestion 提示检查余额、密匙和模型名" },
+        { step: "测试命令", title: curl, description: "确认 API Key、余额和模型链路可用" },
+        { step: "调用失败", title: "查看中文错误提示", description: "按 suggestion 提示检查余额、API Key 和模型名" },
         { step: "查看流水", title: "数据面板", description: "每次调用会记录 Token、成本和状态" },
       ],
       actions: <><Link href="/dashboard">查看用量</Link><Link href="/help#manual-config">查看教程</Link></>,
@@ -341,14 +341,14 @@ function StepCards({ onCreateKey, onAutoConfig, onOpenDetail }) {
       </InteractiveCard>
 
       {/* Card 02 */}
-      <InteractiveCard className="guide-step-wide" title="创建 API 密匙" hint="点击查看 API 密匙说明" onClick={() => onOpenDetail("createKey")}>
+      <InteractiveCard className="guide-step-wide" title="创建 API Key" hint="点击查看 API Key说明" onClick={() => onOpenDetail("createKey")}>
         <div className="guide-step-wide-top">
           <div className="guide-step-wide-num">02</div>
-          <h3>创建 API 密匙</h3>
+          <h3>创建 API Key</h3>
           <p>创建你的专属 API Key，用于在客户端或代码中调用模型。</p>
         </div>
         <div className="guide-step-wide-bottom">
-          <button className="guide-step-action" onClick={(event) => { event.stopPropagation(); onCreateKey(); }}>创建 API 密匙</button>
+          <button className="guide-step-action" onClick={(event) => { event.stopPropagation(); onCreateKey(); }}>创建 API Key</button>
         </div>
       </InteractiveCard>
 
@@ -357,7 +357,7 @@ function StepCards({ onCreateKey, onAutoConfig, onOpenDetail }) {
         <div className="guide-step-wide-top">
           <div className="guide-step-wide-num">03</div>
           <h3>配置调用地址</h3>
-          <p>启动 CC-Switch 后，自动填入 Base URL、API 密匙和推荐模型。</p>
+          <p>启动 CC-Switch 后，自动填入 Base URL、API Key和推荐模型。</p>
         </div>
         <div className="guide-step-wide-bottom">
           <button className="guide-step-action" onClick={(event) => { event.stopPropagation(); onAutoConfig(); }}>启动 CC-Switch</button>
@@ -460,7 +460,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
     setForm((value) => ({
       ...value,
       modelId: product.id,
-      label: value.label?.startsWith("API 密匙") ? `${product.displayName} Key` : value.label,
+      label: value.label?.startsWith("API Key") ? `${product.displayName} Key` : value.label,
     }));
   }
 
@@ -471,7 +471,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
 
   function openCcSwitch(key) {
     if (!key?.token || !String(key.token).startsWith("sk-")) {
-      showMessage("没有拿到完整 sk- 开头 API Key，已停止导入 CC-Switch。请重新创建 API 密匙。");
+      showMessage("没有拿到完整 sk- 开头 API Key，已停止导入 CC-Switch。请重新创建 API Key。");
       return;
     }
     const currentApiBaseUrl = getPublicApiBaseUrl();
@@ -495,7 +495,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
 
   const openCreateModal = useCallback(() => {
     const defaultGroupId = apiGroups.find((group) => group.recommended && group.available)?.id || apiGroups.find((group) => group.available)?.id || apiGroups[0]?.id || "";
-    setForm({ label: `API 密匙 ${apiKeys.length + 1}`, expiresAt: "never", customDate: "", modelId: "", groupId: defaultGroupId });
+    setForm({ label: `API Key ${apiKeys.length + 1}`, expiresAt: "never", customDate: "", modelId: "", groupId: defaultGroupId });
     setModal({ type: "create" });
   }, [apiGroups, apiKeys.length]);
 
@@ -516,11 +516,11 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
 
   async function submitKey() {
     if (!customer) {
-      showMessage("请先登录后再创建 API 密匙");
+      showMessage("请先登录后再创建 API Key");
       return;
     }
     if (modal?.type !== "edit" && !form.modelId) {
-      showMessage("请先选择要使用的模型，再创建 API 密匙");
+      showMessage("请先选择要使用的模型，再创建 API Key");
       return;
     }
     if (form.expiresAt === "custom" && !form.customDate) {
@@ -528,7 +528,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       return;
     }
     setSaving(true);
-    const fallbackLabel = modal?.type === "edit" ? "API 密匙" : `API 密匙 ${apiKeys.length + 1}`;
+    const fallbackLabel = modal?.type === "edit" ? "API Key" : `API Key ${apiKeys.length + 1}`;
     const body = {
       customerId: customer.id, label: form.label.trim() || fallbackLabel,
       expiresAt: computeExpiry(form.expiresAt, form.customDate),
@@ -549,7 +549,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
 
       const updatedCustomer = data?.customer || data;
       updateCustomer(updatedCustomer);
-      showMessage(modal?.type === "edit" ? "API 密匙已更新" : "API 密匙已创建，请立即复制保存");
+      showMessage(modal?.type === "edit" ? "API Key已更新" : "API Key已创建，请立即复制保存");
       setModal(null);
       if (modal?.type !== "edit") {
         const newKey = data.createdKey || (updatedCustomer.apiKeys || []).slice(-1)[0];
@@ -571,13 +571,13 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
     });
     if (res.ok) {
       updateCustomer(await res.json());
-      showMessage(disabled ? "API 密匙已禁用" : "API 密匙已启用");
+      showMessage(disabled ? "API Key已禁用" : "API Key已启用");
     }
   }
 
   async function deleteKeys(keys) {
     if (!customer || keys.length === 0) return;
-    if (!window.confirm(`确认删除 ${keys.length} 个 API 密匙？删除后无法恢复。`)) return;
+    if (!window.confirm(`确认删除 ${keys.length} 个 API Key？删除后无法恢复。`)) return;
     setSaving(true);
     let latest = customer;
     for (const key of keys) {
@@ -588,7 +588,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       if (res.ok) latest = await res.json();
     }
     updateCustomer(latest);
-    showMessage("API 密匙已删除");
+    showMessage("API Key已删除");
     setSaving(false);
   }
 
@@ -597,7 +597,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
     if (!customer) return "请先登录后创建 API Key";
     if (saving) return "";
     if (modal.type !== "edit" && !form.modelId) return "请选择默认模型后创建 API Key";
-    if (modal.type !== "edit" && !form.groupId) return "请选择 API 分组后创建 API Key";
+    if (modal.type !== "edit" && !form.groupId) return "请选择 API 线路后创建 API Key";
     if (form.expiresAt === "custom" && !form.customDate) return "请选择自定义过期日期";
     return "";
   }
@@ -641,7 +641,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
     return (
       <div className="api-manager-empty">
         <h1>请先登录</h1>
-        <p>登录后即可创建和管理你的 API 密匙。</p>
+        <p>登录后即可创建和管理你的 API Key。</p>
         <Link href="/login" className="btn-primary">前往登录</Link>
       </div>
     );
@@ -653,7 +653,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       <div className="api-hero-banner">
         <div>
           <h1>API 管理</h1>
-          <p>为不同模型创建独立 API 密钥，方便管理额度、权限和消耗。请先选择你要使用的模型，再创建对应的 API 密钥。</p>
+          <p>为不同模型创建独立 API Key，方便管理额度、权限和消耗。请先选择你要使用的模型，再创建对应的 API Key。</p>
         </div>
         <div className="api-hero-actions">
           <a href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer">下载 CC-Switch 自动配置</a>
@@ -680,11 +680,11 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       {/* API key card */}
       <div className="api-start-card">
         <div className="api-start-head">
-          <h2>API 密匙</h2>
-          <p>管理你的 API 访问密匙</p>
+          <h2>API Key</h2>
+          <p>管理你的 API Key 和调用权限</p>
         </div>
         <div className={`api-primary-key-row ${primaryKey ? "" : "without-action"}`}>
-          <strong>{primaryKey?.label || "尚未创建 API 密匙"}</strong>
+          <strong>{primaryKey?.label || "尚未创建 API Key"}</strong>
           <code>{visibleTokens[primaryKey?.id] ? primaryKey?.token : maskToken(primaryKey?.token || "")}</code>
           {primaryKey ? (
             <div className="api-key-actions">
@@ -724,10 +724,10 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       <div className="flow-api-keys-card">
         <div className="flow-api-keys-toolbar">
           <div className="flow-token-actions">
-            <button type="button" className="primary" onClick={openCreateModal}>选择模型创建密匙</button>
+            <button type="button" className="primary" onClick={openCreateModal}>选择模型创建 API Key</button>
             <Link href="/models" className="flow-token-link">前往模型广场</Link>
             <button type="button" disabled={selectedKeys.length === 0} onClick={() => copyText("CC Switch 配置", makeCcSwitchConfig(selectedKeys, apiBaseUrl))}>CC Switch 备用配置</button>
-            <button type="button" disabled={selectedKeys.length === 0} onClick={() => copyText("所选 API 密匙", selectedKeys.map((key) => key.token).join("\n"))}>复制所选</button>
+            <button type="button" disabled={selectedKeys.length === 0} onClick={() => copyText("所选 API Key", selectedKeys.map((key) => key.token).join("\n"))}>复制所选</button>
             <button type="button" className="danger" disabled={selectedKeys.length === 0 || saving} onClick={() => deleteKeys(selectedKeys)}>删除所选</button>
           </div>
           <div className="flow-token-searches">
@@ -741,11 +741,11 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
           <thead>
             <tr>
               <th className="flow-check"><input type="checkbox" checked={allPageSelected} onChange={togglePageSelected} /></th>
-              <th>密匙名称</th>
+              <th>API Key名称</th>
               <th>绑定模型</th>
               <th>状态</th>
               <th>剩余额度 / 总额度</th>
-              <th>API 密匙</th>
+              <th>API Key</th>
               <th>最后调用</th>
               <th>操作</th>
             </tr>
@@ -810,11 +810,11 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
         </table>
 
         {pageKeys.length === 0 && (
-          <div className="flow-empty">暂无 API 密匙，请先前往模型广场选择模型，或点击“选择模型创建密匙”。</div>
+          <div className="flow-empty">暂无 API Key，请先前往模型广场选择模型，或点击“选择模型创建 API Key”。</div>
         )}
 
         <footer className="flow-table-foot">
-          共 {filteredKeys.length} 个 API 密匙
+          共 {filteredKeys.length} 个 API Key
           {totalPages > 1 && (
             <span>
               <button type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>上一页</button>
@@ -832,8 +832,8 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
           <div className="api-modal">
             <header>
               <div>
-                <span>{modal.type === "edit" ? "编辑 API 密匙" : "添加 API 密匙"}</span>
-                <h2>{modal.type === "edit" ? modal.key.label : "创建新的 API 密匙"}</h2>
+                <span>{modal.type === "edit" ? "编辑 API Key" : "添加 API Key"}</span>
+                <h2>{modal.type === "edit" ? modal.key.label : "创建新的 API Key"}</h2>
               </div>
               <button type="button" onClick={() => setModal(null)}>×</button>
             </header>
@@ -843,7 +843,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
               </label>
               {modal.type !== "edit" ? (
                 <div className="api-model-choice-field">
-                  <span>选择要创建密钥的模型</span>
+                  <span>选择要创建 API Key 的模型</span>
                   <div className="api-model-choice-grid">
                     {MODEL_PRODUCT_OPTIONS.map((product) => (
                       <button
@@ -868,7 +868,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
               ) : null}
               {modal.type !== "edit" ? (
                 <div className="api-expiry-field api-group-choice-field">
-                  <span>选择分组</span>
+                  <span>选择线路</span>
                   <div className="api-group-choice-grid">
                     {apiGroups.map((group) => {
                       const product = MODEL_PRODUCT_OPTIONS.find((item) => item.id === form.modelId || item.publicModelId === form.modelId);
@@ -881,18 +881,18 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
                           aria-disabled={disabled}
                           onClick={() => {
                             if (disabled) {
-                              showMessage(group.available ? "该分组不支持当前模型" : "该分组已停用");
+                              showMessage(group.available ? "该线路不支持当前模型" : "该线路已停用");
                               return;
                             }
                             setForm((current) => ({ ...current, groupId: group.id }));
                           }}
                         >
                           <span><strong>{group.displayName}</strong><em>{group.billingMultiplier}x</em></span>
-                          <small>{group.recommended ? "系统推荐 · " : ""}{group.description || "自动调度分组"}</small>
+                          <small>{group.recommended ? "系统推荐 · " : ""}{group.description || "自动调度线路"}</small>
                         </button>
                       );
                     })}
-                    {!apiGroups.length ? <div className="api-management-empty-text">分组配置同步中，请稍后刷新。</div> : null}
+                    {!apiGroups.length ? <div className="api-management-empty-text">线路配置同步中，请稍后刷新。</div> : null}
                   </div>
                 </div>
               ) : null}
@@ -917,7 +917,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
               <button type="button" className="api-action" onClick={() => setModal(null)}>取消</button>
               <button type="button" className="api-action primary flowapi-primary-action" disabled={saving || Boolean(getModalActionDisabledReason())} data-loading={saving ? "true" : "false"} onClick={submitKey}>
                 {saving ? <span className="api-action-spinner" aria-hidden="true" /> : null}
-                {saving ? "保存中..." : modal.type === "edit" ? "保存修改" : "创建 API 密匙"}
+                {saving ? "保存中..." : modal.type === "edit" ? "保存修改" : "创建 API Key"}
               </button>
             </footer>
           </div>
@@ -962,7 +962,7 @@ export default function GuidePage() {
   function openCreateKey() {
     scrollToKeys();
     if (!customer) {
-      showToast("请先登录后再创建 API 密匙");
+      showToast("请先登录后再创建 API Key");
       return;
     }
     setCreateSignal((value) => value + 1);
@@ -971,7 +971,7 @@ export default function GuidePage() {
   function handleAutoConfig() {
     const primaryKey = customer?.apiKeys?.[0];
     if (!primaryKey?.token || !String(primaryKey.token).startsWith("sk-")) {
-      showToast("请先创建 API 密匙");
+      showToast("请先创建 API Key");
       return;
     }
     try {
@@ -1001,14 +1001,14 @@ export default function GuidePage() {
   const guideExportSheets = [
     { sheetName: "操作步骤", data: [
       { step: "01", title: "下载 CC-Switch 自动配置", description: "先下载并安装客户端/配置工具，准备好本地调用环境。" },
-      { step: "02", title: "创建 API 密匙", description: "创建你的专属 API Key，用于客户端或代码调用模型。" },
+      { step: "02", title: "创建 API Key", description: "创建你的专属 API Key，用于客户端或代码调用模型。" },
       { step: "03", title: "配置调用地址", description: "Base URL 和模型名按 FlowAPI 说明填写。" },
       { step: "04", title: "开始使用", description: "发起测试调用，并在数据面板查看用量。" },
     ] },
     { sheetName: "接口配置", data: [
       { metric: "Base URL", value: getPublicApiBaseUrl(), description: "统一接入地址" },
       { metric: "示例模型", value: defaultModel, description: "可替换为模型广场中的模型 ID" },
-      { metric: "常见错误", value: "余额不足 / API 密匙错误 / 模型名错误 / 网络超时", description: "按中文错误提示排查" },
+      { metric: "常见错误", value: "余额不足 / API Key 错误 / 模型名错误 / 网络超时", description: "按中文错误提示排查" },
     ] },
   ];
   const apiBaseUrl = getPublicApiBaseUrl();
@@ -1034,7 +1034,7 @@ export default function GuidePage() {
             <p>不懂 API 也能照着配置，几分钟即可使用 FlowAPI 中转站。</p>
             <div className="guide-hero-steps">
               <span>下载工具</span>
-              <span>创建密匙</span>
+              <span>创建 API Key</span>
               <span>自动配置</span>
               <span>查看用量</span>
             </div>

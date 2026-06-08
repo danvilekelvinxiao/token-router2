@@ -1,7 +1,6 @@
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
-import { checkUpstreamHealth } from "@/lib/upstream";
 
 const STATUS_STYLES = {
   available: { label: "可用", color: "#16a34a", bg: "rgba(22,163,74,0.1)" },

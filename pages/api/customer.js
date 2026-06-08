@@ -1,16 +1,14 @@
-import { getDashboard, loginCustomer } from "@/lib/customer-store";
+import { getDashboard } from "@/lib/customer-store";
 import { buildLocalDemoDashboard, isLocalDemoRequest } from "@/lib/local-demo-dashboard";
 import { assertCustomerOwner } from "@/lib/session";
 import { attachImageCallsToDashboard } from "@/lib/image-dashboard-sync";
 
 export default async function handler(req, res) {
   if (req.method === "POST") {
-    const customer = await loginCustomer({
-      phone: req.body?.phone,
-      company: req.body?.company,
+    return res.status(410).json({
+      error: "该登录入口已停用，请使用 /api/auth/login。",
+      suggestion: "为了保护账号安全，FlowAPI 现在统一使用邮箱登录和验证码注册流程。",
     });
-
-    return res.status(200).json(customer);
   }
 
   if (req.method === "GET") {

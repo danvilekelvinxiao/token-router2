@@ -2,8 +2,9 @@ import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
+import { getPublicApiBaseUrl } from "@/lib/public-api";
 
-const API_BASE_URL = "https://flowapi.fun/v1";
+const API_BASE_URL = getPublicApiBaseUrl();
 const DEFAULT_MODEL = "deepseek-chat";
 const CHATGPT_MODEL = "openai/gpt-4o-mini";
 
@@ -244,9 +245,9 @@ const preflightLeft = [
     tip: "填错时优先看 401。",
   },
   {
-    icon: "📦", title: "模型与分组",
-    desc: "确认目标模型在「大模型接入」中可见，并且当前 Key 分组允许调用。",
-    tip: "分组不匹配时优先看 403。",
+    icon: "📦", title: "模型与线路",
+    desc: "确认目标模型在「大模型接入」中可见，并且当前 Key 线路允许调用。",
+    tip: "线路不匹配时优先看 403。",
   },
   {
     icon: "🛡", title: "IP 白名单",
@@ -269,7 +270,7 @@ const preflightRight = [
   {
     icon: "📋", title: "Model",
     code: null,
-    desc: "不要手写猜模型名；看得到、分组允许，才建议填入客户端。",
+    desc: "不要手写猜模型名；看得到、线路允许，才建议填入客户端。",
     action: true,
   },
 ];
@@ -326,7 +327,7 @@ function PreflightCheckSection() {
 /* ==================== Section: Failed Call Checklist ==================== */
 
 const failedCallSteps = [
-  { title: "先看 code", desc: "FlowAPI 返回的 code 会直接告诉你是 API Key、余额、限流还是上游问题。" },
+  { title: "先看 code", desc: "FlowAPI 返回的 code 会直接告诉你是 API Key、余额、限流还是模型服务问题。" },
   { title: "再看 suggestion", desc: "接口会返回中文排查建议，小白用户优先照着 suggestion 操作。" },
   { title: "回到 API 管理页检查", desc: "确认当前 API Key 是否已启用、是否绑定了正确模型，并复制完整 Key。" },
   { title: "仍失败再联系客服", desc: "带上 code、suggestion、API Key 名称和调用时间，排查会更快。" },
@@ -337,8 +338,8 @@ const structuredApiErrors = [
   { code: "INVALID_API_KEY", reason: "API Key 不存在、被禁用或已过期", fix: "回到 API 管理页复制完整 API Key，必要时创建新的 Key。", href: "/api-management" },
   { code: "INSUFFICIENT_BALANCE", reason: "账户余额不足", fix: "先充值，再重新发起调用。", href: "/recharge" },
   { code: "API_KEY_RATE_LIMITED", reason: "请求太频繁", fix: "降低并发或等待一会儿再试，高峰期建议加重试机制。", href: "/help#preflight-check" },
-  { code: "UPSTREAM_NOT_CONFIGURED", reason: "上游接口还没有配置好", fix: "这是平台配置问题，请联系 FlowAPI 管理员处理。", href: "/help#failed-call-checklist" },
-  { code: "UPSTREAM_REQUEST_FAILED", reason: "上游模型服务没有成功返回", fix: "稍后重试，或切换到其他模型；如果持续失败，请带上 code 联系客服。", href: "/models" },
+  { code: "UPSTREAM_NOT_CONFIGURED", reason: "模型服务还没有配置好", fix: "这是平台配置问题，请联系 FlowAPI 客服处理。", href: "/help#failed-call-checklist" },
+  { code: "UPSTREAM_REQUEST_FAILED", reason: "模型服务没有成功返回", fix: "稍后重试，或切换到其他模型；如果持续失败，请带上 code 联系客服。", href: "/models" },
 ];
 
 function FailedCallChecklistSection() {
@@ -390,13 +391,13 @@ const errorCodes = [
   { code: "400", title: "Bad Request — 请求格式错误", desc: "检查请求体 JSON 格式是否正确。确认 model 字段的模型名拼写正确。确认 messages 数组格式符合规范。" },
   { code: "413", title: "Payload Too Large — 请求体过大", desc: "减小 prompt 或上下文长度。分块发送过长的文本内容。使用更小分辨率的图片。" },
   { code: "408", title: "Request Timeout — 请求超时", desc: "模型处理时间过长导致超时。可以降低 max_tokens 参数。或拆分长文本为多次请求。" },
-  { code: "500", title: "Internal Server Error — 服务器内部错误", desc: "等待几秒后重试。如果持续出现，可能是上游模型服务故障。联系客服或查看服务状态。" },
-  { code: "502", title: "Bad Gateway — 网关错误", desc: "上游模型暂时不可用。等待 30 秒后重试。可以切换到备用模型继续使用。" },
+  { code: "500", title: "Internal Server Error — 服务器内部错误", desc: "等待几秒后重试。如果持续出现，可能是模型服务故障。联系客服或查看服务状态。" },
+  { code: "502", title: "Bad Gateway — 网关错误", desc: "模型服务暂时不可用。等待 30 秒后重试。可以切换到备用模型继续使用。" },
   { code: "503", title: "Service Unavailable — 服务暂不可用", desc: "模型正在维护或过载。稍等片刻后重试。可以临时切换到其他模型。" },
-  { code: "504", title: "Gateway Timeout — 网关超时", desc: "上游服务响应过慢。增加客户端超时时间。或使用更快的模型。" },
+  { code: "504", title: "Gateway Timeout — 网关超时", desc: "模型服务响应过慢。增加客户端超时时间。或使用更快的模型。" },
   { code: "522", title: "Connection Timed Out — 连接超时", desc: "网络链路问题导致连接超时。检查本地网络连接。稍后重试。" },
-  { code: "523", title: "Origin Unreachable — 上游不可达", desc: "模型服务商暂时不可达。该模型可能正在维护。建议切换到其他模型重试。" },
-  { code: "524", title: "A Timeout Occurred — 超时", desc: "上游服务响应超时但未断开。可以重试，或降低 max_tokens。如持续出现，切换模型。" },
+  { code: "523", title: "Origin Unreachable — 模型服务不可达", desc: "模型服务商暂时不可达。该模型可能正在维护。建议切换到其他模型重试。" },
+  { code: "524", title: "A Timeout Occurred — 超时", desc: "模型服务响应超时但未断开。可以重试，或降低 max_tokens。如持续出现，切换模型。" },
 ];
 
 function ErrorCodesSection() {

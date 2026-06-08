@@ -152,7 +152,7 @@ export default function AdminChannels() {
                   <Field label="接口类型" value={form.type || ""} onChange={(v) => setForm({ ...form, type: v })} type="select" options={TYPES} />
                   <Field label="Base URL" value={form.baseUrl || ""} onChange={(v) => setForm({ ...form, baseUrl: v })} />
                   <Field label="接口路径" value={form.path || ""} onChange={(v) => setForm({ ...form, path: v })} />
-                  <Field label="上游 API 密匙" value={form.apiKey || ""} onChange={(v) => setForm({ ...form, apiKey: v })} type="password" />
+                  <Field label="上游 API Key" value={form.apiKey || ""} onChange={(v) => setForm({ ...form, apiKey: v })} type="password" />
                   <Field label="权重" value={String(form.weight || 0)} onChange={(v) => setForm({ ...form, weight: Number(v) })} type="number" />
                   <Field label="超时(秒)" value={String(form.timeout || 0)} onChange={(v) => setForm({ ...form, timeout: Number(v) })} type="number" />
                   <Field label="输入成本(¥/1M)" value={String(form.costInput || "")} onChange={(v) => setForm({ ...form, costInput: v })} />

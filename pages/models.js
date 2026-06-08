@@ -32,6 +32,12 @@ function isAdminCustomer(customer) {
 
 function normalizeModel(model) {
   const publicModel = sanitizePublicModelProvider(model);
+  const categories = new Set(Array.isArray(model.categories) ? model.categories : []);
+  categories.add("all");
+  if (model.category) categories.add(model.category);
+  if (model.recommended || model.hot || Number(model.sortOrder || 999) <= 20) categories.add("recommended");
+  if (String(model.modelId || model.publicModelId || "").toLowerCase().includes("deepseek")) categories.add("deepseek");
+  if (String(model.modelId || model.publicModelId || "").toLowerCase().includes("qwen")) categories.add("qwen");
   return {
     ...model,
     id: model.id || model.modelId || model.displayName,
@@ -40,7 +46,7 @@ function normalizeModel(model) {
     providerName: publicModel.provider || "FlowAPI",
     modelId: model.modelId || model.publicModelId || "",
     officialReleaseDate: model.officialReleaseDate || model.releaseDate || "",
-    categories: Array.isArray(model.categories) ? model.categories : ["all"],
+    categories: Array.from(categories).filter(Boolean),
     tags: Array.isArray(model.tags) ? model.tags : [],
     useCases: Array.isArray(model.useCases) ? model.useCases : [],
     notRecommendedFor: Array.isArray(model.notRecommendedFor) ? model.notRecommendedFor : [],
@@ -399,7 +405,7 @@ export default function ModelsPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="搜索模型名称 / Provider / Model ID"
+                placeholder="搜索模型名称 / Model ID"
               />
             </div>
             {moduleEnabled("show-categories") && (
@@ -422,7 +428,7 @@ export default function ModelsPage() {
           <section className="models-market-list">
             <div className="models-section-head">
               <div>
-                <span className="models-market-kicker">Model Shelf</span>
+                <span className="models-market-kicker">模型货架</span>
                 <h2>模型货架</h2>
               </div>
               <p>{loading ? "正在同步模型配置" : `当前展示 ${filteredModels.length} 个模型`}</p>
@@ -435,12 +441,12 @@ export default function ModelsPage() {
             ) : error ? (
               <div className="models-market-empty">
                 <strong>模型数据同步中</strong>
-                <p>请稍后刷新，或联系管理员检查模型配置。</p>
+                <p>请稍后刷新，或联系 FlowAPI 客服检查模型配置。</p>
               </div>
             ) : models.length === 0 ? (
               <div className="models-market-empty">
                 <strong>暂无可用模型</strong>
-                <p>管理员上架模型后将在这里展示。</p>
+                <p>FlowAPI 上架模型后将在这里展示。</p>
                 {isAdmin && <Link href="/admin/content" className="models-market-primary">前往内容管理</Link>}
               </div>
             ) : filteredModels.length === 0 ? (

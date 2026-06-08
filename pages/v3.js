@@ -68,7 +68,7 @@ export default function V3Page() {
               FlowAPI
             </h1>
             <h2 style={{ margin: "22px auto 0", fontSize: 34, lineHeight: 1.2, maxWidth: 760 }}>
-              一个 API 密匙，稳定调用全球主流 AI 模型
+              一个 API Key，稳定调用全球主流 AI 模型
             </h2>
             <p style={{ margin: "18px auto 0", maxWidth: 780, color: "#aeb9cc", fontSize: 18, lineHeight: 1.8 }}>
               面向中国用户的 AI API 中转站。无需海外支付，无需复杂配置，
@@ -154,7 +154,7 @@ export default function V3Page() {
               <div style={{ color: "#7bc6ff", fontSize: 12, fontWeight: 800 }}>Quick Start</div>
               <h2 style={{ margin: "14px 0 0", fontSize: 62, lineHeight: 1.02, letterSpacing: "-0.05em" }}>三步即可开始</h2>
               <p style={{ margin: "16px auto 0", maxWidth: 760, color: "#aeb9cc", fontSize: 18, lineHeight: 1.8 }}>
-                打开网站后，用户一眼就能知道怎么接入。先注册，再创建 API 密匙，再导入 CC Switch。
+                打开网站后，用户一眼就能知道怎么接入。先注册，再创建 API Key，再导入 CC Switch。
               </p>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18, marginTop: 36 }}>
@@ -174,7 +174,7 @@ export default function V3Page() {
                 <div style={{ color: "#7bc6ff", fontSize: 12, fontWeight: 800 }}>推荐接入</div>
                 <h2 style={{ margin: "14px 0 0", fontSize: 44, lineHeight: 1.08 }}>使用 CC Switch 一键配置</h2>
                 <p style={{ margin: "16px 0 0", color: "#aeb9cc", lineHeight: 1.9, fontSize: 17 }}>
-                  登录后进入控制台创建 API 密匙，点击 CC Switch，即可自动填入 Base URL、模型和 API 密匙。
+                  登录后进入控制台创建 API Key，点击 CC Switch，即可自动填入 Base URL、模型和 API Key。
                   如果工具不支持一键配置，也可以手动填写上方三项参数。
                 </p>
               </div>
@@ -233,7 +233,7 @@ export default function V3Page() {
                 <div style={{ color: "#7bc6ff", fontSize: 12, fontWeight: 800 }}>帮助文档</div>
                 <h2 style={{ margin: "14px 0 0", fontSize: 48, lineHeight: 1.08 }}>不会 API 也能接入</h2>
                 <p style={{ margin: "16px 0 0", color: "#aeb9cc", lineHeight: 1.9 }}>
-                  让新手第一眼就知道怎么填 Base URL、怎么复制 API 密匙、怎么选择模型，
+                  让新手第一眼就知道怎么填 Base URL、怎么复制 API Key、怎么选择模型，
                   这是中国用户转化非常关键的一步。
                 </p>
               </div>

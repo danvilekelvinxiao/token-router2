@@ -1,4 +1,5 @@
 import Head from "next/head";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
@@ -250,7 +251,16 @@ export default function DashboardLogsPage() {
                   ))}
                   {items.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="usage-log-zero-row">0</td>
+                      <td colSpan={11} className="usage-log-zero-row">
+                        <div className="usage-log-empty-state">
+                          <strong>还没有扣费日志</strong>
+                          <p>完成一次模型调用后，这里会显示 Token、金额、状态和 request_id。现在可以去复制教程跑通第一次调用。</p>
+                          <div>
+                            <Link href="/api-management">创建 API Key</Link>
+                            <Link href="/help">查看三步教程</Link>
+                          </div>
+                        </div>
+                      </td>
                     </tr>
                   ) : null}
                 </tbody>

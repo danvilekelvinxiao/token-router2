@@ -73,6 +73,7 @@ export default function AdminOverview() {
 
   const quickEntries = [
     { label: "新增渠道", href: "/admin/channels", color: "#6366f1" },
+    { label: "毛利审计", href: "/admin/profit", color: "#16a34a" },
     { label: "查看用户", href: "/admin/users", color: "#8b5cf6" },
     { label: "调用日志", href: "/admin/logs", color: "#059669" },
     { label: "安全风控", href: "/admin/security", color: "#f59e0b" },

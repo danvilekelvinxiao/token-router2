@@ -1,8 +1,10 @@
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireAdmin, requireCron } from "@/lib/admin-auth";
 import { listAlertEvents, sendOpenAlertEmails } from "@/lib/team-token-pool";
 
 export default async function handler(req, res) {
-  const admin = await requireAdmin(req, res);
+  const admin = req.headers["x-flowapi-cron-secret"]
+    ? requireCron(req, res)
+    : await requireAdmin(req, res);
   if (!admin) return;
   if (req.method === "POST") {
     return res.status(200).json({ ok: true, result: await sendOpenAlertEmails(admin.id) });

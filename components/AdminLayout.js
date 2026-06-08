@@ -20,6 +20,7 @@ const adminMenuGroups = [
     items: [
       { key: "modelWizard", label: "模型接入向导", href: "/admin/model-wizard", icon: IconBossWizard, aliases: ["/admin/boss-wizard"] },
       { key: "upstreams", label: "上游渠道", href: "/admin/upstreams", icon: IconChannels, aliases: ["/admin/channels"] },
+      { key: "routes", label: "智能路由", href: "/admin/routes", icon: IconRouting, aliases: ["/admin/routing"] },
       { key: "modelMarket", label: "模型广场", href: "/admin/model-market", icon: IconModels },
       { key: "models", label: "模型测试", href: "/admin/models", icon: IconModels },
       { key: "billing", label: "价格规则", href: "/admin/billing-rules", icon: IconBilling },
@@ -62,6 +63,7 @@ const adminMenuGroups = [
     label: "数据与日志",
     helper: "调用、团队、导出",
     items: [
+      { key: "profit", label: "毛利审计", href: "/admin/profit", icon: IconBilling },
       { key: "logs", label: "调用日志", href: "/admin/logs", icon: IconLogs },
       { key: "teamReports", label: "团队报表", href: "/admin/team-reports", icon: IconLogs },
       { key: "teamUsageLogs", label: "团队日志", href: "/admin/team-usage-logs", icon: IconLogs },

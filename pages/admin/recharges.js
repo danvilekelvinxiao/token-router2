@@ -336,7 +336,7 @@ export default function AdminRechargesPage() {
                 <option value="auth">认证</option>
                 <option value="payment">支付</option>
                 <option value="api">API 调用</option>
-                <option value="api_key">API 密匙</option>
+                <option value="api_key">API Key</option>
               </select>
               <button className="btn-primary" onClick={() => { setLogPage(0); loadLogs(secret, logCategory, logAction, 0); }} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>
                 {loading ? "加载中" : "加载日志"}
@@ -480,7 +480,7 @@ export default function AdminRechargesPage() {
                 <option value="recharge_order">充值订单</option>
                 <option value="recharge_approved">充值到账</option>
                 <option value="redeem_code">激活码兑换</option>
-                <option value="create_key">创建 API 密匙</option>
+                <option value="create_key">创建 API Key</option>
               </select>
               <span style={{ fontSize: 12, color: "var(--page-subtle)", marginLeft: "auto" }}>共 {logTotal} 条</span>
             </div>
@@ -492,7 +492,7 @@ export default function AdminRechargesPage() {
                     {log.category === "auth" ? "认证" : log.category === "payment" ? "支付" : log.category === "api" ? "API" : "密匙"}
                   </span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: "var(--page-heading)" }}>
-                    {log.action === "register" ? "注册" : log.action === "login" ? "登录" : log.action === "api_call" ? "API 调用" : log.action === "recharge_order" ? "充值订单" : log.action === "recharge_approved" ? "充值到账" : log.action === "redeem_code" ? "激活码兑换" : log.action === "create_key" ? "创建 API 密匙" : log.action}
+                    {log.action === "register" ? "注册" : log.action === "login" ? "登录" : log.action === "api_call" ? "API 调用" : log.action === "recharge_order" ? "充值订单" : log.action === "recharge_approved" ? "充值到账" : log.action === "redeem_code" ? "激活码兑换" : log.action === "create_key" ? "创建 API Key" : log.action}
                   </span>
                   <div>
                     <div style={{ fontSize: 13, color: "var(--page-text)" }}>{log.detail || "—"}</div>

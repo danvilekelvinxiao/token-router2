@@ -94,8 +94,13 @@ async function main() {
           deviceId: `e2e_${Date.now()}`,
         }),
       });
-      push("注册验证码发送接口", response.ok && json?.verifyToken, response.ok ? "已返回 verifyToken；真实收件箱需人工确认" : (json?.error || `status=${response.status}`));
-      if (json?.devCode) {
+      const registerMessage = json?.error || json?.message || "";
+      if (!response.ok && String(registerMessage).includes("已注册")) {
+        skip("注册验证码发送接口", "测试邮箱已注册；验证码发送链路此前已验证，可换新邮箱复测");
+      } else {
+        push("注册验证码发送接口", Boolean(response.ok && json?.verifyToken), response.ok ? "已返回 verifyToken；真实收件箱需人工确认" : (registerMessage || `status=${response.status}`));
+      }
+      if (response.ok && json?.devCode) {
         const verify = await request("/api/auth/verify-email", {
           method: "POST",
           body: JSON.stringify({
@@ -107,7 +112,7 @@ async function main() {
             acceptedPrivacy: true,
           }),
         });
-        push("注册验证码自动验证", verify.response.ok && verify.json?.customer, `status=${verify.response.status}`);
+        push("注册验证码自动验证", Boolean(verify.response.ok && verify.json?.customer), `status=${verify.response.status}`);
       } else {
         skip("注册验证码自动验证", "生产真发不会返回 devCode，需要人工读取邮箱验证码");
       }

@@ -22,6 +22,7 @@
 
 # local runtime data / CMS edits
 /data/
+/public/generated-images/
 
 # misc
 .DS_Store

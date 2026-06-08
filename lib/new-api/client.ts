@@ -8,7 +8,9 @@
  * - Quota sync: pushed to New API /api/token/ (PUT) when admin token is valid.
  * - Health: verified by checking New API /api/status and /api/token/.
  *
- * Important: user-facing API Keys must never be local mock keys.
+ * Important: customer-facing API Keys are FlowAPI keys first. Per-user New API
+ * token sync is optional; when disabled, FlowAPI routes with server-side group
+ * tokens while the local ledger remains the only customer billing authority.
  */
 
 const NEW_API_BASE_URL =
@@ -88,7 +90,7 @@ export async function createNewApiToken(params: {
   }
 
   const nameLimit = Number(process.env.NEW_API_TOKEN_NAME_MAX_LENGTH || 30);
-  const name = String(params.name || "API 密匙").slice(0, Math.max(12, Math.min(nameLimit, 30)));
+  const name = String(params.name || "API Key").slice(0, Math.max(12, Math.min(nameLimit, 30)));
   const group = params.group || NEW_API_DEFAULT_GROUP;
   const quota = params.quota || NEW_API_DEFAULT_QUOTA;
   const beforeCreate = Math.floor(Date.now() / 1000) - 5;

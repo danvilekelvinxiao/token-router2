@@ -2,6 +2,19 @@ import { createApiKey, deleteApiKey, getDashboard, updateApiKey } from "@/lib/cu
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { assertCustomerOwner } from "@/lib/session";
 import { getLocalePriceMultiplier, normalizeLocale } from "@/lib/pricing/locale-pricing";
+import { getPublicApiBaseUrl } from "@/lib/public-api";
+
+function parseBody(body) {
+  if (!body) return {};
+  if (typeof body === "string") {
+    try {
+      return JSON.parse(body);
+    } catch {
+      return {};
+    }
+  }
+  return body;
+}
 
 export default async function handler(req, res) {
   if (!["POST", "PATCH", "DELETE"].includes(req.method)) {
@@ -9,7 +22,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const requestedCustomerId = req.body?.customerId;
+  const body = parseBody(req.body);
+  const requestedCustomerId = body?.customerId;
   const session = assertCustomerOwner(req, res, requestedCustomerId);
   if (!session) return;
   const customerId = session.customerId;
@@ -18,7 +32,7 @@ export default async function handler(req, res) {
 
   if (req.method === "POST") {
     try {
-      const modelId = req.body?.modelId || req.body?.productId;
+      const modelId = body?.modelId || body?.productId;
       if (!modelId) {
         return res.status(400).json({
           error: {
@@ -55,16 +69,16 @@ export default async function handler(req, res) {
 
       const createdKey = await createApiKey(
         customerId,
-        req.body?.label || `${modelProduct.displayName} Key`,
-        req.body?.expiresAt || null,
+        body?.label || `${modelProduct.displayName} Key`,
+        body?.expiresAt || null,
         modelProduct,
         {
-          localePriceMultiplier: getLocalePriceMultiplier(normalizeLocale(req.body?.locale)),
-          limit: req.body?.limit || req.body?.quotaLimit || {},
-          groupId: req.body?.groupId || req.body?.modelGroup || "",
-          teamId: req.body?.teamId || req.body?.team_id || "",
-          usagePurpose: req.body?.usagePurpose || req.body?.usage_purpose || "",
-          usageScope: req.body?.usageScope || req.body?.usage_scope || "",
+          localePriceMultiplier: getLocalePriceMultiplier(normalizeLocale(body?.locale)),
+          limit: body?.limit || body?.quotaLimit || {},
+          groupId: body?.groupId || body?.modelGroup || "",
+          teamId: body?.teamId || body?.team_id || "",
+          usagePurpose: body?.usagePurpose || body?.usage_purpose || "",
+          usageScope: body?.usageScope || body?.usage_scope || "",
         }
       );
       const customer = await getDashboard(customerId);
@@ -73,7 +87,7 @@ export default async function handler(req, res) {
         customer,
         createdKey,
         modelProduct,
-        baseUrl: process.env.NEXT_PUBLIC_FLOWAPI_BASE_URL || "https://flowapi.fun/v1",
+        baseUrl: getPublicApiBaseUrl(),
       });
     } catch (error) {
       console.error("[api/keys:create]", error);
@@ -98,34 +112,43 @@ export default async function handler(req, res) {
           },
         });
       }
+      if (error?.type === "model_profit_guard") {
+        return res.status(400).json({
+          error: {
+            message: error.message || "该模型价格尚未通过毛利审核，请先选择其他模型。",
+            type: error.code || "model_profit_guard",
+          },
+          suggestion: "请先选择已通过价格审核的模型，或联系 FlowAPI 客服开通该模型。",
+        });
+      }
       if (error?.code === "INVALID_NEW_API_TOKEN_FORMAT") {
         return res.status(502).json({
-          code: "INVALID_NEW_API_TOKEN_FORMAT",
+          code: "API_KEY_CREATE_FAILED",
           error: {
-            message: "New API 返回的 API Key 格式异常",
-            type: "invalid_new_api_token_format",
+            message: "API Key 创建失败，请稍后重试或联系 FlowAPI 客服。",
+            type: "api_key_create_failed",
           },
-          suggestion: "请检查 New API 创建 Token 接口是否返回完整 sk- 开头 API Key。",
+          suggestion: "平台正在修复创建通道，请不要重复提交；如需加急，请把当前页面截图发给客服。",
         });
       }
       if (error?.code === "NEW_API_TOKEN_CREATE_FAILED") {
         return res.status(502).json({
-          code: "NEW_API_TOKEN_CREATE_FAILED",
+          code: "API_KEY_CREATE_FAILED",
           error: {
-            message: "上游 API Key 创建失败，请稍后重试或联系管理员",
-            type: "new_api_token_create_failed",
+            message: "API Key 创建失败，请稍后重试或联系 FlowAPI 客服。",
+            type: "api_key_create_failed",
           },
-          suggestion: error?.message || "New API API Key 创建失败",
+          suggestion: "平台通道暂时不可用，请稍后重试；如果持续失败，请联系 FlowAPI 客服。",
         });
       }
       return res.status(502).json({
         error: "API Key 创建失败，请稍后重试或联系管理员。",
-        suggestion: error?.message || "New API API Key 创建失败",
+        suggestion: "平台通道暂时不可用，请稍后重试；如果持续失败，请联系 FlowAPI 客服。",
       });
     }
   }
 
-  const keyId = req.body?.keyId;
+  const keyId = body?.keyId;
   if (!keyId) {
     return res.status(400).json({ error: "缺少 API Key ID" });
   }
@@ -133,14 +156,14 @@ export default async function handler(req, res) {
   if (req.method === "PATCH") {
     try {
       const customer = await updateApiKey(customerId, keyId, {
-        label: req.body?.label,
-        expiresAt: req.body?.expiresAt,
-        disabled: req.body?.disabled,
-        limit: req.body?.limit,
-        quotaLimit: req.body?.quotaLimit,
-        teamId: req.body?.teamId,
-        usagePurpose: req.body?.usagePurpose,
-        usageScope: req.body?.usageScope,
+        label: body?.label,
+        expiresAt: body?.expiresAt,
+        disabled: body?.disabled,
+        limit: body?.limit,
+        quotaLimit: body?.quotaLimit,
+        teamId: body?.teamId,
+        usagePurpose: body?.usagePurpose,
+        usageScope: body?.usageScope,
       });
       if (!customer) return res.status(404).json({ error: "API Key 不存在" });
       return res.status(200).json(customer);

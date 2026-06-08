@@ -13,12 +13,11 @@ function getClientToken(req) {
   return token.replace(/^["']|["']$/g, "");
 }
 
-function getInternalChatUrl(req) {
+function getInternalChatUrl() {
   const configured = process.env.INTERNAL_FLOWAPI_BASE_URL?.replace(/\/+$/, "");
   if (configured) return `${configured}/api/v1/chat/completions`;
-  const host = req.headers.host || "localhost:3000";
-  const protocol = host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https";
-  return `${protocol}://${host}/api/v1/chat/completions`;
+  const port = process.env.FLOWAPI_INTERNAL_PORT || process.env.PORT || "3000";
+  return `http://127.0.0.1:${port}/api/v1/chat/completions`;
 }
 
 export default async function handler(req, res) {
@@ -49,7 +48,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch(getInternalChatUrl(req), {
+    const response = await fetch(getInternalChatUrl(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${clientToken}`,
@@ -70,14 +69,14 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       return res.status(response.status).json({
-        error: data.error?.message || "上游模型服务请求失败，请稍后重试。",
+        error: data.error?.message || "模型服务请求失败，请稍后重试。",
       });
     }
 
     const content = data.choices?.[0]?.message?.content;
 
     if (!content) {
-      return res.status(502).json({ error: "上游模型服务没有返回有效内容，请稍后重试。" });
+      return res.status(502).json({ error: "模型服务没有返回有效内容，请稍后重试。" });
     }
 
     return res.status(200).json({ content });

@@ -51,11 +51,11 @@ const addOnServices = [
   },
   {
     id: "openrouter_credits",
-    title: "OpenRouter Credits 代充",
+    title: "模型官方额度代充",
     priceCny: 9,
     unit: "credits",
     minQuantity: 5,
-    description: "适合需要使用 OpenRouter 官方 credits 的用户，最低 5 credits 起充。",
+    description: "适合需要单独购买模型官方额度的用户，最低 5 份起充。",
     tags: ["最低 5 个", "适合开发者", "额度代充"],
     type: "quantity",
   },
@@ -215,6 +215,7 @@ export default function RechargePage() {
   const [redeemResult, setRedeemResult] = useState(null);
   const [packageDetail, setPackageDetail] = useState(null);
   const [selectedAddOns, setSelectedAddOns] = useState([]);
+  const [showMoreRechargeOptions, setShowMoreRechargeOptions] = useState(false);
   const [openrouterCredits, setOpenrouterCredits] = useState(5);
   const [referral, setReferral] = useState(null);
   const [commissionModal, setCommissionModal] = useState("");
@@ -336,9 +337,9 @@ export default function RechargePage() {
 
   const currentMethod = useMemo(() => localizedPaymentMethods.find((item) => item.key === paymentMethod) || localizedPaymentMethods[0], [localizedPaymentMethods, paymentMethod]);
   const manualModeNotice = useMemo(() => {
-    if (paymentMethod === "wechat") return "微信商户参数未配置完整，已切换到手动确认模式";
-    if (paymentMethod === "alipay") return "支付宝商户参数未配置完整，已切换到手动确认模式";
-    if (paymentMethod === "crypto" && manualFallback) return "GMWallet 暂时未能生成自动收银台，当前订单已切换到人工确认兜底。";
+    if (paymentMethod === "wechat") return "当前为人工确认模式，通常 5-15 分钟到账，异常可凭订单号处理。";
+    if (paymentMethod === "alipay") return "当前为人工确认模式，通常 5-15 分钟到账，异常可凭订单号处理。";
+    if (paymentMethod === "crypto" && manualFallback) return "链上收银台暂时未能生成，当前订单已切换到人工确认。";
     return "";
   }, [paymentMethod, manualFallback]);
   const selectedCryptoChoice = useMemo(
@@ -491,7 +492,7 @@ export default function RechargePage() {
             }
             setStep("pay");
             setActivePaymentModal("");
-            setPaymentError(L("GMWallet 已创建订单但未返回收银台链接，请联系客服处理订单号。", "GMWallet order was created but no checkout URL was returned. Contact support with the order number."));
+            setPaymentError(L("链上订单已创建但未返回收银台链接，请联系客服处理订单号。", "Crypto order was created but no checkout URL was returned. Contact support with the order number."));
           }
           setCryptoNow(Date.now());
         }
@@ -675,7 +676,7 @@ export default function RechargePage() {
       setCommissionMessage(data.error || "操作失败，请稍后重试");
       return;
     }
-    setCommissionMessage(commissionModal === "convert" ? `已成功使用 ¥${Number(payload.amountCny).toFixed(2)} 佣金兑换 FlowAPI 余额。` : "已提交提现申请，管理员审核后会处理。");
+    setCommissionMessage(commissionModal === "convert" ? `已成功使用 ¥${Number(payload.amountCny).toFixed(2)} 佣金兑换 FlowAPI 余额。` : "已提交提现申请，客服审核后会处理。");
     setCommissionForm({ amountCny: "", method: "alipay", account: "", realName: "", remark: "" });
     refreshCustomer(customer);
   }
@@ -728,6 +729,12 @@ export default function RechargePage() {
 
             {/* ===== LEFT: Main area ===== */}
             <section className="recharge-main">
+              <div className="recharge-trust-strip" aria-label="充值保障">
+                <span>订单号可查</span>
+                <span>自动到账优先</span>
+                <span>人工兜底 5-15 分钟</span>
+                <span>QQ 群客服</span>
+              </div>
 
               {/* 1. Recharge amount */}
               <div className="recharge-section-card">
@@ -747,78 +754,92 @@ export default function RechargePage() {
                 </label>
               </div>
 
-              {/* 2. Add-on services */}
-              <div className="recharge-section-card">
-                <div className="section-heading-row">
-                  <div>
-                    <h2>{L("附加服务", "Add-on Services")}</h2>
-                    <p>{L("可选增值服务，适合需要人工协助、订阅支持、额度代充或接入配置的用户。", "Optional value-added services for setup, subscriptions, and credits support.")}</p>
-                  </div>
+              <div className="recharge-more-options-bar">
+                <div>
+                  <strong>更多套餐与人工服务</strong>
+                  <span>周包、月卡和附加服务默认收起，新用户先完成 Token 充值即可。</span>
                 </div>
-                <div className="addon-services-grid">
-                  {addOnServices.map((svc) => {
-                    const isSelected = selectedAddOns.includes(svc.id);
-                    const isQuantity = svc.type === "quantity" && svc.id === "openrouter_credits";
-                    return (
-                      <button
-                        key={svc.id}
-                        type="button"
-                        className={`addon-service-card ${isSelected ? "selected" : ""}`}
-                        onClick={() => toggleAddOn(svc.id)}
-                      >
-                        <div className="addon-service-head">
-                          <strong>{svc.title}</strong>
-                          <span className="addon-service-price">¥{svc.priceCny}{svc.type === "quantity" ? ` / ${svc.unit}` : ` / ${svc.unit}`}</span>
-                        </div>
-                        <p>{svc.description}</p>
-                        <div className="addon-service-tags">
-                          {svc.tags.map((tag) => <span key={tag}>{tag}</span>)}
-                        </div>
-                        {isSelected && isQuantity && (
-                          <div className="addon-service-quantity" onClick={(e) => e.stopPropagation()}>
-                            <span>OpenRouter Credits 数量</span>
-                            <div className="addon-quantity-control">
-                              <button type="button" onClick={() => setOpenrouterCredits((v) => Math.max(5, v - 1))} disabled={openrouterCredits <= 5}>−</button>
-                              <strong>{openrouterCredits}</strong>
-                              <button type="button" onClick={() => setOpenrouterCredits((v) => v + 1)}>+</button>
+                <button type="button" onClick={() => setShowMoreRechargeOptions((value) => !value)}>
+                  {showMoreRechargeOptions ? "收起" : "展开更多"}
+                </button>
+              </div>
+
+              {showMoreRechargeOptions && (
+                <>
+                  {/* 2. Add-on services */}
+                  <div className="recharge-section-card">
+                    <div className="section-heading-row">
+                      <div>
+                        <h2>{L("附加服务", "Add-on Services")}</h2>
+                        <p>{L("可选增值服务，适合需要人工协助、订阅支持、额度代充或接入配置的用户。", "Optional value-added services for setup, subscriptions, and credits support.")}</p>
+                      </div>
+                    </div>
+                    <div className="addon-services-grid">
+                      {addOnServices.map((svc) => {
+                        const isSelected = selectedAddOns.includes(svc.id);
+                        const isQuantity = svc.type === "quantity" && svc.id === "openrouter_credits";
+                        return (
+                          <button
+                            key={svc.id}
+                            type="button"
+                            className={`addon-service-card ${isSelected ? "selected" : ""}`}
+                            onClick={() => toggleAddOn(svc.id)}
+                          >
+                            <div className="addon-service-head">
+                              <strong>{svc.title}</strong>
+                              <span className="addon-service-price">¥{svc.priceCny}{svc.type === "quantity" ? ` / ${svc.unit}` : ` / ${svc.unit}`}</span>
                             </div>
-                            <span className="addon-quantity-total">合计 ¥{svc.priceCny * openrouterCredits}</span>
-                          </div>
-                        )}
-                        <span className={`addon-service-action ${isSelected ? "selected" : ""}`}>
-                          {isSelected ? L("已选择", "Selected") : L("选择服务", "Select")}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                            <p>{svc.description}</p>
+                            <div className="addon-service-tags">
+                              {svc.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                            </div>
+                            {isSelected && isQuantity && (
+                              <div className="addon-service-quantity" onClick={(e) => e.stopPropagation()}>
+                                <span>官方额度数量</span>
+                                <div className="addon-quantity-control">
+                                  <button type="button" onClick={() => setOpenrouterCredits((v) => Math.max(5, v - 1))} disabled={openrouterCredits <= 5}>−</button>
+                                  <strong>{openrouterCredits}</strong>
+                                  <button type="button" onClick={() => setOpenrouterCredits((v) => v + 1)}>+</button>
+                                </div>
+                                <span className="addon-quantity-total">合计 ¥{svc.priceCny * openrouterCredits}</span>
+                              </div>
+                            )}
+                            <span className={`addon-service-action ${isSelected ? "selected" : ""}`}>
+                              {isSelected ? L("已选择", "Selected") : L("选择服务", "Select")}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-              {/* 3. Codex API weekly packages */}
-              <div className="recharge-section-card">
-                <div className="section-heading-row">
-                  <div><h2>Codex API — 周畅用包</h2><p>点击档位后生成订单，支付后自动或人工确认开通对应额度包。</p></div>
-                  <span>支付宝直购 · 一周畅用</span>
-                </div>
-                <div className="recharge-package-grid weekly">
-                  {weeklyPackages.map((pkg) => (
-                    <PackageCard key={pkg.id} pkg={pkg} type="weekly_package" selected={purchaseType === "weekly_package" && selectedPackageId === pkg.id} onSelect={() => selectPackage("weekly_package", pkg.id)} onDetail={() => setPackageDetail(buildPackageDetail(pkg, "weekly_package"))} />
-                  ))}
-                </div>
-              </div>
+                  {/* 3. Codex API weekly packages */}
+                  <div className="recharge-section-card">
+                    <div className="section-heading-row">
+                      <div><h2>Codex API — 周畅用包</h2><p>点击档位后生成订单，支付后自动或人工确认开通对应额度包。</p></div>
+                      <span>支付宝直购 · 一周畅用</span>
+                    </div>
+                    <div className="recharge-package-grid weekly">
+                      {weeklyPackages.map((pkg) => (
+                        <PackageCard key={pkg.id} pkg={pkg} type="weekly_package" selected={purchaseType === "weekly_package" && selectedPackageId === pkg.id} onSelect={() => selectPackage("weekly_package", pkg.id)} onDetail={() => setPackageDetail(buildPackageDetail(pkg, "weekly_package"))} />
+                      ))}
+                    </div>
+                  </div>
 
-              {/* 4. Monthly packages */}
-              <div className="recharge-section-card">
-                <div className="section-heading-row">
-                  <div><h2>月卡套餐</h2><p>购买区独立展示，已购权益以上方“我的订阅”为准。</p></div>
-                  <span>每日额度 · 月度资源包</span>
-                </div>
-                <div className="recharge-package-grid monthly">
-                  {monthlyPackages.map((pkg) => (
-                    <PackageCard key={pkg.id} pkg={pkg} type="monthly_subscription" selected={purchaseType === "monthly_subscription" && selectedPackageId === pkg.id} onSelect={() => selectPackage("monthly_subscription", pkg.id)} onDetail={() => setPackageDetail(buildPackageDetail(pkg, "monthly_subscription"))} />
-                  ))}
-                </div>
-              </div>
+                  {/* 4. Monthly packages */}
+                  <div className="recharge-section-card">
+                    <div className="section-heading-row">
+                      <div><h2>月卡套餐</h2><p>购买区独立展示，已购权益以上方“我的订阅”为准。</p></div>
+                      <span>每日额度 · 月度资源包</span>
+                    </div>
+                    <div className="recharge-package-grid monthly">
+                      {monthlyPackages.map((pkg) => (
+                        <PackageCard key={pkg.id} pkg={pkg} type="monthly_subscription" selected={purchaseType === "monthly_subscription" && selectedPackageId === pkg.id} onSelect={() => selectPackage("monthly_subscription", pkg.id)} onDetail={() => setPackageDetail(buildPackageDetail(pkg, "monthly_subscription"))} />
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
 
             </section>
 
@@ -891,7 +912,7 @@ export default function RechargePage() {
                       </div>
                     </div>
                     <div className="payment-method-config-note">
-                      <strong>{L("GMWallet 专属收银台", "GMWallet dedicated checkout")}</strong>
+                      <strong>{L("链上专属收银台", "Crypto checkout")}</strong>
                       <p>
                         {L("下单后会同步展示订单号、倒计时、二维码、地址复制和到账轮询。仅支持 USDT / USDC。", "After order creation, the page syncs order number, countdown, QR code, address copy and payment polling. Only USDT / USDC are supported.")}
                       </p>
@@ -936,7 +957,7 @@ export default function RechargePage() {
                         ? L("立即购买", "Buy Now")
                         : L("立即订阅", "Subscribe Now")}
               </button>
-              <p className="recharge-sidebar-note">{L("一般 10 秒内到账，异常订单可凭订单号联系客服处理。", "Usually credited within 10 seconds. Contact support with your order number if anything is abnormal.")}</p>
+              <p className="recharge-sidebar-note">{L("自动通道可用时约 10 秒到账；当前走人工兜底时通常 5-15 分钟，异常订单可凭订单号联系客服处理。", "When automatic settlement is available, credit usually arrives in about 10 seconds. Manual fallback usually takes 5-15 minutes; contact support with your order number if anything is abnormal.")}</p>
 
               <RechargeSupportCard copied={copied} onCopy={copyText} />
             </aside>
@@ -998,8 +1019,8 @@ export default function RechargePage() {
                     ) : null}
                     <div style={{ fontSize: 12, color: "var(--page-sub)", lineHeight: 1.6 }}>
                       {manualFallback
-                        ? L("GMWallet 自动下单失败时才进入人工确认兜底，请提交 TxHash 或付款备注。", "Manual review is only used when GMWallet checkout fails. Submit TxHash or payment note.")
-                        : L("请按 GMWallet 订单展示的币种、网络、金额和地址转账。系统每 3 秒自动查询一次到账状态。", "Transfer with the exact token, network, amount and address shown by GMWallet. The system checks payment status every 3 seconds.")}
+                        ? L("自动下单失败时才进入人工确认，请提交 TxHash 或付款备注。", "Manual review is only used when automatic checkout fails. Submit TxHash or payment note.")
+                        : L("请按订单展示的币种、网络、金额和地址转账。系统每 3 秒自动查询一次到账状态。", "Transfer with the exact token, network, amount and address shown by the order. The system checks payment status every 3 seconds.")}
                     </div>
                     {manualFallback ? (
                       <>
@@ -1141,7 +1162,7 @@ export default function RechargePage() {
               <h2>{commissionModal === "convert" ? "使用佣金购买 Token" : "申请提现"}</h2>
               <p>
                 当前可提现佣金为 <strong>¥{Number(referral?.withdrawableCommissionCny || 0).toFixed(2)}</strong>。
-                {commissionModal === "convert" ? "确认使用佣金兑换 FlowAPI 余额 / Token 额度吗？" : "提现申请提交后，管理员审核通过后打款到你的支付宝或微信。"}
+                {commissionModal === "convert" ? "确认使用佣金兑换 FlowAPI 余额 / Token 额度吗？" : "提现申请提交后，客服审核通过后打款到你的支付宝或微信。"}
               </p>
               <label>
                 <span>{commissionModal === "convert" ? "使用金额" : "提现金额"}</span>
@@ -1191,7 +1212,7 @@ function RechargeSupportCard({ copied, onCopy }) {
         <div>
           <strong>微信群</strong>
           <code>添加微信后邀请入群</code>
-          <button type="button" onClick={() => onCopy("请在 QQ 群联系 FlowAPI 管理员拉你进微信群")}>{copied.includes("微信群") ? "已复制" : "复制说明"}</button>
+          <button type="button" onClick={() => onCopy("请在 QQ 群联系 FlowAPI 客服拉你进微信群")}>{copied.includes("微信群") ? "已复制" : "复制说明"}</button>
         </div>
       </div>
       <div className="recharge-support-qr">

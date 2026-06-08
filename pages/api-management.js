@@ -7,11 +7,12 @@ import ModelLogo from "@/components/ModelLogo";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import InteractiveCard from "@/components/InteractiveCard";
 import { buildCcSwitchCodexConfig, buildCcSwitchConfigUrl } from "@/lib/cc-switch";
+import { getPublicApiBaseUrl } from "@/lib/public-api";
 import { formatDateTime, formatPercent, formatRequestCount, formatSmallCny, formatToken as formatUnifiedToken } from "@/lib/format/number-format";
 import { useLocale } from "@/components/providers/locale-provider";
 import { applyLocalePrice } from "@/lib/pricing/locale-pricing";
 
-const API_BASE_URL = "https://flowapi.fun/v1";
+const API_BASE_URL = getPublicApiBaseUrl();
 const DEFAULT_MODEL_ID = "deepseek-chat";
 const CC_SWITCH_RELEASE_URL = "https://github.com/farion1231/cc-switch/releases/tag/v3.15.0";
 const CC_SWITCH_WINDOWS_URL = "https://github.com/farion1231/cc-switch/releases/download/v3.15.0/CC-Switch-v3.15.0-Windows.msi";
@@ -145,6 +146,21 @@ function normalizeModel(model = {}) {
   };
 }
 
+function readRequestedModelId() {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get("model") || "";
+}
+
+function findRequestedModel(list = [], requested = "") {
+  const target = String(requested || "").trim().toLowerCase();
+  if (!target) return null;
+  return list.find((model) => {
+    return [model.modelId, model.publicModelId, model.id, model.displayName]
+      .filter(Boolean)
+      .some((value) => String(value).trim().toLowerCase() === target);
+  }) || null;
+}
+
 function ApiManagementGuideHero({ onCreateKey }) {
   return (
     <section className="guide-hero api-management-guide-hero">
@@ -251,11 +267,15 @@ export default function ApiManagementPage() {
     let cancelled = false;
     const stored = localStorage.getItem("flowapi_customer");
     if (!stored) {
-      window.location.href = "/login";
+      queueMicrotask(() => { if (!cancelled) setLoading(false); });
       return undefined;
     }
     let localCustomer = null;
-    try { localCustomer = JSON.parse(stored); } catch { window.location.href = "/login"; return undefined; }
+    try { localCustomer = JSON.parse(stored); } catch {
+      localStorage.removeItem("flowapi_customer");
+      queueMicrotask(() => { if (!cancelled) setLoading(false); });
+      return undefined;
+    }
     queueMicrotask(() => setCustomer(localCustomer));
     Promise.all([
       fetch(`/api/customer?customerId=${localCustomer.id}`).then((res) => res.ok ? res.json() : localCustomer),
@@ -268,12 +288,25 @@ export default function ApiManagementPage() {
       localStorage.setItem("flowapi_customer", JSON.stringify(freshCustomer));
       const list = (modelJson.data || modelJson.models || []).map(normalizeModel).filter((model) => model.enabled);
       const groups = groupJson.groups || [];
+      const requestedModel = findRequestedModel(list, readRequestedModelId());
+      const defaultModelId = requestedModel?.modelId || list[0]?.modelId || "";
       const defaultGroupId = groups.find((group) => group.recommended && group.available)?.id || groups.find((group) => group.available)?.id || groups[0]?.id || "";
       setModels(list);
       setApiGroups(groups);
-      setSelectedModelId((current) => current || list[0]?.modelId || "");
-      setCreateForm((current) => ({ ...current, modelId: current.modelId || list[0]?.modelId || "", groupId: current.groupId || defaultGroupId }));
+      setSelectedModelId((current) => current || defaultModelId);
+      setCreateForm((current) => ({
+        ...current,
+        modelId: current.modelId || defaultModelId,
+        label: current.label || (requestedModel ? `${requestedModel.displayName} Key` : ""),
+        groupId: current.groupId || defaultGroupId,
+      }));
       setMembership(walletJson?.membership || null);
+      if (requestedModel) {
+        window.setTimeout(() => {
+          scrollToCreateCard();
+          showToast(`已为你选中 ${requestedModel.displayName}`);
+        }, 250);
+      }
     }).catch(() => {
       if (!cancelled) setToast("数据同步中，请稍后刷新。");
     }).finally(() => {
@@ -394,10 +427,10 @@ export default function ApiManagementPage() {
       },
       createKey: {
         title: "02 创建 API Key",
-        description: "API Key 是你的调用凭证，请在下方 CREATE API KEY 区域选择模型后创建。",
+        description: "API Key 是你的调用凭证，请在下方创建区选择模型后创建。",
         rows: [
           { label: "当前模型", value: selectedModel?.modelId || "模型同步中" },
-          { label: "创建位置", value: "本页 CREATE API KEY 卡片" },
+          { label: "创建位置", value: "本页创建 API Key 卡片" },
           { label: "安全提醒", value: "API Key 默认脱敏展示，完整值只在复制时使用" },
         ],
         actions: <button type="button" onClick={() => openCreateModal(selectedModel)}>选择模型创建 API Key</button>,
@@ -435,7 +468,7 @@ export default function ApiManagementPage() {
           { key: "title", label: "内容" },
           { key: "description", label: "说明" },
         ]} rows={[
-          { step: "Base URL", title: API_BASE_URL, description: "统一接入地址，不要改成上游地址" },
+          { step: "Base URL", title: API_BASE_URL, description: "FlowAPI 统一接入地址，直接复制使用" },
           { step: "Model", title: selectedModel?.modelId || DEFAULT_MODEL_ID, description: "可在模型广场复制其他模型 ID" },
           { step: "Curl", title: curl, description: "替换为你的 API Key 后即可测试" },
         ]} /> },
@@ -455,9 +488,9 @@ export default function ApiManagementPage() {
     const model = models.find((item) => item.modelId === createForm.modelId) || selectedModel;
     if (!model?.modelId) return "模型配置同步中，请稍后再创建";
     if (!canSelectModel(model)) return "当前模型需要黑金会员权限";
-    if (!selectedCreateGroup?.id) return "请选择 API 分组后创建 API Key";
-    if (!selectedCreateGroup.available) return "当前 API 分组已停用，请选择其他分组";
-    if (!groupSupportsModel(selectedCreateGroup, model)) return "当前分组不支持所选模型，请更换分组或模型";
+    if (!selectedCreateGroup?.id) return "请选择 API 线路后创建 API Key";
+    if (!selectedCreateGroup.available) return "当前 API 线路已停用，请选择其他线路";
+    if (!groupSupportsModel(selectedCreateGroup, model)) return "当前线路不支持所选模型，请更换线路或模型";
     if (createForm.expiresAt === "custom" && !createForm.customDate) return "请选择自定义过期日期";
     return getLimitValidationMessage(createForm.limit);
   }
@@ -688,7 +721,7 @@ export default function ApiManagementPage() {
       const rows = [
         { label: "API Key", value: data.key?.maskedKey || maskToken(key.token) },
         { label: "绑定模型", value: key.modelDisplayName || key.publicModelId || "未绑定模型" },
-        { label: "分组", value: `${groupMap.get(key.modelGroup)?.displayName || key.modelGroup || "默认"} · ${Number(key.priceMultiplier || groupMap.get(key.modelGroup)?.billingMultiplier || 1)}x` },
+        { label: "线路", value: `${groupMap.get(key.modelGroup)?.displayName || key.modelGroup || "默认"} · ${Number(key.priceMultiplier || groupMap.get(key.modelGroup)?.billingMultiplier || 1)}x` },
         { label: "Base URL", value: API_BASE_URL },
         { label: "创建时间", value: formatDate(key.createdAt) },
         { label: "最近调用", value: formatDate(data.key?.lastUsedAt || key.lastUsedAt) },
@@ -735,7 +768,7 @@ export default function ApiManagementPage() {
                       <ModelLogo model={call.model} provider={call.provider} size={20} />
                       <span className="model-text">
                         <strong className="model-name">{call.model || "未知模型"}</strong>
-                        <small className="model-provider">{call.provider || "未知供应商"}</small>
+                        <small className="model-provider">{call.provider || "模型服务"}</small>
                       </span>
                     </span>
                   ),
@@ -760,10 +793,29 @@ export default function ApiManagementPage() {
     }
   }
 
+  const authRequired = !loading && !customer;
+
   if (!customer) {
     return (
-      <main className="landing-shell" style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
-        <p style={{ color: "var(--page-sub)" }}>加载中...</p>
+      <main className="landing-shell api-management-auth-shell">
+        <section className="api-management-auth-gate">
+          <span>{authRequired ? "需要登录" : "同步账号"}</span>
+          <h1>{authRequired ? "先登录，再创建你的 FlowAPI Key" : "正在读取你的 API Key 工作台"}</h1>
+          <p>
+            {authRequired
+              ? "注册账号后会获得体验额度。登录后你可以选择模型、创建 API Key、复制 Base URL，并在使用日志里看到每次 Token 和金额消耗。"
+              : "正在同步账号、模型和调用记录，请稍等几秒。"}
+          </p>
+          {authRequired ? (
+            <div className="api-management-auth-actions">
+              <Link href="/register">注册送 ¥5 体验额度</Link>
+              <Link href="/login" className="secondary">登录账号</Link>
+              <Link href="/help" className="ghost">看三步教程</Link>
+            </div>
+          ) : (
+            <p className="api-management-empty-text">加载中...</p>
+          )}
+        </section>
       </main>
     );
   }
@@ -784,7 +836,7 @@ export default function ApiManagementPage() {
           <section id="api-create-section" className="api-management-create-card">
             <div className="api-management-card-head">
               <div>
-                <span>CREATE API KEY</span>
+                <span>创建 API Key</span>
                 <h2>选择模型创建 API Key</h2>
                 <p>每个 Key 绑定一个模型，后续账单、扣费来源和调用记录更容易看懂。</p>
               </div>
@@ -806,7 +858,7 @@ export default function ApiManagementPage() {
           <section className="api-management-key-panel">
             <div className="api-management-panel-head">
               <div>
-                <span>YOUR API KEYS</span>
+                <span>我的 API Keys</span>
                 <h2>我的 API Key</h2>
                 <p>点击卡片查看真实调用、Token 消耗、扣费来源和最近使用时间。</p>
               </div>
@@ -831,7 +883,7 @@ export default function ApiManagementPage() {
                     </div>
                     <code>{maskToken(key.token)}</code>
                     <div className="api-key-card-meta">
-                      <span>分组：{groupMap.get(key.modelGroup)?.displayName || key.modelGroup || "默认"} · {Number(key.priceMultiplier || groupMap.get(key.modelGroup)?.billingMultiplier || 1)}x</span>
+                      <span>线路：{groupMap.get(key.modelGroup)?.displayName || key.modelGroup || "默认"} · {Number(key.priceMultiplier || groupMap.get(key.modelGroup)?.billingMultiplier || 1)}x</span>
                       <span>今日使用：{formatToken(key.quotaLimit?.todayUsedTokens || 0)}</span>
                       <span>本月使用：{formatToken(key.quotaLimit?.monthUsedTokens || key.quotaLimit?.totalUsedTokens || 0)}</span>
                       <span>最后调用：{formatDate(key.lastUsedAt)}</span>
@@ -939,7 +991,7 @@ export default function ApiManagementPage() {
                   </div>
 
                   <div className="api-expiry-field api-group-choice-field">
-                    <span>选择分组</span>
+                    <span>选择线路</span>
                     <div className="api-group-choice-grid">
                       {apiGroups.map((group) => {
                         const model = models.find((item) => item.modelId === createForm.modelId) || selectedModel;
@@ -952,7 +1004,7 @@ export default function ApiManagementPage() {
                             aria-disabled={disabled}
                             onClick={() => {
                               if (disabled) {
-                                showToast(group.available ? "该分组不支持当前模型" : "该分组已停用");
+                                showToast(group.available ? "该线路不支持当前模型" : "该线路已停用");
                                 return;
                               }
                               setCreateForm((current) => ({ ...current, groupId: group.id }));
@@ -962,12 +1014,12 @@ export default function ApiManagementPage() {
                               <strong>{group.displayName}</strong>
                               <em>{group.billingMultiplier}x</em>
                             </span>
-                            <small>{group.recommended ? "系统推荐 · " : ""}{group.description || "自动调度分组"}</small>
+                            <small>{group.recommended ? "系统推荐 · " : ""}{group.description || "自动调度线路"}</small>
                             <code>{group.supportedModels?.length ? `${group.modelCount || group.supportedModels.length} 个模型` : "全部模型"}</code>
                           </button>
                         );
                       })}
-                      {!apiGroups.length ? <div className="api-management-empty-text">分组配置同步中，请稍后刷新。</div> : null}
+                      {!apiGroups.length ? <div className="api-management-empty-text">线路配置同步中，请稍后刷新。</div> : null}
                     </div>
                   </div>
 
@@ -1047,7 +1099,7 @@ export default function ApiManagementPage() {
             <div className="api-modal-body">
               <p className="api-key-limit-note">{ccSwitchFallback.message}</p>
               <DetailRows rows={[
-                { label: "Provider", value: "OpenAI Compatible" },
+                { label: "类型", value: "OpenAI 兼容" },
                 { label: "Base URL", value: API_BASE_URL },
                 { label: "默认模型", value: ccSwitchFallback.modelId || ccSwitchFallback.key?.publicModelId || DEFAULT_MODEL_ID },
                 { label: "API Key", value: ccSwitchFallback.canImport ? "已写入 deeplink，不在本地保存" : "完整 Key 不可取回" },

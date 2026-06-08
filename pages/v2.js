@@ -1,8 +1,9 @@
 import Head from "next/head";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { getPublicApiBaseUrl } from "@/lib/public-api";
 
-const apiBaseUrl = "https://flowapi.fun/v1";
+const apiBaseUrl = getPublicApiBaseUrl();
 
 const models = [
   { name: "GPT", scene: "复杂分析 / 代码辅助", price: "均衡", score: "4.8" },
@@ -19,15 +20,43 @@ const models = [
 const plans = [
   { name: "免费体验", price: "¥0", desc: "注册即送 Token，适合先测试效果", features: ["网页端体验", "基础模型试用", "新手文档"] },
   { name: "个人版", price: "按量充值", desc: "适合个人开发者、AI 工具玩家", features: ["人民币充值", "调用日志", "模型广场"] },
-  { name: "团队版", price: "余额池", desc: "适合工作室、小团队、自媒体", features: ["多密匙管理", "成本统计", "智能路由"] },
+  { name: "团队版", price: "余额池", desc: "适合工作室、小团队、自媒体", features: ["多API Key管理", "成本统计", "智能路由"] },
   { name: "企业版", price: "专属方案", desc: "更高额度、独立通道、专属客服", features: ["独立通道", "专属客服", "用量对账"] },
 ];
 
 export default function V2() {
+  const [customer, setCustomer] = useState(null);
   const [prompt, setPrompt] = useState("用中文解释一下 FlowAPI 为什么适合新手接入 AI API。");
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState("");
+  const [compareMode, setCompareMode] = useState(false);
+  const [modelOptions, setModelOptions] = useState([]);
+  const [selectedModels, setSelectedModels] = useState([]);
+  const [compareResults, setCompareResults] = useState([]);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareError, setCompareError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    const storedCustomer = localStorage.getItem("flowapi_customer");
+    if (storedCustomer) {
+      try {
+        const parsedCustomer = JSON.parse(storedCustomer);
+        queueMicrotask(() => { if (!cancelled) setCustomer(parsedCustomer); });
+      } catch {}
+    }
+    fetch("/api/models/api-key-options")
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (cancelled) return;
+        const options = Array.isArray(data?.models) ? data.models : [];
+        setModelOptions(options.slice(0, 12));
+        setSelectedModels(options.slice(0, 2).map((item) => item.publicModelId || item.modelId || item.id).filter(Boolean));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   async function copy(text, label) {
     await navigator.clipboard.writeText(text);
@@ -36,13 +65,18 @@ export default function V2() {
   }
 
   async function testChat() {
+    const usableKey = (customer?.apiKeys || []).find((key) => key?.token && String(key.token).startsWith("sk-") && !key.disabledAt);
+    if (!usableKey) {
+      setResult("这是一个真实扣费体验入口。请先登录 FlowAPI，在 API 管理页创建一个 API Key，然后回到这里体验；FlowAPI 不会用假的 Key 冒充成功。");
+      return;
+    }
     setLoading(true);
     setResult("");
     try {
       const res = await fetch("/api/v1/chat/completions", {
         method: "POST",
-        headers: { Authorization: "Bearer sk-******", "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "auto", messages: [{ role: "user", content: prompt }] }),
+        headers: { Authorization: `Bearer ${usableKey.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: usableKey.publicModelId || "auto", messages: [{ role: "user", content: prompt }], max_tokens: 256 }),
       });
       const data = await res.json();
       setResult(data.choices?.[0]?.message?.content || "未获取到回复");
@@ -51,6 +85,47 @@ export default function V2() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function toggleCompareModel(modelId) {
+    setSelectedModels((current) => {
+      if (current.includes(modelId)) return current.filter((item) => item !== modelId);
+      if (current.length >= 4) return current;
+      return [...current, modelId];
+    });
+  }
+
+  async function runCompare() {
+    if (!customer?.id) {
+      setCompareError("请先登录 FlowAPI，并为要对比的模型创建 API Key。每个模型独立调用、独立扣费，失败不扣费。");
+      return;
+    }
+    setCompareLoading(true);
+    setCompareError("");
+    setCompareResults([]);
+    try {
+      const res = await fetch("/api/model-compare", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, models: selectedModels }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "模型对比失败");
+      setCompareResults(data.results || []);
+    } catch (error) {
+      setCompareError(error.message || "模型对比失败，请确认已登录且已创建对应模型 API Key。");
+    } finally {
+      setCompareLoading(false);
+    }
+  }
+
+  async function markBest(sessionId, resultId) {
+    await fetch("/api/model-compare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "mark_best", sessionId, resultId }),
+    }).catch(() => null);
+    setCompareResults((items) => items.map((item) => ({ ...item, isBest: item.id === resultId })));
   }
 
   return (
@@ -75,12 +150,12 @@ export default function V2() {
             版本 A · 白底极简成交
           </div>
           <h1 style={{ fontSize: 54, fontWeight: 900, lineHeight: 1.1, margin: 0, letterSpacing: "-0.03em" }}>
-            一个 API 密匙
+            一个 FlowAPI 账户
             <br />
-            调用全球主流 AI 模型
+            管理主流 AI 模型
           </h1>
           <p style={{ fontSize: 18, color: "#666", lineHeight: 1.7, marginTop: 24, maxWidth: 500 }}>
-            无需海外支付，无需复杂配置。充值 Token 即可使用 GPT、Claude、DeepSeek 等模型。
+            无需海外支付，无需复杂配置。按模型创建 API Key，所有调用共用 FlowAPI 余额、日志和扣费流水。
           </p>
           <div style={{ display: "flex", gap: 12, marginTop: 32 }}>
             <a href="#quickstart" style={{ background: "#111", color: "#fff", padding: "13px 26px", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: 15, display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -103,7 +178,7 @@ export default function V2() {
 
           {/* Stats */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 24, marginTop: 64 }}>
-            {[["99.7%", "可用率"], ["1.4s", "平均响应"], ["9+", "主流模型"], ["1 个密匙", "统一接入"]].map(([v, l]) => (
+            {[["99.7%", "可用率"], ["1.4s", "平均响应"], ["9+", "主流模型"], ["统一账本", "余额与日志"]].map(([v, l]) => (
               <div key={l}>
                 <div style={{ fontSize: 36, fontWeight: 900, color: "#111", letterSpacing: "-0.02em" }}>{v}</div>
                 <div style={{ fontSize: 14, color: "#888", marginTop: 4 }}>{l}</div>
@@ -123,8 +198,8 @@ export default function V2() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20 }}>
               {[
                 { step: "01", title: "注册账号", text: "完成注册进入控制台，获得专属接入环境" },
-                { step: "02", title: "创建 API 密匙", text: "在控制台创建 API 密匙，支持多 API 密匙管理" },
-                { step: "03", title: "一键配置", text: "复制 Base URL 和 API 密匙，接入 OpenAI 兼容客户端" },
+                { step: "02", title: "创建 API Key", text: "在控制台创建 API Key，支持多 API Key管理" },
+                { step: "03", title: "一键配置", text: "复制 Base URL 和 API Key，接入 OpenAI 兼容客户端" },
               ].map((s) => (
                 <div key={s.step} style={{ background: "#fff", borderRadius: 12, padding: "36px 28px", border: "1px solid #f0f0f0", transition: "box-shadow .2s" }}>
                   <div style={{ fontSize: 44, fontWeight: 900, color: "#e5e7eb", lineHeight: 1 }}>{s.step}</div>
@@ -153,7 +228,7 @@ export default function V2() {
           <div style={{ textAlign: "center", marginBottom: 56 }}>
             <span style={{ display: "inline-block", background: "#fef3c7", color: "#d97706", padding: "4px 14px", borderRadius: 20, fontSize: 12, fontWeight: 700, marginBottom: 16 }}>Model Hub</span>
             <h2 style={{ fontSize: 42, fontWeight: 900, color: "#111", margin: 0, letterSpacing: "-0.02em" }}>模型广场</h2>
-            <p style={{ color: "#888", marginTop: 12, fontSize: 16 }}>按任务选择最合适的模型，一个 API 密匙调用所有</p>
+            <p style={{ color: "#888", marginTop: 12, fontSize: 16 }}>按任务选择最合适的模型，每个模型单独建 Key，更方便控费和排查</p>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14 }}>
             {models.map((m) => (
@@ -180,13 +255,78 @@ export default function V2() {
               onChange={(e) => setPrompt(e.target.value)}
               style={{ width: "100%", minHeight: 100, border: "1px solid #e5e7eb", borderRadius: 10, padding: 16, fontSize: 15, resize: "vertical", outline: "none", boxSizing: "border-box", fontFamily: "system-ui, sans-serif", lineHeight: 1.6 }}
             />
-            <button
-              onClick={testChat}
-              disabled={loading}
-              style={{ marginTop: 14, background: "#111", color: "#fff", border: "none", padding: "13px 36px", borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: "pointer", opacity: loading ? 0.5 : 1 }}
-            >
-              {loading ? "调用中..." : "体验智能路由"}
-            </button>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+              <button
+                onClick={testChat}
+                disabled={loading || compareMode}
+                style={{ background: compareMode ? "#e5e7eb" : "#111", color: compareMode ? "#777" : "#fff", border: "none", padding: "13px 28px", borderRadius: 8, fontSize: 15, fontWeight: 700, cursor: compareMode ? "not-allowed" : "pointer", opacity: loading ? 0.5 : 1 }}
+              >
+                {loading ? "调用中..." : "真实体验智能路由"}
+              </button>
+              <button
+                onClick={() => setCompareMode((value) => !value)}
+                style={{ background: compareMode ? "linear-gradient(135deg,#6366f1,#8b5cf6)" : "#fff", color: compareMode ? "#fff" : "#111", border: "1px solid #e5e7eb", padding: "13px 22px", borderRadius: 8, fontSize: 15, fontWeight: 800, cursor: "pointer" }}
+              >
+                对比
+              </button>
+            </div>
+            {compareMode && (
+              <div style={{ marginTop: 18, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, textAlign: "left" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <div>
+                    <strong style={{ color: "#111" }}>选择 2-4 个模型横向对比</strong>
+                    <p style={{ margin: "4px 0 0", color: "#777", fontSize: 13 }}>需要先登录并为对应模型创建 API Key。每个模型独立调用、独立扣费，失败不影响其他模型。</p>
+                  </div>
+                  <button
+                    onClick={runCompare}
+                    disabled={compareLoading || selectedModels.length < 2}
+                    style={{ background: selectedModels.length >= 2 ? "#111" : "#e5e7eb", color: selectedModels.length >= 2 ? "#fff" : "#777", border: "none", borderRadius: 8, padding: "10px 16px", fontWeight: 800, cursor: selectedModels.length >= 2 ? "pointer" : "not-allowed" }}
+                  >
+                    {compareLoading ? "对比中..." : "开始对比"}
+                  </button>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+                  {modelOptions.map((model) => {
+                    const modelId = model.publicModelId || model.modelId || model.id;
+                    const active = selectedModels.includes(modelId);
+                    return (
+                      <button
+                        key={modelId}
+                        onClick={() => toggleCompareModel(modelId)}
+                        style={{ border: active ? "1px solid #6366f1" : "1px solid #e5e7eb", background: active ? "#eef2ff" : "#fafafa", color: active ? "#4338ca" : "#555", borderRadius: 999, padding: "7px 11px", fontSize: 12, fontWeight: 750, cursor: "pointer" }}
+                      >
+                        {model.displayName || modelId}
+                      </button>
+                    );
+                  })}
+                </div>
+                {compareError && <div style={{ marginTop: 12, color: "#dc2626", fontSize: 13, fontWeight: 700 }}>{compareError}</div>}
+                {compareResults.length > 0 && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginTop: 16 }}>
+                    {compareResults.map((item) => (
+                      <article key={item.id} style={{ border: item.isBest ? "1px solid #6366f1" : "1px solid #e5e7eb", borderRadius: 12, padding: 14, background: item.isBest ? "#f5f3ff" : "#fff" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                          <strong style={{ color: "#111", fontSize: 14 }}>{item.publicModelId}</strong>
+                          <span style={{ color: item.status === "success" ? "#16a34a" : "#dc2626", fontSize: 12, fontWeight: 800 }}>{item.status === "success" ? "成功" : "失败"}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", color: "#777", fontSize: 11, marginTop: 8 }}>
+                          <span>首字 {item.firstTokenMs || 0}ms</span>
+                          <span>总耗时 {item.latencyMs || 0}ms</span>
+                          <span>¥{Number(item.cost || 0).toFixed(6)}</span>
+                        </div>
+                        <p style={{ margin: "12px 0 0", color: item.status === "success" ? "#333" : "#dc2626", lineHeight: 1.7, whiteSpace: "pre-wrap", fontSize: 13 }}>
+                          {item.status === "success" ? item.responseText : item.errorMessage}
+                        </p>
+                        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                          <button onClick={() => copy(item.responseText || item.errorMessage, "answer")} style={{ border: "1px solid #e5e7eb", background: "#fff", borderRadius: 7, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>{copied === "answer" ? "已复制" : "复制"}</button>
+                          {item.status === "success" && <button onClick={() => markBest(item.sessionId, item.id)} style={{ border: "1px solid #e5e7eb", background: item.isBest ? "#eef2ff" : "#fff", color: item.isBest ? "#4338ca" : "#333", borderRadius: 7, padding: "6px 10px", fontSize: 12, fontWeight: 800, cursor: "pointer" }}>{item.isBest ? "已收藏" : "选为最佳"}</button>}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {result && (
               <div style={{ marginTop: 20, background: "#fff", border: "1px solid #f0f0f0", borderRadius: 10, padding: 24, textAlign: "left", color: "#333", lineHeight: 1.8, whiteSpace: "pre-wrap", fontSize: 15 }}>
                 {result}

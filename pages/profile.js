@@ -26,7 +26,7 @@ const ANNOUNCEMENTS = [
     status: "已发布",
     tone: "success",
     pinned: false,
-    title: "FlowAPI DeepSeek 官方渠道已上线",
+    title: "FlowAPI DeepSeek 稳定线路已上线",
     content: "当前已支持 deepseek-chat 和 deepseek-reasoner。用户可在 API 管理页创建 API Key 后，通过 CC-Switch、Cherry Studio、Chatbox 等工具接入。",
     publishedAt: "2026-05-21T16:00:00+08:00",
   },
@@ -37,7 +37,7 @@ const ANNOUNCEMENTS = [
     tone: "progress",
     pinned: false,
     title: "CC-Switch 自动配置持续优化",
-    content: "正在优化 API Key 同步、/v1/responses 兼容、自动导入自定义供应商等问题。建议优先使用自定义供应商 + https://flowapi.fun/v1 手动配置。",
+    content: "正在优化 API Key 同步、/v1/responses 兼容和自动配置体验。建议优先使用自定义接入 + https://api.flowapi.fun/v1 手动配置。",
     publishedAt: "2026-05-20T14:30:00+08:00",
   },
   {
@@ -57,7 +57,7 @@ const ANNOUNCEMENTS = [
     tone: "warning",
     pinned: false,
     title: "源站巡检与监控加强",
-    content: "FlowAPI 会持续检查正式域名、API 健康状态和上游通道。出现异常时会优先恢复访问，再同步处理原因。",
+    content: "FlowAPI 会持续检查正式域名、API 健康状态和模型线路。出现异常时会优先恢复访问，再同步处理原因。",
     publishedAt: "2026-05-18T18:00:00+08:00",
   },
   {
@@ -309,7 +309,7 @@ export default function ProfilePage() {
       setReferralMessage(data.error || "操作失败，请稍后重试");
       return;
     }
-    setReferralMessage(referralModal === "convert" ? `已成功使用 ${formatMoney(payload.amountCny)} 佣金兑换 FlowAPI 余额。` : "已提交提现申请，管理员审核后会处理。");
+    setReferralMessage(referralModal === "convert" ? `已成功使用 ${formatMoney(payload.amountCny)} 佣金兑换 FlowAPI 余额。` : "已提交提现申请，客服审核后会处理。");
     setReferralForm({ amountCny: "", method: "alipay", account: "", realName: "", remark: "" });
     await refreshReferral(customer);
     await refreshProfile(customer);
@@ -572,7 +572,7 @@ export default function ProfilePage() {
               <h2>{referralModal === "convert" ? "使用佣金购买 Token" : "申请提现"}</h2>
               <p>
                 当前可提现佣金为 <strong>{formatMoney(referral?.withdrawableCommissionCny || 0)}</strong>。
-                {referralModal === "convert" ? "确认后会增加 FlowAPI 账户余额，可继续购买 Token。" : "提现申请提交后，管理员审核通过后打款到你的支付宝或微信。"}
+                {referralModal === "convert" ? "确认后会增加 FlowAPI 账户余额，可继续购买 Token。" : "提现申请提交后，客服审核通过后打款到你的支付宝或微信。"}
               </p>
               <label>
                 <span>{referralModal === "convert" ? "使用金额" : "提现金额"}</span>

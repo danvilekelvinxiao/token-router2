@@ -11,6 +11,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+  const requireDatabase = process.env.FLOWAPI_REQUIRE_DATABASE === "true" || process.env.NODE_ENV === "production";
   let database = "disabled";
 
   if (hasDatabase()) {
@@ -20,11 +21,15 @@ export default async function handler(req, res) {
     } catch {
       database = "error";
     }
+  } else if (requireDatabase) {
+    database = "required_missing";
   }
 
   const upstream = await checkUpstreamHealth({ timeoutMs: 4000 });
 
-  const ok = database !== "error" && upstream.ok;
+  const ok = database === "ok" || (!requireDatabase && database === "disabled")
+    ? upstream.ok
+    : false;
 
   return res.status(ok ? 200 : 500).json({
     ok,

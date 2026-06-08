@@ -1,5 +1,6 @@
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { listModelPricing, listPublishedModels } from "@/lib/admin-commercial-config";
+import { getContent } from "@/lib/content-cms";
 
 const CATEGORY_META = {
   chatgpt: { providerId: "openai", providerName: "ChatGPT" },
@@ -62,6 +63,9 @@ export default async function handler(req, res) {
 function normalizeMarketModel(model) {
   const category = mapCategory(model);
   const meta = CATEGORY_META[category] || CATEGORY_META.chatgpt;
+  const fallbackPrice = findContentPrice(model);
+  const inputSellPrice = model.pricing?.inputSellPricePerMTokens ?? fallbackPrice.inputPricePerM ?? null;
+  const outputSellPrice = model.pricing?.outputSellPricePerMTokens ?? fallbackPrice.outputPricePerM ?? null;
   return {
     id: model.id || model.modelId,
     displayName: model.displayName,
@@ -74,8 +78,12 @@ function normalizeMarketModel(model) {
     description: model.description || "",
     typeTags: model.tags || [],
     tags: model.tags || [],
-    inputPrice: model.pricing?.inputSellPricePerMTokens ?? null,
-    outputPrice: model.pricing?.outputSellPricePerMTokens ?? null,
+    inputPrice: inputSellPrice,
+    outputPrice: outputSellPrice,
+    inputPricePerM: inputSellPrice,
+    outputPricePerM: outputSellPrice,
+    flowapiInputPricePerM: inputSellPrice,
+    flowapiOutputPricePerM: outputSellPrice,
     imageSellPricePerImageCny: model.pricing?.imageSellPricePerImageCny ?? null,
     billingUnit: model.pricing?.billingMode?.startsWith("per_image") ? "张" : "1M Token",
     officialReleaseDate: model.officialReleaseDate || "",
@@ -90,6 +98,21 @@ function normalizeMarketModel(model) {
     sortOrder: model.sortOrder || 999,
     primaryButtonText: "立即接入",
     primaryButtonHref: "/api-management",
+  };
+}
+
+function findContentPrice(model = {}) {
+  const aliases = [model.modelId, model.publicModelId, model.id, model.displayName]
+    .filter(Boolean)
+    .map((item) => String(item).trim().toLowerCase());
+  const item = getContent("models").find((candidate) => {
+    return [candidate.modelId, candidate.id, candidate.displayName]
+      .filter(Boolean)
+      .some((value) => aliases.includes(String(value).trim().toLowerCase()));
+  });
+  return {
+    inputPricePerM: item?.flowapiInputPricePerM ?? item?.inputPricePerM ?? null,
+    outputPricePerM: item?.flowapiOutputPricePerM ?? item?.outputPricePerM ?? null,
   };
 }
 

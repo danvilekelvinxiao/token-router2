@@ -17,9 +17,10 @@ rsync -az --delete \
   --exclude .env.production \
   --exclude .claude \
   --exclude .next/cache \
+  --exclude public/generated-images \
   ./ "$SERVER:$APP_DIR/"
 
-if [ "${FLOWAPI_SYNC_NODE_MODULES:-1}" = "1" ]; then
+if [ "${FLOWAPI_SYNC_NODE_MODULES:-0}" = "1" ]; then
   rsync -az --delete \
     -e "ssh $SSH_OPTS" \
     ./node_modules/ "$SERVER:$APP_DIR/node_modules/"
@@ -35,10 +36,9 @@ ssh $SSH_OPTS "$SERVER" "
   swapon /swapfile 2>/dev/null || true
   grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
   cd '$APP_DIR'
+  FLOWAPI_REQUIRE_DATABASE=\"\${FLOWAPI_REQUIRE_DATABASE:-true}\" node scripts/run-production-migrations.mjs
   export NODE_OPTIONS=--max-old-space-size=512
-  if [ ! -x node_modules/.bin/next ]; then
-    npm install --omit=dev --no-audit --no-fund
-  fi
+  npm install --omit=dev --no-audit --no-fund
   if pm2 describe flowapi >/dev/null 2>&1; then
     pm2 restart flowapi --update-env
   else

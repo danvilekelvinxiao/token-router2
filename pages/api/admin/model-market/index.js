@@ -6,6 +6,7 @@ import {
   checkAdminSyncConsistency,
 } from "@/lib/admin-commercial-config";
 import { getAllModelConfigs } from "@/lib/model-store";
+import { invalidateModelCaches } from "@/lib/cache-manager";
 
 export default async function handler(req, res) {
   const admin = await requireAdmin(req, res);
@@ -34,6 +35,7 @@ export default async function handler(req, res) {
 
     if (req.method === "POST") {
       const result = await upsertPublishedModel(req.body || {}, admin.customer?.id || admin.customer?.email || "admin");
+      invalidateModelCaches();
       return res.status(200).json({
         ok: true,
         message: "模型已保存，并同步到前台配置",
