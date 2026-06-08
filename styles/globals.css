@@ -5121,7 +5121,7 @@ pre {
 
 .team-console-table {
   width: 100%;
-  min-width: 880px;
+  min-width: 1040px;
   border-collapse: collapse;
 }
 
@@ -5144,6 +5144,43 @@ pre {
 
 .team-console-table td {
   overflow-wrap: anywhere;
+}
+
+.team-console-inline-code {
+  display: inline-flex;
+  max-width: 170px;
+  padding: 3px 7px;
+  border: 1px solid var(--dash-border);
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.07);
+  color: var(--dash-text);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.team-console-stack {
+  display: grid;
+  gap: 3px;
+  min-width: 150px;
+}
+
+.team-console-stack strong,
+.team-console-stack span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.team-console-stack strong {
+  color: var(--dash-text);
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.team-console-stack span {
+  color: var(--dash-sub);
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .team-console-empty-cell,

@@ -5,6 +5,7 @@ const tabs = [
   ["overview", "团队总览"],
   ["members", "成员额度"],
   ["keys", "团队 Key"],
+  ["usage", "Token 去向"],
   ["logs", "调用日志"],
   ["billing", "团队账单"],
 ];
@@ -44,6 +45,26 @@ function tokens(value) {
 function time(value) {
   if (!value) return "暂无";
   return new Date(value).toLocaleString("zh-CN");
+}
+
+function shortId(value = "") {
+  const clean = String(value || "").trim();
+  if (!clean) return "-";
+  if (clean.length <= 18) return clean;
+  return `${clean.slice(0, 10)}...${clean.slice(-4)}`;
+}
+
+function purposeText(value = "") {
+  const clean = String(value || "").trim();
+  if (!clean) return "未填写用途";
+  const labels = {
+    chat: "对话调用",
+    image: "图片生成",
+    code: "代码开发",
+    writing: "文案写作",
+    team: "团队调用",
+  };
+  return labels[clean] || clean;
 }
 
 function limitText(limit) {
@@ -315,14 +336,50 @@ export default function TeamSpaceConsole({ initialTab = "overview" }) {
             </section>
           ) : null}
 
+          {tab === "usage" ? (
+            <section className="team-console-panel">
+              <div className="team-console-panel-head">
+                <div><h2>Token 去向</h2><p>队长可以按成员、API Key、用途、输入/输出 Token 和 Request ID 追踪每一笔消耗。</p></div>
+              </div>
+              <Table
+                columns={["时间", "成员", "API Key", "模型 / 用途", "输入", "输出", "总 Token", "花费", "Request ID"]}
+                rows={logs.map((log) => ({
+                  key: `usage-${log.id || log.requestId}`,
+                  cells: [
+                    time(log.createdAt),
+                    log.userId || "成员",
+                    <code key="api-key" className="team-console-inline-code">{shortId(log.apiKeyId)}</code>,
+                    <div key="model-purpose" className="team-console-stack"><strong>{log.model || "未知模型"}</strong><span>{purposeText(log.purpose)}</span></div>,
+                    tokens(log.inputTokens),
+                    tokens(log.outputTokens),
+                    tokens(log.totalTokens),
+                    money(log.actualCostCny),
+                    <code key="request-id" className="team-console-inline-code">{shortId(log.requestId)}</code>,
+                  ],
+                }))}
+                empty="还没有 Token 去向记录。团队成员真实调用成功后会自动写入。"
+              />
+            </section>
+          ) : null}
+
           {tab === "logs" ? (
             <section className="team-console-panel">
               <div className="team-console-panel-head"><div><h2>团队调用日志</h2><p>每一笔 Token 花在哪里、谁用了、哪个模型、是否成功，都在这里追踪。</p></div></div>
               <Table
-                columns={["时间", "成员", "模型", "Token", "花费", "状态", "Request ID"]}
+                columns={["时间", "成员", "API Key", "模型", "用途", "Token", "花费", "状态", "Request ID"]}
                 rows={logs.map((log) => ({
                   key: log.id || log.requestId,
-                  cells: [time(log.createdAt), log.userId || "成员", log.model || "未知模型", tokens(log.totalTokens), money(log.actualCostCny), log.success === false ? `失败：${log.errorCode || "未知"}` : "成功", log.requestId],
+                  cells: [
+                    time(log.createdAt),
+                    log.userId || "成员",
+                    <code key="api-key" className="team-console-inline-code">{shortId(log.apiKeyId)}</code>,
+                    log.model || "未知模型",
+                    purposeText(log.purpose),
+                    `${tokens(log.inputTokens)} / ${tokens(log.outputTokens)} / ${tokens(log.totalTokens)}`,
+                    money(log.actualCostCny),
+                    log.success === false ? `失败：${log.errorCode || "未知"}` : "成功",
+                    <code key="request-id" className="team-console-inline-code">{shortId(log.requestId)}</code>,
+                  ],
                 }))}
                 empty="还没有团队调用日志。"
               />

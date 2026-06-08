@@ -1615,7 +1615,6 @@ export default async function handler(req, res) {
         ...responsePayload,
         code: "UPSTREAM_ERROR",
         error: "模型服务返回错误",
-        serviceError: "",
         suggestion: getUpstreamSuggestion(upstreamResponse.status),
         docsUrl: "/help#error-codes",
       });
@@ -1638,7 +1637,7 @@ export default async function handler(req, res) {
         clientName,
         success: false,
         errorCode: error.message === "TEAM_TOKEN_POOL_EMPTY" ? "TEAM_TOKEN_POOL_EMPTY" : "UPSTREAM_REQUEST_FAILED",
-	        errorMessage: sanitizeSecretText(error.message || "upstream error"),
+        errorMessage: sanitizeSecretText(error.message || "upstream error"),
         upstreamError: error.message !== "TEAM_TOKEN_POOL_EMPTY",
         finalStatus: "failed",
       }).catch(() => {});
@@ -1681,8 +1680,8 @@ export default async function handler(req, res) {
       error.message === "TEAM_TOKEN_POOL_EMPTY" ? "当前团队可用 Token 不足，请联系管理员。" : "模型服务暂时不可用",
       error.message === "TEAM_TOKEN_POOL_EMPTY" ? "该团队没有匹配当前模型/用途的可用 Token，请管理员到团队 Token 池录入或启用 Token。" : "模型服务暂时无法连接，请稍后重试；如果持续失败，请切换其他模型或联系 FlowAPI 客服。",
       {
-	      serviceError: sanitizeSecretText(error.message || ""),
-	    });
+        request_id: requestId,
+      });
   }
 }
 
