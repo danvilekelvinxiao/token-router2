@@ -1,6 +1,21 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { getUpstreamConfigs } from "@/lib/upstream";
 import { updateModelConfig } from "@/lib/model-store";
+import { getModelProductWithConfig } from "@/lib/model-products-server";
+
+async function updateModelConfigAliases(publicModelId, updates) {
+  const product = await getModelProductWithConfig(publicModelId);
+  const aliases = [
+    publicModelId,
+    product?.id,
+    product?.publicModelId,
+    product?.actualModelId,
+  ].filter(Boolean);
+
+  for (const alias of [...new Set(aliases)]) {
+    await updateModelConfig(alias, updates);
+  }
+}
 
 export default async function handler(req, res) {
   const admin = await requireAdmin(req, res);
@@ -48,7 +63,8 @@ export default async function handler(req, res) {
       statusCode: response.status,
       error: ok ? "" : (json?.error?.message || json?.error || text.slice(0, 220) || `HTTP ${response.status}`),
     };
-    await updateModelConfig(publicModelId, {
+    await updateModelConfigAliases(publicModelId, {
+      actualModelId,
       lastHealthCheckAt: new Date().toISOString(),
       lastError: result.ok ? "" : result.error,
       status: result.ok ? "available" : "unavailable",
@@ -66,7 +82,8 @@ export default async function handler(req, res) {
       statusCode: 0,
       error: error.name === "AbortError" ? "模型测试超时，请稍后重试或检查上游渠道。" : error.message || "模型测试失败",
     };
-    await updateModelConfig(publicModelId, {
+    await updateModelConfigAliases(publicModelId, {
+      actualModelId,
       lastHealthCheckAt: new Date().toISOString(),
       lastError: result.error,
       status: "unavailable",

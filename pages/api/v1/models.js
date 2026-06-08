@@ -1,7 +1,7 @@
-import { MODEL_CATALOG } from "@/lib/models";
 import { findCustomerByToken } from "@/lib/customer-store";
 import { isTokenWhitelisted } from "@/lib/new-api/passthrough";
 import { getUpstreamConfigs } from "@/lib/upstream";
+import { listModelProductsWithConfig } from "@/lib/model-products-server";
 
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -63,6 +63,7 @@ export default async function handler(req, res) {
   }
 
   const created = Math.floor(Date.now() / 1000);
+  const products = await listModelProductsWithConfig({ includeUnavailable: false }).catch(() => []);
   const models = [
     {
       id: "auto",
@@ -71,12 +72,14 @@ export default async function handler(req, res) {
       owned_by: "flowapi",
       name: "FlowAPI Auto Router",
     },
-    ...MODEL_CATALOG.map((model) => ({
-      id: model.modelId,
+    ...products
+      .filter((model) => model.canCreateKey !== false)
+      .map((model) => ({
+      id: model.publicModelId || model.id,
       object: "model",
       created,
-      owned_by: model.provider.toLowerCase(),
-      name: model.name,
+      owned_by: String(model.provider || "flowapi").toLowerCase(),
+      name: model.displayName || model.publicModelId || model.id,
     })),
   ];
 

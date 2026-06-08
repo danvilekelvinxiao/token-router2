@@ -1,12 +1,13 @@
 /**
  * POST /api/admin/health-check-model
- * Admin-only: runs a real health check against UniAPI for a specific model.
+ * Admin-only: runs a real health check against the active upstream for a specific model.
  * Sends POST /v1/chat/completions with { model, messages: [{role:"user",content:"ping"}], max_tokens:5 }
  * Only marks model as available if 200 + valid response.
  */
 import { requireAdmin } from "@/lib/admin-auth";
-import { getModelProduct } from "@/lib/model-products";
+import { getModelProductWithConfig } from "@/lib/model-products-server";
 import { updateModelConfig } from "@/lib/model-store";
+import { getUpstreamConfigs } from "@/lib/upstream";
 
 const UNIAPI_API_KEY = process.env.UNIAPI_API_KEY || "";
 const UNIAPI_BASE_URL = "https://api.uniapi.io";
@@ -14,6 +15,19 @@ const UNIAPI_BASE_URL = "https://api.uniapi.io";
 function isUsableKey(key) {
   const value = String(key || "").trim();
   return value.length > 20 && !value.includes("请填入");
+}
+
+async function updateModelConfigAliases(product, actualModelId, updates) {
+  const aliases = [
+    product?.id,
+    product?.publicModelId,
+    product?.actualModelId,
+    actualModelId,
+  ].filter(Boolean);
+
+  for (const alias of [...new Set(aliases)]) {
+    await updateModelConfig(alias, { actualModelId, ...updates });
+  }
 }
 
 export default async function handler(req, res) {
@@ -26,7 +40,7 @@ export default async function handler(req, res) {
 
   const { modelId, actualModelId: inputActualId } = req.body || {};
 
-  const product = modelId ? getModelProduct(modelId) : null;
+  const product = modelId ? await getModelProductWithConfig(modelId) : null;
   const actualModelId = inputActualId || product?.actualModelId;
 
   if (!actualModelId || String(actualModelId).trim() === "") {
@@ -37,10 +51,20 @@ export default async function handler(req, res) {
     });
   }
 
-  if (!isUsableKey(UNIAPI_API_KEY)) {
+  const configuredUpstream = getUpstreamConfigs().find((item) => item.apiKey && item.upstreamUrl);
+  const upstream = configuredUpstream || (isUsableKey(UNIAPI_API_KEY)
+    ? {
+        label: "UniAPI",
+        apiKey: UNIAPI_API_KEY,
+        upstreamUrl: `${UNIAPI_BASE_URL}/v1/chat/completions`,
+      }
+    : null);
+
+  if (!upstream) {
     return res.status(400).json({
       ok: false,
-      error: "UNIAPI_API_KEY 未配置，无法执行真实健康检查。",
+      error: "未配置可用于真实健康检查的上游通道。",
+      suggestion: "请先配置 NEW_API_BASE_URL + NEW_API_KEY，或配置 UNIAPI_API_KEY。",
     });
   }
 
@@ -50,10 +74,10 @@ export default async function handler(req, res) {
   let errorMessage = "";
 
   try {
-    const response = await fetch(`${UNIAPI_BASE_URL}/v1/chat/completions`, {
+    const response = await fetch(upstream.upstreamUrl, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${UNIAPI_API_KEY}`,
+        Authorization: `Bearer ${upstream.apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -83,11 +107,12 @@ export default async function handler(req, res) {
 
     if (hasValidContent) {
       if (product) {
-        await updateModelConfig(product.id, {
+        await updateModelConfigAliases(product, actualModelId, {
           isAvailable: true,
           status: "available",
           statusLabel: "可用",
           lastHealthCheckAt: now,
+          upstream: upstream.label,
           lastError: null,
         });
       }
@@ -99,6 +124,7 @@ export default async function handler(req, res) {
         status: "available",
         statusLabel: "可用",
         latencyMs: Date.now() - startMs,
+        upstream: upstream.label,
         upstreamStatus: statusCode,
         lastHealthCheckAt: now,
       });
@@ -113,11 +139,12 @@ export default async function handler(req, res) {
     errorMessage = typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg);
 
     if (product) {
-      await updateModelConfig(product.id, {
+      await updateModelConfigAliases(product, actualModelId, {
         isAvailable: false,
         status: "unavailable",
         statusLabel: "暂不可用",
         lastHealthCheckAt: new Date().toISOString(),
+        upstream: upstream.label,
         lastError: errorMessage,
       });
     }
@@ -126,11 +153,12 @@ export default async function handler(req, res) {
     statusCode = 0;
 
     if (product) {
-      await updateModelConfig(product.id, {
+      await updateModelConfigAliases(product, actualModelId, {
         isAvailable: false,
         status: "unavailable",
         statusLabel: "暂不可用",
         lastHealthCheckAt: new Date().toISOString(),
+        upstream: upstream.label,
         lastError: errorMessage,
       });
     }
@@ -143,6 +171,7 @@ export default async function handler(req, res) {
     status: "unavailable",
     statusLabel: "暂不可用",
     latencyMs: Date.now() - startMs,
+    upstream: upstream.label,
     upstreamStatus: statusCode,
     error: errorMessage,
     lastHealthCheckAt: new Date().toISOString(),

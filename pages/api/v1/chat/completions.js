@@ -1,5 +1,5 @@
 import { estimateCnyCost, getActualModelId, getCatalogModel, normalizeModelLookup } from "@/lib/models";
-import { getModelProduct } from "@/lib/model-products";
+import { getModelProductWithConfig } from "@/lib/model-products-server";
 import { smartSelectModel } from "@/lib/smart-router";
 import { finalizeReservedCallByToken, findCustomerByToken, getTemporaryCreditBalance, reserveBalanceByToken } from "@/lib/customer-store";
 import { acquireConcurrency, getClientIp, graylistKey, isGraylisted, rateLimit, releaseConcurrency, securityLog } from "@/lib/security";
@@ -156,12 +156,28 @@ function estimatePromptTokens(messages = []) {
   return Math.max(1, Math.ceil(text.length / 4));
 }
 
-function estimateReserveCost(modelId, body = {}, promptTokens = 1) {
+function estimateModelProductCnyCost(modelId, usage = {}, modelProduct = null) {
+  const pricing = modelProduct?.pricing || {};
+  const inputPrice = Number(pricing.inputSellPricePerMTokens);
+  const outputPrice = Number(pricing.outputSellPricePerMTokens);
+
+  if (Number.isFinite(inputPrice) && Number.isFinite(outputPrice) && inputPrice + outputPrice > 0) {
+    const promptTokens = Number(usage.prompt_tokens || 0);
+    const completionTokens = Number(usage.completion_tokens || 0);
+    const inputCost = (promptTokens / 1_000_000) * inputPrice;
+    const outputCost = (completionTokens / 1_000_000) * outputPrice;
+    return Number((inputCost + outputCost).toFixed(6));
+  }
+
+  return estimateCnyCost(modelId, usage);
+}
+
+function estimateReserveCostForProduct(modelId, body = {}, promptTokens = 1, modelProduct = null) {
   const maxTokens = Math.min(Number(body.max_tokens || 1024) || 1024, Number(process.env.MAX_COMPLETION_TOKENS || 4096));
-  const estimated = estimateCnyCost(modelId, {
+  const estimated = estimateModelProductCnyCost(modelId, {
     prompt_tokens: promptTokens,
     completion_tokens: maxTokens,
-  });
+  }, modelProduct);
   const minimum = Number(process.env.MIN_API_RESERVE_CNY || 0.001);
   return Number(Math.max(minimum, estimated * 1.25).toFixed(6));
 }
@@ -388,7 +404,10 @@ export default async function handler(req, res) {
     );
   }
   const catalogModel = requestedManualModel ? getCatalogModel(effectiveRequestedModel) : null;
-  if (requestedManualModel && !catalogModel) {
+  const configuredModelProduct = requestedManualModel
+    ? await getModelProductWithConfig(effectiveRequestedModel)
+    : null;
+  if (requestedManualModel && !catalogModel && !configuredModelProduct) {
     releaseConcurrency(concurrencyKey);
     return sendApiError(
       res,
@@ -399,11 +418,20 @@ export default async function handler(req, res) {
     );
   }
 
-  const selected = requestedManualModel ? catalogModel : smartSelectModel(prompt);
-  const upstreamModelId = getActualModelId(selected);
+  const selected = requestedManualModel
+    ? (catalogModel || {
+        name: configuredModelProduct.displayName,
+        key: configuredModelProduct.id,
+        provider: configuredModelProduct.provider || "FlowAPI",
+        modelId: configuredModelProduct.publicModelId || configuredModelProduct.id,
+        actualModelId: configuredModelProduct.actualModelId,
+        inputPrice: 0,
+        outputPrice: 0,
+      })
+    : smartSelectModel(prompt);
 
   // Check model product availability
-  const modelProduct = getModelProduct(effectiveRequestedModel || selected.modelId);
+  const modelProduct = configuredModelProduct || await getModelProductWithConfig(effectiveRequestedModel || selected.modelId);
   if (modelProduct) {
     const contentModel = findContentModelForMemberAccess(effectiveRequestedModel || selected.modelId, modelProduct);
     if (contentModel?.isMemberOnly && !userCanUseMemberModel(customerMatch.customer.id, contentModel)) {
@@ -427,6 +455,7 @@ export default async function handler(req, res) {
       );
     }
   }
+  const upstreamModelId = modelProduct?.actualModelId || getActualModelId(selected);
 
   if (!upstreamModelId || String(upstreamModelId).trim() === "") {
     releaseConcurrency(concurrencyKey);
@@ -530,7 +559,7 @@ export default async function handler(req, res) {
 
   const promptTokens = estimatePromptTokens(upstreamBody.messages || []);
   const estimatedCompletionTokens = Math.min(Number(upstreamBody.max_tokens || 1024) || 1024, Number(process.env.MAX_COMPLETION_TOKENS || 4096));
-  const reserveCost = Number((estimateReserveCost(selected.modelId, upstreamBody, promptTokens) * localePriceMultiplier).toFixed(6));
+  const reserveCost = Number((estimateReserveCostForProduct(selected.modelId, upstreamBody, promptTokens, modelProduct) * localePriceMultiplier).toFixed(6));
   const reserve = await reserveBalanceByToken(clientToken, reserveCost, {
     tokens: promptTokens + estimatedCompletionTokens,
   });
@@ -661,10 +690,10 @@ export default async function handler(req, res) {
       res.setHeader("Connection", "keep-alive");
       res.setHeader("X-Accel-Buffering", "no");
 
-      const estimatedCost = estimateCnyCost(selected.modelId, {
+      const estimatedCost = estimateModelProductCnyCost(selected.modelId, {
         prompt_tokens: promptTokens,
         completion_tokens: 0,
-      });
+      }, modelProduct);
       const billedEstimatedCost = Number((estimatedCost * localePriceMultiplier).toFixed(6));
       const nodeStream = Readable.fromWeb(upstreamResponse.body);
 
@@ -722,7 +751,7 @@ export default async function handler(req, res) {
     }
 
     const data = await upstreamResponse.json();
-    const baseCost = estimateCnyCost(selected.modelId, data.usage);
+    const baseCost = estimateModelProductCnyCost(selected.modelId, data.usage, modelProduct);
     const cost = Number((baseCost * localePriceMultiplier).toFixed(6));
 
     const customer = await finalizeReservedCallByToken(clientToken, {

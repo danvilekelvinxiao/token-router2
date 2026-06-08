@@ -8,6 +8,19 @@ import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { getAllModelConfigs, updateModelConfig } from "@/lib/model-store";
 import { listUpstreamModels } from "@/lib/model-store";
 
+async function updateModelConfigAliases(product, updates) {
+  const aliases = [
+    product?.id,
+    product?.publicModelId,
+    product?.actualModelId,
+    updates?.actualModelId,
+  ].filter(Boolean);
+
+  for (const alias of [...new Set(aliases)]) {
+    await updateModelConfig(alias, updates);
+  }
+}
+
 export default async function handler(req, res) {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
@@ -94,11 +107,11 @@ export default async function handler(req, res) {
     }
 
     try {
-      const config = await updateModelConfig(product.id, filtered);
+      await updateModelConfigAliases(product, filtered);
       return res.status(200).json({
         ok: true,
         productId: product.id,
-        config,
+        config: filtered,
         message: `模型 ${product.displayName} 配置已更新`,
       });
     } catch (error) {
