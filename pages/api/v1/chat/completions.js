@@ -328,6 +328,15 @@ function sanitizeSseEventForClient(event = {}, context = {}) {
   return sanitizeOpenAiResponseForClient(event, context);
 }
 
+function buildSanitizedSsePlaceholder({ publicModelId = "", requestId = "" } = {}) {
+  return {
+    id: requestId || `chatcmpl_${Date.now().toString(36)}`,
+    object: "chat.completion.chunk",
+    model: publicModelId || "flowapi-model",
+    choices: [{ index: 0, delta: {}, finish_reason: null }],
+  };
+}
+
 function assertCandidateMargin(candidate = {}, { modelId = "", usage = {}, modelProduct = null, multiplier = 1 } = {}) {
   if (candidate.name === "team-token-pool") return { ok: true, snapshot: buildBillingSnapshot(modelId, usage, modelProduct, multiplier) };
   if (candidateRequiresExplicitCost(candidate) && estimateCandidateCostCny(candidate, usage) === null) {
@@ -1327,8 +1336,7 @@ export default async function handler(req, res) {
 	          const sanitized = sanitizeSseEventForClient(event, { publicModelId: selected.modelId, requestId });
 	          return `data: ${JSON.stringify(sanitized)}`;
 	        } catch {
-	          // Keep proxying the stream even when a vendor sends non-JSON data lines.
-	          return line;
+	          return `data: ${JSON.stringify(buildSanitizedSsePlaceholder({ publicModelId: selected.modelId, requestId }))}`;
 	        }
 	      };
 
@@ -1607,7 +1615,7 @@ export default async function handler(req, res) {
         ...responsePayload,
         code: "UPSTREAM_ERROR",
         error: "模型服务返回错误",
-	        serviceError: sanitizeSecretText(typeof data.error === "string" ? data.error : data.error?.message || ""),
+        serviceError: "",
         suggestion: getUpstreamSuggestion(upstreamResponse.status),
         docsUrl: "/help#error-codes",
       });

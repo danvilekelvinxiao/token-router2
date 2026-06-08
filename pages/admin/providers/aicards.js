@@ -44,6 +44,31 @@ function makeReviewDraft(model = {}) {
   };
 }
 
+function getModelStage(model = {}) {
+  if (model.channelLastError) return "有错误";
+  if (model.isPublic) return "已发布";
+  if (model.channelEnabled) return "备用已启用";
+  if (!model.inputCostPerMillion || !model.outputCostPerMillion || !model.sellInputPricePerMillion || !model.sellOutputPricePerMillion) return "待定价";
+  if (Number(model.channelSuccessRate || 0) <= 0) return "待检测";
+  return "可发布";
+}
+
+function marginPercent(value) {
+  return `${Math.round(Number(value || 0) * 100)}%`;
+}
+
+function calcProfit(cost, sell) {
+  const costValue = Number(cost || 0);
+  const sellValue = Number(sell || 0);
+  if (!costValue || !sellValue) return null;
+  const profit = sellValue - costValue;
+  return {
+    profit,
+    margin: sellValue > 0 ? profit / sellValue : 0,
+    safe: sellValue >= costValue * (1 + Number(emptyReview.minProfitMargin || 0.2)),
+  };
+}
+
 function getSessionAdminSecret() {
   if (typeof window === "undefined") return "";
   try {
@@ -71,6 +96,7 @@ export default function AdminAicardsProviderPage() {
   const [health, setHealth] = useState(null);
   const [review, setReview] = useState(emptyReview);
   const [secret, setSecret] = useState(getSessionAdminSecret);
+  const [statusFilter, setStatusFilter] = useState("全部");
 
   function adminHeaders() {
     return {
@@ -129,7 +155,7 @@ export default function AdminAicardsProviderPage() {
   }
 
   async function runHealthCheck(modelId = "") {
-    setBusy("health");
+    setBusy(`health:${modelId || "all"}`);
     setMessage("");
     try {
       rememberSessionAdminSecret(secret);
@@ -141,7 +167,7 @@ export default function AdminAicardsProviderPage() {
       const data = await res.json().catch(() => ({}));
       setHealth(data);
       if (!res.ok || !data.ok) throw new Error(data.error || data.lastError || "健康检查失败");
-      setMessage(`健康检查通过：模型列表 ${data.modelCount || 0} 个，耗时 ${data.modelsLatencyMs || 0}ms。`);
+      setMessage(`健康检查通过：${modelId ? "当前模型" : "模型列表"}可用，候选 ${data.modelCount || 0} 个，耗时 ${data.modelsLatencyMs || 0}ms。`);
       await load();
     } catch (error) {
       setMessage(error.message || "健康检查失败");
@@ -149,6 +175,14 @@ export default function AdminAicardsProviderPage() {
       setBusy("");
     }
   }
+
+  const filteredModels = useMemo(() => {
+    if (statusFilter === "全部") return models;
+    return models.filter((model) => getModelStage(model) === statusFilter);
+  }, [models, statusFilter]);
+
+  const inputProfit = calcProfit(review.inputCostPerMillion, review.sellInputPricePerMillion);
+  const outputProfit = calcProfit(review.outputCostPerMillion, review.sellOutputPricePerMillion);
 
   async function saveReview(event) {
     event.preventDefault();
@@ -190,6 +224,11 @@ export default function AdminAicardsProviderPage() {
           {message && <div style={noticeStyle}>{message}</div>}
 
           <section style={panelStyle}>
+            <div style={stepsStyle}>
+              {["1 同步候选", "2 单模型检测", "3 填成本售价", "4 看毛利", "5 启用或发布"].map((step) => (
+                <span key={step}>{step}</span>
+              ))}
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 }}>
               {[
                 ["候选模型", stats.total],
@@ -205,6 +244,7 @@ export default function AdminAicardsProviderPage() {
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
               <input
+                type="password"
                 value={secret}
                 onChange={(event) => setSecret(event.target.value)}
                 placeholder="管理员密钥（如当前登录态已生效，可留空）"
@@ -213,8 +253,8 @@ export default function AdminAicardsProviderPage() {
               <button onClick={syncModels} disabled={busy === "sync"} style={primaryButton}>
                 {busy === "sync" ? "同步中..." : "同步候选模型"}
               </button>
-              <button onClick={() => runHealthCheck(review.actualModelId)} disabled={busy === "health"} style={ghostButton}>
-                {busy === "health" ? "检查中..." : "健康检查"}
+              <button onClick={() => runHealthCheck(review.actualModelId)} disabled={busy.startsWith("health:")} style={ghostButton}>
+                {busy.startsWith("health:") ? "检查中..." : "健康检查"}
               </button>
             </div>
             {health && (
@@ -228,9 +268,21 @@ export default function AdminAicardsProviderPage() {
             <div style={panelStyle}>
               <h2 style={sectionTitle}>待审核候选</h2>
               <p style={sectionSub}>用户端不会看到备用线路名称、上游地址或真实模型 ID。</p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
+                {["全部", "待检测", "待定价", "可发布", "备用已启用", "已发布", "有错误"].map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setStatusFilter(item)}
+                    style={statusFilter === item ? primaryMiniButton : ghostMiniButton}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
               {loading ? (
                 <div style={emptyStyle}>正在读取候选模型...</div>
-              ) : models.length === 0 ? (
+              ) : filteredModels.length === 0 ? (
                 <div style={emptyStyle}>还没有候选模型。先点击“同步候选模型”。</div>
               ) : (
                 <div style={{ overflowX: "auto", marginTop: 12 }}>
@@ -241,7 +293,7 @@ export default function AdminAicardsProviderPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {models.map((model) => (
+                      {filteredModels.map((model) => (
                         <tr key={model.id} style={{ borderTop: "1px solid var(--dash-border)" }}>
                           <td style={tdStyle}>
                             <strong>{model.displayName || "待命名"}</strong>
@@ -263,9 +315,20 @@ export default function AdminAicardsProviderPage() {
                           <td style={tdStyle}>
                             <span style={mutedBlock}>{model.channelEnabled ? "备用已启用" : "备用未启用"}</span>
                             <span style={mutedBlock}>{model.isPublic ? "已发布前台" : "未发布前台"}</span>
+                            <span style={mutedBlock}>阶段：{getModelStage(model)}</span>
                           </td>
                           <td style={tdStyle}>
                             <button onClick={() => setReview(makeReviewDraft(model))} style={ghostButton}>审核</button>
+                            <button
+                              onClick={() => runHealthCheck(model.actualModelId)}
+                              disabled={busy === `health:${model.actualModelId}`}
+                              style={{ ...ghostButton, marginLeft: 6 }}
+                            >
+                              {busy === `health:${model.actualModelId}` ? "检测中" : "检测"}
+                            </button>
+                            {model.channelLastError ? (
+                              <button onClick={() => setMessage(`错误原因：${model.channelLastError}`)} style={{ ...ghostButton, marginLeft: 6 }}>错误</button>
+                            ) : null}
                           </td>
                         </tr>
                       ))}
@@ -288,8 +351,14 @@ export default function AdminAicardsProviderPage() {
                 <Field label="输出售价/1M" value={review.sellOutputPricePerMillion} onChange={(v) => setReview({ ...review, sellOutputPricePerMillion: v })} type="number" />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <Field label="最低毛利率" value={review.minProfitMargin} onChange={(v) => setReview({ ...review, minProfitMargin: v })} type="number" />
+                <Field label={`最低毛利率（当前 ${marginPercent(review.minProfitMargin)}）`} value={review.minProfitMargin} onChange={(v) => setReview({ ...review, minProfitMargin: v })} type="number" />
                 <Field label="备用优先级" value={review.priority} onChange={(v) => setReview({ ...review, priority: v })} type="number" />
+              </div>
+              <div style={profitBoxStyle}>
+                <strong>毛利预览</strong>
+                <span>输入：{inputProfit ? `每 1M 赚 ¥${inputProfit.profit.toFixed(3)}，毛利率 ${marginPercent(inputProfit.margin)}` : "填完成本和售价后自动计算"}</span>
+                <span>输出：{outputProfit ? `每 1M 赚 ¥${outputProfit.profit.toFixed(3)}，毛利率 ${marginPercent(outputProfit.margin)}` : "填完成本和售价后自动计算"}</span>
+                <em>低于最低毛利率时，后端会拒绝启用或发布，避免亏钱兜底。</em>
               </div>
               <label style={checkStyle}>
                 <input type="checkbox" checked={review.enable} onChange={(event) => setReview({ ...review, enable: event.target.checked })} />
@@ -334,6 +403,12 @@ const metricStyle = {
   display: "grid",
   gap: 6,
 };
+const stepsStyle = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  marginBottom: 14,
+};
 const sectionTitle = { margin: 0, fontSize: 18, fontWeight: 950 };
 const sectionSub = { margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 12, lineHeight: 1.6 };
 const primaryButton = {
@@ -353,6 +428,29 @@ const ghostButton = {
   color: "var(--dash-text)",
   fontWeight: 800,
   cursor: "pointer",
+};
+const primaryMiniButton = {
+  ...primaryButton,
+  padding: "6px 10px",
+  minHeight: 30,
+  fontSize: 12,
+};
+const ghostMiniButton = {
+  ...ghostButton,
+  padding: "6px 10px",
+  minHeight: 30,
+  fontSize: 12,
+};
+const profitBoxStyle = {
+  display: "grid",
+  gap: 6,
+  margin: "10px 0 12px",
+  padding: 12,
+  border: "1px solid var(--dash-border)",
+  borderRadius: 10,
+  background: "var(--dash-card-hover)",
+  color: "var(--dash-text)",
+  fontSize: 12,
 };
 const noticeStyle = {
   marginBottom: 14,

@@ -1,4 +1,4 @@
-import { listImageModels } from "@/lib/image-studio";
+import { listImageModels, mapPublicImageModel } from "@/lib/image-studio";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed" });
@@ -8,13 +8,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       ok: true,
       success: true,
-      models: models.map((model) => ({
-        ...model,
-        modelId: model.id,
-        displayName: model.displayName,
-        enabled: model.enabled,
-        imageSellPricePerImageCny: model.imageSellPricePerImageCny || model.unitPriceRmbTextToImage || 0,
-      })),
+      models: models.map(mapPublicImageModel),
       updatedAt: new Date().toISOString(),
     });
   } catch (error) {

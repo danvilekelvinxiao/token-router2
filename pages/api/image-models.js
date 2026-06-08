@@ -1,4 +1,4 @@
-import { listImageModels } from "@/lib/image-studio";
+import { listImageModels, mapPublicImageModel } from "@/lib/image-studio";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -9,6 +9,6 @@ export default async function handler(req, res) {
   const models = await listImageModels();
   return res.status(200).json({
     success: true,
-    models,
+    models: models.map(mapPublicImageModel),
   });
 }
