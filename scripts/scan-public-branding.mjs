@@ -22,6 +22,7 @@ const pagePaths = [
 
 const apiLeakRe = /(aicards|aicards\.shop|uniapi|aheapi|new api|new-api|newapi|sub2api|actual_model|provider_key|base_url|api_key|bearer|authorization|sk-|cr_|上游|供应商|供货商)/i;
 const pageLeakRe = /(aicards|aicards\.shop|openrouter|openrouter\.ai|uniapi|aheapi|new api|new-api|newapi|sub2api|actual_model|provider_key|localhost:3001|127\.0\.0\.1:3001)/i;
+const maxFetchAttempts = Number(process.env.FLOWAPI_PUBLIC_SCAN_ATTEMPTS || 3);
 
 function urlFor(path) {
   if (/^https?:\/\//i.test(path)) return path;
@@ -29,8 +30,23 @@ function urlFor(path) {
 }
 
 async function fetchText(path) {
-  const response = await fetch(urlFor(path), { headers: { accept: "text/html,application/json" } });
-  return { response, text: await response.text() };
+  const url = urlFor(path);
+  let lastError;
+  for (let attempt = 1; attempt <= maxFetchAttempts; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers: { accept: "text/html,application/json" } });
+      return { response, text: await response.text() };
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxFetchAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+      }
+    }
+  }
+  return {
+    response: { ok: false, status: 0 },
+    text: JSON.stringify({ error: lastError?.message || "fetch failed", url }),
+  };
 }
 
 async function scanApi(path) {
