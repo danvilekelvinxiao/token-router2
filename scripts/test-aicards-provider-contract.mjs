@@ -11,6 +11,7 @@ const bossWizardSource = fs.readFileSync(path.join(repoRoot, "pages/admin/boss-w
 const ccSwitchSource = fs.readFileSync(path.join(repoRoot, "lib/cc-switch.js"), "utf8");
 const modelProductsSource = fs.readFileSync(path.join(repoRoot, "lib/model-products-server.js"), "utf8");
 const publicProviderSource = fs.readFileSync(path.join(repoRoot, "lib/public-model-provider.js"), "utf8");
+const publicApiSource = fs.readFileSync(path.join(repoRoot, "lib/public-api.js"), "utf8");
 const customerStoreSource = fs.readFileSync(path.join(repoRoot, "lib/customer-store.js"), "utf8");
 const dashboardSource = fs.readFileSync(path.join(repoRoot, "pages/dashboard.js"), "utf8");
 const upstreamHealthApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/upstreams/health.js"), "utf8");
@@ -247,6 +248,8 @@ assert(
 );
 assert(
   packageSource.includes('"deploy:workbench": "bash scripts/workbench-deploy-flowapi.sh"')
+    && workbenchDeploySource.includes("FLOWAPI_SYNC_AICARDS_ON_DEPLOY")
+    && workbenchDeploySource.includes("node scripts/aicards-sync-publish.mjs")
     && packageSource.includes('"admin:aicards-sync": "node scripts/aicards-sync-publish.mjs"')
     && workbenchDeploySource.includes("FlowAPI public branding scan")
     && workbenchDeploySource.includes("FLOWAPI_SYNC_AICARDS_ON_DEPLOY")
@@ -342,7 +345,13 @@ assert(
   "老板后台向导必须默认展示 FlowAPI 公共模型 ID，不能默认把真实上游 model id 当成用户模型 ID",
 );
 assert(
-  ccSwitchSource.includes('providerId: "flowapi"')
+  publicApiSource.includes("normalizePublicApiBaseUrl")
+    && publicApiSource.includes("forbiddenPublicApiBasePattern")
+    && publicApiSource.includes("aicards")
+    && publicApiSource.includes("openrouter")
+    && publicApiSource.includes("newapi")
+    && ccSwitchSource.includes("normalizePublicApiBaseUrl")
+    && ccSwitchSource.includes('providerId: "flowapi"')
     && ccSwitchSource.includes('name = "FlowAPI"')
     && ccSwitchSource.includes('model_provider = "flowapi"')
     && !ccSwitchSource.includes("aicards.shop")
