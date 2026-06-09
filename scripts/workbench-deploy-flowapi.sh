@@ -73,7 +73,14 @@ echo "==> 8. Local health"
 sleep 2
 curl -fsS http://127.0.0.1:3000/api/health && echo
 
-echo "==> 9. Public FlowAPI branding scan"
+if [ "${FLOWAPI_SYNC_AICARDS_ON_DEPLOY:-false}" = "true" ]; then
+  echo "==> 9. Sync and publish AICards backup models"
+  FLOWAPI_PUBLIC_BASE_URL="http://127.0.0.1:3000" node scripts/aicards-sync-publish.mjs
+else
+  echo "==> 9. Skip AICards auto-sync (set FLOWAPI_SYNC_AICARDS_ON_DEPLOY=true to enable)"
+fi
+
+echo "==> 10. Public FlowAPI branding scan"
 node - <<'NODE'
 const base = process.env.FLOWAPI_PUBLIC_BASE_URL || "https://flowapi.fun";
 const paths = [
@@ -109,6 +116,6 @@ if (failed) {
 }
 NODE
 
-echo "==> 10. Deployed commit"
+echo "==> 11. Deployed commit"
 git rev-parse HEAD
 echo "FlowAPI deploy complete: $PUBLIC_BASE"
