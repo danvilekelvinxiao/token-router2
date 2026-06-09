@@ -15,5 +15,12 @@ export function proxy(request) {
 }
 
 export const config = {
-  matcher: "/:path*",
+  matcher: [
+    /*
+     * Only run the www -> apex redirect on document-like requests.
+     * Static Next assets must bypass the proxy or the browser can get
+     * stuck on server-rendered fallback HTML without loading CSS/JS.
+     */
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
+  ],
 };

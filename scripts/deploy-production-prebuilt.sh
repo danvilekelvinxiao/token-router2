@@ -55,3 +55,6 @@ ssh $SSH_OPTS "$SERVER" "
 
 echo "==> Public health check"
 curl -fsS -m 20 "https://flowapi.fun/api/health" && echo
+
+echo "==> Public asset check"
+node scripts/check-public-page-assets.mjs "${FLOWAPI_PUBLIC_BASE_URL:-https://flowapi.fun}" /admin/model-market /admin/image-models

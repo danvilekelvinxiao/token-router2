@@ -92,4 +92,6 @@ REMOTE
 echo "==> Public check https://flowapi.fun/api/health"
 sleep 2
 curl -fsS -m 20 "https://flowapi.fun/api/health" && echo
+echo "==> Public admin asset check"
+node scripts/check-public-page-assets.mjs "${FLOWAPI_PUBLIC_BASE_URL:-https://flowapi.fun}" /admin/model-market /admin/image-models
 echo "==> Fix script finished OK"

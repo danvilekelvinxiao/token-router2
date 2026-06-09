@@ -17,3 +17,4 @@ systemctl restart nginx
 sleep 5
 curl -sS http://127.0.0.1:3000/api/health
 pm2 list
+node scripts/check-public-page-assets.mjs "${FLOWAPI_PUBLIC_BASE_URL:-https://flowapi.fun}" /admin/model-market /admin/image-models
