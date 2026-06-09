@@ -101,7 +101,7 @@ export default async function handler(req, res) {
         return res.status(200).json({
           ok: result.ok,
           message: result.ok
-            ? `已开通 ${result.publishedCount} 个 FlowAPI 推荐模型。`
+            ? result.acceptance?.summary || `已开通 ${result.publishedCount} 个 FlowAPI 推荐模型。`
             : "没有模型被开通，请检查成本、售价或上游模型 ID。",
           ...result,
         });

@@ -287,6 +287,14 @@ assert(
   "模型广场后台必须提供老板一键开通入口，并展示系统推荐模型，避免管理员面对空表和复杂上游字段",
 );
 assert(
+  adminConfigSource.includes("function buildModelPackAcceptance")
+    && adminConfigSource.includes("async function enableDefaultImageModelPack")
+    && modelMarketAdminApiSource.includes("result.acceptance?.summary")
+    && modelMarketAdminPageSource.includes("model-market-admin__acceptance-grid")
+    && modelMarketAdminPageSource.includes("创建测试 API Key"),
+  "老板一键开通必须返回人话验收摘要，并同步检查模型广场、API Key 创建和默认图片模型入口",
+);
+assert(
   modelProductsSource.includes("const publishedEntries = publishedModels.map")
     && modelProductsSource.includes("const publishedByAlias = new Map()")
     && modelProductsSource.includes("const publishedMatch = [")

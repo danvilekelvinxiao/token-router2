@@ -287,11 +287,13 @@ export default function AdminModelMarketPage() {
         pack,
         published: data.published || [],
         skipped: data.skipped || [],
+        imagePack: data.imagePack || null,
+        acceptance: data.acceptance || null,
         publishedCount: Number(data.publishedCount || 0),
         skippedCount: Number(data.skippedCount || 0),
       });
-      const skipped = Number(data.skippedCount || 0);
-      showToast(skipped ? `已开通 ${data.publishedCount || 0} 个模型，跳过 ${skipped} 个未达标模型` : data.message || "推荐模型已开通");
+      const skipped = Number(data.acceptance?.skippedCount ?? data.skippedCount ?? 0);
+      showToast(skipped ? `已开通 ${data.publishedCount || 0} 个模型，仍有 ${skipped} 项要处理` : data.message || "推荐模型已开通");
       await loadData();
     } catch (error) {
       showToast(error.message || "模型包开通失败");
@@ -452,9 +454,20 @@ export default function AdminModelMarketPage() {
               <div>
                 <strong>{bootstrapReport.pack === "full" ? "完整包处理结果" : "基础包处理结果"}</strong>
                 <span>
-                  已开通 {bootstrapReport.publishedCount} 个模型
-                  {bootstrapReport.skippedCount ? `，跳过 ${bootstrapReport.skippedCount} 个模型。` : "。"}
+                  {bootstrapReport.acceptance?.summary || `已开通 ${bootstrapReport.publishedCount} 个模型${bootstrapReport.skippedCount ? `，跳过 ${bootstrapReport.skippedCount} 个模型。` : "。"}`}
                 </span>
+              </div>
+              <div className="model-market-admin__acceptance-grid">
+                {[
+                  ["模型广场", bootstrapReport.acceptance?.readyForModelSquare, bootstrapReport.acceptance?.modelSquareCount || 0],
+                  ["创建 API Key", bootstrapReport.acceptance?.readyForApiKey, bootstrapReport.acceptance?.apiKeyCount || 0],
+                  ["生成图片", bootstrapReport.acceptance?.readyForImages, bootstrapReport.acceptance?.imageModelCount || 0],
+                ].map(([label, ok, count]) => (
+                  <article key={label} className={ok ? "is-ok" : "is-missing"}>
+                    <strong>{label}</strong>
+                    <span>{ok ? `已同步 ${count} 个` : "还没打通"}</span>
+                  </article>
+                ))}
               </div>
               <div className="model-market-admin__bootstrap-grid">
                 <article>
@@ -471,16 +484,21 @@ export default function AdminModelMarketPage() {
                 </article>
                 <article>
                   <h3>为什么没开成</h3>
-                  {bootstrapReport.skipped.length ? (
+                  {(bootstrapReport.acceptance?.warnings || bootstrapReport.skipped).length ? (
                     <ul>
-                      {bootstrapReport.skipped.map((item) => (
-                        <li key={`${item.id}-${item.reason}`}>{item.displayName || item.id}：{item.reason}</li>
+                      {(bootstrapReport.acceptance?.warnings || bootstrapReport.skipped.map((item) => `${item.displayName || item.id}：${item.reason}`)).map((item, index) => (
+                        <li key={`${item}-${index}`}>{typeof item === "string" ? item : `${item.displayName || item.id}：${item.reason}`}</li>
                       ))}
                     </ul>
                   ) : (
                     <p>这次没有跳过项。</p>
                   )}
                 </article>
+              </div>
+              <div className={`model-market-admin__after-action ${bootstrapReport.acceptance?.ok ? "is-ok" : "is-warn"}`}>
+                <strong>{bootstrapReport.acceptance?.ok ? "可以进入真实测试" : "还不能放心售卖"}</strong>
+                <span>{bootstrapReport.acceptance?.nextStep || "建议先创建测试 API Key，再做一次真实调用确认扣费和日志。"}</span>
+                <Link href="/api-management" target="_blank">创建测试 API Key</Link>
               </div>
             </section>
           ) : null}
@@ -701,12 +719,28 @@ export default function AdminModelMarketPage() {
         .model-market-admin__bootstrap-result strong, .model-market-admin__bootstrap-result span { display: block; }
         .model-market-admin__bootstrap-result span { margin-top: 5px; color: var(--dash-sub); font-size: 12px; line-height: 1.65; }
         .model-market-admin__bootstrap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .model-market-admin__acceptance-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+        .model-market-admin__acceptance-grid article {
+          border: 1px solid var(--dash-border); border-radius: 12px; padding: 13px; background: rgba(148,163,184,.06);
+        }
+        .model-market-admin__acceptance-grid article.is-ok { border-color: rgba(22,163,74,.26); background: rgba(22,163,74,.08); }
+        .model-market-admin__acceptance-grid article.is-missing { border-color: rgba(245,158,11,.3); background: rgba(245,158,11,.08); }
+        .model-market-admin__acceptance-grid strong, .model-market-admin__acceptance-grid span { display: block; }
+        .model-market-admin__acceptance-grid span { margin-top: 6px; color: var(--dash-sub); font-size: 12px; }
         .model-market-admin__bootstrap-grid article {
           border: 1px solid var(--dash-border); border-radius: 12px; padding: 14px; background: rgba(148,163,184,.06);
         }
         .model-market-admin__bootstrap-grid h3 { margin: 0 0 10px; font-size: 13px; font-weight: 900; }
         .model-market-admin__bootstrap-grid p, .model-market-admin__bootstrap-grid ul { margin: 0; color: var(--dash-sub); font-size: 12px; line-height: 1.7; }
         .model-market-admin__bootstrap-grid ul { padding-left: 18px; }
+        .model-market-admin__after-action {
+          border: 1px solid var(--dash-border); border-radius: 12px; padding: 13px 14px;
+          display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center;
+        }
+        .model-market-admin__after-action.is-ok { border-color: rgba(22,163,74,.28); background: rgba(22,163,74,.08); }
+        .model-market-admin__after-action.is-warn { border-color: rgba(245,158,11,.3); background: rgba(245,158,11,.08); }
+        .model-market-admin__after-action span { color: var(--dash-sub); font-size: 12px; line-height: 1.55; }
+        .model-market-admin__after-action a { color: var(--dash-accent); font-weight: 900; text-decoration: none; white-space: nowrap; }
         .model-market-admin__boss-strip strong, .model-market-admin__boss-strip span { display: block; }
         .model-market-admin__boss-strip span { margin-top: 5px; color: var(--dash-sub); font-size: 12px; line-height: 1.65; }
         .model-market-admin__boss-strip > div:last-child { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
@@ -766,12 +800,13 @@ export default function AdminModelMarketPage() {
         @media (max-width: 760px) {
           .model-market-admin__hero { display: grid; }
           .model-market-admin__actions { justify-content: stretch; }
-          .model-market-admin__stats, .model-market-admin__toolbar, .model-market-admin__bootstrap-grid, .model-market-admin__boss-checklist, .model-market-admin__family-grid { grid-template-columns: 1fr; }
+          .model-market-admin__stats, .model-market-admin__toolbar, .model-market-admin__bootstrap-grid, .model-market-admin__acceptance-grid, .model-market-admin__boss-checklist, .model-market-admin__family-grid { grid-template-columns: 1fr; }
           .model-market-admin__boss-strip { display: grid; }
           .model-market-admin__boss-strip > div:last-child { justify-content: stretch; }
           .model-market-admin__boss-strip button, .model-market-admin__boss-strip a { width: 100%; }
           .model-market-admin__sync { align-items: flex-start; flex-direction: column; }
           .model-market-admin__next-action { grid-template-columns: 1fr; }
+          .model-market-admin__after-action { grid-template-columns: 1fr; }
           .model-market-admin__price-grid { grid-template-columns: 1fr; }
         }
       `}</style>
