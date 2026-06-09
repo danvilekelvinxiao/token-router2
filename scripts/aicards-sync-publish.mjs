@@ -1,7 +1,21 @@
-import { loadEnvFile } from "node:process";
+import fs from "node:fs";
 
-loadEnvFile?.(".env.production");
-loadEnvFile?.(".env.local");
+function loadEnvFileIfExists(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  const content = fs.readFileSync(filePath, "utf8");
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match) continue;
+    const [, key, rawValue] = match;
+    if (process.env[key] !== undefined) continue;
+    process.env[key] = rawValue.replace(/^['"]|['"]$/g, "");
+  }
+}
+
+loadEnvFileIfExists(".env.production");
+loadEnvFileIfExists(".env.local");
 
 const adminId = process.env.FLOWAPI_DEPLOY_ADMIN_ID || "workbench-aicards-sync";
 const maxCount = Number(process.env.FLOWAPI_AICARDS_SYNC_MAX_COUNT || 80);

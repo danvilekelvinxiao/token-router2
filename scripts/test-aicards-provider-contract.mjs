@@ -268,6 +268,8 @@ assert(
     && aicardsSyncScriptSource.includes("healthCheckAicards")
     && aicardsSyncScriptSource.includes("AICARDS_API_KEY")
     && aicardsSyncScriptSource.includes("mask(process.env.AICARDS_API_KEY)")
+    && aicardsSyncScriptSource.includes("loadEnvFileIfExists")
+    && !aicardsSyncScriptSource.includes('from "node:process"')
     && aicardsSyncScriptSource.includes("badProviders")
     && aicardsSyncScriptSource.includes("/api/models/market")
     && aicardsSyncScriptSource.includes("Public branding scan failed")
