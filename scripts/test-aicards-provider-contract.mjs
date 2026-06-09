@@ -11,6 +11,7 @@ const bossWizardSource = fs.readFileSync(path.join(repoRoot, "pages/admin/boss-w
 const ccSwitchSource = fs.readFileSync(path.join(repoRoot, "lib/cc-switch.js"), "utf8");
 const modelProductsSource = fs.readFileSync(path.join(repoRoot, "lib/model-products-server.js"), "utf8");
 const publicProviderSource = fs.readFileSync(path.join(repoRoot, "lib/public-model-provider.js"), "utf8");
+const customerStoreSource = fs.readFileSync(path.join(repoRoot, "lib/customer-store.js"), "utf8");
 const dashboardSource = fs.readFileSync(path.join(repoRoot, "pages/dashboard.js"), "utf8");
 const upstreamHealthApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/upstreams/health.js"), "utf8");
 const marketApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/models/market.js"), "utf8");
@@ -206,9 +207,25 @@ assert(
   "用户端 Dashboard 和公开健康接口必须使用 FlowAPI/模型服务命名，不能暴露上游通道语义",
 );
 assert(
-  publicProviderSource.includes('provider.toLowerCase() === "flowapi"')
-    && publicProviderSource.includes("normalizeText(model.displayProvider).toLowerCase() === \"flowapi\""),
-  "后台发布为 FlowAPI 的模型在公开接口中必须保持 FlowAPI 品牌，不得按模型关键词改回厂商品牌",
+  publicProviderSource.includes("export function getPublicModelProvider")
+    && publicProviderSource.includes('return "FlowAPI";')
+    && !publicProviderSource.includes('return "OpenAI";')
+    && !publicProviderSource.includes('return "Anthropic";')
+    && !publicProviderSource.includes('return "Google";'),
+  "用户侧公开模型 provider 必须统一显示 FlowAPI，不得按关键词暴露模型厂商品牌",
+);
+assert(
+  customerStoreSource.includes("function publicApiKeyDto")
+    && customerStoreSource.includes("const publicAllowedModels")
+    && customerStoreSource.includes("allowedModels: publicAllowedModels")
+    && !customerStoreSource.includes("allowedModels: Array.isArray(key.allowedModels) ? key.allowedModels : []"),
+  "普通用户 API Key DTO 只能返回公开模型 ID，不能把 allowedModels 里的真实上游模型 ID 透给前台",
+);
+assert(
+  marketApiSource.includes("listImageModels")
+    && marketApiSource.includes("mapPublicImageModel")
+    && marketApiSource.includes("primaryButtonHref: category === \"image\" ? \"/images\" : \"/api-management\""),
+  "模型广场必须把已启用图片模型并入公开货架，并把图片模型入口指向 /images",
 );
 assert(
   imageModelsApiSource.includes("mapPublicImageModel")

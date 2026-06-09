@@ -2,6 +2,7 @@ import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { listModelPricing, listPublishedModels } from "@/lib/admin-commercial-config";
 import { getContent } from "@/lib/content-cms";
 import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { listImageModels, mapPublicImageModel } from "@/lib/image-studio";
 
 const CATEGORY_META = {
   chatgpt: { providerId: "openai", providerName: "ChatGPT" },
@@ -16,10 +17,11 @@ export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const [products, publishedModels, pricingConfigs] = await Promise.all([
+    const [products, publishedModels, pricingConfigs, imageModels] = await Promise.all([
       listModelProductsWithConfig({ includeUnavailable: true }),
       listPublishedModels({ target: "modelSquare" }).catch(() => []),
       listModelPricing().catch(() => []),
+      listImageModels().then((models) => models.map(mapPublicImageModel)).catch(() => []),
     ]);
     const pricingMap = new Map(pricingConfigs.map((item) => [item.modelId, item]));
     const staticModels = products
@@ -40,8 +42,29 @@ export default async function handler(req, res) {
     const adminModels = publishedModels
       .filter((model) => model.enabled && model.showInModelSquare && !existing.has(model.modelId))
       .map((model) => sanitizePublicModelForClient(normalizeMarketModel({ ...model, pricing: pricingMap.get(model.modelId) })));
+    adminModels.forEach((model) => existing.add(model.modelId));
+    const publicImageModels = imageModels
+      .filter((model) => model.enabled && !existing.has(model.modelId || model.publicModelId || model.id))
+      .map((model) => sanitizePublicModelForClient(normalizeMarketModel({
+        id: model.id,
+        modelId: model.modelId || model.publicModelId || model.id,
+        publicModelId: model.publicModelId || model.modelId || model.id,
+        displayName: model.displayName,
+        provider: "FlowAPI",
+        modelType: "image",
+        description: model.sceneDescription || "",
+        tags: model.labelTags || model.tags || [],
+        enabled: model.enabled,
+        recommended: model.recommended,
+        hot: Boolean(model.recommended),
+        sortOrder: Number(model.sortOrder || 500) + 700,
+        pricing: {
+          billingMode: model.imageBillingMode?.startsWith("per_image") ? model.imageBillingMode : "per_image_fixed_profit",
+          imageSellPricePerImageCny: model.imageSellPricePerImageCny || model.unitPriceRmbTextToImage || 0,
+        },
+      })));
 
-    const models = [...staticModels, ...adminModels]
+    const models = [...staticModels, ...adminModels, ...publicImageModels]
       .sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
     const categories = getCategoryCounts(models);
 
@@ -97,8 +120,8 @@ function normalizeMarketModel(model) {
     isMemberOnly: Boolean(model.memberOnly),
     isFreeModel: Boolean(model.free),
     sortOrder: model.sortOrder || 999,
-    primaryButtonText: "立即接入",
-    primaryButtonHref: "/api-management",
+    primaryButtonText: category === "image" ? "去生成图片" : "立即接入",
+    primaryButtonHref: category === "image" ? "/images" : "/api-management",
   };
 }
 

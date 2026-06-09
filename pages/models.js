@@ -17,6 +17,7 @@ const DEFAULT_CATEGORIES = [
   { id: "gpt", name: "GPT" },
   { id: "claude", name: "Claude" },
   { id: "gemini", name: "Gemini" },
+  { id: "image", name: "图片生成" },
   { id: "qwen", name: "Qwen" },
   { id: "low-cost", name: "低成本" },
   { id: "code-programming", name: "代码编程" },
@@ -317,7 +318,13 @@ export default function ModelsPage() {
 
   const visibleCategories = useMemo(() => {
     const withAll = categories.some((item) => item.id === "all" || item.slug === "all") ? categories : [DEFAULT_CATEGORIES[0], ...categories];
-    return withAll
+    const withDefaults = [...withAll];
+    for (const item of DEFAULT_CATEGORIES) {
+      if (!withDefaults.some((candidate) => (candidate.slug || candidate.id) === item.id)) {
+        withDefaults.push(item);
+      }
+    }
+    return withDefaults
       .filter((item) => item.enabled !== false)
       .map((item) => ({ ...item, id: item.slug || item.id }))
       .filter((item, index, list) => list.findIndex((next) => next.id === item.id) === index)
