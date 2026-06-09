@@ -15,6 +15,7 @@
     "recover": "bash scripts/recover-and-deploy.sh",
     "verify:newapi": "node scripts/verify-new-api-env.mjs",
     "check:admin-sync": "node scripts/check-admin-sync-consistency.mjs",
+    "admin:bootstrap-model-pack": "node scripts/bootstrap-model-pack.mjs",
     "test:aicards-provider": "node scripts/test-aicards-provider-contract.mjs",
     "test:commercial-loop": "node scripts/e2e-commercial-loop.mjs",
     "test:smart-router-cache": "node scripts/e2e-smart-router-cache.mjs",

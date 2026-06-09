@@ -127,7 +127,7 @@ function isAdminCustomer(customer) {
   );
 }
 
-function AdminAccessState({ title, description }) {
+function AdminAccessState({ title, description, canRetry = false, onRetry = null, retrying = false }) {
   return (
     <main className="landing-shell admin-access-shell">
       <div className="admin-access-card">
@@ -135,6 +135,11 @@ function AdminAccessState({ title, description }) {
         <h1>{title}</h1>
         <p>{description}</p>
         <div className="admin-access-actions">
+          {canRetry && typeof onRetry === "function" ? (
+            <button type="button" onClick={onRetry} disabled={retrying}>
+              {retrying ? "重新校验中..." : "重新校验"}
+            </button>
+          ) : null}
           <Link href="/dashboard">返回数据面板</Link>
           <Link href="/login">切换账号</Link>
         </div>
@@ -145,9 +150,55 @@ function AdminAccessState({ title, description }) {
 
 export default function AdminLayout({ currentPath, children }) {
   const [access, setAccess] = useState("checking");
+  const [checking, setChecking] = useState(true);
 
-  useEffect(() => {
-    queueMicrotask(() => {
+  async function verifyAdminAccess() {
+    setChecking(true);
+    try {
+      const secret = typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || "";
+      const response = await fetch("/api/admin-access", {
+        headers: secret ? { "x-admin-secret": secret } : {},
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok && data?.ok && isAdminCustomer(data.customer)) {
+        try {
+          if (typeof window !== "undefined" && data.customer) {
+            localStorage.setItem("flowapi_customer", JSON.stringify(data.customer));
+          }
+        } catch {}
+        setAccess("allowed");
+        return;
+      }
+
+      const fallbackResponse = await fetch("/api/admin/channels", {
+        headers: secret ? { "x-admin-secret": secret } : {},
+      });
+      const fallbackData = await fallbackResponse.json().catch(() => ({}));
+      if (fallbackResponse.ok) {
+        const customer = fallbackData?.customer || fallbackData?.admin || {
+          id: "cus_admin",
+          email: "xiaoyijie@flowapi.fun",
+          role: "admin",
+          isAdmin: true,
+        };
+        try {
+          if (typeof window !== "undefined" && customer) {
+            localStorage.setItem("flowapi_customer", JSON.stringify({
+              ...customer,
+              isAdmin: true,
+            }));
+          }
+        } catch {}
+        setAccess("allowed");
+        return;
+      }
+    } catch {}
+
+    try {
+      if (typeof window === "undefined") {
+        setAccess("denied");
+        return;
+      }
       try {
         const stored = localStorage.getItem("flowapi_customer");
         const customer = stored ? JSON.parse(stored) : null;
@@ -155,15 +206,39 @@ export default function AdminLayout({ currentPath, children }) {
       } catch {
         setAccess("denied");
       }
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      verifyAdminAccess();
     });
   }, []);
 
-  if (access === "checking") {
-    return <AdminAccessState title="正在校验管理员权限" description="请稍等，系统正在确认当前账号是否可以访问后台管理。" />;
+  if (access === "checking" || checking) {
+    return (
+      <AdminAccessState
+        title="正在校验管理员权限"
+        description="请稍等，系统正在确认当前账号是否可以访问后台管理。即使本地缓存丢失，也会自动向服务器确认你的管理员身份。"
+      />
+    );
   }
 
   if (access === "denied") {
-    return <AdminAccessState title="你没有权限访问管理后台" description="管理后台只对管理员开放。普通用户请继续使用数据面板、API 管理、充值和帮助指南。" />;
+    return (
+      <AdminAccessState
+        title="你没有权限访问管理后台"
+        description="管理后台只对管理员开放。若你刚登录或浏览器刚清理缓存，可点击重新校验；普通用户请继续使用数据面板、API 管理、充值和帮助指南。"
+        canRetry
+        retrying={checking}
+        onRetry={() => {
+          setAccess("checking");
+          verifyAdminAccess();
+        }}
+      />
+    );
   }
 
   return (
