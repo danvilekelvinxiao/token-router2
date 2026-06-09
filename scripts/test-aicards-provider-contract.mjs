@@ -33,6 +33,8 @@ const modelMarketAdminPageSource = fs.readFileSync(path.join(repoRoot, "pages/ad
 const upstreamSource = fs.readFileSync(path.join(repoRoot, "lib/upstream.js"), "utf8");
 const smartRouterSource = fs.readFileSync(path.join(repoRoot, "lib/smart-router.js"), "utf8");
 const chatCompletionsSource = fs.readFileSync(path.join(repoRoot, "pages/api/v1/chat/completions.js"), "utf8");
+const packageSource = fs.readFileSync(path.join(repoRoot, "package.json"), "utf8");
+const workbenchDeploySource = fs.readFileSync(path.join(repoRoot, "scripts/workbench-deploy-flowapi.sh"), "utf8");
 
 const publicBlocklist = [
   "aicards",
@@ -241,6 +243,20 @@ assert(
     && globalModelRankSource.includes("return \"FlowAPI\";")
     && globalModelRankSource.includes('logo: "flowapi"'),
   "旧公开模型榜单接口必须兼容转发或复用 FlowAPI 公开货架，不能继续输出上游 provider/logo",
+);
+assert(
+  packageSource.includes('"deploy:workbench": "bash scripts/workbench-deploy-flowapi.sh"')
+    && workbenchDeploySource.includes("FlowAPI public branding scan")
+    && workbenchDeploySource.includes("badProviders")
+    && workbenchDeploySource.includes("/api/models/market")
+    && workbenchDeploySource.includes("/api/models/api-key-options")
+    && workbenchDeploySource.includes("/api/image/models")
+    && workbenchDeploySource.includes("/api/market-models")
+    && workbenchDeploySource.includes("/api/analytics/openrouter-top-models")
+    && workbenchDeploySource.includes("/api/market/model-rank")
+    && workbenchDeploySource.includes("imageCount < 1")
+    && workbenchDeploySource.includes("git rev-parse HEAD"),
+  "Workbench 部署脚本必须拉取部署最新代码，并对公开模型/图片/榜单接口做 FlowAPI 品牌和图片模型并入验收",
 );
 assert(
   marketApiSource.includes("listImageModels")

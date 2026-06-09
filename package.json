@@ -11,6 +11,7 @@
     "deploy": "bash scripts/deploy-production-prebuilt.sh",
     "deploy:legacy": "bash scripts/一键部署.sh",
     "deploy:prebuilt": "bash scripts/deploy-production-prebuilt.sh",
+    "deploy:workbench": "bash scripts/workbench-deploy-flowapi.sh",
     "deploy:rsync": "bash scripts/deploy-rsync-only.sh",
     "recover": "bash scripts/recover-and-deploy.sh",
     "verify:newapi": "node scripts/verify-new-api-env.mjs",
