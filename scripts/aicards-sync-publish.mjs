@@ -70,6 +70,12 @@ async function main() {
     lastError: health.lastError,
   }, null, 2));
 
+  if (process.env.FLOWAPI_AICARDS_SYNC_ONLY === "true") {
+    console.log("==> sync-only mode");
+    console.log("Skipped publish and public branding scan because FLOWAPI_AICARDS_SYNC_ONLY=true.");
+    return;
+  }
+
   const publish = await bulkPublishAicardsCandidates({
     adminId,
     maxCount,

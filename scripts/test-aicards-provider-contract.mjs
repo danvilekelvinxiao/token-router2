@@ -163,12 +163,14 @@ assert(
 assert(
   providerSource.includes("function buildAicardsAutoPricing")
     && providerSource.includes("FLOWAPI_AICARDS_AUTO_SELL_MULTIPLIER")
+    && providerSource.includes("FLOWAPI_AICARDS_ALLOW_ESTIMATED_COST")
+    && providerSource.includes("estimated_guardrail")
     && providerSource.includes("extractAicardsRawPricing")
     && providerSource.includes("缺少真实上游成本")
     && providerSource.includes("autoSync")
     && providerSource.includes("autoHealthCheck")
     && bulkPublishApiSource.includes("autoPrice: body.autoPrice === true"),
-  "AICards 必须支持老板一键自动同步、健康检查、真实成本安全定价和发布，缺成本时不能猜价直接售卖",
+  "AICards 必须支持老板一键自动同步、健康检查、真实成本安全定价和发布；缺真实成本时只能在管理员显式开启保守估算后发布",
 );
 assert(
   upstreamSource.includes("export async function getUpstreamConfigsAsync")
@@ -269,7 +271,7 @@ assert(
     && aicardsSyncScriptSource.includes("spawnSync")
     && aicardsSyncScriptSource.includes("scripts/scan-public-branding.mjs")
     && aicardsSyncScriptSource.includes("Public branding scan failed")
-    && !aicardsSyncScriptSource.includes("sk-82c05707d2dd583c637aa08342b857f567199f040839e3a9"),
+    && !/sk-[A-Za-z0-9_-]{32,}/.test(aicardsSyncScriptSource),
   "AICards 同步发布脚本必须从服务器环境变量读取密钥、批量发布候选，并在发布后扫描公开接口，禁止硬编码用户密钥",
 );
 assert(
