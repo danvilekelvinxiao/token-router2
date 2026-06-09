@@ -1,4 +1,5 @@
 import Head from "next/head";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
@@ -243,10 +244,13 @@ export default function AdminAicardsProviderPage() {
             <div>
               <h1 style={{ margin: 0, fontSize: 26, fontWeight: 950 }}>备用线路审核</h1>
               <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13 }}>
-                这里管理备用供货方候选模型。同步后默认不公开，必须先健康检查、填成本和售价，再决定是否发布为 FlowAPI 模型。
+                这里管理备用线路候选模型。你可以先去老板后台向导或上游管理里保存 Base URL 和 API Key，再回来一键同步、检测、定价并发布为 FlowAPI 模型。
               </p>
             </div>
-            <button onClick={load} style={primaryButton}>刷新</button>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <Link href="/admin/boss-wizard" style={{ ...ghostButton, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>老板后台向导</Link>
+              <button onClick={load} style={primaryButton}>刷新</button>
+            </div>
           </header>
 
           {message && <div style={noticeStyle}>{message}</div>}

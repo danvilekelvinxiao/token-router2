@@ -3,19 +3,17 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
-const steps = ["上游", "连接", "拉模型", "选模型", "定价", "发布"];
+const steps = ["线路", "连接", "拉模型", "选模型", "定价", "发布"];
 
 const upstreamTypes = [
   "OpenAI Compatible",
-  "OpenRouter",
-  "New API",
-  "One API",
-  "DeepSeek 官方",
-  "Claude 官方",
-  "Gemini 官方",
-  "Qwen / 阿里云",
-  "火山 / 豆包",
-  "自定义",
+  "主线路",
+  "备用线路",
+  "低价线路",
+  "官方线路",
+  "图片线路",
+  "代码模型线路",
+  "自定义兼容线路",
 ];
 
 const protocols = ["/v1/chat/completions", "/v1/models", "/v1/images/generations", "/v1/responses", "自定义"];
@@ -48,6 +46,32 @@ function money(value) {
 function compactId(value = "") {
   const text = String(value || "");
   return text.length > 34 ? `${text.slice(0, 18)}...${text.slice(-12)}` : text;
+}
+
+function stablePublicHash(value = "") {
+  let hash = 0;
+  const text = String(value || "model");
+  for (let index = 0; index < text.length; index += 1) {
+    hash = ((hash << 5) - hash + text.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash).toString(36).padStart(6, "0").slice(0, 8);
+}
+
+function flowApiFamily(modelId = "") {
+  const id = String(modelId || "").toLowerCase();
+  if (id.includes("claude")) return "claude";
+  if (id.includes("codex") || id.includes("code")) return "codex";
+  if (id.includes("gemini")) return "gemini";
+  if (id.includes("deepseek")) return "deepseek";
+  if (id.includes("qwen")) return "qwen";
+  if (id.includes("grok")) return "grok";
+  if (id.includes("image") || id.includes("imagen") || id.includes("flux") || id.includes("sdxl") || id.includes("seedream") || id.includes("recraft") || id.includes("ideogram")) return "image";
+  if (id.includes("gpt") || id.includes("openai") || /\bo[134]\b/.test(id)) return "chatgpt";
+  return "model";
+}
+
+function defaultPublicModelId(modelId = "") {
+  return `flowapi-${flowApiFamily(modelId)}-${stablePublicHash(modelId)}`;
 }
 
 function StatusPill({ ok, children }) {
@@ -154,7 +178,7 @@ export default function BossWizardPage() {
       if (!data.ok) throw new Error(data.error || "保存失败");
       setSavedUpstream(data.upstream);
       setStep(1);
-      showToast("上游已保存，下一步测试连接");
+      showToast("线路已保存，下一步测试连接");
     } catch (error) {
       showToast(error.message);
     }
@@ -162,7 +186,7 @@ export default function BossWizardPage() {
   }
 
   async function testConnection() {
-    if (!savedUpstream?.id) return showToast("请先保存上游");
+    if (!savedUpstream?.id) return showToast("请先保存线路");
     setBusy("test");
     try {
       const response = await fetch(`/api/admin/upstreams/${savedUpstream.id}/test`, {
@@ -181,7 +205,7 @@ export default function BossWizardPage() {
   }
 
   async function syncModels() {
-    if (!savedUpstream?.id) return showToast("请先保存上游");
+    if (!savedUpstream?.id) return showToast("请先保存线路");
     setBusy("sync");
     try {
       const response = await fetch(`/api/admin/upstreams/${savedUpstream.id}/sync-models`, {
@@ -234,8 +258,9 @@ export default function BossWizardPage() {
       const pricing = {};
       selectedModels.forEach((model, index) => {
         const modelType = settings[model.id]?.modelType || model.modelType;
+        const publicModelId = settings[model.id]?.publicModelId || defaultPublicModelId(model.modelId);
         modelSettings[model.id] = {
-          publicModelId: settings[model.id]?.publicModelId || model.modelId,
+          publicModelId,
           displayName: settings[model.id]?.displayName || model.displayName,
           modelType,
           description: settings[model.id]?.description || "",
@@ -249,9 +274,9 @@ export default function BossWizardPage() {
         };
         pricing[model.id] = {
           ...priceDraft,
-          modelId: settings[model.id]?.publicModelId || model.modelId,
+          modelId: publicModelId,
           displayName: settings[model.id]?.displayName || model.displayName,
-          provider: model.provider,
+          provider: "FlowAPI",
           modelType,
           billingMode: modelType === "image" || modelType === "image-edit" ? "per_image_fixed_profit" : "token_multiplier",
         };
@@ -299,7 +324,7 @@ export default function BossWizardPage() {
             <div>
               <h1 style={{ margin: 0, fontSize: 25, fontWeight: 950, letterSpacing: "-.02em" }}>老板后台向导</h1>
               <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13, lineHeight: 1.7, maxWidth: 760 }}>
-                通过向导快速接入新的上游渠道、同步模型、设置售价，并发布到 FlowAPI 模型广场。
+                通过向导快速接入新的模型线路、同步模型、设置售价，并发布到 FlowAPI 模型广场。
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -349,20 +374,20 @@ export default function BossWizardPage() {
             {step === 0 && (
               <div style={{ display: "grid", gap: 18 }}>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950 }}>新增上游中转站</h2>
-                  <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13 }}>把便宜上游先接进后台，Key 会加密保存，前端不会展示完整 Key。</p>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950 }}>新增模型线路</h2>
+                  <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13 }}>把可用模型来源先接进后台，Key 会加密保存，前端不会展示完整 Key。</p>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                  <Field label="上游名称"><input style={inputStyle} value={upstream.name} onChange={(e) => setUpstream({ ...upstream, name: e.target.value })} placeholder="例如：新加坡低价 OpenAI 兼容池" /></Field>
-                  <Field label="上游类型">
+                  <Field label="线路名称"><input style={inputStyle} value={upstream.name} onChange={(e) => setUpstream({ ...upstream, name: e.target.value })} placeholder="例如：新加坡低价兼容池" /></Field>
+                  <Field label="线路类型">
                     <select style={inputStyle} value={upstream.type} onChange={(e) => setUpstream({ ...upstream, type: e.target.value })}>
                       {upstreamTypes.map((item) => <option key={item}>{item}</option>)}
                     </select>
                   </Field>
-                  <Field label="Base URL" hint="建议填写根地址，例如 https://example.com，不要以 /v1 结尾。">
+                  <Field label="接口地址" hint="建议填写根地址，例如 https://example.com，不要以 /v1 结尾。">
                     <input style={inputStyle} value={upstream.baseUrl} onChange={(e) => setUpstream({ ...upstream, baseUrl: e.target.value })} placeholder="https://api.example.com" />
                   </Field>
-                  <Field label="API Key" hint="保存后只显示掩码，不能再次查看完整 Key。">
+                  <Field label="线路密钥" hint="保存后只显示掩码，不能再次查看完整 Key。">
                     <input style={inputStyle} value={upstream.apiKey} onChange={(e) => setUpstream({ ...upstream, apiKey: e.target.value })} placeholder="sk-..." type="password" />
                   </Field>
                   <Field label="兼容协议">
@@ -385,7 +410,7 @@ export default function BossWizardPage() {
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
                   <div>
                     <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950 }}>测试连接</h2>
-                    <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13 }}>自动检查 Base URL、API Key、/v1/models、延迟和模型数量。</p>
+                    <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13 }}>自动检查接口地址、线路密钥、模型列表、延迟和模型数量。</p>
                   </div>
                   {savedUpstream ? <StatusPill ok>{savedUpstream.name}</StatusPill> : <StatusPill>未保存</StatusPill>}
                 </div>
@@ -415,7 +440,7 @@ export default function BossWizardPage() {
               <div style={{ display: "grid", gap: 18 }}>
                 <div>
                   <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950 }}>自动拉取模型</h2>
-                  <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13 }}>系统会识别模型名称、Provider、类型、能力标签，并写入待上架模型池。</p>
+                  <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13 }}>系统会识别模型名称、类型、能力标签，并写入待上架模型池。</p>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <button type="button" style={{ ...buttonBase, background: "transparent", color: "var(--dash-sub)" }} onClick={() => setStep(1)}>上一步</button>
@@ -438,9 +463,9 @@ export default function BossWizardPage() {
                     <thead>
                       <tr style={{ color: "var(--dash-sub)", fontSize: 11 }}>
                         <th style={{ padding: 11, textAlign: "left" }}>选择</th>
-                        <th style={{ padding: 11, textAlign: "left" }}>模型 ID</th>
+                        <th style={{ padding: 11, textAlign: "left" }}>FlowAPI 模型 ID</th>
                         <th style={{ padding: 11, textAlign: "left" }}>展示名称</th>
-                        <th style={{ padding: 11, textAlign: "left" }}>Provider</th>
+                        <th style={{ padding: 11, textAlign: "left" }}>品牌</th>
                         <th style={{ padding: 11, textAlign: "left" }}>类型</th>
                         <th style={{ padding: 11, textAlign: "left" }}>能力</th>
                       </tr>
@@ -449,7 +474,14 @@ export default function BossWizardPage() {
                       {importedModels.map((model) => (
                         <tr key={model.id} style={{ borderTop: "1px solid var(--dash-border)" }}>
                           <td style={{ padding: 11 }}><input type="checkbox" checked={Boolean(selected[model.id])} onChange={(e) => setSelected({ ...selected, [model.id]: e.target.checked })} /></td>
-                          <td style={{ padding: 11, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12 }}>{compactId(model.modelId)}</td>
+                          <td style={{ padding: 11, fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace", fontSize: 12 }}>
+                            <input
+                              style={{ ...inputStyle, minHeight: 34, padding: "6px 9px" }}
+                              value={settings[model.id]?.publicModelId ?? defaultPublicModelId(model.modelId)}
+                              onChange={(e) => setSettings({ ...settings, [model.id]: { ...(settings[model.id] || {}), publicModelId: e.target.value } })}
+                            />
+                            <div style={{ marginTop: 4, color: "var(--dash-sub)", fontSize: 11 }}>真实线路已隐藏，仅管理员日志可查</div>
+                          </td>
                           <td style={{ padding: 11 }}>
                             <input
                               style={{ ...inputStyle, minHeight: 34, padding: "6px 9px" }}
@@ -457,7 +489,7 @@ export default function BossWizardPage() {
                               onChange={(e) => setSettings({ ...settings, [model.id]: { ...(settings[model.id] || {}), displayName: e.target.value } })}
                             />
                           </td>
-                          <td style={{ padding: 11 }}>{model.provider}</td>
+                          <td style={{ padding: 11 }}>FlowAPI</td>
                           <td style={{ padding: 11 }}>
                             <select
                               style={{ ...inputStyle, minHeight: 34, padding: "6px 9px" }}
@@ -541,7 +573,7 @@ export default function BossWizardPage() {
                 ) : null}
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <Link href="/models" style={{ ...primaryButton, textDecoration: "none", display: "inline-flex", alignItems: "center" }}>查看模型广场</Link>
-                  <button type="button" style={{ ...buttonBase, background: "var(--dash-card-bg)", color: "var(--dash-text)" }} onClick={() => { setStep(0); setSelected({}); }}>继续添加上游</button>
+                  <button type="button" style={{ ...buttonBase, background: "var(--dash-card-bg)", color: "var(--dash-text)" }} onClick={() => { setStep(0); setSelected({}); }}>继续添加线路</button>
                   <Link href="/admin/models" style={{ ...buttonBase, background: "var(--dash-card-bg)", color: "var(--dash-text)", textDecoration: "none", display: "inline-flex", alignItems: "center" }}>查看价格配置</Link>
                 </div>
               </div>
@@ -552,7 +584,7 @@ export default function BossWizardPage() {
             <article style={{ border: "1px solid var(--dash-border)", borderRadius: 14, background: "var(--dash-card-bg)", padding: 18 }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 950 }}>老板视角风险提醒</h3>
               <ul style={{ margin: "10px 0 0", paddingLeft: 18, color: "var(--dash-sub)", fontSize: 13, lineHeight: 1.8 }}>
-                <li>便宜上游先小额压测，不要直接全量开放。</li>
+                <li>新线路先小额压测，不要直接全量开放。</li>
                 <li>图片模型必须填每张成本和每张利润，避免按 Token 误扣。</li>
                 <li>发布、改价、下架都会写审计日志，方便以后查账。</li>
               </ul>

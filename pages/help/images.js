@@ -61,7 +61,7 @@ export default function ImageHelpPage() {
             </article>
             <article>
               <h2>8. 如何通过 cc-switch 转接</h2>
-              <p>Base URL 填 `https://api.flowapi.fun/v1`，API Key 填你自己的 FlowAPI Key，Model 填图片模型名，比如 `flowapi-seedream-45` 或 `flowapi-gpt-image-mini`。</p>
+              <p>Base URL 只填 FlowAPI 对外地址，API Key 只填你自己的 FlowAPI Key，Model 选择你在模型广场看到的模型名即可。整个接入过程不需要知道任何上游平台名字。</p>
             </article>
             <article>
               <h2>9. 常见错误说明</h2>

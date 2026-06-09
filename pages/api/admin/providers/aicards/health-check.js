@@ -30,8 +30,8 @@ export default async function handler(req, res) {
 	  } catch (error) {
 	    return res.status(502).json({
 	      ok: false,
-	      providerKey: "aicards",
-	      channelName: "AICards-Backup",
+	      providerKey: "flowapi",
+	      channelName: "FlowAPI 备用线路",
 	      error: sanitizeSecretText(error.message || "备用上游健康检查失败"),
 	    });
 	  }

@@ -7,6 +7,8 @@ const repoRoot = path.resolve(__dirname, "..");
 const providerSource = fs.readFileSync(path.join(repoRoot, "lib/aicards-provider.js"), "utf8");
 const safeUrlSource = fs.readFileSync(path.join(repoRoot, "lib/safe-upstream-url.js"), "utf8");
 const adminConfigSource = fs.readFileSync(path.join(repoRoot, "lib/admin-commercial-config.js"), "utf8");
+const bossWizardSource = fs.readFileSync(path.join(repoRoot, "pages/admin/boss-wizard.js"), "utf8");
+const ccSwitchSource = fs.readFileSync(path.join(repoRoot, "lib/cc-switch.js"), "utf8");
 const modelProductsSource = fs.readFileSync(path.join(repoRoot, "lib/model-products-server.js"), "utf8");
 const publicProviderSource = fs.readFileSync(path.join(repoRoot, "lib/public-model-provider.js"), "utf8");
 const dashboardSource = fs.readFileSync(path.join(repoRoot, "pages/dashboard.js"), "utf8");
@@ -115,6 +117,12 @@ assert(
   "lib/aicards-provider.js 必须使用 flowapi-分类-hash 生成候选 public_model_id",
 );
 assert(
+  providerSource.includes('host === "aicards.shop"')
+    && providerSource.includes("matches.length > 1")
+    && providerSource.includes("只保留一条启用状态"),
+  "AICards 后台配置选择必须精确匹配域名并拒绝多个启用候选，避免误选旧线路",
+);
+assert(
   providerSource.includes("assertSafePublicModelText(publicModelId")
     && providerSource.includes("assertSafePublicModelText(displayName"),
   "AICards 审核发布必须校验对外模型 ID 和显示名不能包含供应链词",
@@ -199,6 +207,39 @@ assert(
     && adminConfigSource.includes("normalizePricingPayload(")
     && adminConfigSource.includes("assertPublishedModelCommercialGuard("),
   "通用模型发布入口必须复用服务端财务 guard，公开收费模型不能绕过成本/售价/毛利检查",
+);
+assert(
+  adminConfigSource.includes("export function makeFlowApiPublicModelId")
+    && adminConfigSource.includes("function safePublicModelId")
+    && adminConfigSource.includes('requested.startsWith("flowapi-")')
+    && adminConfigSource.includes('provider: "FlowAPI"')
+    && adminConfigSource.includes('logo: "FlowAPI"')
+    && adminConfigSource.includes("containsUnsafePublicModelText(requested)")
+    && adminConfigSource.includes("safeFlowApiDisplayName("),
+  "老板后台通用发布入口必须强制 FlowAPI 公共模型 ID、FlowAPI provider/logo，并清洗公开名称",
+);
+assert(
+  adminConfigSource.includes("function normalizePublishedInput")
+    && adminConfigSource.includes("safePublicModelId(rawModelId")
+    && adminConfigSource.includes("sanitizePublicTags(input.tags)")
+    && adminConfigSource.includes("upstreamModelId: upstreamModelId || modelId"),
+  "模型市场通用保存入口也必须共用 FlowAPI 公开字段安全门，不能绕过老板向导发布上游品牌",
+);
+assert(
+  bossWizardSource.includes("function defaultPublicModelId")
+    && bossWizardSource.includes("FlowAPI 模型 ID")
+    && bossWizardSource.includes("真实线路已隐藏，仅管理员日志可查")
+    && bossWizardSource.includes('provider: "FlowAPI"')
+    && !bossWizardSource.includes("publicModelId: settings[model.id]?.publicModelId || model.modelId"),
+  "老板后台向导必须默认展示 FlowAPI 公共模型 ID，不能默认把真实上游 model id 当成用户模型 ID",
+);
+assert(
+  ccSwitchSource.includes('providerId: "flowapi"')
+    && ccSwitchSource.includes('name = "FlowAPI"')
+    && ccSwitchSource.includes('model_provider = "flowapi"')
+    && !ccSwitchSource.includes("aicards.shop")
+    && !ccSwitchSource.includes("openrouter.ai"),
+  "cc-switch 导入配置必须只呈现 FlowAPI provider 和 FlowAPI Base URL，不得硬编码其他上游域名",
 );
 assert(
   adminConfigSource.includes("STARTER_MODEL_PACK_IDS")
