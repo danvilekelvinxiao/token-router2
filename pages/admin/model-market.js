@@ -51,6 +51,13 @@ function statusText(model) {
   return { label: "仅后台", tone: "warn" };
 }
 
+function nextActionText(stats) {
+  if (!stats.apiKey) return "现在还没有 API Key 可选模型。先点下面的“推荐开通完整包”，前台模型广场和创建 API Key 会一起同步。";
+  if (stats.apiKey < 6) return `当前 API Key 只开放了 ${stats.apiKey} 个模型，建议点“推荐开通完整包”补齐 ChatGPT / Codex / Claude / Gemini 等常用入口。`;
+  if (!stats.published) return "模型已可创建 API Key，但前台模型广场还没展示。请打开“模型广场”开关或使用推荐开通完整包。";
+  return "模型广场和 API Key 创建页已有可用模型。新增上游后，可以继续用一键开通或逐个编辑价格。";
+}
+
 function toDraft(model) {
   return {
     ...emptyDraft,
@@ -304,17 +311,23 @@ export default function AdminModelMarketPage() {
             <Link href="/models" target="_blank">查看前台效果</Link>
           </section>
 
+          <section className={`model-market-admin__next-action ${stats.apiKey >= 6 ? "is-ok" : "is-urgent"}`}>
+            <strong>{stats.apiKey >= 6 ? "下一步：可以开始创建测试 API Key" : "下一步：先把可售模型打开"}</strong>
+            <span>{nextActionText(stats)}</span>
+            <Link href="/api-management" target="_blank">去看 API Key 创建页</Link>
+          </section>
+
           <section className="model-market-admin__boss-strip" aria-label="老板一键开通模型">
             <div>
               <strong>老板一键开通</strong>
-              <span>不需要先研究上游字段。系统会按 FlowAPI 品牌模型、默认成本价、默认售价和毛利保护，自动同步到模型广场与 API Key 创建页。</span>
+              <span>不会暴露上游字段。点击主按钮后，系统会按 FlowAPI 品牌模型、默认成本价、默认售价和毛利保护，同步到模型广场与 API Key 创建页。</span>
             </div>
             <div>
-              <button type="button" className="model-market-admin__primary" onClick={() => bootstrapModelPack("starter")} disabled={Boolean(bootstrapping)}>
-                {bootstrapping === "starter" ? "开通中..." : "开通基础推荐包"}
+              <button type="button" className="model-market-admin__primary" onClick={() => bootstrapModelPack("full")} disabled={Boolean(bootstrapping)}>
+                {bootstrapping === "full" ? "铺设中..." : "推荐开通完整包"}
               </button>
-              <button type="button" className="model-market-admin__ghost" onClick={() => bootstrapModelPack("full")} disabled={Boolean(bootstrapping)}>
-                {bootstrapping === "full" ? "铺设中..." : "铺好完整模型包"}
+              <button type="button" className="model-market-admin__ghost" onClick={() => bootstrapModelPack("starter")} disabled={Boolean(bootstrapping)}>
+                {bootstrapping === "starter" ? "开通中..." : "只开基础包"}
               </button>
             </div>
           </section>
@@ -511,7 +524,7 @@ export default function AdminModelMarketPage() {
         .model-market-admin__primary:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.05); }
         .model-market-admin__ghost { border: 1px solid var(--dash-border); background: var(--dash-card-bg); color: var(--dash-text); }
         .model-market-admin__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-        .model-market-admin__stats article, .model-market-admin__sync, .model-market-admin__toolbar, .model-market-admin__table-card {
+        .model-market-admin__stats article, .model-market-admin__sync, .model-market-admin__next-action, .model-market-admin__toolbar, .model-market-admin__table-card {
           border: 1px solid var(--dash-border); border-radius: 14px; background: var(--dash-card-bg);
         }
         .model-market-admin__boss-strip {
@@ -531,6 +544,14 @@ export default function AdminModelMarketPage() {
         .model-market-admin__sync a { color: var(--dash-accent); font-weight: 900; text-decoration: none; white-space: nowrap; }
         .model-market-admin__sync.is-ok { border-color: rgba(22,163,74,.24); }
         .model-market-admin__sync.is-warn { border-color: rgba(245,158,11,.28); }
+        .model-market-admin__next-action {
+          display: grid; grid-template-columns: minmax(150px, auto) 1fr auto; gap: 12px; align-items: center; padding: 14px 16px;
+        }
+        .model-market-admin__next-action strong { font-size: 14px; }
+        .model-market-admin__next-action span { color: var(--dash-sub); font-size: 12px; line-height: 1.65; }
+        .model-market-admin__next-action a { color: var(--dash-accent); font-weight: 900; text-decoration: none; white-space: nowrap; }
+        .model-market-admin__next-action.is-urgent { border-color: rgba(245,158,11,.34); background: linear-gradient(135deg, rgba(245,158,11,.12), rgba(99,102,241,.07)); }
+        .model-market-admin__next-action.is-ok { border-color: rgba(22,163,74,.28); background: linear-gradient(135deg, rgba(22,163,74,.1), rgba(99,102,241,.05)); }
         .model-market-admin__toolbar { display: grid; grid-template-columns: 1fr 220px; gap: 12px; padding: 14px; }
         .model-market-admin__toolbar label, .model-market-admin__form label { display: grid; gap: 7px; color: var(--dash-text); font-size: 12px; font-weight: 850; }
         .model-market-admin__table-card { overflow: hidden; }
@@ -571,6 +592,7 @@ export default function AdminModelMarketPage() {
           .model-market-admin__boss-strip > div:last-child { justify-content: stretch; }
           .model-market-admin__boss-strip button { width: 100%; }
           .model-market-admin__sync { align-items: flex-start; flex-direction: column; }
+          .model-market-admin__next-action { grid-template-columns: 1fr; }
           .model-market-admin__price-grid { grid-template-columns: 1fr; }
         }
       `}</style>

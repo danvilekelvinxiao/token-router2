@@ -208,8 +208,9 @@ assert(
     && modelMarketAdminApiSource.includes("bootstrap_model_pack")
     && modelMarketAdminApiSource.includes("listModelProductsWithConfig")
     && modelMarketAdminApiSource.includes("mapSystemProductForAdmin")
-    && modelMarketAdminPageSource.includes("开通基础推荐包")
-    && modelMarketAdminPageSource.includes("铺好完整模型包"),
+    && modelMarketAdminPageSource.includes("推荐开通完整包")
+    && modelMarketAdminPageSource.includes("只开基础包")
+    && modelMarketAdminPageSource.includes("去看 API Key 创建页"),
   "模型广场后台必须提供老板一键开通入口，并展示系统推荐模型，避免管理员面对空表和复杂上游字段",
 );
 assert(
