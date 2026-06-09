@@ -1179,9 +1179,8 @@ export default async function handler(req, res) {
         lastUpstreamError = new Error("候选渠道成本缺失或低于 FlowAPI 毛利保护线");
         continue;
       }
-      const authorizationToken = candidate.name === "new-api"
-        ? getNewApiAuthorizationToken({ modelProduct })
-        : String(candidate.apiKey || "").trim();
+      const authorizationToken = String(candidate.apiKey || "").trim()
+        || (candidate.name === "new-api" ? getNewApiAuthorizationToken({ modelProduct }) : "");
       if (!authorizationToken) {
         await recordRouteAttempt({
           requestId,

@@ -150,10 +150,12 @@ assert(
 assert(
   providerSource.includes("function buildAicardsAutoPricing")
     && providerSource.includes("FLOWAPI_AICARDS_AUTO_SELL_MULTIPLIER")
+    && providerSource.includes("extractAicardsRawPricing")
+    && providerSource.includes("缺少真实上游成本")
     && providerSource.includes("autoSync")
     && providerSource.includes("autoHealthCheck")
     && bulkPublishApiSource.includes("autoPrice: body.autoPrice === true"),
-  "AICards 必须支持老板一键自动同步、健康检查、安全定价和发布，避免非技术管理员卡在成本售价配置",
+  "AICards 必须支持老板一键自动同步、健康检查、真实成本安全定价和发布，缺成本时不能猜价直接售卖",
 );
 assert(
   upstreamSource.includes("export async function getUpstreamConfigsAsync")
@@ -162,6 +164,17 @@ assert(
     && smartRouterSource.includes("await getUpstreamConfigsAsync({ includeReviewOnly: true })")
     && chatCompletionsSource.includes("await getUpstreamConfigsAsync({ includeReviewOnly: true })"),
   "运行时路由必须能读取后台保存的模型线路密钥，不能只读取服务器环境变量造成上架可见但调用不通",
+);
+assert(
+  chatCompletionsSource.includes("String(candidate.apiKey || \"\").trim()")
+    && chatCompletionsSource.includes("candidate.name === \"new-api\" ? getNewApiAuthorizationToken"),
+  "New API 后台保存线路必须优先使用候选自身密钥，环境变量组 token 只能作为兜底",
+);
+assert(
+  smartRouterSource.includes("function sanitizeRoutePreviewCandidate")
+    && smartRouterSource.includes("sanitizeRoutePreviewDecision")
+    && !/sanitizeRoutePreviewCandidate[\s\S]{0,900}apiKey/.test(smartRouterSource),
+  "管理员路由模拟响应必须脱敏，不能把 apiKey/baseUrl/authorization 等服务端线路密钥返回浏览器",
 );
 assert(
   safeUrlSource.includes('"aicards.shop"'),
