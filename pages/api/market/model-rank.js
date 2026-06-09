@@ -20,8 +20,7 @@ function isFresh(time, ttl) {
 }
 
 function providerFromSlug(slug = "") {
-  const provider = String(slug || "").split("/")[0].toLowerCase() || "unknown";
-  return provider === "openrouter" ? "global" : provider;
+  return "FlowAPI";
 }
 
 function stripProviderPrefix(name = "") {
@@ -177,7 +176,8 @@ function buildModels(rows, catalog) {
     const current = grouped.get(slug) || {
       model: compactModelName(model, slug),
       provider: providerFromSlug(model.id || slug),
-      logo: providerFromSlug(model.id || slug),
+      providerName: "FlowAPI",
+      logo: "flowapi",
       tokens: 0,
       changePercent: null,
       isNew: false,
@@ -230,7 +230,8 @@ function buildCatalogModels(catalog) {
       return {
         model: compactModelName(model, slug),
         provider: providerFromSlug(model.id || slug),
-        logo: providerFromSlug(model.id || slug),
+        providerName: "FlowAPI",
+        logo: "flowapi",
         tokens: null,
         tokensLabel: isFree ? "免费可用" : contextLength ? `${Math.round(contextLength / 1000)}K 上下文` : "目录已同步",
         changePercent: null,

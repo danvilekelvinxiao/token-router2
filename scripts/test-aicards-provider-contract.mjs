@@ -22,6 +22,9 @@ const teamUsageApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/team/u
 const imageStudioSource = fs.readFileSync(path.join(repoRoot, "lib/image-studio.js"), "utf8");
 const imageModelsApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/image/models.js"), "utf8");
 const imageHistoryApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/images/history.js"), "utf8");
+const legacyOpenRouterTopModelsSource = fs.readFileSync(path.join(repoRoot, "pages/api/analytics/openrouter-top-models.js"), "utf8");
+const legacyMarketModelsSource = fs.readFileSync(path.join(repoRoot, "pages/api/market-models.js"), "utf8");
+const globalModelRankSource = fs.readFileSync(path.join(repoRoot, "pages/api/market/model-rank.js"), "utf8");
 const newApiAdminProxySource = fs.readFileSync(path.join(repoRoot, "lib/new-api/admin-proxy.js"), "utf8");
 const genericAdminProxySource = fs.readFileSync(path.join(repoRoot, "pages/api/admin/[...path].js"), "utf8");
 const bulkPublishApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/admin/providers/aicards/bulk-publish.js"), "utf8");
@@ -114,6 +117,10 @@ const sampleModels = [
   "aicards-openrouter-claude-sonnet-4-6-provider_key",
   "vendor-proxy-gpt-5.4-backup-route",
 ];
+const publicApiKeyDtoSource = customerStoreSource.slice(
+  customerStoreSource.indexOf("function publicApiKeyDto"),
+  customerStoreSource.indexOf("function publicCallDto"),
+);
 
 assert(
   providerSource.includes("function publicModelIdForCandidate")
@@ -215,11 +222,25 @@ assert(
   "用户侧公开模型 provider 必须统一显示 FlowAPI，不得按关键词暴露模型厂商品牌",
 );
 assert(
-  customerStoreSource.includes("function publicApiKeyDto")
-    && customerStoreSource.includes("const publicAllowedModels")
-    && customerStoreSource.includes("allowedModels: publicAllowedModels")
-    && !customerStoreSource.includes("allowedModels: Array.isArray(key.allowedModels) ? key.allowedModels : []"),
-  "普通用户 API Key DTO 只能返回公开模型 ID，不能把 allowedModels 里的真实上游模型 ID 透给前台",
+  publicApiKeyDtoSource.includes("function publicApiKeyDto")
+    && publicApiKeyDtoSource.includes("maskedToken")
+    && publicApiKeyDtoSource.includes("token: maskedToken")
+    && publicApiKeyDtoSource.includes("const publicAllowedModels")
+    && publicApiKeyDtoSource.includes("allowedModels: publicAllowedModels")
+    && publicApiKeyDtoSource.includes("modelProductId: publicModelId")
+    && !publicApiKeyDtoSource.includes("key.modelProductId")
+    && !publicApiKeyDtoSource.includes("token: key.token")
+    && !publicApiKeyDtoSource.includes("allowedModels: Array.isArray(key.allowedModels) ? key.allowedModels : []"),
+  "普通用户 API Key DTO 只能返回脱敏 Key 和公开模型 ID，不能把完整 token 或 allowedModels 里的真实上游模型 ID 透给前台",
+);
+assert(
+  legacyOpenRouterTopModelsSource.trim() === 'export { default } from "@/pages/api/analytics/global-model-rank";'
+    && !legacyMarketModelsSource.includes("openrouter.ai")
+    && legacyMarketModelsSource.includes("listModelProductsWithConfig")
+    && legacyMarketModelsSource.includes('provider: "FlowAPI"')
+    && globalModelRankSource.includes("return \"FlowAPI\";")
+    && globalModelRankSource.includes('logo: "flowapi"'),
+  "旧公开模型榜单接口必须兼容转发或复用 FlowAPI 公开货架，不能继续输出上游 provider/logo",
 );
 assert(
   marketApiSource.includes("listImageModels")
@@ -230,6 +251,10 @@ assert(
 assert(
   imageModelsApiSource.includes("mapPublicImageModel")
     && imageStudioSource.includes("export function mapPublicImageModel")
+    && imageStudioSource.includes('providerName: "FlowAPI"')
+    && imageStudioSource.includes('logo: "image"')
+    && imageStudioSource.includes('family: "image"')
+    && imageStudioSource.includes("blockedTagPattern")
     && imageModelsApiSource.includes("(await listImageModels()).map(mapPublicImageModel)")
     && !imageModelsApiSource.includes("const models = await listImageModels();"),
   "公开图片模型接口必须返回 mapPublicImageModel 后的结果，不能暴露 upstreamModel/provider",
