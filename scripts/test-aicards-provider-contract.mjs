@@ -22,6 +22,8 @@ const imageHistoryApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/ima
 const newApiAdminProxySource = fs.readFileSync(path.join(repoRoot, "lib/new-api/admin-proxy.js"), "utf8");
 const genericAdminProxySource = fs.readFileSync(path.join(repoRoot, "pages/api/admin/[...path].js"), "utf8");
 const bulkPublishApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/admin/providers/aicards/bulk-publish.js"), "utf8");
+const modelMarketAdminApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/admin/model-market/index.js"), "utf8");
+const modelMarketAdminPageSource = fs.readFileSync(path.join(repoRoot, "pages/admin/model-market.js"), "utf8");
 
 const publicBlocklist = [
   "aicards",
@@ -197,6 +199,18 @@ assert(
     && adminConfigSource.includes("normalizePricingPayload(")
     && adminConfigSource.includes("assertPublishedModelCommercialGuard("),
   "通用模型发布入口必须复用服务端财务 guard，公开收费模型不能绕过成本/售价/毛利检查",
+);
+assert(
+  adminConfigSource.includes("STARTER_MODEL_PACK_IDS")
+    && adminConfigSource.includes("PACK_PRICING_PRESETS")
+    && adminConfigSource.includes("export async function bootstrapModelMarketPack")
+    && adminConfigSource.includes('provider: "FlowAPI"')
+    && modelMarketAdminApiSource.includes("bootstrap_model_pack")
+    && modelMarketAdminApiSource.includes("listModelProductsWithConfig")
+    && modelMarketAdminApiSource.includes("mapSystemProductForAdmin")
+    && modelMarketAdminPageSource.includes("开通基础推荐包")
+    && modelMarketAdminPageSource.includes("铺好完整模型包"),
+  "模型广场后台必须提供老板一键开通入口，并展示系统推荐模型，避免管理员面对空表和复杂上游字段",
 );
 assert(
   adminConfigSource.includes("upstream_model_id")

@@ -84,6 +84,7 @@ export default function AdminModelMarketPage() {
   const [sync, setSync] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState("");
   const [testing, setTesting] = useState("");
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -185,6 +186,26 @@ export default function AdminModelMarketPage() {
     setSaving(false);
   }
 
+  async function bootstrapModelPack(pack) {
+    setBootstrapping(pack);
+    try {
+      sessionStorage.setItem("flowapi_admin_secret", secret);
+      const response = await fetch("/api/admin/model-market", {
+        method: "POST",
+        headers: adminHeaders(),
+        body: JSON.stringify({ action: "bootstrap_model_pack", pack }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!data.ok) throw new Error(data.error || data.message || "模型包开通失败");
+      const skipped = Number(data.skippedCount || 0);
+      showToast(skipped ? `已开通 ${data.publishedCount || 0} 个模型，跳过 ${skipped} 个未达标模型` : data.message || "推荐模型已开通");
+      await loadData();
+    } catch (error) {
+      showToast(error.message || "模型包开通失败");
+    }
+    setBootstrapping("");
+  }
+
   async function quickToggle(model, key) {
     try {
       const next = toDraft(model);
@@ -283,6 +304,21 @@ export default function AdminModelMarketPage() {
             <Link href="/models" target="_blank">查看前台效果</Link>
           </section>
 
+          <section className="model-market-admin__boss-strip" aria-label="老板一键开通模型">
+            <div>
+              <strong>老板一键开通</strong>
+              <span>不需要先研究上游字段。系统会按 FlowAPI 品牌模型、默认成本价、默认售价和毛利保护，自动同步到模型广场与 API Key 创建页。</span>
+            </div>
+            <div>
+              <button type="button" className="model-market-admin__primary" onClick={() => bootstrapModelPack("starter")} disabled={Boolean(bootstrapping)}>
+                {bootstrapping === "starter" ? "开通中..." : "开通基础推荐包"}
+              </button>
+              <button type="button" className="model-market-admin__ghost" onClick={() => bootstrapModelPack("full")} disabled={Boolean(bootstrapping)}>
+                {bootstrapping === "full" ? "铺设中..." : "铺好完整模型包"}
+              </button>
+            </div>
+          </section>
+
           <section className="model-market-admin__toolbar">
             <label>
               <span>搜索模型</span>
@@ -321,7 +357,7 @@ export default function AdminModelMarketPage() {
                           <td>
                             <strong>{model.displayName}</strong>
                             <code>{model.modelId}</code>
-                            <span>{model.provider} · {model.officialReleaseDate || "发布时间待确认"}</span>
+                            <span>{model.provider} · {model.source === "system" ? "系统推荐" : "后台发布"} · {model.officialReleaseDate || "发布时间待确认"}</span>
                           </td>
                           <td>{MODEL_TYPES.find(([value]) => value === model.modelType)?.[1] || model.modelType}</td>
                           <td>
@@ -353,7 +389,7 @@ export default function AdminModelMarketPage() {
             ) : (
               <div className="model-market-admin__empty">
                 <strong>还没有匹配的模型</strong>
-                <p>可以点击“新增模型”，先上架 DeepSeek、Codex 或 GPT-5.5 测试模型。</p>
+                <p>可以点击“开通基础推荐包”，先让前台模型广场和 API Key 创建页有可用模型。</p>
               </div>
             )}
           </section>
@@ -478,6 +514,14 @@ export default function AdminModelMarketPage() {
         .model-market-admin__stats article, .model-market-admin__sync, .model-market-admin__toolbar, .model-market-admin__table-card {
           border: 1px solid var(--dash-border); border-radius: 14px; background: var(--dash-card-bg);
         }
+        .model-market-admin__boss-strip {
+          border: 1px solid rgba(99,102,241,.22); border-radius: 14px; padding: 15px 16px;
+          background: linear-gradient(135deg, rgba(99,102,241,.12), rgba(14,165,233,.08));
+          display: flex; justify-content: space-between; align-items: center; gap: 14px;
+        }
+        .model-market-admin__boss-strip strong, .model-market-admin__boss-strip span { display: block; }
+        .model-market-admin__boss-strip span { margin-top: 5px; color: var(--dash-sub); font-size: 12px; line-height: 1.65; }
+        .model-market-admin__boss-strip > div:last-child { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
         .model-market-admin__stats article { padding: 15px; }
         .model-market-admin__stats span { display: block; color: var(--dash-sub); font-size: 12px; font-weight: 800; }
         .model-market-admin__stats strong { display: block; margin-top: 8px; font-size: 28px; font-weight: 950; }
@@ -523,6 +567,9 @@ export default function AdminModelMarketPage() {
           .model-market-admin__hero { display: grid; }
           .model-market-admin__actions { justify-content: stretch; }
           .model-market-admin__stats, .model-market-admin__toolbar { grid-template-columns: 1fr; }
+          .model-market-admin__boss-strip { display: grid; }
+          .model-market-admin__boss-strip > div:last-child { justify-content: stretch; }
+          .model-market-admin__boss-strip button { width: 100%; }
           .model-market-admin__sync { align-items: flex-start; flex-direction: column; }
           .model-market-admin__price-grid { grid-template-columns: 1fr; }
         }
