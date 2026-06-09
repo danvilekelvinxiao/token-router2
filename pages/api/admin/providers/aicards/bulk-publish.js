@@ -24,6 +24,13 @@ export default async function handler(req, res) {
     const result = await bulkPublishAicardsCandidates({
       modelIds: body.modelIds || body.ids || [],
       maxCount: body.maxCount || 50,
+      autoPrice: body.autoPrice === true,
+      autoSync: body.autoSync === true,
+      autoHealthCheck: body.autoHealthCheck === true,
+      perModelHealthCheck: body.perModelHealthCheck !== false,
+      includeImages: body.includeImages === true,
+      minProfitMargin: body.minProfitMargin,
+      sellMultiplier: body.sellMultiplier,
       adminId: admin.customer?.id || admin.customer?.email || admin.session?.customerId || "admin",
     });
     return res.status(result.ok ? 200 : 400).json({

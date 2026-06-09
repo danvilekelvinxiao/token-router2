@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/admin-auth";
-import { getUpstreamConfigs } from "@/lib/upstream";
+import { getUpstreamConfigsAsync } from "@/lib/upstream";
 import { updateModelConfig } from "@/lib/model-store";
 import { getModelProductWithConfig } from "@/lib/model-products-server";
 
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
   const actualModelId = String(req.body?.actualModelId || req.body?.upstreamModelId || publicModelId).trim();
   if (!actualModelId) return res.status(400).json({ ok: false, error: "缺少上游模型 ID" });
 
-  const upstream = getUpstreamConfigs().find((item) => item.apiKey && item.upstreamUrl);
+  const upstream = (await getUpstreamConfigsAsync({ includeReviewOnly: true })).find((item) => item.apiKey && item.upstreamUrl);
   if (!upstream) {
     return res.status(400).json({
       ok: false,

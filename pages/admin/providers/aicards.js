@@ -115,10 +115,10 @@ export default function AdminAicardsProviderPage() {
         headers: secret ? { "x-admin-secret": secret } : {},
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.ok) throw new Error(data.error || "读取备用线路候选失败");
+      if (!res.ok || !data.ok) throw new Error(data.error || "读取模型线路候选失败");
       setModels(data.models || []);
     } catch (error) {
-      setMessage(error.message || "读取备用线路候选失败");
+      setMessage(error.message || "读取模型线路候选失败");
     } finally {
       setLoading(false);
     }
@@ -188,15 +188,17 @@ export default function AdminAicardsProviderPage() {
         method: "POST",
         headers: adminHeaders(),
         body: JSON.stringify({
-          modelIds: models
-            .filter((model) => getModelStage(model) === "可发布" || model.channelEnabled)
-            .map((model) => model.id),
+          autoSync: true,
+          autoHealthCheck: true,
+          autoPrice: true,
+          includeImages: false,
+          maxCount: 50,
         }),
       });
       const data = await res.json().catch(() => ({}));
       setBulkResult(data);
       if (!res.ok || !data.ok) throw new Error(data.error || data.message || "批量发布失败");
-      setMessage(data.message || `已发布 ${data.publishedCount || 0} 个 FlowAPI 模型。`);
+      setMessage(data.message || `已开通 ${data.publishedCount || 0} 个 FlowAPI 可用模型，已同步到模型广场和 API Key 创建页。`);
       await load();
     } catch (error) {
       setMessage(error.message || "批量发布失败");
@@ -237,14 +239,14 @@ export default function AdminAicardsProviderPage() {
 
   return (
     <>
-      <Head><title>备用线路审核 - FlowAPI Admin</title></Head>
+      <Head><title>模型线路审核 - FlowAPI Admin</title></Head>
       <AdminLayout currentPath="/admin/providers/aicards">
         <main style={{ color: "var(--dash-text)" }}>
           <header style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 20 }}>
             <div>
-              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 950 }}>备用线路审核</h1>
+              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 950 }}>模型线路审核</h1>
               <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13 }}>
-                这里管理备用线路候选模型。你可以先去老板后台向导或上游管理里保存 Base URL 和 API Key，再回来一键同步、检测、定价并发布为 FlowAPI 模型。
+                这里管理模型线路候选。你可以先去老板后台向导或上游管理里保存接口地址和线路密钥，再回来一键同步、检测、定价并发布为 FlowAPI 模型。
               </p>
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -257,7 +259,7 @@ export default function AdminAicardsProviderPage() {
 
           <section style={panelStyle}>
             <div style={stepsStyle}>
-              {["1 同步候选", "2 单模型检测", "3 填成本售价", "4 看毛利", "5 启用或发布"].map((step) => (
+              {["1 同步候选", "2 自动检测", "3 安全定价", "4 毛利保护", "5 发布前台"].map((step) => (
                 <span key={step}>{step}</span>
               ))}
             </div>
@@ -289,7 +291,7 @@ export default function AdminAicardsProviderPage() {
                 {busy.startsWith("health:") ? "检查中..." : "健康检查"}
               </button>
               <button onClick={bulkPublishReadyModels} disabled={busy === "bulk-publish"} style={ghostButton}>
-                {busy === "bulk-publish" ? "发布中..." : "批量发布达标模型"}
+                {busy === "bulk-publish" ? "开通中..." : "老板一键开通可用模型"}
               </button>
             </div>
             {health && (
@@ -312,7 +314,7 @@ export default function AdminAicardsProviderPage() {
           <section style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.3fr) minmax(360px, .7fr)", gap: 16, marginTop: 16 }}>
             <div style={panelStyle}>
               <h2 style={sectionTitle}>待审核候选</h2>
-              <p style={sectionSub}>用户端不会看到备用线路名称、上游地址或真实模型 ID。</p>
+              <p style={sectionSub}>用户端只会看到 FlowAPI 品牌模型名；内部线路名仅用于后台排查。</p>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
                 {["全部", "待检测", "待定价", "可发布", "备用已启用", "已发布", "有错误"].map((item) => (
                   <button
@@ -334,7 +336,7 @@ export default function AdminAicardsProviderPage() {
                   <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 880 }}>
                     <thead>
                       <tr>
-                        {["FlowAPI 模型", "真实模型", "成本/售价", "健康", "状态", "操作"].map((item) => <th key={item} style={thStyle}>{item}</th>)}
+                        {["FlowAPI 模型", "内部线路", "成本/售价", "健康", "状态", "操作"].map((item) => <th key={item} style={thStyle}>{item}</th>)}
                       </tr>
                     </thead>
                     <tbody>
@@ -344,7 +346,7 @@ export default function AdminAicardsProviderPage() {
                             <strong>{model.displayName || "待命名"}</strong>
                             <span style={mutedBlock}>{model.publicModelId || "待填写 public_model_id"}</span>
                           </td>
-                          <td style={tdStyle}>
+                              <td style={tdStyle}>
                             <code style={{ fontSize: 11 }}>{model.actualModelId}</code>
                           </td>
                           <td style={tdStyle}>
@@ -388,7 +390,7 @@ export default function AdminAicardsProviderPage() {
               <p style={sectionSub}>启用前必须成本、售价、毛利、健康检查全部达标。</p>
               <Field label="用户看到的模型名" value={review.displayName} onChange={(v) => setReview({ ...review, displayName: v })} />
               <Field label="FlowAPI Model ID" value={review.publicModelId} onChange={(v) => setReview({ ...review, publicModelId: v })} />
-              <Field label="真实模型 ID（仅后台）" value={review.actualModelId} onChange={(v) => setReview({ ...review, actualModelId: v })} />
+              <Field label="内部线路模型 ID（仅后台）" value={review.actualModelId} onChange={(v) => setReview({ ...review, actualModelId: v })} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <Field label="输入成本/1M" value={review.inputCostPerMillion} onChange={(v) => setReview({ ...review, inputCostPerMillion: v })} type="number" />
                 <Field label="输出成本/1M" value={review.outputCostPerMillion} onChange={(v) => setReview({ ...review, outputCostPerMillion: v })} type="number" />
@@ -407,7 +409,7 @@ export default function AdminAicardsProviderPage() {
               </div>
               <label style={checkStyle}>
                 <input type="checkbox" checked={review.enable} onChange={(event) => setReview({ ...review, enable: event.target.checked })} />
-                启用为备用线路
+                启用为模型线路
               </label>
               <label style={checkStyle}>
                 <input type="checkbox" checked={review.publish} onChange={(event) => setReview({ ...review, publish: event.target.checked })} />

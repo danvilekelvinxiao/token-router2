@@ -26,6 +26,9 @@ const genericAdminProxySource = fs.readFileSync(path.join(repoRoot, "pages/api/a
 const bulkPublishApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/admin/providers/aicards/bulk-publish.js"), "utf8");
 const modelMarketAdminApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/admin/model-market/index.js"), "utf8");
 const modelMarketAdminPageSource = fs.readFileSync(path.join(repoRoot, "pages/admin/model-market.js"), "utf8");
+const upstreamSource = fs.readFileSync(path.join(repoRoot, "lib/upstream.js"), "utf8");
+const smartRouterSource = fs.readFileSync(path.join(repoRoot, "lib/smart-router.js"), "utf8");
+const chatCompletionsSource = fs.readFileSync(path.join(repoRoot, "pages/api/v1/chat/completions.js"), "utf8");
 
 const publicBlocklist = [
   "aicards",
@@ -143,6 +146,22 @@ assert(
   providerSource.includes("export async function bulkPublishAicardsCandidates")
     && bulkPublishApiSource.includes("bulkPublishAicardsCandidates"),
   "AICards 必须提供批量发布达标候选的管理员 API",
+);
+assert(
+  providerSource.includes("function buildAicardsAutoPricing")
+    && providerSource.includes("FLOWAPI_AICARDS_AUTO_SELL_MULTIPLIER")
+    && providerSource.includes("autoSync")
+    && providerSource.includes("autoHealthCheck")
+    && bulkPublishApiSource.includes("autoPrice: body.autoPrice === true"),
+  "AICards 必须支持老板一键自动同步、健康检查、安全定价和发布，避免非技术管理员卡在成本售价配置",
+);
+assert(
+  upstreamSource.includes("export async function getUpstreamConfigsAsync")
+    && upstreamSource.includes("await import(\"./admin-commercial-config\")")
+    && upstreamSource.includes("getUpstream(item.id, { includeSecret: true })")
+    && smartRouterSource.includes("await getUpstreamConfigsAsync({ includeReviewOnly: true })")
+    && chatCompletionsSource.includes("await getUpstreamConfigsAsync({ includeReviewOnly: true })"),
+  "运行时路由必须能读取后台保存的模型线路密钥，不能只读取服务器环境变量造成上架可见但调用不通",
 );
 assert(
   safeUrlSource.includes('"aicards.shop"'),

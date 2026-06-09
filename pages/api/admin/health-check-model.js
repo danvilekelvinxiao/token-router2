@@ -7,7 +7,7 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { getModelProductWithConfig } from "@/lib/model-products-server";
 import { updateModelConfig } from "@/lib/model-store";
-import { getUpstreamConfigs } from "@/lib/upstream";
+import { getUpstreamConfigsAsync } from "@/lib/upstream";
 
 const UNIAPI_API_KEY = process.env.UNIAPI_API_KEY || "";
 const UNIAPI_BASE_URL = "https://api.uniapi.io";
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     });
   }
 
-  const configuredUpstream = getUpstreamConfigs().find((item) => item.apiKey && item.upstreamUrl);
+  const configuredUpstream = (await getUpstreamConfigsAsync({ includeReviewOnly: true })).find((item) => item.apiKey && item.upstreamUrl);
   const upstream = configuredUpstream || (isUsableKey(UNIAPI_API_KEY)
     ? {
         label: "UniAPI",

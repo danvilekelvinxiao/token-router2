@@ -3,7 +3,7 @@ import { getModelProductWithConfig } from "@/lib/model-products-server";
 import { smartSelectModel } from "@/lib/smart-router";
 import { beginApiRequestIdempotency, finalizeReservedCallByToken, findCustomerByToken, reserveBalanceByToken } from "@/lib/customer-store";
 import { acquireConcurrency, getClientIp, graylistKey, isGraylisted, rateLimit, releaseConcurrency, securityLog } from "@/lib/security";
-import { getUpstreamConfigs, getUpstreamSuggestion, sendApiError } from "@/lib/upstream";
+import { getUpstreamConfigsAsync, getUpstreamSuggestion, sendApiError } from "@/lib/upstream";
 import { selectUpstream, STRATEGY } from "@/lib/smart-router";
 import { userCanUseMemberModel } from "@/lib/membership/store";
 import { getContent } from "@/lib/content-cms";
@@ -550,7 +550,7 @@ export default async function handler(req, res) {
     return sendApiError(res, 429, "API_KEY_CONCURRENCY_LIMITED", "该 API Key 并发请求过多，请稍后再试", "请减少同时发起的请求数量，或稍后重试。");
   }
 
-  const upstreams = getUpstreamConfigs({ includeReviewOnly: true });
+  const upstreams = await getUpstreamConfigsAsync({ includeReviewOnly: true });
   if (upstreams.length === 0) {
     releaseConcurrency(concurrencyKey);
     return sendApiError(res, 500, "UPSTREAM_NOT_CONFIGURED", "未配置模型服务", "FlowAPI 服务端暂未配置模型服务，请联系管理员处理。");
