@@ -37,6 +37,7 @@ const chatCompletionsSource = fs.readFileSync(path.join(repoRoot, "pages/api/v1/
 const packageSource = fs.readFileSync(path.join(repoRoot, "package.json"), "utf8");
 const workbenchDeploySource = fs.readFileSync(path.join(repoRoot, "scripts/workbench-deploy-flowapi.sh"), "utf8");
 const aicardsSyncScriptSource = fs.readFileSync(path.join(repoRoot, "scripts/aicards-sync-publish.mjs"), "utf8");
+const publicBrandingScanSource = fs.readFileSync(path.join(repoRoot, "scripts/scan-public-branding.mjs"), "utf8");
 
 const publicBlocklist = [
   "aicards",
@@ -248,20 +249,12 @@ assert(
 );
 assert(
   packageSource.includes('"deploy:workbench": "bash scripts/workbench-deploy-flowapi.sh"')
+    && packageSource.includes('"check:public-branding": "node scripts/scan-public-branding.mjs"')
     && workbenchDeploySource.includes("FLOWAPI_SYNC_AICARDS_ON_DEPLOY")
     && workbenchDeploySource.includes("node scripts/aicards-sync-publish.mjs")
+    && workbenchDeploySource.includes("node scripts/scan-public-branding.mjs")
     && packageSource.includes('"admin:aicards-sync": "node scripts/aicards-sync-publish.mjs"')
     && workbenchDeploySource.includes("FlowAPI public branding scan")
-    && workbenchDeploySource.includes("FLOWAPI_SYNC_AICARDS_ON_DEPLOY")
-    && workbenchDeploySource.includes("node scripts/aicards-sync-publish.mjs")
-    && workbenchDeploySource.includes("badProviders")
-    && workbenchDeploySource.includes("/api/models/market")
-    && workbenchDeploySource.includes("/api/models/api-key-options")
-    && workbenchDeploySource.includes("/api/image/models")
-    && workbenchDeploySource.includes("/api/market-models")
-    && workbenchDeploySource.includes("/api/analytics/openrouter-top-models")
-    && workbenchDeploySource.includes("/api/market/model-rank")
-    && workbenchDeploySource.includes("imageCount < 1")
     && workbenchDeploySource.includes("git rev-parse HEAD"),
   "Workbench 部署脚本必须拉取部署最新代码，并对公开模型/图片/榜单接口做 FlowAPI 品牌和图片模型并入验收",
 );
@@ -273,11 +266,25 @@ assert(
     && aicardsSyncScriptSource.includes("mask(process.env.AICARDS_API_KEY)")
     && aicardsSyncScriptSource.includes("loadEnvFileIfExists")
     && !aicardsSyncScriptSource.includes('from "node:process"')
-    && aicardsSyncScriptSource.includes("badProviders")
-    && aicardsSyncScriptSource.includes("/api/models/market")
+    && aicardsSyncScriptSource.includes("spawnSync")
+    && aicardsSyncScriptSource.includes("scripts/scan-public-branding.mjs")
     && aicardsSyncScriptSource.includes("Public branding scan failed")
     && !aicardsSyncScriptSource.includes("sk-82c05707d2dd583c637aa08342b857f567199f040839e3a9"),
   "AICards 同步发布脚本必须从服务器环境变量读取密钥、批量发布候选，并在发布后扫描公开接口，禁止硬编码用户密钥",
+);
+assert(
+  publicBrandingScanSource.includes("pagePaths")
+    && publicBrandingScanSource.includes('"/models"')
+    && publicBrandingScanSource.includes('"/api-management"')
+    && publicBrandingScanSource.includes('"/guide"')
+    && publicBrandingScanSource.includes('"/help"')
+    && publicBrandingScanSource.includes('"/help/images"')
+    && publicBrandingScanSource.includes("pageLeakRe")
+    && publicBrandingScanSource.includes("apiLeakRe")
+    && publicBrandingScanSource.includes("badProviders")
+    && publicBrandingScanSource.includes("imageCount >= 1")
+    && publicBrandingScanSource.includes("FlowAPI public branding scan failed"),
+  "公开品牌扫描必须覆盖用户页面和公开模型 API，防止 cc-switch/帮助页/模型广场泄露备用中转供应商",
 );
 assert(
   marketApiSource.includes("listImageModels")

@@ -80,41 +80,8 @@ else
   echo "==> 9. Skip AICards auto-sync (set FLOWAPI_SYNC_AICARDS_ON_DEPLOY=true to enable)"
 fi
 
-echo "==> 10. Public FlowAPI branding scan"
-node - <<'NODE'
-const base = process.env.FLOWAPI_PUBLIC_BASE_URL || "https://flowapi.fun";
-const paths = [
-  "/api/health",
-  "/api/models/market",
-  "/api/models/api-key-options",
-  "/api/image/models",
-  "/api/market-models",
-  "/api/analytics/openrouter-top-models",
-  "/api/market/model-rank",
-];
-const leakRe = /(aicards|aicards\.shop|uniapi|aheapi|new api|new-api|newapi|sub2api|actual_model|provider_key|base_url|api_key|bearer|authorization|sk-|cr_|上游|供应商|供货商)/i;
-const badProviderRe = /^(?!FlowAPI$).+/;
-let failed = false;
-for (const path of paths) {
-  const response = await fetch(base + path, { headers: { accept: "application/json" } });
-  const text = await response.text();
-  let payload = {};
-  try { payload = JSON.parse(text); } catch {}
-  const rows = Array.isArray(payload.models) ? payload.models : Array.isArray(payload.data) ? payload.data : [];
-  const providers = [...new Set(rows.map((item) => item.provider || item.providerName).filter(Boolean))];
-  const imageCount = rows.filter((item) => String(item.category || item.primaryButtonHref || "").includes("image") || item.primaryButtonHref === "/images").length;
-  const leaked = leakRe.test(text);
-  const badProviders = providers.filter((provider) => badProviderRe.test(provider));
-  const result = { path, status: response.status, count: rows.length, imageCount, providers, leaked, badProviders };
-  console.log(JSON.stringify(result));
-  if (!response.ok || leaked || badProviders.length) failed = true;
-  if (path === "/api/models/market" && imageCount < 1) failed = true;
-}
-if (failed) {
-  console.error("FlowAPI public branding scan failed.");
-  process.exit(1);
-}
-NODE
+echo "==> 10. FlowAPI public branding scan"
+node scripts/scan-public-branding.mjs "$PUBLIC_BASE"
 
 echo "==> 11. Deployed commit"
 git rev-parse HEAD

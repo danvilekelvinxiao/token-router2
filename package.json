@@ -16,6 +16,7 @@
     "recover": "bash scripts/recover-and-deploy.sh",
     "verify:newapi": "node scripts/verify-new-api-env.mjs",
     "check:admin-sync": "node scripts/check-admin-sync-consistency.mjs",
+    "check:public-branding": "node scripts/scan-public-branding.mjs",
     "admin:bootstrap-model-pack": "node scripts/bootstrap-model-pack.mjs",
     "admin:aicards-sync": "node scripts/aicards-sync-publish.mjs",
     "test:aicards-provider": "node scripts/test-aicards-provider-contract.mjs",

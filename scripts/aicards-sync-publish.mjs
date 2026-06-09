@@ -31,36 +31,6 @@ function mask(value = "") {
   return `${text.slice(0, 8)}...${text.slice(-4)}`;
 }
 
-async function scanPublicBranding() {
-  const paths = [
-    "/api/models/market",
-    "/api/models/api-key-options",
-    "/api/image/models",
-    "/api/market-models",
-    "/api/analytics/openrouter-top-models",
-    "/api/market/model-rank",
-  ];
-  const leakRe = /(aicards|aicards\.shop|uniapi|aheapi|new api|new-api|newapi|sub2api|actual_model|provider_key|base_url|api_key|bearer|authorization|sk-|cr_|上游|供应商|供货商)/i;
-  let failed = false;
-  const results = [];
-  for (const path of paths) {
-    const response = await fetch(publicBase + path, { headers: { accept: "application/json" } });
-    const text = await response.text();
-    let payload = {};
-    try { payload = JSON.parse(text); } catch {}
-    const rows = Array.isArray(payload.models) ? payload.models : Array.isArray(payload.data) ? payload.data : [];
-    const providers = [...new Set(rows.map((item) => item.provider || item.providerName).filter(Boolean))];
-    const badProviders = providers.filter((provider) => provider !== "FlowAPI");
-    const imageCount = rows.filter((item) => String(item.category || item.primaryButtonHref || "").includes("image") || item.primaryButtonHref === "/images").length;
-    const leaked = leakRe.test(text);
-    const result = { path, status: response.status, count: rows.length, imageCount, providers, leaked, badProviders };
-    results.push(result);
-    if (!response.ok || leaked || badProviders.length) failed = true;
-    if (path === "/api/models/market" && imageCount < 1) failed = true;
-  }
-  return { ok: !failed, results };
-}
-
 async function main() {
   console.log("==> FlowAPI AICards sync/publish");
   console.log(JSON.stringify({
@@ -124,14 +94,13 @@ async function main() {
     skippedExamples: publish.skipped?.slice(0, 10) || [],
   }, null, 2));
 
-  const scan = await scanPublicBranding();
   console.log("==> public branding scan");
-  for (const result of scan.results) {
-    console.log(JSON.stringify(result));
-  }
-  if (!scan.ok) {
-    throw new Error("Public branding scan failed after AICards publish.");
-  }
+  const { spawnSync } = await import("node:child_process");
+  const scan = spawnSync(process.execPath, ["scripts/scan-public-branding.mjs", publicBase], {
+    stdio: "inherit",
+    env: { ...process.env, FLOWAPI_PUBLIC_BASE_URL: publicBase },
+  });
+  if (scan.status !== 0) throw new Error("Public branding scan failed after AICards publish.");
   if (!publish.ok) {
     throw new Error("No AICards candidates were published. Check upstream cost/pricing/health details above.");
   }
