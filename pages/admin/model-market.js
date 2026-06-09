@@ -58,6 +58,51 @@ function nextActionText(stats) {
   return "模型广场和 API Key 创建页已有可用模型。新增上游后，可以继续用一键开通或逐个编辑价格。";
 }
 
+const MODEL_FAMILY_SECTIONS = [
+  {
+    key: "chatgpt",
+    label: "ChatGPT",
+    description: "给普通聊天、写作、Agent 任务卖的主力入口。",
+    match(model) {
+      const id = String(model.modelId || "").toLowerCase();
+      return model.showInApiKeyCreate && model.enabled && !id.includes("deepseek") && !id.includes("claude") && !id.includes("gemini") && !id.includes("codex") && model.modelType !== "image" && model.modelType !== "image-edit";
+    },
+  },
+  {
+    key: "codex",
+    label: "Codex",
+    description: "给 Cursor、Codex、Claude Code 这类编程场景卖的模型。",
+    match(model) {
+      const id = String(model.modelId || "").toLowerCase();
+      return model.showInApiKeyCreate && model.enabled && (model.modelType === "coding" || id.includes("codex"));
+    },
+  },
+  {
+    key: "deepseek",
+    label: "DeepSeek",
+    description: "国内用户最容易下单的低门槛模型入口。",
+    match(model) {
+      return model.showInApiKeyCreate && model.enabled && String(model.modelId || "").toLowerCase().includes("deepseek");
+    },
+  },
+  {
+    key: "claude",
+    label: "Claude",
+    description: "高客单价的长文本、写作、分析模型入口。",
+    match(model) {
+      return model.showInApiKeyCreate && model.enabled && String(model.modelId || "").toLowerCase().includes("claude");
+    },
+  },
+  {
+    key: "gemini",
+    label: "Gemini",
+    description: "多模态和性价比补位，适合做完整产品线。",
+    match(model) {
+      return model.showInApiKeyCreate && model.enabled && String(model.modelId || "").toLowerCase().includes("gemini");
+    },
+  },
+];
+
 function toDraft(model) {
   return {
     ...emptyDraft,
@@ -147,6 +192,39 @@ export default function AdminModelMarketPage() {
     apiKey: models.filter((model) => model.enabled && model.showInApiKeyCreate).length,
     image: models.filter((model) => model.enabled && model.showInImageGeneration).length,
   }), [models]);
+
+  const familySummary = useMemo(() => {
+    return MODEL_FAMILY_SECTIONS.map((section) => {
+      const count = models.filter((model) => section.match(model)).length;
+      return {
+        ...section,
+        count,
+        ok: count > 0,
+        hint: count > 0 ? `已开通 ${count} 个` : "还没开通",
+      };
+    });
+  }, [models]);
+
+  const launchChecklist = useMemo(() => {
+    const imageCount = Number(sync?.counts?.imageModels || 0);
+    return [
+      {
+        label: "文字模型可售卖",
+        ok: stats.apiKey >= 4,
+        hint: stats.apiKey >= 4 ? `已开放 ${stats.apiKey} 个可创建 Key 模型` : "先点推荐开通完整包",
+      },
+      {
+        label: "前台模型广场可展示",
+        ok: stats.published >= 4,
+        hint: stats.published >= 4 ? `前台已展示 ${stats.published} 个模型` : "仍需打开模型广场展示开关",
+      },
+      {
+        label: "图片生成模型已就绪",
+        ok: imageCount > 0,
+        hint: imageCount > 0 ? `生成图片页已有 ${imageCount} 个模型` : "去图片模型页启用默认模型",
+      },
+    ];
+  }, [stats, sync]);
 
   function openCreate() {
     setDraft(emptyDraft);
@@ -302,11 +380,20 @@ export default function AdminModelMarketPage() {
               ["全部后台模型", stats.total],
               ["前台展示", stats.published],
               ["可创建 Key", stats.apiKey],
-              ["图片页可用", stats.image],
+              ["图片页可用", Number(sync?.counts?.imageModels || stats.image)],
             ].map(([label, value]) => (
               <article key={label}>
                 <span>{label}</span>
                 <strong>{value}</strong>
+              </article>
+            ))}
+          </section>
+
+          <section className="model-market-admin__boss-checklist" aria-label="老板开通清单">
+            {launchChecklist.map((item) => (
+              <article key={item.label} className={item.ok ? "is-ok" : "is-warn"}>
+                <strong>{item.label}</strong>
+                <span>{item.hint}</span>
               </article>
             ))}
           </section>
@@ -325,10 +412,29 @@ export default function AdminModelMarketPage() {
             <Link href="/api-management" target="_blank">去看 API Key 创建页</Link>
           </section>
 
+          <section className="model-market-admin__family-grid" aria-label="售卖入口状态">
+            {familySummary.map((item) => (
+              <article key={item.key} className={item.ok ? "is-ok" : "is-missing"}>
+                <div>
+                  <strong>{item.label}</strong>
+                  <span>{item.description}</span>
+                </div>
+                <b>{item.hint}</b>
+              </article>
+            ))}
+            <article className={Number(sync?.counts?.imageModels || 0) > 0 ? "is-ok" : "is-missing"}>
+              <div>
+                <strong>图片生成</strong>
+                <span>对应 /images 页面和图片商业化闭环，单独在图片模型页管理。</span>
+              </div>
+              <b>{Number(sync?.counts?.imageModels || 0) > 0 ? `已启用 ${Number(sync?.counts?.imageModels || 0)} 个` : "还没启用"}</b>
+            </article>
+          </section>
+
           <section className="model-market-admin__boss-strip" aria-label="老板一键开通模型">
             <div>
               <strong>老板一键开通</strong>
-              <span>不会暴露上游字段。点击主按钮后，系统会按 FlowAPI 品牌模型、默认成本价、默认售价和毛利保护，同步到模型广场与 API Key 创建页。</span>
+              <span>不会暴露上游字段。你只需要先点“推荐开通完整包”，再去“图片模型”打开默认图片模型，前台模型广场、创建 API Key、生成图片三处就会一起联动。</span>
             </div>
             <div>
               <button type="button" className="model-market-admin__primary" onClick={() => bootstrapModelPack("full")} disabled={Boolean(bootstrapping)}>
@@ -337,6 +443,7 @@ export default function AdminModelMarketPage() {
               <button type="button" className="model-market-admin__ghost" onClick={() => bootstrapModelPack("starter")} disabled={Boolean(bootstrapping)}>
                 {bootstrapping === "starter" ? "开通中..." : "只开基础包"}
               </button>
+              <Link href="/admin/image-models">去开图片模型</Link>
             </div>
           </section>
 
@@ -570,9 +677,18 @@ export default function AdminModelMarketPage() {
         .model-market-admin__primary:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(1.05); }
         .model-market-admin__ghost { border: 1px solid var(--dash-border); background: var(--dash-card-bg); color: var(--dash-text); }
         .model-market-admin__stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
-        .model-market-admin__stats article, .model-market-admin__sync, .model-market-admin__next-action, .model-market-admin__toolbar, .model-market-admin__table-card {
+        .model-market-admin__boss-checklist, .model-market-admin__family-grid { display: grid; gap: 10px; }
+        .model-market-admin__boss-checklist { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .model-market-admin__family-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .model-market-admin__stats article, .model-market-admin__sync, .model-market-admin__next-action, .model-market-admin__toolbar, .model-market-admin__table-card, .model-market-admin__boss-checklist article, .model-market-admin__family-grid article {
           border: 1px solid var(--dash-border); border-radius: 14px; background: var(--dash-card-bg);
         }
+        .model-market-admin__boss-checklist article, .model-market-admin__family-grid article { padding: 15px; display: grid; gap: 10px; }
+        .model-market-admin__boss-checklist article strong, .model-market-admin__family-grid article strong { font-size: 14px; }
+        .model-market-admin__boss-checklist article span, .model-market-admin__family-grid article span { color: var(--dash-sub); font-size: 12px; line-height: 1.65; }
+        .model-market-admin__boss-checklist article.is-ok, .model-market-admin__family-grid article.is-ok { border-color: rgba(22,163,74,.24); background: linear-gradient(135deg, rgba(22,163,74,.1), rgba(99,102,241,.03)); }
+        .model-market-admin__boss-checklist article.is-warn, .model-market-admin__family-grid article.is-missing { border-color: rgba(245,158,11,.28); background: linear-gradient(135deg, rgba(245,158,11,.1), rgba(99,102,241,.03)); }
+        .model-market-admin__family-grid article b { font-size: 18px; font-weight: 950; }
         .model-market-admin__boss-strip {
           border: 1px solid rgba(99,102,241,.22); border-radius: 14px; padding: 15px 16px;
           background: linear-gradient(135deg, rgba(99,102,241,.12), rgba(14,165,233,.08));
@@ -594,6 +710,10 @@ export default function AdminModelMarketPage() {
         .model-market-admin__boss-strip strong, .model-market-admin__boss-strip span { display: block; }
         .model-market-admin__boss-strip span { margin-top: 5px; color: var(--dash-sub); font-size: 12px; line-height: 1.65; }
         .model-market-admin__boss-strip > div:last-child { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+        .model-market-admin__boss-strip a {
+          min-height: 42px; border-radius: 10px; padding: 0 15px; display: inline-flex; align-items: center; justify-content: center;
+          border: 1px solid var(--dash-border); background: var(--dash-card-bg); color: var(--dash-text); text-decoration: none; font-size: 12px; font-weight: 900;
+        }
         .model-market-admin__stats article { padding: 15px; }
         .model-market-admin__stats span { display: block; color: var(--dash-sub); font-size: 12px; font-weight: 800; }
         .model-market-admin__stats strong { display: block; margin-top: 8px; font-size: 28px; font-weight: 950; }
@@ -646,10 +766,10 @@ export default function AdminModelMarketPage() {
         @media (max-width: 760px) {
           .model-market-admin__hero { display: grid; }
           .model-market-admin__actions { justify-content: stretch; }
-          .model-market-admin__stats, .model-market-admin__toolbar, .model-market-admin__bootstrap-grid { grid-template-columns: 1fr; }
+          .model-market-admin__stats, .model-market-admin__toolbar, .model-market-admin__bootstrap-grid, .model-market-admin__boss-checklist, .model-market-admin__family-grid { grid-template-columns: 1fr; }
           .model-market-admin__boss-strip { display: grid; }
           .model-market-admin__boss-strip > div:last-child { justify-content: stretch; }
-          .model-market-admin__boss-strip button { width: 100%; }
+          .model-market-admin__boss-strip button, .model-market-admin__boss-strip a { width: 100%; }
           .model-market-admin__sync { align-items: flex-start; flex-direction: column; }
           .model-market-admin__next-action { grid-template-columns: 1fr; }
           .model-market-admin__price-grid { grid-template-columns: 1fr; }

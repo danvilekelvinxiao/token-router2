@@ -23,6 +23,7 @@ const adminMenuGroups = [
       { key: "backupProviderReview", label: "备用线路审核", href: `/admin/providers/${["ai", "cards"].join("")}`, icon: IconChannels },
 	      { key: "routes", label: "智能路由", href: "/admin/routes", icon: IconRouting, aliases: ["/admin/routing", "/admin/model-mapping"] },
       { key: "modelMarket", label: "模型广场", href: "/admin/model-market", icon: IconModels },
+      { key: "imageModels", label: "图片模型", href: "/admin/image-models", icon: IconModels },
       { key: "models", label: "模型测试", href: "/admin/models", icon: IconModels },
       { key: "billing", label: "价格规则", href: "/admin/billing-rules", icon: IconBilling },
     ],
@@ -127,6 +128,21 @@ function isAdminCustomer(customer) {
   );
 }
 
+async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 3200) {
+  const controller = typeof AbortController === "function" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetch(url, {
+      ...options,
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    const data = await response.json().catch(() => ({}));
+    return { response, data };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function AdminAccessState({ title, description, canRetry = false, onRetry = null, retrying = false }) {
   return (
     <main className="landing-shell admin-access-shell">
@@ -156,10 +172,9 @@ export default function AdminLayout({ currentPath, children }) {
     setChecking(true);
     try {
       const secret = typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || "";
-      const response = await fetch("/api/admin-access", {
+      const { response, data } = await fetchJsonWithTimeout("/api/admin-access", {
         headers: secret ? { "x-admin-secret": secret } : {},
       });
-      const data = await response.json().catch(() => ({}));
       if (response.ok && data?.ok && isAdminCustomer(data.customer)) {
         try {
           if (typeof window !== "undefined" && data.customer) {
@@ -167,13 +182,13 @@ export default function AdminLayout({ currentPath, children }) {
           }
         } catch {}
         setAccess("allowed");
+        setChecking(false);
         return;
       }
 
-      const fallbackResponse = await fetch("/api/admin/channels", {
+      const { response: fallbackResponse, data: fallbackData } = await fetchJsonWithTimeout("/api/admin/channels", {
         headers: secret ? { "x-admin-secret": secret } : {},
       });
-      const fallbackData = await fallbackResponse.json().catch(() => ({}));
       if (fallbackResponse.ok) {
         const customer = fallbackData?.customer || fallbackData?.admin || {
           id: "cus_admin",
@@ -190,6 +205,7 @@ export default function AdminLayout({ currentPath, children }) {
           }
         } catch {}
         setAccess("allowed");
+        setChecking(false);
         return;
       }
     } catch {}

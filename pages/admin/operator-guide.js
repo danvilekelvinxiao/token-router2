@@ -10,6 +10,12 @@ const workflows = [
     href: "/admin/model-wizard",
   },
   {
+    title: "开通生成图片模型",
+    goal: "让用户打开 /images 就能直接生成图片并扣费。",
+    steps: ["打开图片模型", "点一键启用默认图片模型", "确认每张图售价大于 0", "去前台 /images 测试出图"],
+    href: "/admin/image-models",
+  },
+  {
     title: "检查模型为什么 403",
     goal: "判断是 Key 权限、模型未开放、上游失败，还是余额不足。",
     steps: ["打开模型测试", "确认模型显示可用", "点击健康检查", "查看 actual model id", "再去调用日志查 request id"],
