@@ -89,6 +89,7 @@ function toDraft(model) {
 export default function AdminModelMarketPage() {
   const [models, setModels] = useState([]);
   const [sync, setSync] = useState(null);
+  const [bootstrapReport, setBootstrapReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [bootstrapping, setBootstrapping] = useState("");
@@ -204,6 +205,13 @@ export default function AdminModelMarketPage() {
       });
       const data = await response.json().catch(() => ({}));
       if (!data.ok) throw new Error(data.error || data.message || "模型包开通失败");
+      setBootstrapReport({
+        pack,
+        published: data.published || [],
+        skipped: data.skipped || [],
+        publishedCount: Number(data.publishedCount || 0),
+        skippedCount: Number(data.skippedCount || 0),
+      });
       const skipped = Number(data.skippedCount || 0);
       showToast(skipped ? `已开通 ${data.publishedCount || 0} 个模型，跳过 ${skipped} 个未达标模型` : data.message || "推荐模型已开通");
       await loadData();
@@ -331,6 +339,44 @@ export default function AdminModelMarketPage() {
               </button>
             </div>
           </section>
+
+          {bootstrapReport ? (
+            <section className="model-market-admin__bootstrap-result" aria-label="一键开通结果">
+              <div>
+                <strong>{bootstrapReport.pack === "full" ? "完整包处理结果" : "基础包处理结果"}</strong>
+                <span>
+                  已开通 {bootstrapReport.publishedCount} 个模型
+                  {bootstrapReport.skippedCount ? `，跳过 ${bootstrapReport.skippedCount} 个模型。` : "。"}
+                </span>
+              </div>
+              <div className="model-market-admin__bootstrap-grid">
+                <article>
+                  <h3>本次已开通</h3>
+                  {bootstrapReport.published.length ? (
+                    <ul>
+                      {bootstrapReport.published.map((item) => (
+                        <li key={item.modelId || item.id}>{item.displayName || item.modelId}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>这次没有新增开通模型。</p>
+                  )}
+                </article>
+                <article>
+                  <h3>为什么没开成</h3>
+                  {bootstrapReport.skipped.length ? (
+                    <ul>
+                      {bootstrapReport.skipped.map((item) => (
+                        <li key={`${item.id}-${item.reason}`}>{item.displayName || item.id}：{item.reason}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p>这次没有跳过项。</p>
+                  )}
+                </article>
+              </div>
+            </section>
+          ) : null}
 
           <section className="model-market-admin__toolbar">
             <label>
@@ -532,6 +578,19 @@ export default function AdminModelMarketPage() {
           background: linear-gradient(135deg, rgba(99,102,241,.12), rgba(14,165,233,.08));
           display: flex; justify-content: space-between; align-items: center; gap: 14px;
         }
+        .model-market-admin__bootstrap-result {
+          border: 1px solid var(--dash-border); border-radius: 14px; background: var(--dash-card-bg);
+          padding: 15px 16px; display: grid; gap: 14px;
+        }
+        .model-market-admin__bootstrap-result strong, .model-market-admin__bootstrap-result span { display: block; }
+        .model-market-admin__bootstrap-result span { margin-top: 5px; color: var(--dash-sub); font-size: 12px; line-height: 1.65; }
+        .model-market-admin__bootstrap-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .model-market-admin__bootstrap-grid article {
+          border: 1px solid var(--dash-border); border-radius: 12px; padding: 14px; background: rgba(148,163,184,.06);
+        }
+        .model-market-admin__bootstrap-grid h3 { margin: 0 0 10px; font-size: 13px; font-weight: 900; }
+        .model-market-admin__bootstrap-grid p, .model-market-admin__bootstrap-grid ul { margin: 0; color: var(--dash-sub); font-size: 12px; line-height: 1.7; }
+        .model-market-admin__bootstrap-grid ul { padding-left: 18px; }
         .model-market-admin__boss-strip strong, .model-market-admin__boss-strip span { display: block; }
         .model-market-admin__boss-strip span { margin-top: 5px; color: var(--dash-sub); font-size: 12px; line-height: 1.65; }
         .model-market-admin__boss-strip > div:last-child { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
@@ -587,7 +646,7 @@ export default function AdminModelMarketPage() {
         @media (max-width: 760px) {
           .model-market-admin__hero { display: grid; }
           .model-market-admin__actions { justify-content: stretch; }
-          .model-market-admin__stats, .model-market-admin__toolbar { grid-template-columns: 1fr; }
+          .model-market-admin__stats, .model-market-admin__toolbar, .model-market-admin__bootstrap-grid { grid-template-columns: 1fr; }
           .model-market-admin__boss-strip { display: grid; }
           .model-market-admin__boss-strip > div:last-child { justify-content: stretch; }
           .model-market-admin__boss-strip button { width: 100%; }

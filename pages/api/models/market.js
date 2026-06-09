@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     ]);
     const pricingMap = new Map(pricingConfigs.map((item) => [item.modelId, item]));
     const staticModels = products
-      .filter((p) => p.isAvailable)
+      .filter((p) => p.isAvailable && p.showInModelSquare !== false)
       .map((p) => sanitizePublicModelForClient(normalizeMarketModel({
         id: p.id,
         modelId: p.publicModelId || p.id,

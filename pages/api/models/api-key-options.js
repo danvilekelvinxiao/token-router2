@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   try {
     const products = await listModelProductsWithConfig({ includeUnavailable: true });
     const models = products
-      .filter((model) => model.isAvailable && model.canCreateKey !== false)
+      .filter((model) => model.isAvailable && model.canCreateKey !== false && model.showInApiKeyCreate !== false)
       .map((model) => {
         const fallbackPrice = findContentPrice(model);
         const inputSellPrice = model.pricing?.inputSellPricePerMTokens ?? fallbackPrice.inputPricePerM ?? null;

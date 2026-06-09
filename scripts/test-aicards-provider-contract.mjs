@@ -214,6 +214,19 @@ assert(
   "模型广场后台必须提供老板一键开通入口，并展示系统推荐模型，避免管理员面对空表和复杂上游字段",
 );
 assert(
+  modelProductsSource.includes("const publishedEntries = publishedModels.map")
+    && modelProductsSource.includes("const publishedByAlias = new Map()")
+    && modelProductsSource.includes("const publishedMatch = [")
+    && modelProductsSource.includes("showInModelSquare: publishedMatch.showInModelSquare")
+    && modelProductsSource.includes("canCreateKey: publishedMatch.canCreateKey"),
+  "模型产品聚合层必须让后台已发布配置覆盖系统默认可用性，否则一键开通后前台和 API Key 入口仍会错拿未开通版本",
+);
+assert(
+  marketApiSource.includes("p.isAvailable && p.showInModelSquare !== false")
+    && apiKeyOptionsSource.includes("model.isAvailable && model.canCreateKey !== false && model.showInApiKeyCreate !== false"),
+  "公开模型接口必须尊重后台的展示开关，不能忽略模型广场和 API Key 可见性配置",
+);
+assert(
   adminConfigSource.includes("upstream_model_id")
     && adminConfigSource.includes("model.upstreamModelId")
     && modelProductsSource.includes("item.upstreamModelId"),
