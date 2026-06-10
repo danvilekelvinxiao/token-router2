@@ -16888,3 +16888,403 @@ body {
   .modal-backdrop { align-items: flex-end; }
 }
 }
+
+/* ===== FlowAPI visual polish layer: OpenRouter-clean, Apple-minimal ===== */
+:root {
+  --flow-font-sans: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --flow-font-mono: "SF Mono", "SFMono-Regular", ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  --flow-text-title: 32px;
+  --flow-text-section: 22px;
+  --flow-text-card-title: 15px;
+  --flow-text-body: 14px;
+  --flow-text-caption: 12px;
+  --flow-metric-xl: 48px;
+  --flow-metric-lg: 36px;
+  --flow-metric-md: 24px;
+  --flow-metric-sm: 16px;
+  --flow-radius-card: 18px;
+  --flow-radius-control: 12px;
+  --flow-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --flow-duration-fast: 140ms;
+  --flow-duration-normal: 220ms;
+  --flow-duration-slow: 420ms;
+  --flow-surface: rgba(255, 255, 255, 0.94);
+  --flow-surface-soft: rgba(248, 250, 252, 0.86);
+  --flow-surface-border: rgba(226, 232, 240, 0.92);
+  --flow-surface-shadow: 0 16px 45px rgba(15, 23, 42, 0.055);
+  --flow-chart-grid: rgba(15, 23, 42, 0.06);
+  --flow-chart-tooltip-bg: rgba(255, 255, 255, 0.96);
+  --flow-chart-tooltip-border: rgba(226, 232, 240, 0.92);
+}
+
+.dark {
+  --flow-surface: rgba(11, 16, 32, 0.82);
+  --flow-surface-soft: rgba(17, 24, 39, 0.72);
+  --flow-surface-border: rgba(148, 163, 184, 0.14);
+  --flow-surface-shadow: 0 16px 50px rgba(0, 0, 0, 0.24);
+  --flow-chart-grid: rgba(148, 163, 184, 0.10);
+  --flow-chart-tooltip-bg: rgba(11, 16, 32, 0.96);
+  --flow-chart-tooltip-border: rgba(148, 163, 184, 0.18);
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--flow-font-sans);
+  text-rendering: geometricPrecision;
+}
+
+body {
+  overflow-x: hidden;
+}
+
+code,
+pre,
+.mono,
+.long-value,
+[class*="token"],
+[class*="price"],
+[class*="cost"],
+[class*="amount"],
+[class*="balance"],
+[class*="metric"],
+[class*="quota"] {
+  font-variant-numeric: tabular-nums;
+}
+
+main,
+section,
+article,
+aside,
+header,
+footer,
+nav,
+form,
+div,
+li,
+td,
+th {
+  min-width: 0;
+}
+
+.text-ellipsis,
+.truncate,
+[class*="model"][class*="name"],
+[class*="api-key"] code,
+[class*="key-card"] code,
+[class*="key-display"],
+[class*="email"],
+[class*="request-id"],
+[class*="long-value"] {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-clamp-2,
+[class*="desc"],
+[class*="description"],
+[class*="subtext"] {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.long-value,
+pre,
+code {
+  overflow-wrap: anywhere;
+}
+
+.flow-card,
+.metric-card,
+.chart-card,
+.table-card,
+.compact-card,
+.dash3-stat-card,
+.dash3-onboarding-panel,
+.dash3-core-metric-card,
+.dash3-asset-card,
+.dash3-flow-chart-card,
+.dash3-token-flow-card,
+.dash3-model-card,
+.dash3-profile-card,
+.api-management-create-card,
+.api-management-key-card,
+.recharge-section-card,
+.recharge-summary-card,
+.models-market-card,
+.market-model-card,
+.model-card-v2,
+.free-models-hero,
+.free-models-locked,
+.free-models-empty,
+.free-models-grid article,
+.image-studio-shell,
+.image-studio-sidepanel section,
+.image-result-bubble,
+.guide-config-choice-card,
+.guide-step-wide,
+.help-guide-card,
+.access-panel {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--flow-radius-card);
+  border-color: var(--flow-surface-border);
+  background-color: var(--flow-surface);
+  box-shadow: var(--flow-surface-shadow);
+  transition:
+    transform var(--flow-duration-normal) var(--flow-ease),
+    border-color var(--flow-duration-normal) var(--flow-ease),
+    box-shadow var(--flow-duration-normal) var(--flow-ease),
+    background-color var(--flow-duration-normal) var(--flow-ease);
+}
+
+.flow-card:hover,
+.metric-card:hover,
+.chart-card:hover,
+.table-card:hover,
+.compact-card:hover,
+.dash3-stat-card:hover,
+.dash3-core-metric-card:hover,
+.dash3-asset-card:hover,
+.api-management-key-card:hover,
+.models-market-card:hover,
+.market-model-card:hover,
+.model-card-v2:hover,
+.free-models-grid article:hover,
+.guide-config-choice-card:hover,
+.guide-step-wide:hover,
+.access-panel:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--flow-brand-b) 32%, var(--flow-surface-border));
+  box-shadow: 0 18px 52px rgba(79, 70, 229, 0.12);
+}
+
+button,
+a[class*="btn"],
+.btn-primary,
+.btn-secondary,
+[class*="button"],
+[class*="copy-btn"],
+[class*="action"] button {
+  transition:
+    transform var(--flow-duration-fast) var(--flow-ease),
+    filter var(--flow-duration-fast) var(--flow-ease),
+    background-color var(--flow-duration-fast) var(--flow-ease),
+    border-color var(--flow-duration-fast) var(--flow-ease),
+    color var(--flow-duration-fast) var(--flow-ease);
+}
+
+button:not(:disabled):hover,
+a[class*="btn"]:hover,
+.btn-primary:not(:disabled):hover,
+.btn-secondary:not(:disabled):hover {
+  transform: translateY(-1px);
+  filter: brightness(1.04);
+}
+
+button:active,
+a[class*="btn"]:active {
+  transform: translateY(0) scale(0.99);
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.btn-primary,
+.flowapi-primary-action,
+.api-management-card-head .btn-primary,
+.guide-step-action,
+.model-access-state a,
+.model-access-modal-actions button:first-child {
+  color: #fff;
+  font-weight: 800;
+  background: var(--flow-brand-gradient);
+  border-color: transparent;
+  box-shadow: 0 12px 30px rgba(79, 70, 229, 0.25);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+th,
+td {
+  min-width: 0;
+  vertical-align: middle;
+}
+
+td,
+th,
+.table-cell,
+.call-billing-row > *,
+.models-provider-item-name,
+.model-card-v2-name,
+.model-card-v2-desc,
+.api-key-card-top strong,
+.api-management-key-card > code,
+.dash3-profile-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+th,
+.table-head,
+[class*="table"] th {
+  color: var(--dash-sub, var(--page-sub));
+  font-size: var(--flow-text-caption);
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+td,
+[class*="table"] td {
+  font-size: var(--flow-text-body);
+}
+
+svg text {
+  font-family: var(--flow-font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  fill: var(--dash-sub, var(--page-sub));
+}
+
+svg line,
+svg .chart-grid-lines line {
+  stroke: var(--flow-chart-grid);
+}
+
+.chart-line,
+svg path[class*="line"] {
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dash3-tooltip {
+  pointer-events: none;
+  z-index: 80;
+  max-width: min(340px, calc(100vw - 28px));
+  border: 1px solid var(--flow-chart-tooltip-border);
+  border-radius: 12px;
+  background: var(--flow-chart-tooltip-bg);
+  color: var(--dash-text, var(--page-text));
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.14);
+  font-family: var(--flow-font-sans);
+  font-size: 12px;
+  line-height: 1.55;
+  transform: translate3d(0, 0, 0);
+  will-change: transform, opacity;
+}
+
+.dash3-prediction-chart-wrap,
+.dash3-flow-chart-card,
+.dash3-topmodels-chart,
+.dash3-barchart-wrap,
+.dash-chart-container,
+.trend-chart {
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.dash3-prediction-chart-wrap svg,
+.dash3-flow-chart-card svg,
+.dash3-topmodels-chart svg,
+.dash3-barchart-wrap svg,
+.dash-chart-container svg,
+.trend-chart svg {
+  max-width: 100%;
+  shape-rendering: geometricPrecision;
+}
+
+.dash3-header h1,
+.models-hero h1,
+.guide-hero h1,
+.image-studio-hero h1,
+.access-hero h1 {
+  font-size: var(--flow-text-title);
+  line-height: 1.18;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.dash3-stat-card strong,
+.ticker-card strong,
+.dash3-metric-number,
+.dash3-profile-balance-value,
+.models-series-intro-count,
+.model-card-v2-price-row b {
+  font-family: var(--flow-font-sans);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+}
+
+.model-card-v2-tags,
+.model-card-v2-type-tags,
+.api-key-card-meta,
+.dash3-profile-meta,
+.model-card-bottom > div {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.model-card-v2-tag-item,
+.model-tag,
+.dash3-status-pill,
+.models-provider-item-count {
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --flow-text-title: 28px;
+    --flow-text-section: 20px;
+    --flow-metric-xl: 38px;
+    --flow-metric-lg: 30px;
+  }
+
+  .flow-card,
+  .metric-card,
+  .chart-card,
+  .table-card,
+  .compact-card,
+  .dash3-onboarding-panel,
+  .dash3-core-metric-card,
+  .api-management-create-card,
+  .api-management-key-card,
+  .recharge-section-card,
+  .recharge-summary-card,
+  .model-card-v2,
+  .access-panel {
+    border-radius: 16px;
+  }
+
+  .dash3-tooltip {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

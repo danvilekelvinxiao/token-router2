@@ -1,4 +1,4 @@
-import { checkUpstreamHealth } from "@/lib/upstream";
+import { checkUpstreamHealth, toPublicUpstreamHealth } from "@/lib/upstream";
 
 export default async function handler(req, res) {
   if (req.method === "HEAD") {
@@ -16,5 +16,5 @@ export default async function handler(req, res) {
   }
 
   const health = await checkUpstreamHealth({ timeoutMs: 5000 });
-  return res.status(health.ok ? 200 : 500).json(health);
+  return res.status(health.ok ? 200 : 500).json(toPublicUpstreamHealth(health));
 }

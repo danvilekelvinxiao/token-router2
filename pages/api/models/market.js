@@ -1,21 +1,8 @@
-import { listModelProducts, getModelProduct } from "@/lib/model-products";
-
-const FRONTEND_MODEL_ORDER = [
-  "flowapi-gpt55-pro",
-  "flowapi-gpt55",
-  "flowapi-gpt54-pro",
-  "flowapi-gpt54",
-  "flowapi-gpt4o-mini",
-  "flowapi-codex-lite",
-  "flowapi-codex-plus",
-  "flowapi-codex-pro",
-  "deepseek-chat",
-  "deepseek-reasoner",
-  "flowapi-claude-sonnet",
-  "flowapi-claude-opus",
-  "flowapi-gemini-pro",
-  "flowapi-gemini-flash",
-];
+import { listModelProductsWithConfig } from "@/lib/model-products-server";
+import { listModelPricing, listPublishedModels } from "@/lib/admin-commercial-config";
+import { getContent } from "@/lib/content-cms";
+import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { listImageModels, mapPublicImageModel } from "@/lib/image-studio";
 
 const CATEGORY_META = {
   chatgpt: { providerId: "openai", providerName: "ChatGPT" },
@@ -23,42 +10,70 @@ const CATEGORY_META = {
   deepseek: { providerId: "deepseek", providerName: "DeepSeek" },
   claude: { providerId: "anthropic", providerName: "Claude" },
   gemini: { providerId: "google", providerName: "Gemini" },
+  image: { providerId: "image", providerName: "图片生成" },
 };
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const products = listModelProducts({ includeUnavailable: true })
-      .filter((p) => FRONTEND_MODEL_ORDER.includes(p.publicModelId));
+    const [products, publishedModels, pricingConfigs, imageModels] = await Promise.all([
+      listModelProductsWithConfig({ includeUnavailable: true }),
+      listPublishedModels({ target: "modelSquare" }).catch(() => []),
+      listModelPricing().catch(() => []),
+      listImageModels().then((models) => models.map(mapPublicImageModel)).catch(() => []),
+    ]);
+    const pricingMap = new Map(pricingConfigs.map((item) => [item.modelId, item]));
+    const staticModels = products
+      .filter((p) => p.isAvailable && p.showInModelSquare !== false)
+      .map((p) => sanitizePublicModelForClient(normalizeMarketModel({
+        id: p.id,
+        modelId: p.publicModelId || p.id,
+        displayName: p.displayName,
+        provider: p.provider || "FlowAPI",
+        description: p.description || "",
+        tags: p.useCases || [],
+        enabled: p.isAvailable,
+        officialReleaseDate: p.officialReleaseDate || "",
+        sortOrder: p.sortOrder || 999,
+        pricing: p.pricing,
+      })));
+    const existing = new Set(staticModels.map((model) => model.modelId));
+    const adminModels = publishedModels
+      .filter((model) => model.enabled && model.showInModelSquare && !existing.has(model.modelId))
+      .map((model) => sanitizePublicModelForClient(normalizeMarketModel({ ...model, pricing: pricingMap.get(model.modelId) })));
+    adminModels.forEach((model) => existing.add(model.modelId));
+    const publicImageModels = imageModels
+      .filter((model) => model.enabled && !existing.has(model.modelId || model.publicModelId || model.id))
+      .map((model) => sanitizePublicModelForClient(normalizeMarketModel({
+        id: model.id,
+        modelId: model.modelId || model.publicModelId || model.id,
+        publicModelId: model.publicModelId || model.modelId || model.id,
+        displayName: model.displayName,
+        provider: "FlowAPI",
+        modelType: "image",
+        description: model.sceneDescription || "",
+        tags: model.labelTags || model.tags || [],
+        enabled: model.enabled,
+        recommended: model.recommended,
+        hot: Boolean(model.recommended),
+        sortOrder: Number(model.sortOrder || 500) + 700,
+        pricing: {
+          billingMode: model.imageBillingMode?.startsWith("per_image") ? model.imageBillingMode : "per_image_fixed_profit",
+          imageSellPricePerImageCny: model.imageSellPricePerImageCny || model.unitPriceRmbTextToImage || 0,
+        },
+      })));
 
-    const models = products.map((p) => ({
-      id: p.id,
-      displayName: p.displayName,
-      publicModelId: p.publicModelId,
-      providerId: getFrontendMeta(p).providerId,
-      providerName: getFrontendMeta(p).providerName,
-      category: mapCategory(p),
-      description: p.description || "",
-      useCases: p.useCases || [],
-      recommendedTools: p.recommendedTools || [],
-      typeTags: getTypeTags(p),
-      inputPrice: p.isAvailable ? getDisplayPrice(p, "input") : null,
-      outputPrice: p.isAvailable ? getDisplayPrice(p, "output") : null,
-      billingUnit: "1M Token",
-      isAvailable: Boolean(p.isAvailable),
-      isComingSoon: Boolean(p.isComingSoon),
-      status: p.isAvailable ? "available" : p.isComingSoon ? "coming_soon" : "unavailable",
-      statusLabel: p.isAvailable ? "可用" : p.isComingSoon ? "即将开放" : "暂不可用",
-      sortOrder: p.sortOrder || 0,
-    })).sort((a, b) => {
-      return FRONTEND_MODEL_ORDER.indexOf(a.publicModelId) - FRONTEND_MODEL_ORDER.indexOf(b.publicModelId);
-    });
-
+    const models = [...staticModels, ...adminModels, ...publicImageModels]
+      .sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
     const categories = getCategoryCounts(models);
 
     return res.status(200).json({
+      ok: true,
+      success: true,
+      source: "admin_config",
       models,
+      data: models,
       providers: categories,
       categories,
       updatedAt: new Date().toISOString(),
@@ -69,74 +84,82 @@ export default async function handler(req, res) {
   }
 }
 
-function getFrontendMeta(p) {
-  return CATEGORY_META[mapCategory(p)] || { providerId: "openai", providerName: "ChatGPT" };
+function normalizeMarketModel(model) {
+  const category = mapCategory(model);
+  const meta = CATEGORY_META[category] || CATEGORY_META.chatgpt;
+  const fallbackPrice = findContentPrice(model);
+  const inputSellPrice = model.pricing?.inputSellPricePerMTokens ?? fallbackPrice.inputPricePerM ?? null;
+  const outputSellPrice = model.pricing?.outputSellPricePerMTokens ?? fallbackPrice.outputPricePerM ?? null;
+  return {
+    id: model.id || model.modelId,
+    displayName: model.displayName,
+    modelId: model.modelId,
+    publicModelId: model.modelId,
+    provider: model.provider || meta.providerName,
+    providerId: meta.providerId,
+    providerName: meta.providerName,
+    category,
+    description: model.description || "",
+    typeTags: model.tags || [],
+    tags: model.tags || [],
+    inputPrice: inputSellPrice,
+    outputPrice: outputSellPrice,
+    inputPricePerM: inputSellPrice,
+    outputPricePerM: outputSellPrice,
+    flowapiInputPricePerM: inputSellPrice,
+    flowapiOutputPricePerM: outputSellPrice,
+    imageSellPricePerImageCny: model.pricing?.imageSellPricePerImageCny ?? null,
+    billingUnit: model.pricing?.billingMode?.startsWith("per_image") ? "张" : "1M Token",
+    officialReleaseDate: model.officialReleaseDate || "",
+    isAvailable: model.enabled !== false,
+    enabled: model.enabled !== false,
+    status: model.enabled === false ? "unavailable" : "available",
+    statusLabel: model.enabled === false ? "暂不可用" : "可用",
+    recommended: Boolean(model.recommended),
+    hot: Boolean(model.hot),
+    isMemberOnly: Boolean(model.memberOnly),
+    isFreeModel: Boolean(model.free),
+    sortOrder: model.sortOrder || 999,
+    primaryButtonText: category === "image" ? "去生成图片" : "立即接入",
+    primaryButtonHref: category === "image" ? "/images" : "/api-management",
+  };
 }
 
-function mapCategory(p) {
-  const publicId = String(p.publicModelId || "").toLowerCase();
-  if (publicId.includes("codex")) return "codex";
-  if (publicId.includes("deepseek")) return "deepseek";
-  if (publicId.includes("claude")) return "claude";
-  if (publicId.includes("gemini")) return "gemini";
-  if (publicId.includes("gpt") || publicId.includes("chatgpt")) return "chatgpt";
-  const g = (p.group || "").toLowerCase();
-  if (g.includes("codex")) return "codex";
-  if (g.includes("gpt") || g.includes("openai")) return "chatgpt";
-  if (g.includes("claude")) return "claude";
-  if (g.includes("deepseek")) return "deepseek";
-  if (g.includes("gemini") || g.includes("google")) return "gemini";
+function findContentPrice(model = {}) {
+  const aliases = [model.modelId, model.publicModelId, model.id, model.displayName]
+    .filter(Boolean)
+    .map((item) => String(item).trim().toLowerCase());
+  const item = getContent("models").find((candidate) => {
+    return [candidate.modelId, candidate.id, candidate.displayName]
+      .filter(Boolean)
+      .some((value) => aliases.includes(String(value).trim().toLowerCase()));
+  });
+  return {
+    inputPricePerM: item?.flowapiInputPricePerM ?? item?.inputPricePerM ?? null,
+    outputPricePerM: item?.flowapiOutputPricePerM ?? item?.outputPricePerM ?? null,
+  };
+}
+
+function mapCategory(model) {
+  const publicId = String(model.modelId || model.publicModelId || "").toLowerCase();
+  const provider = String(model.provider || "").toLowerCase();
+  const type = String(model.modelType || "").toLowerCase();
+  if (type.includes("image")) return "image";
+  if (publicId.includes("codex") || provider.includes("codex")) return "codex";
+  if (publicId.includes("deepseek") || provider.includes("deepseek")) return "deepseek";
+  if (publicId.includes("claude") || provider.includes("anthropic")) return "claude";
+  if (publicId.includes("gemini") || provider.includes("google")) return "gemini";
   return "chatgpt";
 }
 
 function getCategoryCounts(models) {
-  const defs = [
+  return [
     { id: "all", name: "全部模型", count: models.length },
-    { id: "newcomer", name: "新手推荐", count: models.filter((m) => isNewcomerModel(m)).length },
     { id: "chatgpt", name: "ChatGPT", count: models.filter((m) => m.category === "chatgpt").length },
     { id: "codex", name: "Codex", count: models.filter((m) => m.category === "codex").length },
     { id: "deepseek", name: "DeepSeek", count: models.filter((m) => m.category === "deepseek").length },
     { id: "claude", name: "Claude", count: models.filter((m) => m.category === "claude").length },
     { id: "gemini", name: "Gemini", count: models.filter((m) => m.category === "gemini").length },
-    { id: "coming_soon", name: "即将开放", count: models.filter((m) => m.status === "coming_soon").length },
+    { id: "image", name: "图片生成", count: models.filter((m) => m.category === "image").length },
   ];
-  return defs;
-}
-
-function isNewcomerModel(m) {
-  return m.isAvailable && ["deepseek-chat", "deepseek-reasoner", "flowapi-codex-lite"].includes(m.publicModelId);
-}
-
-function getTypeTags(p) {
-  const tags = [];
-  const name = (p.displayName || "").toLowerCase();
-  const desc = (p.description || "").toLowerCase();
-  if (desc.includes("代码") || desc.includes("编程") || name.includes("codex")) tags.push("编程");
-  if (desc.includes("推理") || name.includes("reasoner")) tags.push("推理");
-  if (desc.includes("写作") || desc.includes("文本")) tags.push("写作");
-  if (desc.includes("对话") || desc.includes("聊天") || desc.includes("chat")) tags.push("对话");
-  if (desc.includes("工具") || desc.includes("agent")) tags.push("工具");
-  if (desc.includes("长文") || desc.includes("长上下文")) tags.push("长文本");
-  return tags;
-}
-
-function getDisplayPrice(p, type) {
-  const multiplier = Number(p.priceMultiplier || 1);
-  // Base prices in CNY/M Token
-  if (p.group?.includes("deepseek")) {
-    return type === "input" ? (1.0 * multiplier).toFixed(1) : (2.0 * multiplier).toFixed(1);
-  }
-  if (p.group?.includes("codex")) {
-    return type === "input" ? (6.0 * multiplier).toFixed(1) : (24.0 * multiplier).toFixed(1);
-  }
-  if (p.group?.includes("gpt")) {
-    return type === "input" ? (8.0 * multiplier).toFixed(1) : (32.0 * multiplier).toFixed(1);
-  }
-  if (p.group?.includes("claude")) {
-    return type === "input" ? (4.0 * multiplier).toFixed(1) : (16.0 * multiplier).toFixed(1);
-  }
-  if (p.group?.includes("gemini")) {
-    return type === "input" ? (3.0 * multiplier).toFixed(1) : (12.0 * multiplier).toFixed(1);
-  }
-  return type === "input" ? "待配置" : "待配置";
 }

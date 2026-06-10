@@ -3,23 +3,23 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useMemo, useState } from "react";
 
-const apiBaseUrl = "https://api.flowapi.fun/v1";
+const apiBaseUrl = "https://flowapi.fun/v1";
 
 const modelDirectory = [
-  { name: "DeepSeek Chat", modelId: "deepseek-chat", provider: "DeepSeek", bestFor: "中文内容、客服、批量文案" },
-  { name: "Qwen3 32B", modelId: "qwen/qwen3-32b", provider: "Alibaba", bestFor: "外贸邮件、商务沟通、中文办公" },
-  { name: "GPT-4o Mini", modelId: "openai/gpt-4o-mini", provider: "OpenAI", bestFor: "复杂分析、结构化总结、代码辅助" },
-  { name: "Claude Haiku", modelId: "anthropic/claude-3.5-haiku", provider: "Anthropic", bestFor: "长文分析、英文写作、轻量推理" },
-  { name: "Kimi", modelId: "moonshot/kimi-k2", provider: "Moonshot", bestFor: "长文阅读、资料整理、中文知识库" },
-  { name: "GLM", modelId: "zhipu/glm-4.5", provider: "Zhipu", bestFor: "办公问答、中文任务、轻量推理" },
+  { name: "DeepSeek V4 Flash", modelId: "deepseek-chat", provider: "FlowAPI", bestFor: "中文内容、客服、批量文案" },
+  { name: "Qwen3 32B", modelId: "qwen/qwen3-32b", provider: "FlowAPI", bestFor: "外贸邮件、商务沟通、中文办公" },
+  { name: "GPT-4o Mini", modelId: "openai/gpt-4o-mini", provider: "FlowAPI", bestFor: "复杂分析、结构化总结、代码辅助" },
+  { name: "Claude Haiku", modelId: "anthropic/claude-3.5-haiku", provider: "FlowAPI", bestFor: "长文分析、英文写作、轻量推理" },
+  { name: "Kimi", modelId: "moonshot/kimi-k2", provider: "FlowAPI", bestFor: "长文阅读、资料整理、中文知识库" },
+  { name: "GLM", modelId: "zhipu/glm-4.5", provider: "FlowAPI", bestFor: "办公问答、中文任务、轻量推理" },
 ];
 
 function getSelectedModel(queryModel) {
   const cleanModel = typeof queryModel === "string" ? queryModel : "";
   return modelDirectory.find((model) => model.modelId === cleanModel) || {
-    name: cleanModel || "DeepSeek Chat",
+    name: cleanModel || "DeepSeek V4 Flash",
     modelId: cleanModel || "deepseek-chat",
-    provider: "Auto Router",
+    provider: "FlowAPI",
     bestFor: "通用任务",
   };
 }
@@ -30,7 +30,7 @@ export default function ApiAccessPage() {
   const selectedModel = useMemo(() => getSelectedModel(router.query.model), [router.query.model]);
 
   const requestExample = `curl ${apiBaseUrl}/chat/completions \\
-  -H "Authorization: Bearer 你的控制台 API 密匙" \\
+  -H "Authorization: Bearer 替换成你的 FlowAPI API Key" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "${selectedModel.modelId}",
@@ -84,7 +84,7 @@ export default function ApiAccessPage() {
               <div className="panel-title">
                 <div>
                   <h3>接入参数</h3>
-                  <p>{copied ? `${copied} 已复制` : "复制以下三项即可接入 OpenAI 兼容客户端"}</p>
+                  <p>{copied ? `${copied} 已复制` : "复制以下三项即可接入 FlowAPI 标准客户端"}</p>
                 </div>
               </div>
               <div className="access-list">
@@ -94,9 +94,9 @@ export default function ApiAccessPage() {
                   <button type="button" onClick={() => copyText("Base URL", apiBaseUrl)}>复制</button>
                 </div>
                 <div>
-                  <span>API 密匙</span>
-                  <code>你的控制台 API 密匙</code>
-                  <button type="button" onClick={() => copyText("API 密匙", "你的控制台 API 密匙")}>复制</button>
+                  <span>API Key</span>
+                  <code>在 API 管理页复制真实 API Key</code>
+                  <Link href="/api-management">去复制</Link>
                 </div>
                 <div>
                   <span>Model</span>

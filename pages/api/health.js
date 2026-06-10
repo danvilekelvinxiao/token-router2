@@ -1,5 +1,5 @@
 import { hasDatabase, query } from "@/lib/db";
-import { checkUpstreamHealth } from "@/lib/upstream";
+import { checkUpstreamHealth, toPublicUpstreamHealth } from "@/lib/upstream";
 
 export default async function handler(req, res) {
   if (req.method === "HEAD") {
@@ -30,7 +30,11 @@ export default async function handler(req, res) {
     ok,
     service: "flowapi",
     database,
-    upstream,
+    upstream: upstream.ok ? "ok" : "error",
+    deploy: {
+      shortCommit: process.env.FLOWAPI_DEPLOY_COMMIT?.slice(0, 12) || "",
+    },
+    modelService: toPublicUpstreamHealth(upstream).modelService,
     time: new Date().toISOString(),
   });
 }

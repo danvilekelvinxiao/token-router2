@@ -13,8 +13,7 @@
 
 const NEW_API_BASE_URL =
   process.env.NEW_API_BASE_URL || "http://localhost:3001";
-const NEW_API_ADMIN_TOKEN =
-  process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || "";
+const NEW_API_ADMIN_TOKEN = process.env.NEW_API_ADMIN_TOKEN || "";
 const NEW_API_DEFAULT_GROUP =
   process.env.NEW_API_DEFAULT_GROUP || "default";
 const NEW_API_DEFAULT_QUOTA = Number(
@@ -84,7 +83,7 @@ export async function createNewApiToken(params: {
   models?: string[];
 }): Promise<NewApiToken> {
   if (!NEW_API_ADMIN_TOKEN) {
-    throw new Error("NEW_API_ADMIN_TOKEN 或 NEW_API_KEY 未配置，无法创建真实 New API API Key");
+    throw new Error("NEW_API_ADMIN_TOKEN 未配置，无法创建真实 New API API Key");
   }
 
   const nameLimit = Number(process.env.NEW_API_TOKEN_NAME_MAX_LENGTH || 30);
