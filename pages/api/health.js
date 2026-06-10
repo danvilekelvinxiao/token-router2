@@ -1,4 +1,5 @@
 import { hasDatabase, query } from "@/lib/db";
+import { getDeployInfo } from "@/lib/deploy-info";
 import { checkUpstreamHealth } from "@/lib/upstream";
 
 export default async function handler(req, res) {
@@ -33,11 +34,16 @@ export default async function handler(req, res) {
     ? upstream.ok
     : false;
 
+	  const deploy = getDeployInfo();
 	  return res.status(ok ? 200 : 500).json({
 	    ok,
 	    service: "flowapi",
 	    database,
 	    upstream: upstream.ok ? "ok" : "degraded",
+	    deploy: {
+	      shortCommit: deploy.shortCommit,
+	      buildId: deploy.buildId,
+	    },
 	    time: new Date().toISOString(),
 	  });
 	}

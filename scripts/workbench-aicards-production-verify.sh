@@ -6,7 +6,7 @@ set -euo pipefail
 
 APP="${FLOWAPI_APP_DIR:-/var/www/flowapi}"
 BRANCH="${FLOWAPI_DEPLOY_BRANCH:-feature/model-access-cms-redesign-20260527}"
-COMMIT="${FLOWAPI_DEPLOY_COMMIT:-2d10adb49f78d14cae297ead6139220a76a334dc}"
+COMMIT="${FLOWAPI_DEPLOY_COMMIT:-}"
 PUBLIC_BASE="${FLOWAPI_PUBLIC_BASE_URL:-https://flowapi.fun}"
 PORT="${FLOWAPI_PORT:-3000}"
 SUDO=""
@@ -34,7 +34,7 @@ whoami
 hostname
 echo "app=${APP}"
 echo "branch=${BRANCH}"
-echo "commit=${COMMIT}"
+echo "commit=${COMMIT:-origin/${BRANCH}}"
 echo "public=${PUBLIC_BASE}"
 
 if [ ! -d "$APP/.git" ]; then
@@ -47,10 +47,14 @@ cd "$APP"
 echo "==> 1. Deploy exact GitHub commit"
 git fetch origin "$BRANCH"
 git checkout "$BRANCH" || git checkout -B "$BRANCH" "origin/$BRANCH"
-git reset --hard "$COMMIT"
+if [ -n "$COMMIT" ]; then
+  git reset --hard "$COMMIT"
+else
+  git reset --hard "origin/$BRANCH"
+fi
 DEPLOYED_COMMIT="$(git rev-parse HEAD)"
 echo "deployed_commit=${DEPLOYED_COMMIT}"
-if [ "$DEPLOYED_COMMIT" != "$COMMIT" ]; then
+if [ -n "$COMMIT" ] && [ "$DEPLOYED_COMMIT" != "$COMMIT" ]; then
   echo "Commit mismatch after reset." >&2
   exit 2
 fi
@@ -104,6 +108,7 @@ $SUDO systemctl reload nginx || $SUDO service nginx reload || true
 echo "==> 5. Local runtime proof"
 sleep 2
 curl -fsS "http://127.0.0.1:${PORT}/api/health" && echo
+curl -fsS "http://127.0.0.1:${PORT}/api/deploy-info" && echo
 curl -fsS "http://127.0.0.1:${PORT}/api/models/market" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const j=JSON.parse(s);const rows=j.models||j.data||[];console.log(JSON.stringify({count:rows.length,providers:[...new Set(rows.map(x=>x.provider||x.providerName).filter(Boolean))],imageCount:rows.filter(x=>String(x.category||x.primaryButtonHref||"").includes("image")||x.primaryButtonHref==="/images").length},null,2));})'
 
