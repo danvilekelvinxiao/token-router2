@@ -153,7 +153,7 @@ function getProxyReferer(req) {
   return `${protocol}://${host.replace(/^api\./, "")}`;
 }
 
-function orderUpstreamsForFlowApiKey(routeDecision, upstreams) {
+function orderUpstreamsForFlowApiKey(routeDecision, upstreams, apiKey = {}) {
   const candidates = routeDecision.fallbackChain && routeDecision.fallbackChain.length > 0
     ? routeDecision.fallbackChain
     : upstreams;
@@ -167,7 +167,11 @@ function orderUpstreamsForFlowApiKey(routeDecision, upstreams) {
   // FlowAPI 本地余额是唯一商业账本。外部用户的 FlowAPI API Key
   // 只能进入 New API 执行层，不能在 New API 失败后自动切到其他上游
   // 形成“本地已校验但上游绕路”的账务和权限风险。
-  return [newApi];
+  if (apiKey.newApiSyncStatus === "synced" && apiKey.newApiId) return [newApi];
+
+  // 本地开发或 New API 管理接口不可用时，FlowAPI 可使用服务端上游 Key
+  // 托管转发；用户 Key 仍只用于 FlowAPI 鉴权、模型限制、扣费和流水。
+  return routeOrdered;
 }
 
 export default async function handler(req, res) {
@@ -379,6 +383,7 @@ export default async function handler(req, res) {
   const title = process.env.PROXY_TITLE || "FlowAPI";
 
   try {
+    const startMs = Date.now();
     if (upstreamBody.stream) {
       upstreamBody.stream_options = {
         include_usage: true,
@@ -397,11 +402,18 @@ export default async function handler(req, res) {
     let lastUpstreamError = null;
 
     // Try upstreams in smart order: primary first, then fallback chain
-    const orderedUpstreams = orderUpstreamsForFlowApiKey(routeDecision, upstreams);
+    const orderedUpstreams = orderUpstreamsForFlowApiKey(routeDecision, upstreams, customerMatch.apiKey);
 
     for (const candidate of orderedUpstreams) {
+      const upstreamToken = candidate.name === "new-api" && customerMatch.apiKey.newApiSyncStatus === "synced"
+        ? clientToken
+        : candidate.apiKey;
+      if (!upstreamToken) {
+        lastUpstreamError = new Error(`${candidate.label} 未配置 API Key`);
+        continue;
+      }
       const headers = {
-        Authorization: `Bearer ${candidate.name === "new-api" ? clientToken : candidate.apiKey}`,
+        Authorization: `Bearer ${upstreamToken}`,
         "Content-Type": "application/json",
       };
 
@@ -484,6 +496,8 @@ export default async function handler(req, res) {
 
     const data = await upstreamResponse.json();
     const cost = estimateCnyCost(selected.modelId, data.usage);
+    const latencyMs = Date.now() - startMs;
+    const upstreamCost = estimateCnyCost(upstreamModelId, data.usage);
 
     const customer = await finalizeReservedCallByToken(clientToken, {
       endpoint: "/v1/chat/completions",
@@ -494,6 +508,12 @@ export default async function handler(req, res) {
       promptTokens: data.usage?.prompt_tokens || 0,
       completionTokens: data.usage?.completion_tokens || 0,
       cost,
+      publicModelId: effectiveRequestedModel || selected.modelId,
+      actualModelId: upstreamModelId,
+      upstreamChannel: upstream.name,
+      upstreamCost,
+      profit: Number((cost - upstreamCost).toFixed(6)),
+      latencyMs,
     }, reserve);
 
     releaseConcurrency(concurrencyKey);

@@ -1092,24 +1092,63 @@ function buildPredictionFromTrend(trendData, metric, balance) {
     },
     tokens: {
       unit: "K",
-      pastValues: trendData.map((item) => Number(((Number(item.tokens || 0)) / 1000).toFixed(2))),
+      pastValues: trendData.map((item) => Number(item.tokens || 0) / 1000),
       futureValue: dailyAverageTokens / 1000,
     },
   }[metric] || {
     unit: "K",
-    pastValues: trendData.map((item) => Number(((Number(item.tokens || 0)) / 1000).toFixed(2))),
+    pastValues: trendData.map((item) => Number(item.tokens || 0) / 1000),
     futureValue: dailyAverageTokens / 1000,
   };
 
   const hasData = activeDays.length > 0;
-  const futureValues = tokenForecast.map((tokens) => {
-    if (metric === "spend") return Number((tokens * costPerToken).toFixed(4));
-    if (metric === "requests") return Number(Math.max(0, tokens * requestsPerToken).toFixed(2));
-    return Number((tokens / 1000).toFixed(2));
+  const insufficientSample = activeSeven.length < 3;
+  const metricHistory = lastSeven.map((item) => {
+    if (metric === "spend") return Number(item.cost || 0);
+    if (metric === "requests") return Number(item.requests || 0);
+    return Number(item.tokens || 0) / 1000;
   });
+  const dynamicRatios = [];
+  for (let i = 1; i < metricHistory.length; i += 1) {
+    const prev = Number(metricHistory[i - 1] || 0);
+    const curr = Number(metricHistory[i] || 0);
+    if (prev > 0 && curr > 0) {
+      const raw = curr / prev;
+      const clamped = Math.max(0.82, Math.min(1.25, raw));
+      dynamicRatios.push(clamped);
+    }
+  }
+  const waveRatios = dynamicRatios.length ? dynamicRatios : [1.04, 0.96, 1.08, 0.93, 1.05, 0.97, 1.02];
+
+  const flatTokenValue = dailyAverageTokens > 0
+    ? dailyAverageTokens
+    : Number(lastSeven[lastSeven.length - 1]?.tokens || 0);
+  const effectiveTokenForecast = insufficientSample
+    ? Array.from({ length: 7 }, () => flatTokenValue)
+    : tokenForecast.map((tokens, idx) => {
+      const wave = waveRatios[idx % waveRatios.length];
+      return Math.max(0, Number((Number(tokens || 0) * wave).toFixed(2)));
+    });
+
+  const futureValues = insufficientSample
+    ? Array.from({ length: 7 }, () => {
+      if (metric === "spend") return Number(dailyAverageCost.toFixed(4));
+      if (metric === "requests") return Number(dailyAverageRequests.toFixed(2));
+      return Number((dailyAverageTokens / 1000).toFixed(2));
+    })
+    : effectiveTokenForecast.map((tokens) => {
+      if (metric === "spend") return Number((tokens * costPerToken).toFixed(4));
+      if (metric === "requests") return Number(Math.max(0, tokens * requestsPerToken).toFixed(2));
+      return Number((tokens / 1000).toFixed(2));
+    });
+
+  const futureCosts = insufficientSample
+    ? Array.from({ length: 7 }, () => Number(dailyAverageCost.toFixed(4)))
+    : effectiveTokenForecast.map((tokens) => Number((tokens * costPerToken).toFixed(4)));
+
   const estimatedDaysLeft = dailyAverageCost > 0 ? Math.max(1, Math.floor(Number(balance || 0) / dailyAverageCost)) : 0;
-  const weekTokens = tokenForecast.reduce((sum, value) => sum + Number(value || 0), 0) || Math.round(dailyAverageTokens * 7);
-  const weekCost = Number(((tokenForecast.reduce((sum, value) => sum + Number(value || 0), 0) * costPerToken) || (dailyAverageCost * 7)).toFixed(2));
+  const weekTokens = effectiveTokenForecast.reduce((sum, value) => sum + Number(value || 0), 0) || Math.round(dailyAverageTokens * 7);
+  const weekCost = Number(((effectiveTokenForecast.reduce((sum, value) => sum + Number(value || 0), 0) * costPerToken) || (dailyAverageCost * 7)).toFixed(2));
 
   return {
     data: {
@@ -1118,7 +1157,7 @@ function buildPredictionFromTrend(trendData, metric, balance) {
       pastCosts: trendData.map((item) => Number(item.cost || 0)),
       futureDates: getFutureDateLabels(7),
       futureValues,
-      futureCosts: tokenForecast.map((tokens) => Number((Number(tokens || 0) * costPerToken).toFixed(4))),
+      futureCosts,
       unit: metricConfig.unit,
       primaryModel: "DeepSeek Chat",
     },
@@ -1128,7 +1167,9 @@ function buildPredictionFromTrend(trendData, metric, balance) {
       coverDays: estimatedDaysLeft,
       suggestRecharge: dailyAverageCost > 0 ? Math.max(50, Math.ceil((dailyAverageCost * 30) / 10) * 10) : 0,
       dailyAverageCost,
-      message: dailyAverageCost > 0
+      message: insufficientSample
+        ? "真实样本较少，预测区先按当前消耗水平平面展示。"
+        : dailyAverageCost > 0
         ? `按最近 7 天平均消耗，当前余额预计可使用 ${estimatedDaysLeft} 天。`
         : "暂无足够数据生成预测，继续使用后将自动生成。",
       hasData,
@@ -2502,18 +2543,7 @@ function RecentCallLedger({ rows }) {
                   {/* Expanded detail */}
                   {isOpen && (
                     <div className="call-billing-detail" onClick={(e) => e.stopPropagation()}>
-                      {/* Section 1: Channel & Request */}
-                      <div className="call-billing-detail-tags">
-                        <span>渠道：{row.channelName}</span>
-                        <span>{row.upstreamHost}</span>
-                        <span>{row.source}</span>
-                        <span>FinishReason: {row.finishReason}</span>
-                        <span>状态：{row.status}</span>
-                        <span>IP：{row.requestIp || "-"}</span>
-                        <span>耗时：{row.latency}</span>
-                      </div>
-
-                      {/* Section 2-4: Pricing cards */}
+                      {/* Section 1-3: Pricing cards */}
                       <div className="call-billing-pricing-grid">
                         {/* Original price */}
                         <div className="call-billing-pricing-card">

@@ -53,7 +53,7 @@ const addOnServices = [
 
 const paymentQrImages = {
   wechat: "/images/pay/wechat.jpg",
-  alipay: "/images/pay/alipay.jpg",
+  alipay: "/images/pay/alipay.png",
   taobao_code: "/images/pay/taobao.jpg",
 };
 
@@ -191,6 +191,11 @@ export default function RechargePage() {
   const finalAmount = baseAmount + addOnTotal;
 
   const currentMethod = useMemo(() => paymentMethods.find((item) => item.key === paymentMethod) || paymentMethods[0], [paymentMethod]);
+  const manualModeNotice = useMemo(() => {
+    if (paymentMethod === "wechat") return "微信商户参数未配置完整，已切换到手动确认模式";
+    if (paymentMethod === "alipay") return "支付宝商户参数未配置完整，已切换到手动确认模式";
+    return "";
+  }, [paymentMethod]);
 
   const selectedAddOnDetails = useMemo(() => {
     return selectedAddOns.map((id) => {
@@ -521,7 +526,8 @@ export default function RechargePage() {
                   </div>
                 ) : (
                   <div className="payment-workspace">
-                    <PaymentQr src={paymentSession?.qrImage || paymentQrImages[paymentMethod]} methodName={currentMethod.name} loading={paying && !manualFallback} error={paymentError} hint={manualFallback ? "当前自动支付通道未配置完整，请扫码后提交付款备注，管理员会人工确认。" : "扫码付款后，系统会自动处理到账。"} />
+                    <p className="pay-error">{paymentError || manualModeNotice}</p>
+                    <PaymentQr src={paymentQrImages[paymentMethod]} methodName={currentMethod.name} loading={false} error={paymentError} hint="请使用对应支付 App 扫码付款，付款后填写备注并提交人工确认。" />
                     <PaymentBox title="付款备注 / 订单号" value={submittedOrder?.outTradeNo || submittedOrder?.id || paymentRef || "支付后可填写付款备注"} copied={copied} onCopy={copyText} />
                     <label className="payment-ref-input"><span>人工核对备注</span><input value={paymentRef} onChange={(event) => setPaymentRef(event.target.value)} placeholder="可填写微信/支付宝付款备注或淘宝订单号" /></label>
                     <button type="button" className="btn-secondary" disabled={paying} onClick={confirmPayment}>提交人工确认订单</button>
