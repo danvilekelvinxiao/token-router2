@@ -14,6 +14,9 @@ const publicProviderSource = fs.readFileSync(path.join(repoRoot, "lib/public-mod
 const publicApiSource = fs.readFileSync(path.join(repoRoot, "lib/public-api.js"), "utf8");
 const customerStoreSource = fs.readFileSync(path.join(repoRoot, "lib/customer-store.js"), "utf8");
 const dashboardSource = fs.readFileSync(path.join(repoRoot, "pages/dashboard.js"), "utf8");
+const apiManagementSource = fs.readFileSync(path.join(repoRoot, "pages/api-management.js"), "utf8");
+const guideSource = fs.readFileSync(path.join(repoRoot, "pages/guide.js"), "utf8");
+const publicFlowApiUsageSource = fs.readFileSync(path.join(repoRoot, "pages/api/flowapi/keys/[keyId]/usage.js"), "utf8");
 const upstreamHealthApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/upstreams/health.js"), "utf8");
 const marketApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/models/market.js"), "utf8");
 const apiKeyOptionsSource = fs.readFileSync(path.join(repoRoot, "pages/api/models/api-key-options.js"), "utf8");
@@ -223,10 +226,20 @@ assert(
 assert(
   publicProviderSource.includes("export function getPublicModelProvider")
     && publicProviderSource.includes('return "FlowAPI";')
+    && publicProviderSource.includes('providerId: "flowapi"')
     && !publicProviderSource.includes('return "OpenAI";')
     && !publicProviderSource.includes('return "Anthropic";')
     && !publicProviderSource.includes('return "Google";'),
-  "用户侧公开模型 provider 必须统一显示 FlowAPI，不得按关键词暴露模型厂商品牌",
+  "用户侧公开模型 provider/providerId 必须统一显示 FlowAPI，不得按关键词暴露模型厂商品牌",
+);
+assert(
+  apiManagementSource.includes("/api/flowapi/keys/")
+    && guideSource.includes("/api/flowapi/keys/")
+    && !apiManagementSource.includes("/api/newapi/keys/")
+    && !guideSource.includes("/api/newapi/keys/")
+    && publicFlowApiUsageSource.includes('provider: "FlowAPI"')
+    && publicFlowApiUsageSource.includes("allowedModels: key.publicModelId ? [key.publicModelId] : []"),
+  "普通用户 API Key 用量详情必须使用 FlowAPI 命名接口，并且只返回 FlowAPI provider 与公开模型 ID",
 );
 assert(
   publicApiKeyDtoSource.includes("function publicApiKeyDto")

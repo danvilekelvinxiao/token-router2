@@ -4,6 +4,7 @@ import { assertCustomerOwner } from "@/lib/session";
 import { getLocalePriceMultiplier, normalizeLocale } from "@/lib/pricing/locale-pricing";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
 import { assertCanCreateTeamApiKey, linkTeamApiKey } from "@/lib/team-management";
+import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
 
 function parseBody(body) {
   if (!body) return {};
@@ -15,6 +16,41 @@ function parseBody(body) {
     }
   }
   return body;
+}
+
+function publicCreatedModelProduct(modelProduct = {}) {
+  return sanitizePublicModelForClient({
+    id: modelProduct.publicModelId || modelProduct.id,
+    modelId: modelProduct.publicModelId || modelProduct.id,
+    publicModelId: modelProduct.publicModelId || modelProduct.id,
+    displayName: modelProduct.displayName || modelProduct.publicModelId || modelProduct.id,
+    name: modelProduct.displayName || modelProduct.publicModelId || modelProduct.id,
+    provider: "FlowAPI",
+    category: modelProduct.category,
+    description: modelProduct.description,
+    tags: modelProduct.tags,
+    useCases: modelProduct.useCases,
+    recommendedUserTypes: modelProduct.recommendedUserTypes,
+    inputPrice: modelProduct.inputPrice,
+    outputPrice: modelProduct.outputPrice,
+    inputPricePerM: modelProduct.inputPricePerM,
+    outputPricePerM: modelProduct.outputPricePerM,
+    flowapiInputPricePerM: modelProduct.flowapiInputPricePerM,
+    flowapiOutputPricePerM: modelProduct.flowapiOutputPricePerM,
+    billingMode: modelProduct.billingMode || modelProduct.pricing?.billingMode,
+    billingUnit: modelProduct.billingUnit,
+    isAvailable: modelProduct.isAvailable,
+    enabled: modelProduct.enabled,
+    status: modelProduct.status,
+    statusLabel: modelProduct.statusLabel,
+    recommended: modelProduct.recommended,
+    hot: modelProduct.hot,
+    isMemberOnly: modelProduct.isMemberOnly,
+    isFreeModel: modelProduct.isFreeModel,
+    sortOrder: modelProduct.sortOrder,
+    primaryButtonText: modelProduct.primaryButtonText,
+    primaryButtonHref: modelProduct.primaryButtonHref,
+  });
 }
 
 export default async function handler(req, res) {
@@ -109,7 +145,7 @@ export default async function handler(req, res) {
         ...customer,
         customer,
         createdKey,
-        modelProduct,
+        modelProduct: publicCreatedModelProduct(modelProduct),
         baseUrl: getPublicApiBaseUrl(),
       });
     } catch (error) {

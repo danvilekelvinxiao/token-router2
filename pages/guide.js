@@ -628,7 +628,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
     setDetailLoading(true);
     setDetailData(null);
     try {
-      const res = await fetch(`/api/newapi/keys/${key.id}/usage`);
+      const res = await fetch(`/api/flowapi/keys/${key.id}/usage`);
       const data = await res.json();
       setDetailData(data);
     } catch {

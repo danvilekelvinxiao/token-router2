@@ -715,7 +715,7 @@ export default function ApiManagementPage() {
       sections: [{ title: "加载中", content: <p className="api-management-empty-text">正在读取真实调用记录...</p> }],
     });
     try {
-      const res = await fetch(`/api/newapi/keys/${encodeURIComponent(key.id)}/usage`);
+      const res = await fetch(`/api/flowapi/keys/${encodeURIComponent(key.id)}/usage`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "同步失败");
       const rows = [
@@ -1099,7 +1099,7 @@ export default function ApiManagementPage() {
             <div className="api-modal-body">
               <p className="api-key-limit-note">{ccSwitchFallback.message}</p>
               <DetailRows rows={[
-                { label: "类型", value: "OpenAI 兼容" },
+                { label: "类型", value: "FlowAPI 兼容" },
                 { label: "Base URL", value: API_BASE_URL },
                 { label: "默认模型", value: ccSwitchFallback.modelId || ccSwitchFallback.key?.publicModelId || DEFAULT_MODEL_ID },
                 { label: "API Key", value: ccSwitchFallback.canImport ? "已写入 deeplink，不在本地保存" : "完整 Key 不可取回" },
