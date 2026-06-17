@@ -22,7 +22,7 @@ const pagePaths = [
 ];
 
 const apiLeakRe = /(aicards|aicards\.shop|uniapi|aheapi|new api|new-api|newapi|sub2api|actual_model|provider_key|base_url|api_key|bearer|authorization|sk-|cr_|上游|供应商|供货商)/i;
-const pageLeakRe = /(aicards|aicards\.shop|openrouter|openrouter\.ai|uniapi|aheapi|new api|new-api|newapi|sub2api|actual_model|provider_key|localhost:3001|127\.0\.0\.1:3001)/i;
+const pageLeakRe = /(aicards|aicards\.shop|openrouter|openrouter\.ai|uniapi|aheapi|new api|new-api|newapi|sub2api|actual_model|provider_key|localhost:3001|127\.0\.0\.1:3001|localhost:8080|127\.0\.0\.1:8080)/i;
 const publicUiBrandLeakRe = /(OpenAI|Anthropic|DeepSeek|Alibaba|Moonshot|Zhipu|Auto Router)\s+API ACCESS|OpenAI\s+兼容(?:客户端)?/i;
 const maxFetchAttempts = Number(process.env.FLOWAPI_PUBLIC_SCAN_ATTEMPTS || 3);
 

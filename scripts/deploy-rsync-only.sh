@@ -22,6 +22,7 @@ rsync -az --delete \
   set -e
   swapon /swapfile 2>/dev/null || true
   cd '${APP_DIR}'
+  node scripts/verify-new-api-env.mjs .env.production
   export NODE_OPTIONS=--max-old-space-size=512
   npm install --omit=dev
   pm2 delete flowapi >/dev/null 2>&1 || true

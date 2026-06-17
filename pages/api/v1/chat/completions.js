@@ -1,4 +1,5 @@
-import { estimateCnyCost, getActualModelId, getCatalogModel, normalizeModelLookup } from "@/lib/models";
+import crypto from "crypto";
+import { estimateCnyCost, getActualModelId, getCatalogModel, getPublicModelRequestId, normalizeModelLookup } from "@/lib/models";
 import { getModelProductWithConfig } from "@/lib/model-products-server";
 import { smartSelectModel } from "@/lib/smart-router";
 import { beginApiRequestIdempotency, finalizeReservedCallByToken, findCustomerByToken, reserveBalanceByToken } from "@/lib/customer-store";
@@ -257,6 +258,63 @@ function estimateCandidateCostCny(candidate = {}, usage = {}) {
   const promptTokens = Number(usage.prompt_tokens || usage.inputTokens || 0);
   const completionTokens = Number(usage.completion_tokens || usage.outputTokens || 0);
   return Number((((promptTokens / 1_000_000) * inputCost) + ((completionTokens / 1_000_000) * outputCost)).toFixed(6));
+}
+
+function textCharCount(value = "") {
+  if (value == null) return 0;
+  if (typeof value === "string") return value.length;
+  if (Array.isArray(value)) return value.map((item) => textCharCount(item)).reduce((sum, item) => sum + item, 0);
+  if (typeof value === "object") return JSON.stringify(value).length;
+  return String(value).length;
+}
+
+function collectRequestMessageSources(body = {}) {
+  const sources = [];
+  if (body.instructions || body.system) sources.push("system");
+  if (Array.isArray(body.messages)) sources.push("messages");
+  if (Array.isArray(body.input) || body.input) sources.push("input");
+  if (body.prompt || body.query) sources.push("prompt");
+  if (Array.isArray(body.tools) && body.tools.length) sources.push("tools");
+  return Array.from(new Set(sources));
+}
+
+function buildRelayAuditContext({
+  body = {},
+  normalizedMessages = [],
+  requestId = "",
+  clientToken = "",
+  prompt = "",
+} = {}) {
+  const sources = collectRequestMessageSources(body);
+  const originalMessageCount = Array.isArray(body.messages)
+    ? body.messages.length
+    : Array.isArray(body.input)
+      ? body.input.length
+      : body.input
+        ? 1
+        : body.prompt || body.query
+          ? 1
+          : 0;
+  const systemText = [body.instructions, body.system].filter(Boolean).join("\n");
+  const toolSchemaText = Array.isArray(body.tools) ? JSON.stringify(body.tools) : "";
+  const userMessages = normalizedMessages.filter((message) => message?.role === "user");
+  const auditText = normalizedMessages
+    .map((message) => `${message.role || ""}:${typeof message.content === "string" ? message.content : JSON.stringify(message.content || "")}`)
+    .join("\n");
+
+  return {
+    requestId,
+    apiKeyFingerprint: clientToken ? crypto.createHash("sha256").update(clientToken).digest("hex").slice(0, 16) : "",
+    promptHash: crypto.createHash("sha256").update(`${prompt}\n${auditText}`).digest("hex"),
+    userMessageChars: userMessages.reduce((sum, message) => sum + textCharCount(message?.content || ""), 0),
+    userMessageCount: userMessages.length,
+    serverSystemChars: textCharCount(systemText),
+    toolSchemaChars: textCharCount(toolSchemaText),
+    messagesBeforeEnrich: originalMessageCount,
+    messagesAfterEnrich: normalizedMessages.length,
+    enrichmentSources: sources,
+    tokenAnomalyFlag: false,
+  };
 }
 
 function buildBillingSnapshotForCandidate(modelId, usage = {}, modelProduct = null, multiplier = 1, candidate = null) {
@@ -610,6 +668,7 @@ export default async function handler(req, res) {
         outputPrice: 0,
       })
     : smartSelectModel(prompt);
+  const publicModelId = getPublicModelRequestId(selected.modelId);
 
   // Check model product availability
   const modelProduct = configuredModelProduct || await getModelProductWithConfig(effectiveRequestedModel || selected.modelId);
@@ -701,6 +760,18 @@ export default async function handler(req, res) {
   delete upstreamBody.purpose;
   delete upstreamBody.usagePurpose;
 
+  const relayAuditContext = buildRelayAuditContext({
+    body,
+    normalizedMessages,
+    requestId,
+    clientToken,
+    prompt,
+  });
+  const finalizeWithRelayAudit = (record, reservation) => finalizeReservedCallByToken(clientToken, {
+    ...relayAuditContext,
+    ...record,
+  }, reservation);
+
   const teamRequestContext = {
     teamId: requestedTeamId,
     userId: customerMatch.customer.id,
@@ -780,7 +851,7 @@ export default async function handler(req, res) {
   }
   routeDecision = await selectUpstream({
     modelId: upstreamModelId,
-    publicModelId: selected.modelId,
+    publicModelId,
     modelProduct,
     strategy: modelProduct?.routeStrategy || STRATEGY.AUTO,
     usageEstimate: {
@@ -896,12 +967,12 @@ export default async function handler(req, res) {
     const billing = buildBillingSnapshot(selected.modelId, usage, modelProduct, billingMultiplier);
 
     try {
-      const customer = await finalizeReservedCallByToken(clientToken, {
+      const customer = await finalizeWithRelayAudit({
         requestId,
         endpoint: "/v1/chat/completions",
         requestedModel: body.model || "auto",
         routedModel: selected.name,
-        publicModelId: selected.modelId,
+        publicModelId,
         actualModelId: upstreamModelId,
         provider: selected.provider,
         upstreamChannel: "team-cache",
@@ -958,7 +1029,7 @@ export default async function handler(req, res) {
 
       releaseConcurrency(concurrencyKey);
       return res.status(200).json({
-        ...sanitizeOpenAiResponseForClient(cachedTeamResponse.response, { publicModelId: selected.modelId, requestId }),
+        ...sanitizeOpenAiResponseForClient(cachedTeamResponse.response, { publicModelId, requestId }),
         token_router: {
           routed_model: selected.name,
           routed_model_id: selected.modelId,
@@ -975,12 +1046,12 @@ export default async function handler(req, res) {
       });
     } catch (error) {
       console.error("[flowapi] billable team cache settlement failed:", error);
-      await finalizeReservedCallByToken(clientToken, {
+      await finalizeWithRelayAudit({
         requestId,
         endpoint: "/v1/chat/completions",
         requestedModel: body.model || "auto",
         routedModel: selected.name,
-        publicModelId: selected.modelId,
+        publicModelId,
         actualModelId: upstreamModelId,
         provider: selected.provider,
         upstreamChannel: "team-cache",
@@ -1009,12 +1080,12 @@ export default async function handler(req, res) {
 	    if (cachedResponse?.data) {
 	      const usage = cachedResponse.usage || normalizeSuccessUsage(cachedResponse.data, promptTokens);
 	      const billing = buildBillingSnapshot(selected.modelId, usage, modelProduct, billingMultiplier);
-      const customer = await finalizeReservedCallByToken(clientToken, {
+      const customer = await finalizeWithRelayAudit({
         requestId,
         endpoint: "/v1/chat/completions",
         requestedModel: body.model || "auto",
         routedModel: selected.name,
-        publicModelId: selected.modelId,
+        publicModelId,
         actualModelId: upstreamModelId,
         provider: selected.provider,
         upstreamChannel: "response-cache",
@@ -1076,7 +1147,7 @@ export default async function handler(req, res) {
 	      }
 	      releaseConcurrency(concurrencyKey);
 	      return res.status(200).json({
-	        ...sanitizeOpenAiResponseForClient(cachedResponse.data, { publicModelId: selected.modelId, requestId }),
+	        ...sanitizeOpenAiResponseForClient(cachedResponse.data, { publicModelId, requestId }),
         token_router: {
           routed_model: selected.name,
           routed_model_id: selected.modelId,
@@ -1162,7 +1233,7 @@ export default async function handler(req, res) {
           requestId,
           customerId: customerMatch.customer.id,
           apiKeyId: customerMatch.apiKey.id,
-          publicModelId: selected.modelId,
+          publicModelId,
           actualModelId: candidate.actualModelId || upstreamModelId,
           upstreamChannelId: candidate.id || "",
           upstreamChannel: candidate.name || "",
@@ -1186,7 +1257,7 @@ export default async function handler(req, res) {
           requestId,
           customerId: customerMatch.customer.id,
           apiKeyId: customerMatch.apiKey.id,
-          publicModelId: selected.modelId,
+          publicModelId,
           actualModelId: upstreamModelId,
           upstreamChannelId: candidate.id || "",
           upstreamChannel: candidate.name || "",
@@ -1233,7 +1304,7 @@ export default async function handler(req, res) {
           requestId,
           customerId: customerMatch.customer.id,
           apiKeyId: customerMatch.apiKey.id,
-          publicModelId: selected.modelId,
+          publicModelId,
           actualModelId: upstreamModelId,
           upstreamChannelId: candidate.id || "",
           upstreamChannel: candidate.name || "",
@@ -1269,7 +1340,7 @@ export default async function handler(req, res) {
           requestId,
           customerId: customerMatch.customer.id,
           apiKeyId: customerMatch.apiKey.id,
-          publicModelId: selected.modelId,
+          publicModelId,
           actualModelId: upstreamModelId,
           upstreamChannelId: candidate.id || "",
           upstreamChannel: candidate.name || "",
@@ -1332,10 +1403,10 @@ export default async function handler(req, res) {
 	            || event?.content?.[0]?.text
 	            || "";
 	          if (typeof delta === "string") outputTextLength += delta.length;
-	          const sanitized = sanitizeSseEventForClient(event, { publicModelId: selected.modelId, requestId });
+	          const sanitized = sanitizeSseEventForClient(event, { publicModelId, requestId });
 	          return `data: ${JSON.stringify(sanitized)}`;
 	        } catch {
-	          return `data: ${JSON.stringify(buildSanitizedSsePlaceholder({ publicModelId: selected.modelId, requestId }))}`;
+	          return `data: ${JSON.stringify(buildSanitizedSsePlaceholder({ publicModelId, requestId }))}`;
 	        }
 	      };
 
@@ -1380,12 +1451,12 @@ export default async function handler(req, res) {
               profitMargin: 0,
               billingMode: modelProduct?.pricing?.billingMode || "token_multiplier",
             };
-        finalizeReservedCallByToken(clientToken, {
+        finalizeWithRelayAudit({
           requestId,
           endpoint: "/v1/chat/completions",
           requestedModel: body.model || "auto",
           routedModel: selected.name,
-          publicModelId: selected.modelId,
+          publicModelId,
           actualModelId: upstreamModelId,
           provider: selected.provider,
           upstreamChannel: upstream?.name || "",
@@ -1497,12 +1568,12 @@ export default async function handler(req, res) {
         };
     const totalLatencyMs = Date.now() - requestStartedAt;
 
-    const customer = await finalizeReservedCallByToken(clientToken, {
+    const customer = await finalizeWithRelayAudit({
       requestId,
       endpoint: "/v1/chat/completions",
       requestedModel: body.model || "auto",
       routedModel: selected.name,
-      publicModelId: selected.modelId,
+      publicModelId,
       actualModelId: upstreamModelId,
       provider: selected.provider,
       upstreamChannel: upstream?.name || "",
@@ -1529,7 +1600,7 @@ export default async function handler(req, res) {
 
     releaseConcurrency(concurrencyKey);
     const responsePayload = {
-      ...sanitizeOpenAiResponseForClient(data, { publicModelId: selected.modelId, requestId }),
+      ...sanitizeOpenAiResponseForClient(data, { publicModelId, requestId }),
       token_router: {
         routed_model: selected.name,
         routed_model_id: selected.modelId,
@@ -1642,12 +1713,12 @@ export default async function handler(req, res) {
       }).catch(() => {});
     }
     if (!settlementFinalized) {
-      await finalizeReservedCallByToken(clientToken, {
+      await finalizeWithRelayAudit({
         requestId,
         endpoint: "/v1/chat/completions",
         requestedModel: body.model || "auto",
         routedModel: selected.name,
-        publicModelId: selected.modelId,
+        publicModelId,
         actualModelId: upstreamModelId,
         provider: selected.provider,
         upstreamChannel: "",

@@ -6,6 +6,8 @@ import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal from "@/components/CardDetailModal";
 import UserBadges from "@/components/profile/user-badges";
 import UserBadgeDrawer from "@/components/profile/user-badge-drawer";
+import ProfileAiCard from "@/components/dashboard/profile-ai-card";
+import WalletProgressCard from "@/components/wallet/wallet-progress-card";
 import LiveNumber from "@/components/ui/live-number";
 import { useSafePolling } from "@/hooks/useSafePolling";
 
@@ -27,7 +29,7 @@ const ANNOUNCEMENTS = [
     tone: "success",
     pinned: false,
     title: "FlowAPI DeepSeek 稳定线路已上线",
-    content: "当前已支持 deepseek-chat 和 deepseek-reasoner。用户可在 API 管理页创建 API Key 后，通过 CC-Switch、Cherry Studio、Chatbox 等工具接入。",
+    content: "当前已支持 deepseek-chat、deepseek-reasoner、gpt-5.4-mini 和 gpt-5.4-pro。用户可在 API 管理页创建 API Key 后，通过 CC-Switch、Cherry Studio、Chatbox 等工具接入。",
     publishedAt: "2026-05-21T16:00:00+08:00",
   },
   {
@@ -114,6 +116,34 @@ function buildLocalRanking(customer = {}) {
     spendBeatsUsersPercent: Math.max(1, 100 - spendPercentileTop),
     tokenBeatsUsersPercent: Math.max(1, 100 - tokenPercentileTop),
     rankUpdatedAt: new Date().toISOString(),
+  };
+}
+
+function buildProfileUsageSummary(customer = {}, walletData = null) {
+  const calls = Array.isArray(customer.calls) ? customer.calls : [];
+  const byModel = new Map();
+  calls.forEach((call) => {
+    const modelName = call.routedModel || call.requestedModel || call.model || "未知模型";
+    const current = byModel.get(modelName) || { name: modelName, provider: call.provider || "", calls: 0, spendCny: 0 };
+    current.calls += 1;
+    current.spendCny += Number(call.cost || 0);
+    if (!current.provider && call.provider) current.provider = call.provider;
+    byModel.set(modelName, current);
+  });
+
+  const ranked = Array.from(byModel.values()).sort((a, b) => (b.calls - a.calls) || (b.spendCny - a.spendCny));
+  const expensive = Array.from(byModel.values()).sort((a, b) => (b.spendCny - a.spendCny) || (b.calls - a.calls));
+  const totalCalls = calls.length;
+  const totalSpend = Number(customer.totalSpend || calls.reduce((sum, call) => sum + Number(call.cost || 0), 0));
+
+  return {
+    hasStartedCalling: totalCalls > 0,
+    totalCalls,
+    balanceAvailable: Number(customer.balance || 0) > 0 || Number(walletData?.wallet?.balanceCny || 0) > 0,
+    balanceCny: Number(walletData?.wallet?.balanceCny ?? customer.balance ?? 0),
+    mostUsedModel: ranked[0] || null,
+    mostExpensiveModel: expensive[0] || null,
+    avgCostPerCallCny: totalCalls > 0 ? totalSpend / totalCalls : null,
   };
 }
 
@@ -272,6 +302,7 @@ export default function ProfilePage() {
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.publishedAt) - new Date(a.publishedAt));
   const ranking = assetRanking || buildLocalRanking(customer);
   const isBlackGoldMember = walletData?.membership?.status === "active";
+  const profileUsage = buildProfileUsageSummary(customer, walletData);
 
   async function copyQqGroup() {
     await navigator.clipboard.writeText("217637139");
@@ -375,7 +406,7 @@ export default function ProfilePage() {
                 </h3>
               </div>
 
-              <form onSubmit={handleSave}>
+            <form onSubmit={handleSave}>
                 <div className="form-field">
                   <label>邮箱</label>
                   <input type="email" value={customer.email || ""} disabled style={{ background: "var(--page-soft-bg)", color: "var(--page-sub)", cursor: "not-allowed" }} />
@@ -391,6 +422,47 @@ export default function ProfilePage() {
                 </button>
               </form>
             </div>
+
+            <ProfileAiCard
+              greeting="你好"
+              user={{
+                name: customer.name || customer.email?.split("@")[0],
+                email: customer.email,
+                avatarInitial: (customer.name || customer.email || "F")[0]?.toUpperCase(),
+                membershipName: isBlackGoldMember ? "FLOWAPI 黑金会员" : "",
+                isMember: isBlackGoldMember,
+              }}
+              profile={profileUsage}
+              sourceLabel="真实调用画像"
+              onOpenBalance={() => window.location.assign("/recharge")}
+              onOpenCalls={() => window.location.assign("/dashboard#dash-recent-calls")}
+              onOpenModel={(model) => {
+                if (!model?.name) return;
+                window.location.assign(`/models?model=${encodeURIComponent(model.name)}`);
+              }}
+              onOpenMembership={() => window.location.assign("/recharge")}
+            />
+
+            <WalletProgressCard
+              mode="profile"
+              loading={!walletData}
+              empty={walletData?.source === "empty"}
+              balanceCny={Number(walletData?.wallet?.balanceCny || customer.balance || 0)}
+              totalQuotaCny={Number(walletData?.wallet?.totalQuotaCny || 0)}
+              usedQuotaCny={Number(walletData?.wallet?.usedQuotaCny || 0)}
+              remainingQuotaCny={Number(walletData?.wallet?.remainingQuotaCny || customer.balance || 0)}
+              totalTokens={walletData?.token?.totalTokens ?? null}
+              usedTokens={walletData?.token?.usedTokens ?? null}
+              remainingTokens={walletData?.token?.remainingTokens ?? null}
+              planName={walletData?.plan?.planName || "普通余额钱包"}
+              planAmountCny={walletData?.plan?.planAmountCny || 0}
+              planStatus={walletData?.plan?.status || "none"}
+              startedAt={walletData?.plan?.startedAt || ""}
+              expiresAt={walletData?.plan?.expiresAt || ""}
+              remainingDays={walletData?.plan?.remainingDays ?? null}
+              progressPercent={Number(walletData?.wallet?.progressPercent || 0)}
+              data={walletData}
+            />
 
             <section className="profile-asset-rank-card">
               <div className="profile-panel-head">

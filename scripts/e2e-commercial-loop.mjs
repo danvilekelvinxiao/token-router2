@@ -1,7 +1,33 @@
 #!/usr/bin/env node
 
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+
+function loadEnvFile(file) {
+  if (!fs.existsSync(file)) return;
+  for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const index = trimmed.indexOf("=");
+    if (index === -1) continue;
+    const key = trimmed.slice(0, index).trim();
+    let value = trimmed.slice(index + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    if (!(key in process.env)) process.env[key] = value;
+  }
+}
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+loadEnvFile(path.join(repoRoot, ".env.local"));
+loadEnvFile(path.join(repoRoot, ".env.production"));
+
 const BASE_URL = (process.env.FLOWAPI_E2E_BASE_URL || process.env.E2E_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
 const ADMIN_SECRET = process.env.FLOWAPI_ADMIN_SECRET || process.env.ADMIN_SECRET || process.env.E2E_ADMIN_SECRET || "";
+const ADMIN_LOGIN_EMAIL = process.env.FLOWAPI_E2E_LOGIN_EMAIL || process.env.E2E_LOGIN_EMAIL || "xiaoyijie@flowapi.fun";
+const ADMIN_LOGIN_PASSWORD = process.env.FLOWAPI_E2E_LOGIN_PASSWORD || process.env.E2E_LOGIN_PASSWORD || "xiaoyijie";
 const API_KEY = process.env.FLOWAPI_E2E_API_KEY || process.env.E2E_API_KEY || "";
 const TEST_EMAIL = process.env.FLOWAPI_E2E_EMAIL || process.env.E2E_EMAIL || "";
 const TEST_PASSWORD = process.env.FLOWAPI_E2E_PASSWORD || process.env.E2E_PASSWORD || `FlowAPI${Date.now()}!`;
@@ -65,8 +91,25 @@ async function main() {
       push(name, response.ok && count >= 0, `status=${response.status}, count=${count}`);
     } catch (error) {
       push(name, false, error.message);
-    }
   }
+}
+
+async function loginAndGetCookie() {
+  const { response, json, text } = await request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      email: ADMIN_LOGIN_EMAIL,
+      password: ADMIN_LOGIN_PASSWORD,
+    }),
+  });
+  if (!response.ok || !json?.customer?.sessionToken) {
+    throw new Error(`status=${response.status} ${json?.error || text.slice(0, 160)}`);
+  }
+  const setCookie = response.headers.get("set-cookie") || "";
+  const match = setCookie.match(/flowapi_session=[^;]+/);
+  if (!match) throw new Error("session cookie missing");
+  return match[0];
+}
 
   if (ADMIN_SECRET) {
     try {
@@ -153,6 +196,35 @@ async function main() {
     }
   } else {
     skip("真实 API Key 调用 /v1/models", "未提供 FLOWAPI_E2E_API_KEY / E2E_API_KEY");
+  }
+
+  let sessionCookie = "";
+  try {
+    sessionCookie = await loginAndGetCookie();
+    push("管理员登录", true, `email=${ADMIN_LOGIN_EMAIL}`);
+  } catch (error) {
+    push("管理员登录", false, error.message);
+  }
+
+  if (sessionCookie) {
+    const authHeaders = { Cookie: sessionCookie };
+    for (const [name, path, expected] of [
+      ["登录态钱包摘要接口", "/api/user/wallet-summary", "wallet"],
+      ["登录态数据面板", "/dashboard", "AI Token 资产总览"],
+      ["登录态个人资料", "/profile", "client-rendered"],
+    ]) {
+      try {
+        const { response, text, json } = await request(path, { method: "GET", headers: authHeaders });
+        const ok = response.ok && (expected === "wallet" ? Boolean(json?.wallet || json?.walletProgress) : true);
+        push(name, ok, `status=${response.status}${expected === "client-rendered" ? ", client-rendered" : ""}`);
+      } catch (error) {
+        push(name, false, error.message);
+      }
+    }
+  } else {
+    skip("登录态钱包摘要接口", "未获取到会话 cookie");
+    skip("登录态数据面板", "未获取到会话 cookie");
+    skip("登录态个人资料", "未获取到会话 cookie");
   }
 
   const passed = results.filter((item) => item.passed).length;

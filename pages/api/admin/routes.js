@@ -157,20 +157,32 @@ export default async function handler(req, res) {
   if (!(await requireAdmin(req, res))) return;
 
   if (req.method === "GET") {
-    const matrix = await listRouteMatrix();
-    const publicModelId = String(req.query.publicModelId || "").trim();
-    const [failures, performance] = await Promise.all([
-      recentFailures(publicModelId),
-      performanceStats(matrix),
-    ]);
-    return res.status(200).json({
-      ok: true,
-      routes: matrix,
-      failures,
-      performance,
-      database: hasDatabase() ? "connected" : "memory_only",
-      updatedAt: new Date().toISOString(),
-    });
+    try {
+      const matrix = await listRouteMatrix();
+      const publicModelId = String(req.query.publicModelId || "").trim();
+      const [failures, performance] = await Promise.all([
+        recentFailures(publicModelId).catch(() => []),
+        performanceStats(matrix).catch(() => ({})),
+      ]);
+      return res.status(200).json({
+        ok: true,
+        routes: matrix,
+        failures,
+        performance,
+        database: hasDatabase() ? "connected" : "memory_only",
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      return res.status(200).json({
+        ok: false,
+        error: error?.message || "路由矩阵暂时不可用",
+        routes: [],
+        failures: [],
+        performance: {},
+        database: hasDatabase() ? "connected" : "memory_only",
+        updatedAt: new Date().toISOString(),
+      });
+    }
   }
 
   if (req.method === "POST") {

@@ -9,7 +9,7 @@
  * usage logs, model routing, and Chinese error handling stay consistent.
  */
 
-import { MODEL_CATALOG } from "@/lib/models";
+import { MODEL_CATALOG, getCatalogModel, getPublicModelRequestId, normalizeModelLookup } from "@/lib/models";
 
 const SUPPORTED_MODEL_IDS = new Set(MODEL_CATALOG.map((model) => model.modelId));
 
@@ -82,7 +82,8 @@ function inputToMessages(input, instructions) {
 
 function normalizeResponsesModel(model) {
   const rawModel = String(model || "").trim();
-  if (SUPPORTED_MODEL_IDS.has(rawModel)) return rawModel;
+  const normalizedModel = normalizeModelLookup(rawModel);
+  if (SUPPORTED_MODEL_IDS.has(rawModel) || getCatalogModel(normalizedModel)) return getPublicModelRequestId(normalizedModel);
 
   const name = rawModel.toLowerCase();
 
@@ -91,10 +92,17 @@ function normalizeResponsesModel(model) {
   if (name.includes("qwen") || name.includes("alibaba")) return "qwen/qwen3-32b";
   if (name.includes("claude") || name.includes("anthropic")) return "anthropic/claude-3.5-haiku";
   if (name.includes("flowapi-codex") || name.includes("codex")) return "flowapi-codex-plus";
-  if (name.includes("gpt-5.5")) return "gpt-5.5";
-  if (name.includes("gpt-5.3-codex")) return "gpt-5.3-codex";
-  if (name.includes("gpt-4o-mini")) return "openai/gpt-4o-mini";
-  if (name.includes("gpt") || name.includes("openai")) return "flowapi-codex-plus";
+  if (name.includes("gpt5.5-pro") || name.includes("gpt55-pro")) return "flowapi-gpt55-pro";
+  if (name.includes("gpt-5.5-pro")) return "flowapi-gpt55-pro";
+  if (name.includes("gpt5.5") || name.includes("gpt55")) return "flowapi-gpt55";
+  if (name.includes("gpt-5.5")) return "flowapi-gpt55";
+  if (name.includes("gpt5.4-pro") || name.includes("gpt54-pro")) return "flowapi-gpt54-pro";
+  if (name.includes("gpt-5.4-pro")) return "flowapi-gpt54-pro";
+  if (name.includes("gpt5.4-mini") || name.includes("gpt54-mini") || name.includes("gpt54")) return "flowapi-gpt54";
+  if (name.includes("gpt-5.4")) return "flowapi-gpt54";
+  if (name.includes("gpt-5.3-codex")) return "flowapi-codex-plus";
+  if (name.includes("gpt-4o-mini")) return "flowapi-gpt54";
+  if (name.includes("gpt") || name.includes("openai")) return "flowapi-gpt54";
 
   return "deepseek-chat";
 }

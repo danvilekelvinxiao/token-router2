@@ -6,7 +6,7 @@
  * - Token keys: created in New API, then fetched once via /api/token/:id/key.
  * - Usage data: fetched from New API /api/log/ when admin token is valid.
  * - Quota sync: pushed to New API /api/token/ (PUT) when admin token is valid.
- * - Health: verified by checking New API /api/status and /api/token/.
+ * - Health: verified by checking New API /v1/models and /api/token/.
  *
  * Important: customer-facing API Keys are FlowAPI keys first. Per-user New API
  * token sync is optional; when disabled, FlowAPI routes with server-side group
@@ -14,7 +14,7 @@
  */
 
 const NEW_API_BASE_URL =
-  process.env.NEW_API_BASE_URL || "http://localhost:3001";
+  process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080";
 const NEW_API_ADMIN_TOKEN =
   process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || "";
 const NEW_API_DEFAULT_GROUP =
@@ -33,6 +33,20 @@ function adminHeaders(): Record<string, string> {
     "New-Api-User": "1",
     "Content-Type": "application/json",
   };
+}
+
+function getRuntimeToken() {
+  const defaultGroup = String(process.env.NEW_API_DEFAULT_GROUP || "default")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_");
+  const candidates = [
+    process.env.NEW_API_KEY,
+    process.env.NEW_API_KEY_ALL_MODELS,
+    process.env[`NEW_API_KEY_${defaultGroup}`],
+    process.env[`NEW_API_${defaultGroup}_KEY`],
+  ];
+  return candidates.map((value) => String(value || "").trim()).find(Boolean) || "";
 }
 
 async function apiFetch(
@@ -339,37 +353,40 @@ export interface NewApiHealth {
 }
 
 export async function checkNewApiHealth(): Promise<NewApiHealth> {
-  if (!NEW_API_ADMIN_TOKEN) {
-    return { ok: false, error: "NEW_API_ADMIN_TOKEN 未配置" };
-  }
-
-  if (_adminValid !== null) {
-    return _adminValid
-      ? { ok: true }
-      : { ok: false, error: "管理员 Token 验证失败" };
+  const runtimeToken = getRuntimeToken();
+  if (!runtimeToken) {
+    return { ok: false, error: "NEW_API_KEY 未配置" };
   }
 
   try {
-    const url = `${NEW_API_BASE_URL}/api/status`;
-    const res = await fetch(url);
-    const data = await res.json();
+    const url = `${NEW_API_BASE_URL}/v1/models`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${runtimeToken}`,
+        "Content-Type": "application/json",
+      },
+    });
+    const data = await res.json().catch(() => null);
 
-    if (!data?.success) {
-      _adminValid = false;
-      return { ok: false, error: "New API 服务异常" };
+    if (!res.ok) {
+      return { ok: false, error: `New API 返回 ${res.status}` };
     }
 
-    const verify = await apiFetch("/api/token/");
-    _adminValid = verify.ok;
+    if (NEW_API_ADMIN_TOKEN) {
+      const verify = await apiFetch("/api/token/");
+      _adminValid = verify.ok;
+    } else {
+      _adminValid = null;
+    }
 
     return {
       ok: true,
-      version: data.data?.version || data.version,
-      uptime: data.data?.start_time,
-      error: verify.ok ? undefined : "管理员 Token 验证失败",
+      version: data?.data?.version || data?.version,
+      uptime: data?.data?.start_time,
+      error: NEW_API_ADMIN_TOKEN && _adminValid === false ? "管理员 Token 验证失败" : undefined,
     };
   } catch (e: any) {
-    _adminValid = false;
+    if (NEW_API_ADMIN_TOKEN) _adminValid = false;
     return { ok: false, error: e.message };
   }
 }
@@ -377,6 +394,7 @@ export async function checkNewApiHealth(): Promise<NewApiHealth> {
 export function getNewApiConfig() {
   return {
     baseUrl: NEW_API_BASE_URL,
+    hasRuntimeKey: !!getRuntimeToken(),
     hasAdminToken: !!NEW_API_ADMIN_TOKEN,
     adminValid: _adminValid,
     defaultGroup: NEW_API_DEFAULT_GROUP,

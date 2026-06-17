@@ -6,6 +6,7 @@ import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import ModelLogo from "@/components/ModelLogo";
 import { formatTokens } from "@/lib/model-format";
+import { getPublicModelDisplayName, getPublicModelRequestId } from "@/lib/models";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
 import { sanitizePublicModelProvider } from "@/lib/public-model-provider";
 import { useSafePolling } from "@/hooks/useSafePolling";
@@ -33,6 +34,7 @@ function isAdminCustomer(customer) {
 
 function normalizeModel(model) {
   const publicModel = sanitizePublicModelProvider(model);
+  const requestModelId = publicModel.requestModelId || getPublicModelRequestId(model.modelId || model.publicModelId || "");
   const categories = new Set(Array.isArray(model.categories) ? model.categories : []);
   categories.add("all");
   if (model.category) categories.add(model.category);
@@ -42,10 +44,11 @@ function normalizeModel(model) {
   return {
     ...model,
     id: model.id || model.modelId || model.displayName,
-    displayName: model.displayName || model.name || "Unknown Model",
+    displayName: getPublicModelDisplayName(model.displayName || model.name || requestModelId, model.displayName || model.name || requestModelId),
     provider: publicModel.provider || "FlowAPI",
     providerName: publicModel.provider || "FlowAPI",
-    modelId: model.modelId || model.publicModelId || "",
+    modelId: requestModelId || model.modelId || model.publicModelId || "",
+    requestModelId,
     officialReleaseDate: model.officialReleaseDate || model.releaseDate || "",
     categories: Array.from(categories).filter(Boolean),
     tags: Array.isArray(model.tags) ? model.tags : [],
@@ -127,6 +130,7 @@ function findCmsModelForUsage(rankItem, cmsModels) {
   const candidates = [
     rankItem?.model,
     rankItem?.modelId,
+    rankItem?.requestModelId,
     rankItem?.publicModelId,
     rankItem?.routedModel,
     rankItem?.requestedModel,
@@ -138,6 +142,7 @@ function findCmsModelForUsage(rankItem, cmsModels) {
     const values = [
       model.displayName,
       model.modelId,
+      model.requestModelId,
       model.publicModelId,
       model.id,
     ].map(normalizeMatchText).filter(Boolean);
@@ -160,7 +165,7 @@ function generateCurl(model, apiBaseUrl) {
   return `curl ${apiBaseUrl}/chat/completions \\
   -H "Authorization: Bearer 你的 API Key" \\
   -H "Content-Type: application/json" \\
-  -d '{"model":"${model?.modelId || "deepseek-chat"}","messages":[{"role":"user","content":"你好"}]}'`;
+  -d '{"model":"${model?.requestModelId || model?.modelId || "gpt-5.4-mini"}","messages":[{"role":"user","content":"你好"}]}'`;
 }
 
 function generatePython(model, apiBaseUrl) {
@@ -173,7 +178,7 @@ response = requests.post(
         "Content-Type": "application/json",
     },
     json={
-        "model": "${model?.modelId || "deepseek-chat"}",
+        "model": "${model?.requestModelId || model?.modelId || "gpt-5.4-mini"}",
         "messages": [{"role": "user", "content": "你好"}],
     },
 )
@@ -189,7 +194,7 @@ function generateJavaScript(model, apiBaseUrl) {
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
-    model: "${model?.modelId || "deepseek-chat"}",
+    model: "${model?.requestModelId || model?.modelId || "gpt-5.4-mini"}",
     messages: [{ role: "user", content: "你好" }]
   })
 });
@@ -199,9 +204,10 @@ console.log(await response.json());`;
 
 function modelHref(href, model) {
   const target = href || "/api-management";
-  if (!model?.modelId) return target;
-  if (target.includes("?")) return `${target}&model=${encodeURIComponent(model.modelId)}`;
-  return `${target}?model=${encodeURIComponent(model.modelId)}`;
+  const modelId = model?.requestModelId || model?.modelId;
+  if (!modelId) return target;
+  if (target.includes("?")) return `${target}&model=${encodeURIComponent(modelId)}`;
+  return `${target}?model=${encodeURIComponent(modelId)}`;
 }
 
 export default function ModelsPage() {
@@ -370,7 +376,7 @@ export default function ModelsPage() {
   function focusModel(model) {
     if (!model) return;
     setCategory("all");
-    setSearch(model.modelId || model.displayName);
+    setSearch(model.requestModelId || model.modelId || model.displayName);
     setTimeout(() => {
       document.getElementById(`model-${model.id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }, 60);
@@ -470,7 +476,7 @@ export default function ModelsPage() {
                     showPrice={moduleEnabled("show-price")}
                     isMember={membership?.status === "active" && membership?.level === "black_gold"}
                     onMemberRequired={() => showToast(model.nonMemberPrompt || "该模型为 FLOWAPI 黑金会员专属模型")}
-                    onCopy={() => copyText(model.modelId, "Model ID 已复制")}
+                    onCopy={() => copyText(model.requestModelId || model.modelId, "Model ID 已复制")}
                     onDetails={() => setSelectedModel(model)}
                   />
                 ))}
@@ -576,12 +582,12 @@ function PopularModelCard({ item, cmsModel, onCopy, onFocus }) {
         {cmsModel ? (
           <button type="button" className="models-market-primary" onClick={() => onFocus(cmsModel)}>立即接入</button>
         ) : (
-          <button type="button" className="models-market-secondary" onClick={() => onFocus({ displayName: item.model, modelId: item.model, id: item.model })}>查看模型货架</button>
+          <button type="button" className="models-market-secondary" onClick={() => onFocus({ displayName: item.model, modelId: item.model, requestModelId: item.model, id: item.model })}>查看模型货架</button>
         )}
         <button
           type="button"
           className="models-market-secondary"
-          onClick={() => onCopy(cmsModel?.modelId, "Model ID 已复制")}
+          onClick={() => onCopy(cmsModel?.requestModelId || cmsModel?.modelId, "Model ID 已复制")}
           disabled={!hasModelId}
         >
           复制 Model ID
@@ -635,7 +641,7 @@ function ModelMarketCard({ model, showPrice, onCopy, onDetails, isMember = false
 
       <div className="models-model-id">
         <span>Model ID</span>
-        <button type="button" onClick={guardedCopy} title="复制 Model ID">{model.modelId || "同步中"}</button>
+        <button type="button" onClick={guardedCopy} title="复制 Model ID">{model.requestModelId || model.modelId || "同步中"}</button>
       </div>
 
       <p className="models-card-desc">{model.description || "模型用途同步中。"}</p>
@@ -682,8 +688,8 @@ function ModelDetailModal({ model, apiBaseUrl, curlExample, showCurlExamples, on
           <section className="models-detail-summary">
             <div>
               <span>Model ID</span>
-              <code>{model.modelId}</code>
-              <button type="button" onClick={() => onCopy(model.modelId, "Model ID 已复制")}>复制</button>
+              <code>{model.requestModelId || model.modelId}</code>
+              <button type="button" onClick={() => onCopy(model.requestModelId || model.modelId, "Model ID 已复制")}>复制</button>
             </div>
             <div>
               <span>Base URL</span>

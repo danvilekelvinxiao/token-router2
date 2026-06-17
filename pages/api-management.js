@@ -8,12 +8,13 @@ import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetai
 import InteractiveCard from "@/components/InteractiveCard";
 import { buildCcSwitchCodexConfig, buildCcSwitchConfigUrl } from "@/lib/cc-switch";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
+import { getPublicModelDisplayName, getPublicModelRequestId } from "@/lib/models";
 import { formatDateTime, formatPercent, formatRequestCount, formatSmallCny, formatToken as formatUnifiedToken } from "@/lib/format/number-format";
 import { useLocale } from "@/components/providers/locale-provider";
 import { applyLocalePrice } from "@/lib/pricing/locale-pricing";
 
 const API_BASE_URL = getPublicApiBaseUrl();
-const DEFAULT_MODEL_ID = "deepseek-chat";
+const DEFAULT_MODEL_ID = "gpt-5.4-mini";
 const CC_SWITCH_RELEASE_URL = "https://github.com/farion1231/cc-switch/releases/tag/v3.15.0";
 const CC_SWITCH_WINDOWS_URL = "https://github.com/farion1231/cc-switch/releases/download/v3.15.0/CC-Switch-v3.15.0-Windows.msi";
 
@@ -128,11 +129,13 @@ function getLimitCopy(limit = {}) {
 }
 
 function normalizeModel(model = {}) {
+  const requestModelId = model.requestModelId || getPublicModelRequestId(model.modelId || model.publicModelId || "");
   return {
     ...model,
     id: model.id || model.modelId || model.displayName,
-    displayName: model.displayName || model.name || "Unknown Model",
-    modelId: model.modelId || model.publicModelId || "",
+    displayName: getPublicModelDisplayName(model.displayName || model.name || requestModelId, model.displayName || model.name || requestModelId),
+    modelId: requestModelId || model.modelId || model.publicModelId || "",
+    requestModelId,
     provider: model.provider || "FlowAPI",
     description: model.description || "模型介绍同步中。",
     enabled: model.enabled !== false,
@@ -386,14 +389,14 @@ export default function ApiManagementPage() {
       });
       return;
     }
-    const modelId = key?.publicModelId || selectedModel?.modelId || DEFAULT_MODEL_ID;
+    const modelId = key?.requestModelId || selectedModel?.modelId || key?.publicModelId || DEFAULT_MODEL_ID;
     const manualConfig = buildCcSwitchCodexConfig({ apiKey: key.token, baseUrl: API_BASE_URL, model: modelId });
     const url = buildCcSwitchConfigUrl({
       apiKey: key?.token,
       baseUrl: API_BASE_URL,
       model: modelId,
       name: "FlowAPI",
-      displayName: key?.modelDisplayName || modelId,
+      displayName: key?.modelDisplayName || selectedModel?.displayName || modelId,
     });
     setCcSwitchFallback({ key, canImport: true, url, manualConfig, modelId, message: "未检测到 CC-Switch 已打开，请先安装后重试。" });
     const anchor = document.createElement("a");
@@ -412,7 +415,7 @@ export default function ApiManagementPage() {
     const curl = `curl ${API_BASE_URL}/chat/completions \\
   -H "Authorization: Bearer 你的 API Key" \\
   -H "Content-Type: application/json" \\
-  -d '{"model": "${selectedModel?.modelId || DEFAULT_MODEL_ID}",
+      -d '{"model": "${selectedModel?.modelId || DEFAULT_MODEL_ID}",
        "messages": [{"role":"user","content":"你好"}]}'`;
     const configs = {
       download: {

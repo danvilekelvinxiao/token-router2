@@ -11806,12 +11806,7 @@ pre {
 }
 
 .guide-hero::before {
-  content: "";
-  position: absolute;
-  top: -60px; left: 50%; transform: translateX(-50%);
-  width: 600px; height: 300px;
-  background: radial-gradient(ellipse at center, rgba(99,102,241,0.06) 0%, transparent 70%);
-  pointer-events: none;
+  content: none;
 }
 
 .guide-hero-badge {

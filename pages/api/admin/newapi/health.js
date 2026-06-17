@@ -8,7 +8,11 @@ import { requireAdmin } from "@/lib/admin-auth";
 const NEW_API_ADMIN_URL =
   process.env.NEW_API_ADMIN_URL ||
   process.env.NEW_API_BASE_URL ||
-  "http://localhost:3001";
+  "http://127.0.0.1:8080";
+const NEW_API_RUNTIME_KEY =
+  process.env.NEW_API_KEY ||
+  process.env.NEW_API_KEY_ALL_MODELS ||
+  "";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -20,7 +24,18 @@ export default async function handler(req, res) {
 
   try {
     const start = Date.now();
-    const upstream = await fetch(`${url}/api/status`, {
+    if (!NEW_API_RUNTIME_KEY) {
+      return res.status(200).json({
+        status: "error",
+        url,
+        message: "NEW_API_KEY 未配置",
+      });
+    }
+    const upstream = await fetch(`${url}/v1/models`, {
+      headers: {
+        Authorization: `Bearer ${NEW_API_RUNTIME_KEY}`,
+        "Content-Type": "application/json",
+      },
       signal: AbortSignal.timeout(8000),
     });
     const latencyMs = Date.now() - start;
@@ -39,8 +54,7 @@ export default async function handler(req, res) {
       status: "ok",
       url,
       latencyMs,
-      version: body?.data?.version || body?.version || null,
-      uptime: body?.data?.start_time || null,
+      modelCount: Array.isArray(body?.data) ? body.data.length : null,
     });
   } catch {
     return res.status(200).json({

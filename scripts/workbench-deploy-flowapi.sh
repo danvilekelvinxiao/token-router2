@@ -49,6 +49,7 @@ fi
 
 echo "==> 4. Install dependencies and migrate database"
 npm install --no-audit --no-fund
+node scripts/verify-new-api-env.mjs .env.production
 FLOWAPI_REQUIRE_DATABASE=true node scripts/run-production-migrations.mjs
 
 echo "==> 5. Build production bundle"

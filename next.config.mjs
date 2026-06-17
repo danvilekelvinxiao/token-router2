@@ -9,31 +9,31 @@ const newApiAdminRewrites = enableNewApiAdminProxy ? [
   // already protects this path with admin-only access control.
   {
     source: "/newapi-admin/:path*",
-    destination: "http://localhost:3001/:path*",
+    destination: "http://127.0.0.1:8080/:path*",
   },
   {
     source: "/newapi-admin",
-    destination: "http://localhost:3001/",
+    destination: "http://127.0.0.1:8080/",
   },
   // New API admin SPA uses absolute /static and /api/* paths.
   // Keep these narrow so FlowAPI's own /api routes remain under local control.
   {
     source: "/static/:path*",
-    destination: "http://localhost:3001/static/:path*",
+    destination: "http://127.0.0.1:8080/static/:path*",
   },
   // New API admin JSON endpoints are implemented as local API proxy routes
   // under pages/api/{channel,token,log,group,option,status}.
   {
     source: "/api/user/self",
-    destination: "http://localhost:3001/api/user/self",
+    destination: "http://127.0.0.1:8080/api/user/self",
   },
   {
     source: "/api/user/login",
-    destination: "http://localhost:3001/api/user/login",
+    destination: "http://127.0.0.1:8080/api/user/login",
   },
   {
     source: "/api/user/logout",
-    destination: "http://localhost:3001/api/user/logout",
+    destination: "http://127.0.0.1:8080/api/user/logout",
   },
 ] : [];
 

@@ -33,12 +33,19 @@ function loadEnv(file) {
 loadEnv(envPath);
 
 const base = (process.env.NEW_API_BASE_URL || "").replace(/\/+$/, "");
-const relayKey = process.env.NEW_API_KEY || "";
+const defaultGroup = String(process.env.NEW_API_DEFAULT_GROUP || "default").trim();
+const runtimeKeyCandidates = [
+  process.env.NEW_API_KEY,
+  process.env.NEW_API_KEY_ALL_MODELS,
+  process.env[`NEW_API_KEY_${defaultGroup.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`],
+  process.env[`NEW_API_${defaultGroup.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_KEY`],
+];
+const relayKey = runtimeKeyCandidates.find((value) => String(value || "").trim()) || "";
 const adminToken = process.env.NEW_API_ADMIN_TOKEN || "";
 
 console.log("=== 环境变量 ===");
 console.log("NEW_API_BASE_URL:", base || "(未设置)");
-console.log("NEW_API_KEY:", relayKey ? `${relayKey.slice(0, 12)}...` : "(未设置)");
+console.log("NEW_API_RUNTIME_KEY:", relayKey ? `${relayKey.slice(0, 12)}...` : "(未设置)");
 console.log("NEW_API_ADMIN_TOKEN:", adminToken ? `${adminToken.slice(0, 12)}...` : "(未设置)");
 console.log("NEW_API_DEFAULT_GROUP:", process.env.NEW_API_DEFAULT_GROUP || "default");
 console.log("NEW_API_DEFAULT_QUOTA:", process.env.NEW_API_DEFAULT_QUOTA || "500000");
@@ -48,28 +55,18 @@ if (!base) {
   process.exit(1);
 }
 
-async function checkStatus() {
-  const res = await fetch(`${base}/api/status`);
-  const data = await res.json().catch(() => ({}));
-  console.log("\n=== GET /api/status ===", res.status, data.success ? "OK" : data);
-  return data?.success;
-}
-
-async function checkModels(key) {
+async function checkRuntimeModels(key) {
+  if (!key) {
+    console.log("\n=== GET /v1/models (运行时 Key) === 缺少 NEW_API_KEY / NEW_API_KEY_ALL_MODELS");
+    return false;
+  }
   const res = await fetch(`${base}/v1/models`, {
     headers: { Authorization: `Bearer ${key}` },
   });
-  const text = await res.text();
-  console.log("\n=== GET /v1/models (中转 Key) ===", res.status);
+  const data = await res.json().catch(() => ({}));
+  console.log("\n=== GET /v1/models (运行时 Key) ===", res.status, res.ok ? "OK" : data);
   if (res.ok) {
-    try {
-      const j = JSON.parse(text);
-      console.log("模型数量:", j.data?.length ?? "?");
-    } catch {
-      console.log(text.slice(0, 200));
-    }
-  } else {
-    console.log(text.slice(0, 300));
+    console.log("模型数量:", Array.isArray(data?.data) ? data.data.length : "?");
   }
   return res.ok;
 }
@@ -92,19 +89,24 @@ async function checkAdmin() {
 
 const key = relayKey || adminToken;
 if (!key) {
-  console.error("\n需要 NEW_API_KEY 或 NEW_API_ADMIN_TOKEN 至少一个");
+  console.error("\n需要 NEW_API_KEY / NEW_API_KEY_ALL_MODELS 至少一个；NEW_API_ADMIN_TOKEN 只用于后台验证");
   process.exit(1);
 }
 
 let ok = true;
+let runtimeOk = false;
 try {
-  ok = (await checkStatus()) && ok;
-  ok = (await checkModels(key)) && ok;
+  runtimeOk = await checkRuntimeModels(relayKey);
+  ok = runtimeOk && ok;
   if (adminToken) ok = (await checkAdmin()) && ok;
 } catch (e) {
   console.error("\n连接失败:", e.message);
   process.exit(1);
 }
 
-console.log(ok ? "\n✓ New API 配置可用" : "\n✗ 请检查 URL / Token / 渠道");
+if (!runtimeOk && adminToken && relayKey !== adminToken) {
+  console.log("\n提示: 仅检测到 NEW_API_ADMIN_TOKEN，未检测到可用于运行时的 NEW_API_KEY。");
+}
+
+console.log(ok ? "\n✓ New API 运行时配置可用" : "\n✗ New API 运行时未通过，请检查 URL / runtime key / 渠道");
 process.exit(ok ? 0 : 1);

@@ -17,7 +17,7 @@ FlowAPI 把用户请求转发到 **New API（One API）**，由 New API 再调�
 
 ## 第一步：部署 New API
 
-任选一种方式（与 FlowAPI 同机时建议 Docker，监听 `3001`）：
+任选一种方式（与 FlowAPI 同机时建议 Docker，监听 `8080`）：
 
 1. 在服务器安装 [New API / One API](https://github.com/Calcium-Ion/new-api)（Docker 或二进制）。
 2. 打开 New API 控制台，完成：
@@ -30,7 +30,7 @@ FlowAPI 把用户请求转发到 **New API（One API）**，由 New API 再调�
 
 | 名称 | 示例 |
 |------|------|
-| New API 地址 | `https://newapi.你的域名.com` 或同机 `http://127.0.0.1:3001` |
+| New API 地址 | `https://newapi.你的域名.com` 或同机 `http://127.0.0.1:8080` |
 | 中转用 sk API Key | `sk-xxxxxxxx` |
 | 管理员 Token | 一长串，请求头 `Authorization: Bearer ...` |
 

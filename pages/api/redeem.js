@@ -88,7 +88,7 @@ export default async function handler(req, res) {
     const apiKeys = updatedCustomer?.apiKeys || [];
     const primaryKey = apiKeys[0];
     if (primaryKey?.newApiId) {
-      await fetch(`http://localhost:3001/api/token/${primaryKey.newApiId}/quota`, {
+      await fetch(`${(process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/+$/, "")}/api/token/${primaryKey.newApiId}/quota`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

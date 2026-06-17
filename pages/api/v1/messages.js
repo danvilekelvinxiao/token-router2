@@ -29,10 +29,10 @@ function normalizeText(content) {
 
 function normalizeModel(model = "") {
   const value = String(model || "").trim().toLowerCase();
-  if (!value) return "flowapi-claude-sonnet";
-  if (value.includes("opus")) return "flowapi-claude-opus";
-  if (value.includes("sonnet") || value.includes("claude")) return "flowapi-claude-sonnet";
-  return String(model || "flowapi-claude-sonnet").trim();
+  if (!value) return "claude-sonnet-4.6";
+  if (value.includes("opus")) return "claude-opus-4.7";
+  if (value.includes("sonnet") || value.includes("claude")) return "claude-sonnet-4.6";
+  return String(model || "claude-sonnet-4.6").trim();
 }
 
 function toChatBody(body = {}) {

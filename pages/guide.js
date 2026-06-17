@@ -9,7 +9,7 @@ import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import { listModelProducts } from "@/lib/model-products";
 const API_BASE_URL = getPublicApiBaseUrl();
-const defaultModel = "deepseek-chat";
+const defaultModel = "gpt-5.4-mini";
 const CC_SWITCH_RELEASE_URL = "https://github.com/farion1231/cc-switch/releases/tag/v3.15.0";
 const CC_SWITCH_WINDOWS_URL = "https://github.com/farion1231/cc-switch/releases/download/v3.15.0/CC-Switch-v3.15.0-Windows.msi";
 const MODEL_PRODUCT_OPTIONS = listModelProducts({ includeUnavailable: true });

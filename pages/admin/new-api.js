@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
-// New API admin pages are proxied via /newapi-admin/* → localhost:3001/*
+// New API admin pages are proxied via /newapi-admin/* → 127.0.0.1:8080/*
 
 const NAV_CARDS = [
   {
@@ -154,6 +154,16 @@ export default function AdminNewApiPage() {
 
         {/* Status overview */}
         <div className="admin-stat-grid" style={{ marginBottom: 28 }}>
+          <div className="admin-stat-card">
+            <div className="admin-stat-label">运行时 Key</div>
+            <div className="admin-stat-value" style={{ fontSize: 15 }}>
+              {config.hasRuntimeKey ? (
+                <span style={{ color: "var(--page-success-text)" }}>已配置</span>
+              ) : (
+                <span style={{ color: "var(--page-warning-text)" }}>未配置</span>
+              )}
+            </div>
+          </div>
           <div className="admin-stat-card">
             <div className="admin-stat-label">管理员 Token</div>
             <div className="admin-stat-value" style={{ fontSize: 15 }}>

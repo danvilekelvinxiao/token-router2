@@ -3,7 +3,7 @@ import AdminLayout from "@/components/AdminLayout";
 
 export default function ImportNewApiTokenPage() {
   const [form, setForm] = useState({
-    token: "", name: "", customerId: "", publicModelId: "deepseek-chat",
+    token: "", name: "", customerId: "", publicModelId: "gpt-5.4-mini",
     actualModelId: "", modelDisplayName: "", modelGroup: "default",
     allowedModels: "", expiresAt: "",
   });
@@ -42,7 +42,7 @@ export default function ImportNewApiTokenPage() {
           token: form.token.trim(),
           name: form.name.trim(),
           customerId: form.customerId.trim(),
-          publicModelId: form.publicModelId.trim() || "deepseek-chat",
+          publicModelId: form.publicModelId.trim() || "gpt-5.4-mini",
           actualModelId: form.actualModelId.trim() || form.publicModelId.trim(),
           modelDisplayName: form.modelDisplayName.trim() || form.publicModelId.trim(),
           modelGroup: form.modelGroup.trim() || "default",
@@ -103,7 +103,7 @@ export default function ImportNewApiTokenPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
             <label className="admin-field-label">
               公开模型 ID
-              <input value={form.publicModelId} onChange={update("publicModelId")} placeholder="deepseek-chat" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--page-input-border)", background: "var(--page-input-bg)", color: "var(--page-text)", width: "100%" }} />
+              <input value={form.publicModelId} onChange={update("publicModelId")} placeholder="gpt-5.4-mini" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--page-input-border)", background: "var(--page-input-bg)", color: "var(--page-text)", width: "100%" }} />
             </label>
             <label className="admin-field-label">
               实际模型 ID
@@ -118,7 +118,7 @@ export default function ImportNewApiTokenPage() {
             </label>
             <label className="admin-field-label">
               允许模型（逗号分隔）
-              <input value={form.allowedModels} onChange={update("allowedModels")} placeholder="deepseek-chat,deepseek-reasoner" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--page-input-border)", background: "var(--page-input-bg)", color: "var(--page-text)", width: "100%" }} />
+              <input value={form.allowedModels} onChange={update("allowedModels")} placeholder="gpt-5.4-mini,gpt-5.4-pro" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--page-input-border)", background: "var(--page-input-bg)", color: "var(--page-text)", width: "100%" }} />
             </label>
             <label className="admin-field-label">
               过期时间

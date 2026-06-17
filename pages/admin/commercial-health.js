@@ -130,12 +130,12 @@ export default function CommercialHealthPage() {
         .commercial-health-actions input { min-height: 42px; border: 1px solid var(--dash-border); border-radius: 10px; background: var(--dash-card-bg); color: var(--dash-text); padding: 0 12px; }
         .commercial-health-actions button {
           min-height: 42px; border: 0; border-radius: 10px; padding: 0 16px; color: #fff; font-weight: 900; cursor: pointer;
-          background: linear-gradient(135deg,#6366f1,#8b5cf6 56%,#a78bfa); box-shadow: 0 14px 34px rgba(99,102,241,.3);
+          background: linear-gradient(135deg,#6366f1,#8b5cf6 56%,#a78bfa);
         }
         .commercial-health-actions button:disabled { opacity: .7; cursor: wait; }
         .commercial-health-score { display: grid; grid-template-columns: 1.3fr repeat(3, 1fr); gap: 10px; }
         .commercial-health-score div, .commercial-health-card, .commercial-health-empty, .commercial-health-links {
-          border: 1px solid var(--dash-border); border-radius: 14px; background: var(--dash-card-bg); box-shadow: 0 16px 50px rgba(15,23,42,.06);
+          border: 1px solid var(--dash-border); border-radius: 14px; background: var(--dash-card-bg);
         }
         .commercial-health-score div { padding: 16px; }
         .commercial-health-score span { display: block; color: var(--dash-sub); font-size: 12px; font-weight: 800; }

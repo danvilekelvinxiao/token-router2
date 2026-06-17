@@ -3,8 +3,18 @@ import { sanitizeSecretText } from "@/lib/safe-upstream-url";
 
 const MODEL_MAP = {
   DeepSeek: "deepseek-chat",
+  "deepseek-chat": "deepseek-chat",
+  "deepseek-reasoner": "deepseek-reasoner",
   Qwen: "qwen/qwen3-32b",
-  "GPT-4o": "openai/gpt-4o-mini",
+  "qwen/qwen3-32b": "qwen/qwen3-32b",
+  "GPT-4o": "gpt-5.4-mini",
+  "GPT5.5": "gpt-5.5",
+  "GPT5.4 mini": "gpt-5.4-mini",
+  "GPT5.4 Pro": "gpt-5.4-pro",
+  "gpt-5.5": "gpt-5.5",
+  "gpt-5.5-pro": "gpt-5.5-pro",
+  "gpt-5.4-mini": "gpt-5.4-mini",
+  "gpt-5.4-pro": "gpt-5.4-pro",
 };
 
 function getClientToken(req) {

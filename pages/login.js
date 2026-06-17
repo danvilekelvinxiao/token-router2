@@ -8,30 +8,41 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   async function handleLogin(e) {
     e.preventDefault();
+    if (submitting) return;
     setError("");
+    setSubmitting(true);
 
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-    const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      if (data.needsVerification) {
-        setError("该邮箱尚未验证 请先完成注册验证");
-      } else {
-        setError(data.error || "登录失败");
+      if (!res.ok) {
+        if (data.needsVerification) {
+          setError("该邮箱尚未验证 请先完成注册验证");
+        } else if (res.status === 429) {
+          setError(data.error || "登录请求过多，请稍后再试");
+        } else {
+          setError(data.error || "登录失败");
+        }
+        return;
       }
-      return;
-    }
 
-    localStorage.setItem("flowapi_customer", JSON.stringify(data.customer));
-    router.push("/api-management?source=login");
+      localStorage.setItem("flowapi_customer", JSON.stringify(data.customer));
+      router.push("/api-management?source=login");
+    } catch {
+      setError("登录请求失败，请检查网络后重试");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -87,8 +98,8 @@ export default function LoginPage() {
             {error && (
               <p style={{ color: "#ef4444", fontSize: 13, margin: "8px 0" }}>{error}</p>
             )}
-            <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 24 }}>
-              登录
+            <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 24 }} disabled={submitting}>
+              {submitting ? "登录中..." : "登录"}
             </button>
           </form>
 
