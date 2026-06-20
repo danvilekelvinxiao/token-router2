@@ -1,5 +1,5 @@
 import { createRechargeOrder, logActivity, updateRechargeOrderGatewayPayload } from "@/lib/customer-store";
-import { calculateCryptoUsdAmount, createEpusdtPayment, getCryptoConfigSafe, getManualCryptoWallet, isSupportedCryptoPayment, normalizeCryptoSelection } from "@/lib/payments/crypto";
+import { createEpusdtPayment, getCryptoConfigSafe, isSupportedCryptoPayment, normalizeCryptoSelection } from "@/lib/payments/crypto";
 import { assertCustomerOwner } from "@/lib/session";
 
 function buildPurchaseRef(body = {}) {
@@ -80,29 +80,11 @@ export default async function handler(req, res) {
   });
 
   if (payment.error) {
-    const manualWallet = getManualCryptoWallet({ token: cryptoToken, network: cryptoNetwork });
-    if (!manualWallet) {
-      return res.status(400).json({
-        error: payment.error,
-        order: created.order,
-        gateway: getCryptoConfigSafe(),
-      });
-    }
-    return res.status(200).json({
-      ok: true,
-      mode: "manual",
-      reason: `GMWallet 暂时未能生成自动收银台：${payment.error}。已切换到人工确认兜底，请按页面订单号转账后提交凭证。`,
+    return res.status(400).json({
+      error: payment.error,
+      missingFields: payment.missingFields || payment.gateway?.missingFields || [],
       order: created.order,
-      payment: {
-        provider: "manual_crypto",
-        receiveAddress: manualWallet.address,
-        actualAmount: calculateCryptoUsdAmount(value),
-        amountUsd: calculateCryptoUsdAmount(value),
-        token: manualWallet.token,
-        network: manualWallet.network,
-        orderId: created.order.outTradeNo,
-      },
-      gateway: getCryptoConfigSafe(),
+      gateway: payment.gateway || getCryptoConfigSafe(),
     });
   }
 
@@ -133,12 +115,18 @@ export default async function handler(req, res) {
   }
 
   return res.status(200).json({
+    success: true,
     ok: true,
-    mode: "gateway",
+    mode: "gmpay",
     order: bound.order || created.order,
+    orderNo: payment.orderNo || created.order.outTradeNo,
+    checkoutUrl: payment.checkoutUrl || payment.payment_url,
+    payment_url: payment.checkoutUrl || payment.payment_url,
+    provider: payment.provider,
     payment: {
       provider: payment.provider,
-      checkoutUrl: payment.checkoutUrl,
+      checkoutUrl: payment.checkoutUrl || payment.payment_url,
+      payment_url: payment.checkoutUrl || payment.payment_url,
       gatewayOrderNo: payment.gatewayOrderNo,
       tradeId: payment.tradeId,
       orderId: payment.orderId,

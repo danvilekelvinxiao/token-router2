@@ -37,12 +37,15 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "回调数据格式错误" });
   }
 
-  const verified = verifyEpusdtNotifySignature(rawBody, req.headers, payload);
+  const verified = await verifyEpusdtNotifySignature(rawBody, req.headers, payload);
   if (!verified) return res.status(401).json({ error: "回调验签失败" });
 
   const normalized = normalizePayload(payload);
   if (!normalized.outTradeNo) return res.status(400).json({ error: "缺少商户订单号" });
-  if (!normalized.paid) return res.status(200).json({ ok: true, ignored: true, reason: "订单未支付完成" });
+  if (!normalized.paid) {
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    return res.status(200).send("ok");
+  }
 
   const order = await getRechargeOrderByOutTradeNo(normalized.outTradeNo);
   if (!order) return res.status(404).json({ error: "订单不存在" });
@@ -64,5 +67,5 @@ export default async function handler(req, res) {
   if (marked.error) return res.status(400).json({ error: marked.error });
 
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
-  return res.status(200).send("success");
+  return res.status(200).send("ok");
 }

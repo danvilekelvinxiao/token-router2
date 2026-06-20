@@ -436,7 +436,7 @@ export default function RechargePage() {
     }
     setSubmittedOrder(null);
     setPaymentSession(null);
-    setLaunchVisible(paymentMethod !== "taobao_code");
+    setLaunchVisible(paymentMethod !== "taobao_code" && paymentMethod !== "crypto");
     setActivePaymentModal("");
     setPaymentSuccessVisible(false);
     setCryptoExpireAt(null);
@@ -467,34 +467,31 @@ export default function RechargePage() {
     if (paymentMethod === "crypto") {
       setPaying(true);
       try {
-        const { response: res, data } = await fetchJsonWithTimeout("/api/payments/crypto/create", {
+        const { response: res, data } = await fetchJsonWithTimeout("/api/payments/gmwallet/create-order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
         if (!res.ok) {
-          setPaymentError(data.error || L("支付订单创建失败，请稍后重试或联系客服。", "Payment order creation failed. Please try again or contact support."));
+          const missing = Array.isArray(data.missingFields) && data.missingFields.length ? `：${data.missingFields.join("、")}` : "";
+          setPaymentError(data.error || (L("支付订单创建失败，请稍后重试或联系客服。", "Payment order creation failed. Please try again or contact support.") + missing));
           setStep("choose");
         } else {
           setSubmittedOrder(data.order);
-          setPaymentSession(data.payment || null);
-          if (data.mode === "manual") {
-            setStep("pay");
-            setActivePaymentModal("crypto");
-            setManualFallback(true);
-            setPaymentError(data.reason || L("当前链路暂未接通自动到账，已切换为人工确认。", "Automatic settlement is not available for this network yet. Switched to manual confirmation."));
-            setCryptoExpireAt(null);
-          } else {
-            setCryptoExpireAt(data.payment?.expiresAt ? new Date(data.payment.expiresAt).getTime() : Date.now() + 10 * 60 * 1000);
-            if (data.payment?.checkoutUrl) {
-              window.location.assign(data.payment.checkoutUrl);
-              return;
-            }
-            setStep("pay");
-            setActivePaymentModal("");
-            setPaymentError(L("链上订单已创建但未返回收银台链接，请联系客服处理订单号。", "Crypto order was created but no checkout URL was returned. Contact support with the order number."));
+          setPaymentSession(data.payment || {
+            orderId: data.orderNo || data.order?.outTradeNo || "",
+            checkoutUrl: data.checkoutUrl || data.payment_url || "",
+            provider: data.provider || "gmwallet",
+            mode: data.mode || "gmpay",
+          });
+          const checkoutUrl = data.checkoutUrl || data.payment_url || data.payment?.checkoutUrl || "";
+          if (checkoutUrl) {
+            window.location.assign(checkoutUrl);
+            return;
           }
-          setCryptoNow(Date.now());
+          setStep("pay");
+          setActivePaymentModal("");
+          setPaymentError(L("链上订单已创建但未返回收银台链接，请联系客服处理订单号。", "Crypto order was created but no checkout URL was returned. Contact support with the order number."));
         }
       } catch {
         setPaymentError(L("支付订单创建失败，请稍后重试或联系客服。", "Payment order creation failed. Please try again or contact support."));
@@ -582,7 +579,7 @@ export default function RechargePage() {
     try {
       const search = new URLSearchParams({ orderId: submittedOrder.id });
       if (paymentSession?.tradeId) search.set("tradeId", paymentSession.tradeId);
-      const res = await fetch(`/api/payments/crypto/status?${search.toString()}`);
+      const res = await fetch(`/api/payments/gmwallet/status?${search.toString()}`);
       const data = await res.json();
       if (res.ok && data.order) {
         setSubmittedOrder(data.order);
@@ -610,7 +607,7 @@ export default function RechargePage() {
     if (!submittedOrder?.id) return;
     const search = new URLSearchParams({ orderId: submittedOrder.id });
     if (paymentSession?.tradeId) search.set("tradeId", paymentSession.tradeId);
-    const res = await fetch(`/api/payments/crypto/status?${search.toString()}`);
+    const res = await fetch(`/api/payments/gmwallet/status?${search.toString()}`);
     const data = await res.json();
     if (data?.order) {
       setSubmittedOrder(applyOrderUpdate(data.order));
