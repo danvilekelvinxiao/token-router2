@@ -1,23 +1,26 @@
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { getContent } from "@/lib/content-cms";
-import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { toPublicModelCatalogItem } from "@/lib/public-model-provider";
+import { sortModelsForDisplay } from "@/lib/models/model-sorter";
+import { normalizeModelDisplayLabel } from "@/lib/models/model-name-normalizer";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed" });
 
   try {
     const products = await listModelProductsWithConfig({ includeUnavailable: true });
-    const models = products
+    const models = sortModelsForDisplay(products
       .filter((model) => model.isAvailable && model.canCreateKey !== false && model.showInApiKeyCreate !== false)
       .map((model) => {
         const fallbackPrice = findContentPrice(model);
         const inputSellPrice = model.pricing?.inputSellPricePerMTokens ?? fallbackPrice.inputPricePerM ?? null;
         const outputSellPrice = model.pricing?.outputSellPricePerMTokens ?? fallbackPrice.outputPricePerM ?? null;
-        return sanitizePublicModelForClient({
+        return toPublicModelCatalogItem({
           id: model.id,
-          modelId: model.publicModelId || model.id,
-          publicModelId: model.publicModelId || model.id,
-          displayName: model.displayName,
+          modelId: model.publicModelId || model.actualModelId || model.id,
+          publicModelId: model.publicModelId || model.actualModelId || model.id,
+          actualModelId: model.actualModelId || model.publicModelId || model.id,
+          displayName: normalizeModelDisplayLabel(model) || model.displayName,
           provider: model.provider || "FlowAPI",
           description: model.description || "",
           tags: model.useCases || model.tags || [],
@@ -35,9 +38,13 @@ export default async function handler(req, res) {
           hot: Boolean(model.hot),
           blackGoldOnly: Boolean(model.blackGoldOnly),
           sortOrder: model.sortOrder || 999,
+          displayOrder: model.displayOrder,
+          featured: Boolean(model.featured || model.hot || model.recommended),
+          providerFamily: model.providerFamily || "",
+          releaseDate: model.releaseDate || model.officialReleaseDate || "",
+          popularityScore: Number(model.popularityScore || 0),
         });
-      })
-      .sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
+      }));
 
     return res.status(200).json({
       ok: true,

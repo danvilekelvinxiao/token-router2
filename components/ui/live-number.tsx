@@ -8,6 +8,27 @@ interface LiveNumberProps {
   className?: string;
   useGrouping?: boolean;
   locale?: string;
+  animate?: boolean;
+  durationMs?: number;
+}
+
+function toNumericValue(value: number | string) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  const matched = String(value).replace(/,/g, "").match(/[-+]?\d*\.?\d+/)?.[0];
+  if (!matched) return null;
+  const parsed = Number.parseFloat(matched);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatValue(value: number, locale: string, decimals: number | undefined, useGrouping: boolean) {
+  return value.toLocaleString(locale, {
+    minimumFractionDigits: decimals ?? 0,
+    maximumFractionDigits: decimals ?? 2,
+    useGrouping,
+  });
 }
 
 export default function LiveNumber({
@@ -18,37 +39,80 @@ export default function LiveNumber({
   className = "",
   useGrouping = true,
   locale = "zh-CN",
+  animate = true,
+  durationMs = 720,
 }: LiveNumberProps) {
-  const prevRef = useRef<number | string>("");
+  const animationFrameRef = useRef<number | null>(null);
+  const animationStartRef = useRef<number | null>(null);
+  const previousNumericRef = useRef<number | null>(null);
+  const flashValueRef = useRef<number | null>(null);
   const [flash, setFlash] = useState<"up" | "down" | null>(null);
+  const [displayValue, setDisplayValue] = useState<string>(() => {
+    const numeric = toNumericValue(value);
+    return numeric === null ? String(value) : formatValue(numeric, locale, decimals, useGrouping);
+  });
+  const numericValue = toNumericValue(value);
+  const motionReduced = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  const isMeaningfulZero = numericValue === 0 && String(value).trim() !== "";
 
   useEffect(() => {
-    const prev = prevRef.current;
-    const num = typeof value === "string" ? parseFloat(value) : value;
-    const prevNum = typeof prev === "string" ? parseFloat(prev) : prev;
-
-    if (prevRef.current !== "" && !isNaN(num) && !isNaN(prevNum) && prevNum !== num) {
-      setFlash(num > prevNum ? "up" : "down");
-      const timer = setTimeout(() => setFlash(null), 700);
-      prevRef.current = value;
-      return () => clearTimeout(timer);
+    const current = numericValue;
+    const previous = flashValueRef.current;
+    if (previous !== null && current !== null && previous !== current) {
+      setFlash(current > previous ? "up" : "down");
+      const timer = window.setTimeout(() => setFlash(null), 700);
+      flashValueRef.current = current;
+      return () => window.clearTimeout(timer);
     }
-    prevRef.current = value;
-  }, [value]);
+    flashValueRef.current = current;
+  }, [numericValue]);
 
-  const displayValue = (() => {
-    if (typeof value === "number" && Number.isFinite(value)) {
-      if (decimals !== undefined) {
-        return value.toLocaleString(locale, {
-          minimumFractionDigits: decimals,
-          maximumFractionDigits: decimals,
-          useGrouping,
-        });
+  useEffect(() => {
+    if (animationFrameRef.current !== null) {
+      window.cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (!animate || motionReduced || numericValue === null) {
+      setDisplayValue(String(value));
+      previousNumericRef.current = null;
+      return undefined;
+    }
+
+    const target = numericValue;
+    const start = previousNumericRef.current ?? 0;
+    previousNumericRef.current = target;
+
+    if (start === target) {
+      setDisplayValue(formatValue(target, locale, decimals, useGrouping));
+      return undefined;
+    }
+
+    animationStartRef.current = null;
+
+    const tick = (timestamp: number) => {
+      if (animationStartRef.current === null) animationStartRef.current = timestamp;
+      const elapsed = timestamp - animationStartRef.current;
+      const progress = Math.min(1, elapsed / Math.max(120, durationMs));
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = start + (target - start) * eased;
+      setDisplayValue(formatValue(current, locale, decimals, useGrouping));
+      if (progress < 1) {
+        animationFrameRef.current = window.requestAnimationFrame(tick);
+        return;
       }
-      return value.toLocaleString(locale, { useGrouping });
-    }
-    return String(value);
-  })();
+      animationFrameRef.current = null;
+      setDisplayValue(formatValue(target, locale, decimals, useGrouping));
+    };
+
+    animationFrameRef.current = window.requestAnimationFrame(tick);
+    return () => {
+      if (animationFrameRef.current !== null) {
+        window.cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
+  }, [animate, decimals, durationMs, locale, motionReduced, numericValue, useGrouping, value]);
 
   const colorClass =
     flash === "up"
@@ -57,14 +121,20 @@ export default function LiveNumber({
       ? "live-number-down"
       : "";
 
+  const displayText = numericValue === null
+    ? String(value)
+    : isMeaningfulZero
+      ? formatValue(0, locale, decimals, useGrouping)
+      : displayValue;
+
   return (
     <span
       className={`live-number ${colorClass} ${className}`}
       style={{ fontVariantNumeric: "tabular-nums" }}
-      aria-label={`${prefix}${displayValue}${suffix}`}
+      aria-label={`${prefix}${displayText}${suffix}`}
     >
       {prefix}
-      <span className="live-number-value">{displayValue}</span>
+      <span className="live-number-value">{displayText}</span>
       {suffix}
     </span>
   );

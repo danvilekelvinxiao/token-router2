@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
-const BASE_URL = (process.env.FLOWAPI_E2E_BASE_URL || process.env.E2E_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
-const ADMIN_SECRET = process.env.FLOWAPI_ADMIN_SECRET || process.env.ADMIN_SECRET || process.env.E2E_ADMIN_SECRET || "";
+const BASE_URL = (process.env.FLOWAPI_E2E_BASE_URL || process.env.E2E_BASE_URL || process.env.FLOWAPI_PUBLIC_BASE_URL || "http://127.0.0.1:3002").replace(/\/+$/, "");
 const API_KEY = process.env.FLOWAPI_E2E_API_KEY || process.env.E2E_API_KEY || "";
 const TEST_EMAIL = process.env.FLOWAPI_E2E_EMAIL || process.env.E2E_EMAIL || "";
 const TEST_PASSWORD = process.env.FLOWAPI_E2E_PASSWORD || process.env.E2E_PASSWORD || `FlowAPI${Date.now()}!`;
 const RUN_PAID_CALL = process.env.FLOWAPI_E2E_RUN_PAID_CALL === "true" || process.env.E2E_RUN_PAID_CALL === "true";
+const ADMIN_EMAIL = process.env.FLOWAPI_E2E_ADMIN_EMAIL || process.env.E2E_ADMIN_EMAIL || "";
+const ADMIN_PASSWORD = process.env.FLOWAPI_E2E_ADMIN_PASSWORD || process.env.E2E_ADMIN_PASSWORD || "";
+let cookieJar = "";
 
 const results = [];
 
@@ -25,13 +27,30 @@ async function request(path, options = {}) {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(cookieJar ? { Cookie: cookieJar } : {}),
       ...(options.headers || {}),
     },
   });
+  const setCookie = response.headers.get("set-cookie");
+  if (setCookie) {
+    cookieJar = setCookie.split(",").map((item) => item.split(";")[0].trim()).join("; ");
+  }
   const text = await response.text();
   let json = null;
   try { json = JSON.parse(text); } catch {}
   return { response, json, text };
+}
+
+async function loginAdmin() {
+  if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+    return false;
+  }
+  const { response, json } = await request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+  });
+  push("管理员登录", response.ok && Boolean(json?.customer), `status=${response.status}`);
+  return response.ok && Boolean(json?.customer);
 }
 
 async function main() {
@@ -68,17 +87,15 @@ async function main() {
     }
   }
 
-  if (ADMIN_SECRET) {
+  if (await loginAdmin()) {
     try {
-      const { response, json } = await request("/api/admin/commercial-health", {
-        headers: { "x-admin-secret": ADMIN_SECRET },
-      });
+      const { response, json } = await request("/api/admin/commercial-health");
       push("管理员商业闭环看板接口", response.ok && json?.success, `score=${json?.score ?? "-"}, status=${response.status}`);
     } catch (error) {
       push("管理员商业闭环看板接口", false, error.message);
     }
   } else {
-    skip("管理员商业闭环看板接口", "未提供 FLOWAPI_ADMIN_SECRET / ADMIN_SECRET / E2E_ADMIN_SECRET");
+    skip("管理员商业闭环看板接口", "未能建立管理员会话");
   }
 
   if (TEST_EMAIL) {
@@ -138,8 +155,8 @@ async function main() {
         const { response, json } = await request("/api/v1/chat/completions", {
           method: "POST",
           headers: { Authorization: `Bearer ${API_KEY}` },
-          body: JSON.stringify({
-            model: process.env.FLOWAPI_E2E_MODEL || "deepseek-chat",
+            body: JSON.stringify({
+            model: process.env.FLOWAPI_E2E_MODEL || "gpt-5.5",
             messages: [{ role: "user", content: "用一句话回复：FlowAPI commercial loop ok" }],
             max_tokens: 20,
           }),

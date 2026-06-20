@@ -130,7 +130,6 @@ const buttonBase = {
 
 export default function BossWizardPage() {
   const [step, setStep] = useState(0);
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [upstream, setUpstream] = useState(initialUpstream);
   const [savedUpstream, setSavedUpstream] = useState(null);
   const [connection, setConnection] = useState(null);
@@ -145,8 +144,7 @@ export default function BossWizardPage() {
 
   useEffect(() => {
     calculatePrice(priceDraft);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      }, []);
 
   function showToast(message) {
     setToast(message);
@@ -161,7 +159,6 @@ export default function BossWizardPage() {
   function adminHeaders(extra = {}) {
     return {
       "Content-Type": "application/json",
-      "x-admin-secret": secret,
       ...extra,
     };
   }
@@ -172,6 +169,7 @@ export default function BossWizardPage() {
       const response = await fetch("/api/admin/upstreams", {
         method: "POST",
         headers: adminHeaders(),
+        credentials: "include",
         body: JSON.stringify(upstream),
       });
       const data = await response.json();
@@ -192,6 +190,7 @@ export default function BossWizardPage() {
       const response = await fetch(`/api/admin/upstreams/${savedUpstream.id}/test`, {
         method: "POST",
         headers: adminHeaders(),
+        credentials: "include",
       });
       const data = await response.json();
       setConnection(data);
@@ -211,6 +210,7 @@ export default function BossWizardPage() {
       const response = await fetch(`/api/admin/upstreams/${savedUpstream.id}/sync-models`, {
         method: "POST",
         headers: adminHeaders(),
+        credentials: "include",
       });
       const data = await response.json();
       if (!data.ok) throw new Error(data.error || "拉取失败");
@@ -228,6 +228,7 @@ export default function BossWizardPage() {
       const response = await fetch("/api/admin/model-pricing/calculate", {
         method: "POST",
         headers: adminHeaders(),
+        credentials: "include",
         body: JSON.stringify(draft),
       });
       const data = await response.json();
@@ -241,6 +242,7 @@ export default function BossWizardPage() {
       await fetch("/api/admin/boss-wizard/save-draft", {
         method: "POST",
         headers: adminHeaders(),
+        credentials: "include",
         body: JSON.stringify({ upstream, savedUpstream, selected, settings, priceDraft }),
       });
       showToast("草稿已保存");
@@ -328,14 +330,6 @@ export default function BossWizardPage() {
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                value={secret}
-                onChange={(event) => setSecret(event.target.value)}
-                onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)}
-                type="password"
-                placeholder="管理密钥"
-                style={{ ...inputStyle, width: 150, minHeight: 36, fontSize: 12 }}
-              />
               <button type="button" style={{ ...buttonBase, background: "var(--dash-card-bg)", color: "var(--dash-text)" }} onClick={saveDraft}>
                 {busy === "draft" ? "保存中..." : "保存草稿"}
               </button>

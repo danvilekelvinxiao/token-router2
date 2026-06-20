@@ -86,17 +86,16 @@ export default function RedeemCodesPage() {
   const [batchForm, setBatchForm] = useState({ name: "", type: "balance", amountCny: 100, tokenAmount: "", packageId: "weekly_plan", priceCny: 100, source: "taobao", quantity: 10, note: "", expireOption: "", expireDate: "", maxRedemptionsPerCode: 1, enabled: true });
 
   function adminHeaders(extra = {}) {
-    const secret = typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || "";
-    return { ...extra, ...(secret ? { "x-admin-secret": secret } : {}) };
+    return { ...extra };
   }
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [codesRes, recordsRes, batchesRes] = await Promise.all([
-        fetch(`/api/admin/activation-codes?${new URLSearchParams({ status: filterStatus, source: filterSource, search })}`, { headers: adminHeaders() }),
-        fetch("/api/admin/activation-codes?action=records", { headers: adminHeaders() }),
-        fetch("/api/admin/activation-codes?action=batches", { headers: adminHeaders() }),
+        fetch(`/api/admin/activation-codes?${new URLSearchParams({ status: filterStatus, source: filterSource, search })}`, { headers: adminHeaders(), credentials: "include" }),
+        fetch("/api/admin/activation-codes?action=records", { headers: adminHeaders(), credentials: "include" }),
+        fetch("/api/admin/activation-codes?action=batches", { headers: adminHeaders(), credentials: "include" }),
       ]);
       if (codesRes.ok) setCodes((await codesRes.json()).codes || []);
       if (recordsRes.ok) setRecords((await recordsRes.json()).records || []);
@@ -125,6 +124,7 @@ export default function RedeemCodesPage() {
     const res = await fetch("/api/admin/activation-codes", {
       method: "POST",
       headers: adminHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
       body: JSON.stringify(body),
     });
     const data = await res.json();
@@ -155,6 +155,7 @@ export default function RedeemCodesPage() {
     const res = await fetch("/api/admin/activation-codes?action=batch", {
       method: "POST",
       headers: adminHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
       body: JSON.stringify(body),
     });
     const data = await res.json();
@@ -173,6 +174,7 @@ export default function RedeemCodesPage() {
     await fetch("/api/admin/activation-codes", {
       method: "PATCH",
       headers: adminHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
       body: JSON.stringify({ id }),
     });
     loadData();
@@ -183,6 +185,7 @@ export default function RedeemCodesPage() {
     await fetch("/api/admin/activation-codes", {
       method: "DELETE",
       headers: adminHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
       body: JSON.stringify({ id }),
     });
     loadData();

@@ -1,14 +1,16 @@
 export const dynamic = "force-dynamic";
 import Head from "next/head";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import * as Dialog from "@radix-ui/react-dialog";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import ModelLogo from "@/components/ModelLogo";
 import { formatTokens } from "@/lib/model-format";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
 import { sanitizePublicModelProvider } from "@/lib/public-model-provider";
-import { useSafePolling } from "@/hooks/useSafePolling";
+import { sortModelsForDisplay } from "@/lib/models/model-sorter";
 
 const DEFAULT_CATEGORIES = [
   { id: "all", name: "全部" },
@@ -67,6 +69,15 @@ function normalizeModel(model) {
     visibleToNonMember: model.visibleToNonMember !== false,
     nonMemberPrompt: model.nonMemberPrompt || "该模型为 FLOWAPI 黑金会员专属模型，开通会员后即可使用。",
   };
+}
+
+function getVisibleModelId(model = {}) {
+  const publicId = String(model.publicModelId || model.modelId || model.id || "").trim();
+  if (!publicId) return "";
+  if (publicId.startsWith("flowapi-")) {
+    return model.displayName || model.name || publicId;
+  }
+  return publicId;
 }
 
 function releaseDateLabel(value) {
@@ -160,7 +171,7 @@ function generateCurl(model, apiBaseUrl) {
   return `curl ${apiBaseUrl}/chat/completions \\
   -H "Authorization: Bearer 你的 API Key" \\
   -H "Content-Type: application/json" \\
-  -d '{"model":"${model?.modelId || "deepseek-chat"}","messages":[{"role":"user","content":"你好"}]}'`;
+  -d '{"model":"${getVisibleModelId(model) || "deepseek-chat"}","messages":[{"role":"user","content":"你好"}]}'`;
 }
 
 function generatePython(model, apiBaseUrl) {
@@ -173,7 +184,7 @@ response = requests.post(
         "Content-Type": "application/json",
     },
     json={
-        "model": "${model?.modelId || "deepseek-chat"}",
+        "model": "${getVisibleModelId(model) || "deepseek-chat"}",
         "messages": [{"role": "user", "content": "你好"}],
     },
 )
@@ -189,7 +200,7 @@ function generateJavaScript(model, apiBaseUrl) {
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
-    model: "${model?.modelId || "deepseek-chat"}",
+    model: "${getVisibleModelId(model) || "deepseek-chat"}",
     messages: [{ role: "user", content: "你好" }]
   })
 });
@@ -199,9 +210,20 @@ console.log(await response.json());`;
 
 function modelHref(href, model) {
   const target = href || "/api-management";
-  if (!model?.modelId) return target;
-  if (target.includes("?")) return `${target}&model=${encodeURIComponent(model.modelId)}`;
-  return `${target}?model=${encodeURIComponent(model.modelId)}`;
+  const visibleModelId = getVisibleModelId(model);
+  if (!visibleModelId) return target;
+  if (target.includes("?")) return `${target}&model=${encodeURIComponent(visibleModelId)}`;
+  return `${target}?model=${encodeURIComponent(visibleModelId)}`;
+}
+
+async function fetchJsonWithTimeout(input, init = {}, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(new DOMException("Request timed out", "AbortError")), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export default function ModelsPage() {
@@ -215,18 +237,13 @@ export default function ModelsPage() {
   const [category, setCategory] = useState("recommended");
   const [selectedModel, setSelectedModel] = useState(null);
   const [toast, setToast] = useState("");
-  const [popularModels, setPopularModels] = useState([]);
-  const [popularSource, setPopularSource] = useState("loading");
-  const [popularUpdatedAt, setPopularUpdatedAt] = useState(null);
-  const [popularLoading, setPopularLoading] = useState(true);
   const [membership, setMembership] = useState(null);
 
   const apiBaseUrl = getPublicApiBaseUrl();
   const isAdmin = isAdminCustomer(customer);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
-    try {
+        try {
       const stored = localStorage.getItem("flowapi_customer");
       if (stored) setCustomer(JSON.parse(stored));
     } catch {}
@@ -236,17 +253,20 @@ export default function ModelsPage() {
       setLoading(true);
       setError("");
       try {
-        const [modelsRes, categoriesRes, settingsRes] = await Promise.all([
-          fetch("/api/models/market"),
-          fetch("/api/content/model-categories"),
-          fetch("/api/content/page-settings").catch(() => null),
+        const [modelsRes, categoriesRes, settingsRes] = await Promise.allSettled([
+          fetchJsonWithTimeout("/api/models/market", {}, 12000),
+          fetchJsonWithTimeout("/api/content/model-categories", {}, 8000),
+          fetchJsonWithTimeout("/api/content/page-settings", {}, 8000),
         ]);
-        const modelsJson = await modelsRes.json();
-        const categoriesJson = await categoriesRes.json();
-        const settingsJson = settingsRes ? await settingsRes.json().catch(() => null) : null;
+        const modelsResponse = modelsRes.status === "fulfilled" ? modelsRes.value : null;
+        const categoriesResponse = categoriesRes.status === "fulfilled" ? categoriesRes.value : null;
+        const settingsResponse = settingsRes.status === "fulfilled" ? settingsRes.value : null;
+        const modelsJson = modelsResponse ? await modelsResponse.json().catch(() => null) : null;
+        const categoriesJson = categoriesResponse ? await categoriesResponse.json().catch(() => null) : null;
+        const settingsJson = settingsResponse ? await settingsResponse.json().catch(() => null) : null;
         if (cancelled) return;
 
-        if (!modelsRes.ok || !modelsJson?.success) {
+        if (!modelsResponse?.ok || !modelsJson?.success) {
           throw new Error("models_sync_failed");
         }
 
@@ -264,8 +284,7 @@ export default function ModelsPage() {
 
     loadContent();
     return () => { cancelled = true; };
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, []);
+      }, []);
 
   useEffect(() => {
     if (!customer?.id) return undefined;
@@ -277,38 +296,31 @@ export default function ModelsPage() {
     return () => { cancelled = true; };
   }, [customer?.id]);
 
-  const loadPopularModels = useCallback(async ({ silent = false } = {}) => {
-    if (!silent) setPopularLoading(true);
-    try {
-      const response = await fetch("/api/analytics/model-usage-rank?period=week", { cache: "no-store" });
-      const json = await response.json();
-      const rows = response.ok && json?.success && json?.source === "real" && Array.isArray(json.models)
-        ? json.models.filter((item) => Number(item?.tokens) > 0).slice(0, 5)
-        : [];
-
-      setPopularModels(rows);
-      setPopularSource(rows.length ? "real" : "empty");
-      setPopularUpdatedAt(json?.updatedAt || null);
-    } catch {
-      setPopularModels([]);
-      setPopularSource("empty");
-      setPopularUpdatedAt(null);
-    } finally {
-      setPopularLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    queueMicrotask(() => {
-      loadPopularModels();
-    });
-  }, [loadPopularModels]);
-
-  useSafePolling({
-    intervalMs: 60000,
-    enabled: true,
-    callback: () => loadPopularModels({ silent: true }),
+  const popularQuery = useQuery({
+    queryKey: ["models-popular", "week"],
+    queryFn: async () => {
+      try {
+        const response = await fetchJsonWithTimeout("/api/analytics/model-usage-rank?period=week", { cache: "no-store" }, 10000);
+        const json = await response.json().catch(() => ({}));
+        const rows = response.ok && json?.success && json?.source === "real" && Array.isArray(json.models)
+          ? json.models.filter((item) => Number(item?.tokens) > 0).slice(0, 5)
+          : [];
+        return {
+          models: rows,
+          source: rows.length ? "real" : "empty",
+          updatedAt: json?.updatedAt || null,
+        };
+      } catch {
+        return { models: [], source: "empty", updatedAt: null };
+      }
+    },
+    refetchInterval: 60000,
+    refetchIntervalInBackground: true,
   });
+  const popularModels = popularQuery.data?.models || [];
+  const popularSource = popularQuery.data?.source || "loading";
+  const popularUpdatedAt = popularQuery.data?.updatedAt || null;
+  const popularLoading = popularQuery.isPending || popularQuery.isFetching;
 
   const moduleEnabled = (key) => {
     const item = pageSettings.find((setting) => setting.page === "models" && setting.moduleKey === key);
@@ -333,7 +345,7 @@ export default function ModelsPage() {
 
   const filteredModels = useMemo(() => {
     const query = search.trim().toLowerCase();
-    return models
+    return sortModelsForDisplay(models
       .filter((model) => {
         if (category !== "all" && !model.categories.includes(category)) return false;
         if (!query) return true;
@@ -345,8 +357,7 @@ export default function ModelsPage() {
           ...(model.tags || []),
           ...(model.useCases || []),
         ].some((value) => String(value || "").toLowerCase().includes(query));
-      })
-      .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || a.sortOrder - b.sortOrder);
+      }));
   }, [models, category, search]);
 
   function showToast(message) {
@@ -470,7 +481,7 @@ export default function ModelsPage() {
                     showPrice={moduleEnabled("show-price")}
                     isMember={membership?.status === "active" && membership?.level === "black_gold"}
                     onMemberRequired={() => showToast(model.nonMemberPrompt || "该模型为 FLOWAPI 黑金会员专属模型")}
-                    onCopy={() => copyText(model.modelId, "Model ID 已复制")}
+                    onCopy={() => copyText(getVisibleModelId(model), "Model ID 已复制")}
                     onDetails={() => setSelectedModel(model)}
                   />
                 ))}
@@ -555,7 +566,9 @@ function PopularModelCard({ item, cmsModel, onCopy, onFocus }) {
   const shareText = percentLabel(item.share);
 
   return (
-    <article className={`models-popular-card rank-${item.rank <= 3 ? item.rank : "normal"}`}>
+    <article
+      className={`models-popular-card rank-${item.rank <= 3 ? item.rank : "normal"}`}
+    >
       <div className="models-popular-rank">#{item.rank}</div>
       <div className="models-popular-logo">
         <ModelLogo model={displayName} provider={provider} size={42} />
@@ -581,7 +594,7 @@ function PopularModelCard({ item, cmsModel, onCopy, onFocus }) {
         <button
           type="button"
           className="models-market-secondary"
-          onClick={() => onCopy(cmsModel?.modelId, "Model ID 已复制")}
+          onClick={() => onCopy(getVisibleModelId(cmsModel), "Model ID 已复制")}
           disabled={!hasModelId}
         >
           复制 Model ID
@@ -607,7 +620,10 @@ function ModelMarketCard({ model, showPrice, onCopy, onDetails, isMember = false
     onCopy();
   };
   return (
-    <article id={`model-${model.id}`} className={`models-market-card${model.isRecommended ? " recommended" : ""}${model.isMemberOnly ? " member-only" : ""}`}>
+    <article
+      id={`model-${model.id}`}
+      className={`models-market-card${model.isRecommended ? " recommended" : ""}${model.isMemberOnly ? " member-only" : ""}`}
+    >
       <div className="models-card-topline">
         <ModelLogo model={model.displayName} provider={model.provider || model.logo} size={42} />
         <div>
@@ -635,7 +651,7 @@ function ModelMarketCard({ model, showPrice, onCopy, onDetails, isMember = false
 
       <div className="models-model-id">
         <span>Model ID</span>
-        <button type="button" onClick={guardedCopy} title="复制 Model ID">{model.modelId || "同步中"}</button>
+        <button type="button" onClick={guardedCopy} title="复制 Model ID">{getVisibleModelId(model) || "同步中"}</button>
       </div>
 
       <p className="models-card-desc">{model.description || "模型用途同步中。"}</p>
@@ -667,87 +683,96 @@ function ModelDetailModal({ model, apiBaseUrl, curlExample, showCurlExamples, on
   const jsExample = model.javascriptExample || generateJavaScript(model, apiBaseUrl);
 
   return (
-    <div className="models-detail-backdrop" onClick={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <div className="models-detail-modal">
-        <header>
-          <div>
-            <span className="models-market-kicker">Model Detail</span>
-            <h2>{model.displayName}</h2>
-            <p>by {model.provider}</p>
+    <Dialog.Root open onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="models-detail-backdrop" />
+        <Dialog.Content className="models-detail-modal">
+          <header>
+            <div>
+              <span className="models-market-kicker">Model Detail</span>
+              <Dialog.Title asChild>
+                <h2>{model.displayName}</h2>
+              </Dialog.Title>
+              <Dialog.Description asChild>
+                <p>by {model.provider}</p>
+              </Dialog.Description>
+            </div>
+            <Dialog.Close asChild>
+              <button type="button" aria-label="关闭模型详情">×</button>
+            </Dialog.Close>
+          </header>
+
+          <div className="models-detail-body">
+            <section className="models-detail-summary">
+              <div>
+                <span>Model ID</span>
+                <code>{getVisibleModelId(model)}</code>
+                <button type="button" title="复制当前模型 ID" onClick={() => onCopy(getVisibleModelId(model), "Model ID 已复制")}>复制</button>
+              </div>
+              <div>
+                <span>Base URL</span>
+                <code>{apiBaseUrl}</code>
+                <button type="button" title="复制 API Base URL" onClick={() => onCopy(apiBaseUrl, "Base URL 已复制")}>复制</button>
+              </div>
+              <div>
+                <span>输入价格</span>
+                <strong>{priceLabel(model.inputPricePerM)}</strong>
+              </div>
+              <div>
+                <span>输出价格</span>
+                <strong>{priceLabel(model.outputPricePerM)}</strong>
+              </div>
+              <div>
+                <span>官方发布时间</span>
+                <strong>{releaseDateLabel(model.officialReleaseDate)}</strong>
+              </div>
+            </section>
+
+            <section className="models-detail-text">
+              <h3>模型介绍</h3>
+              <p>{model.detailDescription || model.description || "模型介绍同步中。"}</p>
+            </section>
+
+            <section className="models-detail-columns">
+              <div>
+                <h3>适合场景</h3>
+                {(model.useCases?.length ? model.useCases : ["中文问答", "代码辅助", "日常任务"]).map((item) => <span key={item}>{item}</span>)}
+              </div>
+              <div>
+                <h3>不适合场景</h3>
+                {(model.notRecommendedFor?.length ? model.notRecommendedFor : ["价格或能力未同步的高风险业务"]).map((item) => <span key={item}>{item}</span>)}
+              </div>
+              <div>
+                <h3>推荐用户</h3>
+                {(model.recommendedUserTypes?.length ? model.recommendedUserTypes : ["新手用户", "开发者", "内容团队"]).map((item) => <span key={item}>{item}</span>)}
+              </div>
+            </section>
+
+            {showCurlExamples && (
+              <>
+                <CodeBlock title="CURL 示例" code={curlExample} onCopy={onCopy} />
+                <CodeBlock title="Python 示例" code={pythonExample} onCopy={onCopy} />
+                <CodeBlock title="JavaScript 示例" code={jsExample} onCopy={onCopy} />
+              </>
+            )}
+
+            <section className="models-detail-errors">
+              <h3>常见错误</h3>
+              <p><b>401：</b>API Key 填错或已禁用，请回到 API 管理检查。</p>
+              <p><b>404：</b>Model ID 填错，请重新复制模型卡片里的 Model ID。</p>
+              <p><b>402：</b>余额不足，请充值后继续调用。</p>
+            </section>
           </div>
-          <button type="button" onClick={onClose}>×</button>
-        </header>
 
-        <div className="models-detail-body">
-          <section className="models-detail-summary">
-            <div>
-              <span>Model ID</span>
-              <code>{model.modelId}</code>
-              <button type="button" onClick={() => onCopy(model.modelId, "Model ID 已复制")}>复制</button>
-            </div>
-            <div>
-              <span>Base URL</span>
-              <code>{apiBaseUrl}</code>
-              <button type="button" onClick={() => onCopy(apiBaseUrl, "Base URL 已复制")}>复制</button>
-            </div>
-            <div>
-              <span>输入价格</span>
-              <strong>{priceLabel(model.inputPricePerM)}</strong>
-            </div>
-            <div>
-              <span>输出价格</span>
-              <strong>{priceLabel(model.outputPricePerM)}</strong>
-            </div>
-            <div>
-              <span>官方发布时间</span>
-              <strong>{releaseDateLabel(model.officialReleaseDate)}</strong>
-            </div>
-          </section>
-
-          <section className="models-detail-text">
-            <h3>模型介绍</h3>
-            <p>{model.detailDescription || model.description || "模型介绍同步中。"}</p>
-          </section>
-
-          <section className="models-detail-columns">
-            <div>
-              <h3>适合场景</h3>
-              {(model.useCases?.length ? model.useCases : ["中文问答", "代码辅助", "日常任务"]).map((item) => <span key={item}>{item}</span>)}
-            </div>
-            <div>
-              <h3>不适合场景</h3>
-              {(model.notRecommendedFor?.length ? model.notRecommendedFor : ["价格或能力未同步的高风险业务"]).map((item) => <span key={item}>{item}</span>)}
-            </div>
-            <div>
-              <h3>推荐用户</h3>
-              {(model.recommendedUserTypes?.length ? model.recommendedUserTypes : ["新手用户", "开发者", "内容团队"]).map((item) => <span key={item}>{item}</span>)}
-            </div>
-          </section>
-
-          {showCurlExamples && (
-            <>
-              <CodeBlock title="CURL 示例" code={curlExample} onCopy={onCopy} />
-              <CodeBlock title="Python 示例" code={pythonExample} onCopy={onCopy} />
-              <CodeBlock title="JavaScript 示例" code={jsExample} onCopy={onCopy} />
-            </>
-          )}
-
-          <section className="models-detail-errors">
-            <h3>常见错误</h3>
-            <p><b>401：</b>API Key 填错或已禁用，请回到 API 管理检查。</p>
-            <p><b>404：</b>Model ID 填错，请重新复制模型卡片里的 Model ID。</p>
-            <p><b>402：</b>余额不足，请充值后继续调用。</p>
-          </section>
-        </div>
-
-        <footer>
-          <Link className="models-market-primary" href={modelHref(model.primaryButtonHref, model)}>{model.primaryButtonText || "去创建 API Key"}</Link>
-          {showCurlExamples && (
-            <button type="button" className="models-market-secondary" onClick={() => onCopy(curlExample, "CURL 示例已复制")}>复制 CURL 示例</button>
-          )}
-        </footer>
-      </div>
-    </div>
+          <footer>
+            <Link className="models-market-primary" href={modelHref(model.primaryButtonHref, model)}>{model.primaryButtonText || "去创建 API Key"}</Link>
+            {showCurlExamples && (
+              <button type="button" className="models-market-secondary" onClick={() => onCopy(curlExample, "CURL 示例已复制")}>复制 CURL 示例</button>
+            )}
+          </footer>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

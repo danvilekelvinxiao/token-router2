@@ -42,8 +42,8 @@ export default function CallSavingsList({ items = [] }: { items?: CallSaving[] }
   if (!items.length) {
     return (
       <div className="savings-empty-block">
-        <strong>暂无调用节省流水</strong>
-        <span>完成真实调用后，这里会展示每一笔调用的官方预估费用、实际费用和节省金额。</span>
+        <strong>—</strong>
+        <span>—</span>
       </div>
     );
   }
@@ -71,7 +71,7 @@ export default function CallSavingsList({ items = [] }: { items?: CallSaving[] }
               <b>{formatSmallCny(item.officialCostCny)}</b>
               <b>{formatSmallCny(item.actualCostCny)}</b>
               <strong className={Number(item.savedAmountCny || 0) > 0 ? "saving-positive" : "saving-neutral"}>
-                {Number(item.savedAmountCny || 0) > 0 ? formatSmallCny(item.savedAmountCny) : "未节省"}
+                {Number(item.savedAmountCny || 0) > 0 ? formatSmallCny(item.savedAmountCny) : "—"}
               </strong>
               <em>{Number(item.savedPercent || 0).toFixed(1)}%</em>
             </button>
@@ -89,7 +89,7 @@ export default function CallSavingsList({ items = [] }: { items?: CallSaving[] }
                 <p>FlowAPI 实际费用：({item.inputTokens} / 1M × {formatSmallCny(item.flowapiInputPricePerM)}) + ({item.outputTokens} / 1M × {formatSmallCny(item.flowapiOutputPricePerM)})，最终账单 = <b>{formatSmallCny(item.actualCostCny)}</b></p>
                 <p>本次节省：官方预估费用 - FlowAPI 实际费用 = <b>{formatSmallCny(item.savedAmountCny)}</b></p>
                 <p>节省比例：节省金额 / 官方预估费用 = <b>{Number(item.savedPercent || 0).toFixed(1)}%</b></p>
-                <small>本系统按照 Token 用量计算费用，节省金额为基于官方公开价格和 FlowAPI 实际价格的估算结果，最终以平台账单为准。</small>
+                <small>节省金额基于官方公开价格和 FlowAPI 实际价格估算，最终以平台账单为准。</small>
               </div>
             ) : null}
           </article>

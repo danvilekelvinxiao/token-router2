@@ -29,6 +29,22 @@ require_env() {
   fi
 }
 
+require_any_non_claude_env() {
+  if ! grep -q '^AICARDS_API_KEY_NON_CLAUDE=.\+' .env.production 2>/dev/null && ! grep -q '^AICARDS_API_KEY=.\+' .env.production 2>/dev/null; then
+    echo "Missing required .env.production value: AICARDS_API_KEY_NON_CLAUDE or AICARDS_API_KEY" >&2
+    exit 2
+  fi
+}
+
+require_any_env() {
+  local key_a="$1"
+  local key_b="$2"
+  if ! grep -q "^${key_a}=.\+" .env.production 2>/dev/null && ! grep -q "^${key_b}=.\+" .env.production 2>/dev/null; then
+    echo "Missing required .env.production value: ${key_a} or ${key_b}" >&2
+    exit 2
+  fi
+}
+
 echo "==> 0. Context"
 whoami
 hostname
@@ -71,7 +87,7 @@ for line in \
   'FLOWAPI_AICARDS_AUTO_HEALTH_CHECK=true' \
   'FLOWAPI_AICARDS_PER_MODEL_HEALTH_CHECK=false' \
   'FLOWAPI_AICARDS_INCLUDE_IMAGES=false' \
-  'FLOWAPI_AICARDS_SYNC_MAX_COUNT=80'
+  'FLOWAPI_AICARDS_SYNC_MAX_COUNT=999'
 do
   key="${line%%=*}"
   if grep -q "^${key}=" .env.production; then
@@ -81,15 +97,20 @@ do
   fi
 done
 require_env "AICARDS_API_BASE_URL"
-require_env "AICARDS_API_KEY"
+require_any_non_claude_env
+require_any_env "AICARDS_API_KEY_CLAUDE" "AICARDS_CLAUDE_API_KEY"
 mask_env "AICARDS_API_BASE_URL"
+mask_env "AICARDS_API_KEY_NON_CLAUDE"
 mask_env "AICARDS_API_KEY"
+mask_env "AICARDS_API_KEY_CLAUDE"
+mask_env "AICARDS_CLAUDE_API_KEY"
 mask_env "NEW_API_BASE_URL"
 mask_env "NEW_API_KEY"
 mask_env "NEW_API_ADMIN_TOKEN"
 
 echo "==> 3. Install, migrate, build"
 npm install --no-audit --no-fund
+FLOWAPI_REQUIRE_DATABASE=true node scripts/verify-new-api-env.mjs .env.production
 FLOWAPI_REQUIRE_DATABASE=true node scripts/run-production-migrations.mjs
 NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=512}" npm run build
 
@@ -100,7 +121,7 @@ if [ -n "$PORT_PIDS" ]; then
   kill $PORT_PIDS 2>/dev/null || true
   sleep 1
 fi
-pm2 start node_modules/next/dist/bin/next --name flowapi -- start -p "$PORT"
+NODE_OPTIONS="--dns-result-order=ipv4first ${NODE_OPTIONS:-}" pm2 start npm --name flowapi --cwd "$APP_DIR" -- start -- -p "$PORT"
 pm2 save >/dev/null || true
 $SUDO nginx -t
 $SUDO systemctl reload nginx || $SUDO service nginx reload || true

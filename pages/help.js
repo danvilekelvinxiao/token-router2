@@ -23,6 +23,13 @@ function CopyButton({ value, label }) {
   );
 }
 
+function maskToken(token = "") {
+  if (!token || token.length <= 14) return "sk-******";
+  const prefix = token.startsWith("sk-") ? "sk-" : "";
+  const body = token.startsWith("sk-") ? token.slice(3) : token;
+  return `${prefix}${body.slice(0, 4)}************${body.slice(-4)}`;
+}
+
 /* ==================== TOC ==================== */
 
 const tocSections = [
@@ -37,6 +44,7 @@ const tocSections = [
 /* ==================== Params Card ==================== */
 
 function ParamsCard({ title, value, copyLabel, isKey, placeholder }) {
+  const displayValue = isKey && value ? maskToken(value) : value;
   return (
     <div className="help-param-card">
       <div className="help-param-head">
@@ -44,14 +52,14 @@ function ParamsCard({ title, value, copyLabel, isKey, placeholder }) {
         {isKey && !value ? (
           <Link href="/api-management" className="help-go-btn">去创建 API Key</Link>
         ) : (
-          <CopyButton value={value} label={copyLabel || "复制"} />
+          <CopyButton value={displayValue} label={copyLabel || "复制"} />
         )}
       </div>
       <div className="help-param-value">
         {isKey && !value ? (
           <span className="help-placeholder">{placeholder || "请先前往 API 管理页面创建 API Key"}</span>
         ) : (
-          <code>{value}</code>
+          <code>{displayValue}</code>
         )}
       </div>
     </div>
@@ -80,7 +88,7 @@ function DeepSeekGuideSection({ customer }) {
       <h4 className="help-params-title">接入参数</h4>
       <div className="help-params">
         <ParamsCard title="Base URL" value={API_BASE_URL} copyLabel="复制" />
-        <ParamsCard title="API Key" value={primaryKey?.token || ""} copyLabel="复制 API Key" isKey />
+        <ParamsCard title="API Key" value={primaryKey?.token || ""} copyLabel="复制脱敏值" isKey />
         <ParamsCard title="Model" value="deepseek-chat" copyLabel="复制模型名" />
       </div>
 
@@ -124,7 +132,7 @@ function ChatGPTGuideSection({ customer }) {
       <h4 className="help-params-title">接入参数</h4>
       <div className="help-params">
         <ParamsCard title="Base URL" value={API_BASE_URL} copyLabel="复制" />
-        <ParamsCard title="API Key" value={primaryKey?.token || ""} copyLabel="复制 API Key" isKey />
+        <ParamsCard title="API Key" value={primaryKey?.token || ""} copyLabel="复制脱敏值" isKey />
         <ParamsCard title="Model" value={CHATGPT_MODEL} copyLabel="复制模型名" />
       </div>
 
@@ -153,7 +161,7 @@ function ManualConfigSection({ customer }) {
 
   const params = [
     { title: "Base URL", value: API_BASE_URL, copyLabel: "复制" },
-    { title: "API Key", value: primaryKey?.token || "", copyLabel: "复制 API Key", isKey: true },
+    { title: "API Key", value: primaryKey?.token || "", copyLabel: "复制脱敏值", isKey: true },
     { title: "模型", value: DEFAULT_MODEL, copyLabel: "复制模型名" },
   ];
 

@@ -1,5 +1,6 @@
+import Image from "next/image";
 import { useState } from "react";
-import { getProvider, PROVIDERS } from "@/lib/providers";
+import { getProvider } from "@/lib/providers";
 
 interface ProviderLogoProps {
   providerId?: string;
@@ -45,20 +46,20 @@ export default function ProviderLogo({
   if (!logoUrl || imgFailed) return fallback;
 
   return (
-    // eslint-disable-next-line @next/next/no-img-element -- Provider logos are tiny external marks with a text fallback.
-    <img
+    <Image
       src={logoUrl}
       alt={provider.label}
+      width={size}
+      height={size}
       className={`provider-logo ${className}`}
       style={{
-        width: size,
-        height: size,
         borderRadius: variant === "circle" ? "50%" : variant === "rounded" ? "8px" : "4px",
         objectFit: "contain",
         flexShrink: 0,
         background: "transparent",
       }}
       onError={() => setImgFailed(true)}
+      draggable={false}
     />
   );
 }

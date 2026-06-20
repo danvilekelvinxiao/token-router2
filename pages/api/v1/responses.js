@@ -90,10 +90,20 @@ function normalizeResponsesModel(model) {
   if (name.includes("deepseek")) return "deepseek-chat";
   if (name.includes("qwen") || name.includes("alibaba")) return "qwen/qwen3-32b";
   if (name.includes("claude") || name.includes("anthropic")) return "anthropic/claude-3.5-haiku";
-  if (name.includes("flowapi-codex") || name.includes("codex")) return "flowapi-codex-plus";
+  if (name.includes("gpt-5.5-pro")) return "gpt-5.5-pro";
   if (name.includes("gpt-5.5")) return "gpt-5.5";
-  if (name.includes("gpt-5.3-codex")) return "gpt-5.3-codex";
-  if (name.includes("gpt-4o-mini")) return "openai/gpt-4o-mini";
+  if (name.includes("gpt-5.4-pro")) return "gpt-5.4-pro";
+  if (name.includes("gpt-5.4-mini") || name.includes("gpt-5.4")) return "gpt-5.4-mini";
+  if (name.includes("gpt-5.3-codex-plus")) return "gpt-5.3-codex-plus";
+  if (name.includes("gpt-5.3-codex-pro")) return "gpt-5.3-codex-pro";
+  if (name.includes("gpt-5.3-codex-lite")) return "gpt-5.3-codex-lite";
+  if (name.includes("flowapi-codex") || name.includes("codex")) return "flowapi-codex-plus";
+  if (name.includes("gpt-5.3-codex")) return "gpt-5.3-codex-plus";
+  if (name.includes("gpt-4o-mini")) return "gpt-4o-mini";
+  if (name.includes("claude-sonnet-4.6")) return "claude-sonnet-4.6";
+  if (name.includes("claude-opus-4.7")) return "claude-opus-4.7";
+  if (name.includes("gemini-2.5-pro")) return "gemini-2.5-pro";
+  if (name.includes("gemini-2.5-flash")) return "gemini-2.5-flash";
   if (name.includes("gpt") || name.includes("openai")) return "flowapi-codex-plus";
 
   return "deepseek-chat";

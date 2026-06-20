@@ -9,6 +9,7 @@ import {
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { getAllModelConfigs } from "@/lib/model-store";
 import { invalidateModelCaches } from "@/lib/cache-manager";
+import { sortModelsForDisplay } from "@/lib/models/model-sorter";
 
 function modelTypeFromProduct(product = {}) {
   const id = String(product.publicModelId || product.id || "").toLowerCase();
@@ -74,7 +75,7 @@ export default async function handler(req, res) {
           const modelId = product.publicModelId || product.id;
           return mapSystemProductForAdmin(product, priceMap.get(modelId), configs);
         });
-      const mergedModels = [
+      const mergedModels = sortModelsForDisplay([
         ...models.map((model) => ({
           ...model,
           source: "published",
@@ -82,7 +83,7 @@ export default async function handler(req, res) {
           pricing: priceMap.get(model.modelId) || null,
         })),
         ...systemModels,
-      ].sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
+      ]);
       return res.status(200).json({
         ok: true,
         models: mergedModels,

@@ -24,6 +24,12 @@ function maskToken(token = "") {
   return `${prefix}${body.slice(0, 4)}************${body.slice(-4)}`;
 }
 
+function getCreationKeyHint(key = {}) {
+  const token = String(key.token || "");
+  if (!token) return "API Key 已创建";
+  return `完整 API Key 只在创建成功时显示一次。当前值：${maskToken(token)}`;
+}
+
 function formatDate(value) {
   if (!value) return "暂无记录";
   return formatDateTime(value);
@@ -146,6 +152,15 @@ function normalizeModel(model = {}) {
   };
 }
 
+function getVisibleModelId(model = {}) {
+  const publicId = String(model.publicModelId || model.modelId || model.id || "").trim();
+  if (!publicId) return "";
+  if (publicId.startsWith("flowapi-")) {
+    return model.displayName || model.name || publicId;
+  }
+  return publicId;
+}
+
 function readRequestedModelId() {
   if (typeof window === "undefined") return "";
   return new URLSearchParams(window.location.search).get("model") || "";
@@ -247,13 +262,12 @@ export default function ApiManagementPage() {
   const [customer, setCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState([]);
-  const [apiGroups, setApiGroups] = useState([]);
   const [membership, setMembership] = useState(null);
   const [query, setQuery] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
   const [creating, setCreating] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ label: "", modelId: "", groupId: "", expiresAt: "never", customDate: "", limit: defaultLimitForm() });
+  const [createForm, setCreateForm] = useState({ label: "", modelId: "", expiresAt: "never", customDate: "", limit: defaultLimitForm() });
   const [createdKey, setCreatedKey] = useState(null);
   const [toast, setToast] = useState("");
   const [detail, setDetail] = useState(null);
@@ -280,25 +294,20 @@ export default function ApiManagementPage() {
     Promise.all([
       fetch(`/api/customer?customerId=${localCustomer.id}`).then((res) => res.ok ? res.json() : localCustomer),
       fetch("/api/models/api-key-options").then((res) => res.ok ? res.json() : { data: [] }),
-      fetch("/api/groups/available").then((res) => res.ok ? res.json() : { groups: [] }),
       fetch("/api/user/wallet-summary").then((res) => res.ok ? res.json() : null).catch(() => null),
-    ]).then(([freshCustomer, modelJson, groupJson, walletJson]) => {
+    ]).then(([freshCustomer, modelJson, walletJson]) => {
       if (cancelled) return;
       setCustomer(freshCustomer);
       localStorage.setItem("flowapi_customer", JSON.stringify(freshCustomer));
       const list = (modelJson.data || modelJson.models || []).map(normalizeModel).filter((model) => model.enabled);
-      const groups = groupJson.groups || [];
       const requestedModel = findRequestedModel(list, readRequestedModelId());
       const defaultModelId = requestedModel?.modelId || list[0]?.modelId || "";
-      const defaultGroupId = groups.find((group) => group.recommended && group.available)?.id || groups.find((group) => group.available)?.id || groups[0]?.id || "";
       setModels(list);
-      setApiGroups(groups);
       setSelectedModelId((current) => current || defaultModelId);
       setCreateForm((current) => ({
         ...current,
         modelId: current.modelId || defaultModelId,
         label: current.label || (requestedModel ? `${requestedModel.displayName} Key` : ""),
-        groupId: current.groupId || defaultGroupId,
       }));
       setMembership(walletJson?.membership || null);
       if (requestedModel) {
@@ -317,8 +326,6 @@ export default function ApiManagementPage() {
 
   const apiKeys = useMemo(() => customer?.apiKeys || [], [customer?.apiKeys]);
   const selectedModel = useMemo(() => models.find((model) => model.modelId === selectedModelId) || models[0] || null, [models, selectedModelId]);
-  const groupMap = useMemo(() => new Map(apiGroups.map((group) => [group.id, group])), [apiGroups]);
-  const selectedCreateGroup = useMemo(() => groupMap.get(createForm.groupId) || apiGroups.find((group) => group.recommended && group.available) || apiGroups[0] || null, [apiGroups, createForm.groupId, groupMap]);
   const isBlackGoldMember = membership?.status === "active" && membership?.level === "black_gold";
   const filteredKeys = useMemo(() => {
     const text = query.trim().toLowerCase();
@@ -387,6 +394,7 @@ export default function ApiManagementPage() {
       return;
     }
     const modelId = key?.publicModelId || selectedModel?.modelId || DEFAULT_MODEL_ID;
+    const visibleModelId = key?.modelDisplayName || key?.publicModelId || selectedModel?.displayName || DEFAULT_MODEL_ID;
     const manualConfig = buildCcSwitchCodexConfig({ apiKey: key.token, baseUrl: API_BASE_URL, model: modelId });
     const url = buildCcSwitchConfigUrl({
       apiKey: key?.token,
@@ -395,7 +403,7 @@ export default function ApiManagementPage() {
       name: "FlowAPI",
       displayName: key?.modelDisplayName || modelId,
     });
-    setCcSwitchFallback({ key, canImport: true, url, manualConfig, modelId, message: "未检测到 CC-Switch 已打开，请先安装后重试。" });
+    setCcSwitchFallback({ key, canImport: true, url, manualConfig, modelId, visibleModelId, message: "未检测到 CC-Switch 已打开，请先安装后重试。" });
     const anchor = document.createElement("a");
     anchor.href = url;
     anchor.target = "_blank";
@@ -488,20 +496,8 @@ export default function ApiManagementPage() {
     const model = models.find((item) => item.modelId === createForm.modelId) || selectedModel;
     if (!model?.modelId) return "模型配置同步中，请稍后再创建";
     if (!canSelectModel(model)) return "当前模型需要黑金会员权限";
-    if (!selectedCreateGroup?.id) return "请选择 API 线路后创建 API Key";
-    if (!selectedCreateGroup.available) return "当前 API 线路已停用，请选择其他线路";
-    if (!groupSupportsModel(selectedCreateGroup, model)) return "当前线路不支持所选模型，请更换线路或模型";
     if (createForm.expiresAt === "custom" && !createForm.customDate) return "请选择自定义过期日期";
     return getLimitValidationMessage(createForm.limit);
-  }
-
-  function groupSupportsModel(group, model) {
-    const supported = Array.isArray(group?.supportedModels) ? group.supportedModels : [];
-    if (!supported.length) return true;
-    const aliases = [model?.id, model?.modelId, model?.displayName]
-      .map((item) => String(item || "").toLowerCase())
-      .filter(Boolean);
-    return supported.some((item) => aliases.includes(String(item || "").toLowerCase()));
   }
 
   function selectCreateModel(model) {
@@ -555,7 +551,6 @@ export default function ApiManagementPage() {
           expiresAt: resolveCreateExpiresAt(),
           locale,
           limit: buildLimitPayload(createForm.limit),
-          groupId: createForm.groupId,
         }),
       });
       const data = await res.json();
@@ -721,7 +716,6 @@ export default function ApiManagementPage() {
       const rows = [
         { label: "API Key", value: data.key?.maskedKey || maskToken(key.token) },
         { label: "绑定模型", value: key.modelDisplayName || key.publicModelId || "未绑定模型" },
-        { label: "线路", value: `${groupMap.get(key.modelGroup)?.displayName || key.modelGroup || "默认"} · ${Number(key.priceMultiplier || groupMap.get(key.modelGroup)?.billingMultiplier || 1)}x` },
         { label: "Base URL", value: API_BASE_URL },
         { label: "创建时间", value: formatDate(key.createdAt) },
         { label: "最近调用", value: formatDate(data.key?.lastUsedAt || key.lastUsedAt) },
@@ -848,7 +842,7 @@ export default function ApiManagementPage() {
                   <ModelLogo model={model.displayName} provider={model.provider} size={34} />
                   <strong>{model.displayName}</strong>
                   <span>by {model.provider}</span>
-                  <code>{model.modelId || "同步中"}</code>
+                  <code>{getVisibleModelId(model) || "同步中"}</code>
                 </button>
               ))}
               {!models.length && !loading ? <div className="api-management-empty-text">模型配置同步中，请稍后刷新或到大模型接入页查看。</div> : null}
@@ -882,8 +876,8 @@ export default function ApiManagementPage() {
                       <em>{status.label}</em>
                     </div>
                     <code>{maskToken(key.token)}</code>
+                    <small className="api-key-card-hint">{getCreationKeyHint(key)}</small>
                     <div className="api-key-card-meta">
-                      <span>线路：{groupMap.get(key.modelGroup)?.displayName || key.modelGroup || "默认"} · {Number(key.priceMultiplier || groupMap.get(key.modelGroup)?.billingMultiplier || 1)}x</span>
                       <span>今日使用：{formatToken(key.quotaLimit?.todayUsedTokens || 0)}</span>
                       <span>本月使用：{formatToken(key.quotaLimit?.monthUsedTokens || key.quotaLimit?.totalUsedTokens || 0)}</span>
                       <span>最后调用：{formatDate(key.lastUsedAt)}</span>
@@ -902,7 +896,7 @@ export default function ApiManagementPage() {
                     </div>
                     <div className="api-key-card-actions" onClick={(event) => event.stopPropagation()}>
                       <button type="button" className="primary" onClick={() => launchCcSwitchWithKey(key)}>使用</button>
-                      <button type="button" onClick={() => copyText(key.token, "API Key 已复制")}>复制 API Key</button>
+                      <button type="button" onClick={() => copyText(maskToken(key.token), "API Key 脱敏值已复制")}>复制脱敏值</button>
                       <button type="button" onClick={() => openUsage(key)}>详情</button>
                       <button type="button" onClick={() => openLimitEditor(key)}>调整额度</button>
                       <button type="button" onClick={() => toggleKey(key)}>{key.disabledAt ? "启用" : "禁用"}</button>
@@ -939,8 +933,8 @@ export default function ApiManagementPage() {
               <div className="api-modal-body api-create-success-body">
                 <div className="api-key-success-panel">
                   <span>创建成功</span>
-                  <strong>{maskToken(createdKey.token)}</strong>
-                  <p>完整 API Key 只在复制时使用，请妥善保存，不要公开发到群聊、论坛或截图中。</p>
+                  <strong>{createdKey.token}</strong>
+                  <p>完整 API Key 只在创建成功时显示一次，请立即复制保存，不要公开发到群聊、论坛或截图中。</p>
                   <div>
                     <button type="button" className="api-action primary flowapi-primary-action" onClick={() => copyText(createdKey.token, "API Key 已复制")}>复制 API Key</button>
                     <Link href="/help" className="api-action">前往接入教程</Link>
@@ -980,46 +974,13 @@ export default function ApiManagementPage() {
                               </span>
                               <em>{disabled ? "黑金会员专属" : createForm.modelId === model.modelId ? "已选择" : model.recommended ? "推荐" : "可用"}</em>
                             </span>
-                            <code title={model.modelId}>{model.modelId || "同步中"}</code>
+                            <code title={getVisibleModelId(model)}>{getVisibleModelId(model) || "同步中"}</code>
                             <small>{model.provider} · {modelPriceSummary(model, locale)}</small>
                             {model.tags?.length ? <small>{model.tags.slice(0, 3).join(" · ")}</small> : null}
                           </button>
                         );
                       })}
                       {!models.length ? <div className="api-management-empty-text">模型配置同步中，请稍后刷新或到大模型接入页查看。</div> : null}
-                    </div>
-                  </div>
-
-                  <div className="api-expiry-field api-group-choice-field">
-                    <span>选择线路</span>
-                    <div className="api-group-choice-grid">
-                      {apiGroups.map((group) => {
-                        const model = models.find((item) => item.modelId === createForm.modelId) || selectedModel;
-                        const disabled = !group.available || !groupSupportsModel(group, model);
-                        return (
-                          <button
-                            key={group.id}
-                            type="button"
-                            className={`${createForm.groupId === group.id ? "active" : ""} ${disabled ? "disabled" : ""}`}
-                            aria-disabled={disabled}
-                            onClick={() => {
-                              if (disabled) {
-                                showToast(group.available ? "该线路不支持当前模型" : "该线路已停用");
-                                return;
-                              }
-                              setCreateForm((current) => ({ ...current, groupId: group.id }));
-                            }}
-                          >
-                            <span>
-                              <strong>{group.displayName}</strong>
-                              <em>{group.billingMultiplier}x</em>
-                            </span>
-                            <small>{group.recommended ? "系统推荐 · " : ""}{group.description || "自动调度线路"}</small>
-                            <code>{group.supportedModels?.length ? `${group.modelCount || group.supportedModels.length} 个模型` : "全部模型"}</code>
-                          </button>
-                        );
-                      })}
-                      {!apiGroups.length ? <div className="api-management-empty-text">线路配置同步中，请稍后刷新。</div> : null}
                     </div>
                   </div>
 
@@ -1101,7 +1062,7 @@ export default function ApiManagementPage() {
               <DetailRows rows={[
                 { label: "类型", value: "FlowAPI 兼容" },
                 { label: "Base URL", value: API_BASE_URL },
-                { label: "默认模型", value: ccSwitchFallback.modelId || ccSwitchFallback.key?.publicModelId || DEFAULT_MODEL_ID },
+                { label: "默认模型", value: ccSwitchFallback.visibleModelId || ccSwitchFallback.modelId || ccSwitchFallback.key?.publicModelId || DEFAULT_MODEL_ID },
                 { label: "API Key", value: ccSwitchFallback.canImport ? "已写入 deeplink，不在本地保存" : "完整 Key 不可取回" },
               ]} />
               {ccSwitchFallback.manualConfig ? (

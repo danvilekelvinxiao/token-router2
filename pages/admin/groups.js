@@ -5,6 +5,7 @@ import AdminLayout from "@/components/AdminLayout";
 const emptyForm = {
   id: "",
   displayName: "",
+  sortOrder: 100,
   billingMultiplier: "1",
   description: "",
   available: true,
@@ -20,6 +21,7 @@ function toForm(group = {}) {
   return {
     id: group.id || "",
     displayName: group.displayName || "",
+    sortOrder: Number.isFinite(Number(group.sortOrder)) ? Number(group.sortOrder) : 100,
     billingMultiplier: String(group.billingMultiplier ?? 1),
     description: group.description || "",
     available: group.available !== false,
@@ -70,10 +72,8 @@ export default function AdminGroupsPage() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+        loadData();
+      }, []);
 
   async function saveGroup() {
     if (!form.id.trim()) {
@@ -100,6 +100,7 @@ export default function AdminGroupsPage() {
           name: form.id,
           displayName: form.displayName,
           billingMultiplier: multiplier,
+          sortOrder: Number(form.sortOrder || 100),
           description: form.description,
           available: form.available,
           recommended: form.recommended,
@@ -161,7 +162,7 @@ export default function AdminGroupsPage() {
                     <button type="button" onClick={() => setForm(toForm(group))}>
                       <span>
                         <strong>{group.displayName}</strong>
-                        <small>{group.id} · New API: {group.newApiGroup || group.id}</small>
+                        <small>{group.id} · New API: {group.newApiGroup || group.id} · 顺序 {group.sortOrder ?? 100}</small>
                       </span>
                       <em>{group.billingMultiplier}x</em>
                     </button>
@@ -197,6 +198,9 @@ export default function AdminGroupsPage() {
                 </label>
                 <label>计费倍率
                   <input type="number" min="0.01" step="0.01" value={form.billingMultiplier} onChange={(event) => setForm((current) => ({ ...current, billingMultiplier: event.target.value }))} />
+                </label>
+                <label>显示顺序
+                  <input type="number" min="0" step="1" value={form.sortOrder} onChange={(event) => setForm((current) => ({ ...current, sortOrder: event.target.value }))} />
                 </label>
                 <label>New API 分组
                   <input value={form.newApiGroup} onChange={(event) => setForm((current) => ({ ...current, newApiGroup: event.target.value }))} placeholder="default" />

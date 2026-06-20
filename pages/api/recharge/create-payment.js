@@ -1,6 +1,7 @@
 import { createRechargeOrder, logActivity } from "@/lib/customer-store";
 import { createAlipayRechargePayment, isAlipayConfigured } from "@/lib/payments/alipay";
 import { createWechatRechargePayment, isWechatConfigured } from "@/lib/payments/wechat";
+import { createXPayRechargePayment, getXPayConfigAsync } from "@/lib/payments/xpay";
 import { assertCustomerOwner } from "@/lib/session";
 
 function buildPurchaseRef(body = {}) {
@@ -37,7 +38,7 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "缺少有效的充值参数" });
   }
 
-  if (!["wechat", "alipay"].includes(paymentMethod)) {
+  if (!["wechat", "alipay", "xpay"].includes(paymentMethod)) {
     return res.status(400).json({ error: "该支付方式暂不支持自动到账" });
   }
 
@@ -78,6 +79,23 @@ export default async function handler(req, res) {
     });
   }
 
+  if (paymentMethod === "xpay") {
+    const xpayConfig = await getXPayConfigAsync();
+    if (!xpayConfig.enabled || !(xpayConfig.qrImage || xpayConfig.qrContent)) {
+      return res.status(400).json({
+        error: "XPay 收款码暂未配置完整",
+        gateway: {
+          enabled: Boolean(xpayConfig.enabled),
+          providerName: xpayConfig.providerName || "XPay",
+          qrImage: xpayConfig.qrImage || "",
+          qrContent: xpayConfig.qrContent ? "[masked]" : "",
+          paymentNotePrefix: xpayConfig.paymentNotePrefix || "XPAY",
+          manualConfirm: Boolean(xpayConfig.manualConfirm),
+        },
+      });
+    }
+  }
+
   const created = await createRechargeOrder({ customerId: session.customerId, amount: value, paymentMethod, paymentRef: buildPurchaseRef(req.body), purchaseType, packageId, packageName, quotaText, validDays });
   if (created.error) {
     return res.status(400).json({ error: created.error });
@@ -86,7 +104,9 @@ export default async function handler(req, res) {
 
   const payment = paymentMethod === "wechat"
     ? await createWechatRechargePayment({ req, order: created.order })
-    : await createAlipayRechargePayment({ req, order: created.order });
+    : paymentMethod === "alipay"
+      ? await createAlipayRechargePayment({ req, order: created.order })
+      : await createXPayRechargePayment({ order: created.order, amountCny: value });
 
   if (payment.error) {
     return res.status(400).json({ error: payment.error });
@@ -96,9 +116,9 @@ export default async function handler(req, res) {
     ok: true,
     order: created.order,
     payment: {
+      ...payment,
       provider: payment.provider,
-      qrContent: payment.qrContent,
-      qrImage: payment.qrImage,
+      providerName: payment.providerName || (paymentMethod === "xpay" ? "XPay" : ""),
     },
   });
 }

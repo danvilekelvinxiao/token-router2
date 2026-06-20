@@ -45,7 +45,11 @@ export default async function handler(req, res) {
     item("图片下载", fileExists("pages/api/images/download.js") ? "normal" : "待确认", "图片下载接口存在，仍需真实图片 E2E 验证。"),
     item("QR 图片资源", fileExists("public/images/qrcode") ? "normal" : "待确认", "二维码目录存在。"),
     item("数据面板真实数据接口", fileExists("pages/api/analytics/dashboard-v2.js") || fileExists("pages/api/dashboard/overview.js") ? "normal" : "待确认", "数据面板 API 存在。"),
-    item("New API 连接", process.env.NEW_API_BASE_URL || process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY ? "normal" : "未配置", "检查 New API 环境变量。"),
+    item(
+      "New API 连接",
+      process.env.NEW_API_BASE_URL || process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || process.env.NEW_API_KEY_ALL_MODELS || process.env.SUB2API_API_KEY ? "normal" : "未配置",
+      "检查 New API / sub2api 环境变量。"
+    ),
     item("数据库连接", hasDatabase() ? "normal" : "未配置", hasDatabase() ? "已检测到数据库配置。" : "当前可能运行在内存模式。"),
   ];
 

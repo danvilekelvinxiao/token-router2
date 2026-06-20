@@ -21,7 +21,6 @@ function isAdminCustomer(customer) {
 export default function AdminRechargesPage() {
   const router = useRouter();
   const [customer, setCustomer] = useState(null);
-  const [secret, setSecret] = useState("");
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState("pending");
   const [loading, setLoading] = useState(false);
@@ -39,6 +38,7 @@ export default function AdminRechargesPage() {
   const [logAction, setLogAction] = useState("");
   const [logPage, setLogPage] = useState(0);
   const [forbidden, setForbidden] = useState(false);
+  const [xpayDiagnostics, setXpayDiagnostics] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -63,9 +63,8 @@ export default function AdminRechargesPage() {
         router.push("/login");
         return;
       }
-      const savedSecret = sessionStorage.getItem("flowapi_admin_secret") || "";
-      setSecret(savedSecret);
-      if (savedSecret) loadOrders(savedSecret, "pending");
+      loadOrders("pending");
+      loadXpayDiagnostics();
     }
 
     initializeAdmin();
@@ -73,8 +72,7 @@ export default function AdminRechargesPage() {
       cancelled = true;
     };
     // This page intentionally performs one-time localStorage bootstrapping.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      }, []);
 
   if (forbidden) {
     return (
@@ -94,18 +92,13 @@ export default function AdminRechargesPage() {
     );
   }
 
-  async function loadOrders(nextSecret = secret, nextStatus = status) {
-    if (!nextSecret) {
-      setMessage("请输入管理密钥");
-      return;
-    }
+  async function loadOrders(nextStatus = status) {
     setLoading(true);
     setMessage("");
-    sessionStorage.setItem("flowapi_admin_secret", nextSecret);
     try {
       const query = nextStatus ? `?status=${encodeURIComponent(nextStatus)}` : "";
       const res = await fetch(`/api/admin/recharges${query}`, {
-        headers: { "x-admin-secret": nextSecret },
+        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) {
@@ -120,18 +113,13 @@ export default function AdminRechargesPage() {
     setLoading(false);
   }
 
-  async function loadCodes(nextSecret = secret, nextStatus = codeStatus) {
-    if (!nextSecret) {
-      setMessage("请输入管理密钥");
-      return;
-    }
+  async function loadCodes(nextStatus = codeStatus) {
     setLoading(true);
     setMessage("");
-    sessionStorage.setItem("flowapi_admin_secret", nextSecret);
     try {
       const query = nextStatus ? `?status=${encodeURIComponent(nextStatus)}` : "";
       const res = await fetch(`/api/admin/activation-codes${query}`, {
-        headers: { "x-admin-secret": nextSecret },
+        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) {
@@ -147,14 +135,15 @@ export default function AdminRechargesPage() {
   }
 
   async function generateCodes() {
-    if (!secret || !codeAmount) return;
+    if (!codeAmount) return;
     setLoading(true);
     setMessage("");
     setGenResult(null);
     try {
       const res = await fetch("/api/admin/activation-codes", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-secret": secret },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ amount: Number(codeAmount), count: codeCount, note: codeNote }),
       });
       const data = await res.json();
@@ -163,7 +152,7 @@ export default function AdminRechargesPage() {
       } else {
         setGenResult(data.codes || []);
         setMessage(`已生成 ${data.codes.length} 个激活码`);
-        await loadCodes(secret, codeStatus);
+        await loadCodes(codeStatus);
       }
     } catch {
       setMessage("网络异常，请稍后再试");
@@ -171,14 +160,9 @@ export default function AdminRechargesPage() {
     setLoading(false);
   }
 
-  async function loadLogs(nextSecret = secret, category = logCategory, action = logAction, page = logPage) {
-    if (!nextSecret) {
-      setMessage("请输入管理密钥");
-      return;
-    }
+  async function loadLogs(category = logCategory, action = logAction, page = logPage) {
     setLoading(true);
     setMessage("");
-    sessionStorage.setItem("flowapi_admin_secret", nextSecret);
     try {
       const params = new URLSearchParams();
       if (category) params.set("category", category);
@@ -186,7 +170,7 @@ export default function AdminRechargesPage() {
       params.set("limit", "50");
       params.set("offset", String(page * 50));
       const res = await fetch(`/api/admin/activity-logs?${params.toString()}`, {
-        headers: { "x-admin-secret": nextSecret },
+        credentials: "include",
       });
       const data = await res.json();
       if (!res.ok) {
@@ -203,6 +187,20 @@ export default function AdminRechargesPage() {
     setLoading(false);
   }
 
+  async function loadXpayDiagnostics() {
+    try {
+      const res = await fetch("/api/admin/xpay-diagnostics", {
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setXpayDiagnostics(data);
+      }
+    } catch {
+      setXpayDiagnostics(null);
+    }
+  }
+
   async function approve(orderId) {
     if (!window.confirm("确认这笔充值已经收到款了吗？")) return;
     setLoading(true);
@@ -212,8 +210,8 @@ export default function AdminRechargesPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-secret": secret,
         },
+        credentials: "include",
         body: JSON.stringify({ orderId, action: "approve" }),
       });
       const data = await res.json();
@@ -221,7 +219,7 @@ export default function AdminRechargesPage() {
         setMessage(data.error || "确认失败");
       } else {
         setMessage(`已到账：¥ ${Number(data.order.amount).toFixed(2)}`);
-        await loadOrders(secret, status);
+        await loadOrders(status);
       }
     } catch {
       setMessage("网络异常，请稍后再试");
@@ -275,23 +273,23 @@ export default function AdminRechargesPage() {
           >
             活动日志
           </button>
+          <button
+            onClick={() => { loadXpayDiagnostics(); }}
+            className="btn-secondary"
+            style={{ fontSize: 14 }}
+          >
+            XPay 诊断
+          </button>
         </div>
 
-        <div className="admin-recharge-filter-card" style={{ background: "var(--page-card-bg)", border: "1px solid var(--page-card-border)", borderRadius: 16, padding: 20, marginBottom: 20, display: "grid", gridTemplateColumns: "minmax(200px, 1fr) auto auto", gap: 12 }}>
-          <input
-            type="password"
-            value={secret}
-            onChange={(event) => setSecret(event.target.value)}
-            placeholder="管理密钥"
-            style={{ border: "1px solid var(--page-input-border)", borderRadius: 12, padding: "12px 14px", outline: "none", fontSize: 14, fontFamily: "inherit" }}
-          />
+        <div className="admin-recharge-filter-card" style={{ background: "var(--page-card-bg)", border: "1px solid var(--page-card-border)", borderRadius: 16, padding: 20, marginBottom: 20, display: "grid", gridTemplateColumns: "auto auto", gap: 12 }}>
           {tab === "orders" ? (
             <>
               <select
                 value={status}
                 onChange={(event) => {
                   setStatus(event.target.value);
-                  loadOrders(secret, event.target.value);
+                  loadOrders(event.target.value);
                 }}
                 style={{ border: "1px solid var(--page-input-border)", borderRadius: 12, padding: "12px 14px", outline: "none", fontSize: 14, fontFamily: "inherit", background: "var(--page-card-bg)" }}
               >
@@ -309,7 +307,7 @@ export default function AdminRechargesPage() {
                 value={codeStatus}
                 onChange={(event) => {
                   setCodeStatus(event.target.value);
-                  loadCodes(secret, event.target.value);
+                  loadCodes(event.target.value);
                 }}
                 style={{ border: "1px solid var(--page-input-border)", borderRadius: 12, padding: "12px 14px", outline: "none", fontSize: 14, fontFamily: "inherit", background: "var(--page-card-bg)" }}
               >
@@ -328,7 +326,7 @@ export default function AdminRechargesPage() {
                 onChange={(event) => {
                   setLogCategory(event.target.value);
                   setLogPage(0);
-                  loadLogs(secret, event.target.value, logAction, 0);
+                  loadLogs(event.target.value, logAction, 0);
                 }}
                 style={{ border: "1px solid var(--page-input-border)", borderRadius: 12, padding: "12px 14px", outline: "none", fontSize: 14, fontFamily: "inherit", background: "var(--page-card-bg)" }}
               >
@@ -338,7 +336,7 @@ export default function AdminRechargesPage() {
                 <option value="api">API 调用</option>
                 <option value="api_key">API Key</option>
               </select>
-              <button className="btn-primary" onClick={() => { setLogPage(0); loadLogs(secret, logCategory, logAction, 0); }} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>
+              <button className="btn-primary" onClick={() => { setLogPage(0); loadLogs(logCategory, logAction, 0); }} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>
                 {loading ? "加载中" : "加载日志"}
               </button>
             </>
@@ -348,6 +346,44 @@ export default function AdminRechargesPage() {
         {message && (
           <div style={{ background: "var(--page-selected-bg)", color: "#6366f1", border: "1px solid #ddd6fe", borderRadius: 12, padding: "12px 14px", fontSize: 13, fontWeight: 800, marginBottom: 16 }}>
             {message}
+          </div>
+        )}
+
+        {xpayDiagnostics && (
+          <div style={{ background: "var(--page-card-bg)", border: "1px solid var(--page-card-border)", borderRadius: 16, padding: 18, marginBottom: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 900, color: "var(--page-heading)" }}>XPay 诊断</div>
+                <div style={{ fontSize: 12, color: "var(--page-subtle)", marginTop: 4 }}>查询映射与最近回调样本</div>
+              </div>
+              <button className="btn-secondary" onClick={() => loadXpayDiagnostics()} style={{ fontSize: 13 }}>刷新</button>
+            </div>
+            <div style={{ display: "grid", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 10 }}>
+                <DiagItem label="查询 URL" value={xpayDiagnostics.mappingGuide?.query?.urlTemplate || "未配置"} />
+                <DiagItem label="查询方式" value={xpayDiagnostics.mappingGuide?.query?.method || "GET"} />
+                <DiagItem label="订单字段" value={xpayDiagnostics.mappingGuide?.notify?.orderField || "未配置"} />
+                <DiagItem label="签名头" value={xpayDiagnostics.mappingGuide?.notify?.signatureHeader || "x-xpay-signature"} />
+              </div>
+              <div style={{ display: "grid", gap: 10 }}>
+                {(xpayDiagnostics.orders || []).map((order) => (
+                  <div key={order.id} style={{ border: "1px solid var(--page-card-border)", borderRadius: 12, padding: 12, background: "var(--page-bg)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                      <strong style={{ fontSize: 13, color: "var(--page-heading)" }}>{order.outTradeNo}</strong>
+                      <span style={{ fontSize: 12, color: "var(--page-subtle)" }}>{order.status}</span>
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--page-sub)", marginTop: 6, lineHeight: 1.6 }}>
+                      <div>provider_trade_no: {order.providerTradeNo || "—"}</div>
+                      <div>paid_at: {order.paidAt || "—"}</div>
+                      <div>gateway_payload: {order.gatewayPayload ? JSON.stringify(order.gatewayPayload.sample || order.gatewayPayload).slice(0, 300) : "—"}</div>
+                    </div>
+                  </div>
+                ))}
+                {!xpayDiagnostics.orders?.length && (
+                  <div style={{ fontSize: 12, color: "var(--page-subtle)" }}>暂无 XPay 订单样本</div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 
@@ -470,7 +506,7 @@ export default function AdminRechargesPage() {
               <strong style={{ whiteSpace: "nowrap", fontSize: 13, color: "var(--page-code-text)" }}>操作类型</strong>
               <select
                 value={logAction}
-                onChange={(e) => { setLogAction(e.target.value); setLogPage(0); loadLogs(secret, logCategory, e.target.value, 0); }}
+                onChange={(e) => { setLogAction(e.target.value); setLogPage(0); loadLogs(logCategory, e.target.value, 0); }}
                 style={{ border: "1px solid var(--page-input-border)", borderRadius: 10, padding: "8px 12px", outline: "none", fontSize: 13, fontFamily: "inherit", background: "var(--page-card-bg)" }}
               >
                 <option value="">全部</option>
@@ -516,13 +552,13 @@ export default function AdminRechargesPage() {
 
             {logTotal > 50 && (
               <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                <button className="btn-secondary" disabled={logPage === 0} onClick={() => { const p = logPage - 1; setLogPage(p); loadLogs(secret, logCategory, logAction, p); }}>
+                <button className="btn-secondary" disabled={logPage === 0} onClick={() => { const p = logPage - 1; setLogPage(p); loadLogs(logCategory, logAction, p); }}>
                   上一页
                 </button>
                 <span style={{ display: "flex", alignItems: "center", fontSize: 13, color: "var(--page-sub)" }}>
                   第 {logPage + 1} 页 / 共 {Math.ceil(logTotal / 50)} 页
                 </span>
-                <button className="btn-secondary" disabled={(logPage + 1) * 50 >= logTotal} onClick={() => { const p = logPage + 1; setLogPage(p); loadLogs(secret, logCategory, logAction, p); }}>
+                <button className="btn-secondary" disabled={(logPage + 1) * 50 >= logTotal} onClick={() => { const p = logPage + 1; setLogPage(p); loadLogs(logCategory, logAction, p); }}>
                   下一页
                 </button>
               </div>
@@ -542,6 +578,16 @@ function formatDate(value) {
 function formatPayment(value) {
   if (value === "wechat") return "微信";
   if (value === "alipay") return "支付宝";
+  if (value === "xpay") return "XPay 收款码";
   if (value === "taobao") return "淘宝激活码";
   return value || "未知方式";
+}
+
+function DiagItem({ label, value }) {
+  return (
+    <div style={{ border: "1px solid var(--page-card-border)", borderRadius: 12, padding: 12, background: "var(--page-bg)" }}>
+      <div style={{ fontSize: 11, color: "var(--page-subtle)", marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 12, color: "var(--page-heading)", fontWeight: 800, wordBreak: "break-word" }}>{value}</div>
+    </div>
+  );
 }

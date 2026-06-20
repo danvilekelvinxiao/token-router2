@@ -13,85 +13,6 @@ const adminMenuGroups = [
       { key: "commercialHealth", label: "商业闭环检查", href: "/admin/commercial-health", icon: IconMaintenance },
     ],
   },
-  {
-    key: "models",
-    label: "模型管理",
-    helper: "上游、模型、价格、发布",
-    items: [
-	      { key: "modelWizard", label: "模型接入向导", href: "/admin/model-wizard", icon: IconBossWizard, aliases: ["/admin/boss-wizard"] },
-	      { key: "upstreams", label: "上游渠道", href: "/admin/upstreams", icon: IconChannels, aliases: ["/admin/channels"] },
-      { key: "backupProviderReview", label: "备用线路审核", href: `/admin/providers/${["ai", "cards"].join("")}`, icon: IconChannels },
-	      { key: "routes", label: "智能路由", href: "/admin/routes", icon: IconRouting, aliases: ["/admin/routing", "/admin/model-mapping"] },
-      { key: "modelMarket", label: "模型广场", href: "/admin/model-market", icon: IconModels },
-      { key: "imageModels", label: "图片模型", href: "/admin/image-models", icon: IconModels },
-      { key: "models", label: "模型测试", href: "/admin/models", icon: IconModels },
-      { key: "billing", label: "价格规则", href: "/admin/billing-rules", icon: IconBilling },
-    ],
-  },
-  {
-    key: "users",
-    label: "用户管理",
-    helper: "用户、团队、API Key、邀请",
-    items: [
-      { key: "users", label: "用户与 API Key", href: "/admin/users", icon: IconUsers },
-      { key: "teams", label: "团队管理", href: "/admin/teams", icon: IconUsers },
-      { key: "insights", label: "用户画像", href: "/admin/user-insights", icon: IconInsights },
-      { key: "referrals", label: "邀请返佣", href: "/admin/referrals", icon: IconReferrals },
-    ],
-  },
-  {
-    key: "orders",
-    label: "订单与支付",
-    helper: "充值、套餐、激活码",
-    items: [
-      { key: "recharges", label: "充值审核", href: "/admin/recharges", icon: IconRecharges },
-      { key: "membership", label: "套餐会员", href: "/admin/membership", icon: IconBilling },
-      { key: "redeemCodes", label: "激活码", href: "/admin/redeem-codes", icon: IconRedeem },
-    ],
-  },
-  {
-    key: "ops",
-    label: "运营配置",
-    helper: "前台内容、公告、称号",
-    items: [
-      { key: "contentMap", label: "前后台对应", href: "/admin/content-map", icon: IconAnnouncements },
-      { key: "content", label: "前台内容", href: "/admin/content", icon: IconAnnouncements },
-      { key: "announcements", label: "系统公告", href: "/admin/announcements", icon: IconAnnouncements },
-      { key: "titleRules", label: "称号规则", href: "/admin/title-rules", icon: IconHonors },
-    ],
-  },
-  {
-    key: "logs",
-    label: "数据与日志",
-    helper: "调用、团队、导出",
-    items: [
-      { key: "profit", label: "毛利审计", href: "/admin/profit", icon: IconBilling },
-      { key: "logs", label: "调用日志", href: "/admin/logs", icon: IconLogs },
-      { key: "teamReports", label: "团队报表", href: "/admin/team-reports", icon: IconLogs },
-      { key: "teamUsageLogs", label: "团队日志", href: "/admin/team-usage-logs", icon: IconLogs },
-    ],
-  },
-  {
-    key: "monitor",
-    label: "系统监控",
-    helper: "健康、渠道、告警",
-    items: [
-      { key: "healthCheck", label: "功能健康检查", href: "/admin/health-check", icon: IconMaintenance },
-      { key: "upstreamStatus", label: "上游状态", href: "/admin/upstream-status", icon: IconTokenPool, aliases: ["/admin/token-pool/status"] },
-      { key: "tokenAlerts", label: "Token 告警", href: "/admin/token-alerts", icon: IconSecurity },
-      { key: "operatorGuide", label: "老板操作指南", href: "/admin/operator-guide", icon: IconBossWizard },
-    ],
-  },
-  {
-    key: "settings",
-    label: "系统设置",
-    helper: "安全与高级技术入口",
-    items: [
-      { key: "settings", label: "站点设置", href: "/admin/settings", icon: IconSettings },
-      { key: "security", label: "安全风控", href: "/admin/security", icon: IconSecurity },
-      { key: "advanced", label: "高级技术入口", href: "/admin/advanced", icon: IconRouting },
-    ],
-  },
 ];
 
 function IconModels() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="3" width="7" height="4" rx="1"/><rect x="14" y="3" width="7" height="4" rx="1"/><rect x="3" y="10" width="7" height="4" rx="1"/><rect x="14" y="10" width="7" height="4" rx="1"/><rect x="3" y="17" width="7" height="4" rx="1"/><rect x="14" y="17" width="7" height="4" rx="1"/></svg>; }
@@ -171,10 +92,7 @@ export default function AdminLayout({ currentPath, children }) {
   async function verifyAdminAccess() {
     setChecking(true);
     try {
-      const secret = typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || "";
-      const { response, data } = await fetchJsonWithTimeout("/api/admin-access", {
-        headers: secret ? { "x-admin-secret": secret } : {},
-      });
+      const { response, data } = await fetchJsonWithTimeout("/api/admin-access");
       if (response.ok && data?.ok && isAdminCustomer(data.customer)) {
         try {
           if (typeof window !== "undefined" && data.customer) {
@@ -186,28 +104,6 @@ export default function AdminLayout({ currentPath, children }) {
         return;
       }
 
-      const { response: fallbackResponse, data: fallbackData } = await fetchJsonWithTimeout("/api/admin/channels", {
-        headers: secret ? { "x-admin-secret": secret } : {},
-      });
-      if (fallbackResponse.ok) {
-        const customer = fallbackData?.customer || fallbackData?.admin || {
-          id: "cus_admin",
-          email: "xiaoyijie@flowapi.fun",
-          role: "admin",
-          isAdmin: true,
-        };
-        try {
-          if (typeof window !== "undefined" && customer) {
-            localStorage.setItem("flowapi_customer", JSON.stringify({
-              ...customer,
-              isAdmin: true,
-            }));
-          }
-        } catch {}
-        setAccess("allowed");
-        setChecking(false);
-        return;
-      }
     } catch {}
 
     try {

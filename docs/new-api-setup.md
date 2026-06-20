@@ -1,6 +1,11 @@
 # FlowAPI × New API 中转配置
 
-FlowAPI 把用户请求转发到 **New API（One API）**，由 New API 再调用各模型渠道。你需要准备 **一套 New API 服务** + **FlowAPI 环境变量**。
+FlowAPI 把用户请求转发到 **正式 New API**，由它再调用各模型渠道。生产环境只保留 **一个正式实例**，内部地址固定为 `http://127.0.0.1:8080`，管理入口固定为 `https://pincc.flowapi.fun`。
+
+生产机上要让 `pincc.flowapi.fun` 具备正式证书，并固定：
+
+- `http://pincc.flowapi.fun` -> `301` -> `https://pincc.flowapi.fun`
+- `https://pincc.flowapi.fun` 反代到本机 `http://127.0.0.1:8080`
 
 ## 架构
 
@@ -17,7 +22,7 @@ FlowAPI 把用户请求转发到 **New API（One API）**，由 New API 再调�
 
 ## 第一步：部署 New API
 
-任选一种方式（与 FlowAPI 同机时建议 Docker，监听 `3001`）：
+任选一种方式（与 FlowAPI 同机时建议 Docker，监听 `8080`）：
 
 1. 在服务器安装 [New API / One API](https://github.com/Calcium-Ion/new-api)（Docker 或二进制）。
 2. 打开 New API 控制台，完成：
@@ -30,9 +35,19 @@ FlowAPI 把用户请求转发到 **New API（One API）**，由 New API 再调�
 
 | 名称 | 示例 |
 |------|------|
-| New API 地址 | `https://newapi.你的域名.com` 或同机 `http://127.0.0.1:3001` |
+| New API 地址 | `https://pincc.flowapi.fun` 或同机 `http://127.0.0.1:8080` |
 | 中转用 sk API Key | `sk-xxxxxxxx` |
 | 管理员 Token | 一长串，请求头 `Authorization: Bearer ...` |
+
+### 证书与反代
+
+如果服务器还没有给 `pincc.flowapi.fun` 签正式证书，可以在仓库根目录执行：
+
+```bash
+bash scripts/provision-pincc-domain.sh
+```
+
+脚本会在服务器上创建 Nginx 配置、申请或续签证书，并把 HTTP 入口强制跳转到 HTTPS。
 
 ---
 
@@ -42,9 +57,11 @@ FlowAPI 把用户请求转发到 **New API（One API）**，由 New API 再调�
 
 ```bash
 # —— New API 中转（必填才能走 New API 渠道）——
-NEW_API_BASE_URL=https://newapi.你的域名.com
+NEW_API_BASE_URL=http://127.0.0.1:8080
+NEW_API_ADMIN_URL=https://pincc.flowapi.fun
 NEW_API_KEY=sk-你的中转 API Key
 NEW_API_ADMIN_TOKEN=你的管理员AccessToken
+NEW_API_ADMIN_USER_ID=8
 
 # 可选：新用户在 New API 侧默认分组与赠送额度（内部额度单位，非人民币）
 NEW_API_DEFAULT_GROUP=default
@@ -53,10 +70,12 @@ NEW_API_DEFAULT_QUOTA=500000
 
 说明：
 
-- **`NEW_API_BASE_URL`**：不要带末尾 `/`；代码会拼 `/v1/chat/completions`。
+- **`NEW_API_BASE_URL`**：生产环境固定指向 `http://127.0.0.1:8080`，不要带末尾 `/`；代码会拼 `/v1/chat/completions`。
+- **`NEW_API_ADMIN_URL`**：管理入口固定指向 `https://pincc.flowapi.fun`，只允许管理员访问。
 - **`NEW_API_KEY`**：所有 FlowAPI 注册用户调用时，**统一用这把钥匙** 向 New API 转发（用户在 FlowAPI 充人民币，不直接用 New API 余额）。
 - **`NEW_API_ADMIN_TOKEN`**：仅服务端管理用；未配置时后台显示 Mock，用量/同步额度不可用。
-- 若只配 `NEW_API_ADMIN_TOKEN` 不配 `NEW_API_KEY`，`lib/upstream.js` 会临时用 Admin Token 转发，**不推荐**，请分开配置。
+- **`NEW_API_ADMIN_USER_ID`**：New API 管理 Token 绑定的用户 ID；当前实例是 `8`，管理请求头会带这个值。
+- 生产运行时必须配置 `NEW_API_KEY` 或 `NEW_API_KEY_ALL_MODELS`，`NEW_API_ADMIN_TOKEN` 不能替代转发用运行时 key。
 
 配置后重启：
 
@@ -71,8 +90,8 @@ pm2 restart flowapi --update-env
 1. 服务器上：
 
 ```bash
-curl -sS http://127.0.0.1:3000/api/upstreams/health | jq .
-curl -sS http://127.0.0.1:3000/api/newapi/health | jq .
+  curl -sS http://127.0.0.1:3000/api/upstreams/health | jq .
+  curl -sS http://127.0.0.1:3000/api/newapi/health | jq .
 ```
 
 `upstream.ok` 与 `newapi.ok` 应为 `true`。

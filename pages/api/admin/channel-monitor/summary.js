@@ -7,7 +7,8 @@ export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ success: false, error: "Method not allowed" });
 
   const result = await fetchChannelMonitorSummary({ timeoutMs: 6000 });
-  return res.status(result.ok ? 200 : 502).json({
+  const status = result.ok ? 200 : (result.statusCode === 401 || result.statusCode === 403 ? result.statusCode : 502);
+  return res.status(status).json({
     success: result.ok,
     ...result,
   });

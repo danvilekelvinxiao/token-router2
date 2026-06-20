@@ -27,8 +27,7 @@ export default function UserInsightsPage() {
   const [segments, setSegments] = useState(null);
 
   useEffect(() => {
-    /* eslint-disable react-hooks/set-state-in-effect */
-    setLoading(true);
+        setLoading(true);
     fetch("/api/admin/customers?limit=200")
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
@@ -42,8 +41,7 @@ export default function UserInsightsPage() {
       })
       .catch(() => setError("数据加载失败"))
       .finally(() => setLoading(false));
-    /* eslint-enable react-hooks/set-state-in-effect */
-  }, []);
+      }, []);
 
   const hasData = overview || profiles || sources || funnel || segments;
 

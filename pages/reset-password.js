@@ -10,8 +10,20 @@ export default function ResetPasswordPage() {
   const [code, setCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [verifyToken, setVerifyToken] = useState("");
+
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   function startCountdown() {
     setCountdown(60);
@@ -29,48 +41,97 @@ export default function ResetPasswordPage() {
   async function handleSendCode(e) {
     e.preventDefault();
     setError("");
+    setSending(true);
 
-    const res = await fetch("/api/auth/send-code", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, purpose: "reset" }),
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "发送失败");
+    if (!email) {
+      setError("请输入邮箱");
+      setSending(false);
       return;
     }
-    const data = await res.json();
-    if (data.verifyToken) setVerifyToken(data.verifyToken);
-    setStep("reset");
-    startCountdown();
+
+    try {
+      const res = await fetchWithTimeout("/api/auth/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, purpose: "reset" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || `发送失败 (HTTP ${res.status})`);
+        return;
+      }
+      if (data.verifyToken) setVerifyToken(data.verifyToken);
+      setStep("reset");
+      startCountdown();
+    } catch (error) {
+      setError(error.name === "AbortError" ? "验证码发送请求超时，请稍后重试" : error.message || "发送失败");
+    } finally {
+      setSending(false);
+    }
   }
 
   async function handleReset(e) {
     e.preventDefault();
     setError("");
+    setResetting(true);
 
-    const res = await fetch("/api/auth/reset-password", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, code, newPassword, verifyToken }),
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "重置失败");
+    if (!email || !code || !newPassword) {
+      setError("请把邮箱、验证码和新密码填写完整");
+      setResetting(false);
       return;
     }
-    setStep("done");
+
+    if (newPassword.length < 6) {
+      setError("密码至少 6 位");
+      setResetting(false);
+      return;
+    }
+
+    try {
+      const res = await fetchWithTimeout("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, code, newPassword, verifyToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || `重置失败 (HTTP ${res.status})`);
+        return;
+      }
+      setStep("done");
+    } catch (error) {
+      setError(error.name === "AbortError" ? "重置请求超时，请稍后重试" : error.message || "重置失败");
+    } finally {
+      setResetting(false);
+    }
   }
 
   async function resendCode() {
+    setSending(true);
     setError("");
-    await fetch("/api/auth/send-code", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, purpose: "reset" }),
-    });
-    startCountdown();
+    if (!email) {
+      setError("请输入邮箱");
+      setSending(false);
+      return;
+    }
+    try {
+      const res = await fetchWithTimeout("/api/auth/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, purpose: "reset" }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || `发送失败 (HTTP ${res.status})`);
+        return;
+      }
+      if (data.verifyToken) setVerifyToken(data.verifyToken);
+      startCountdown();
+    } catch (error) {
+      setError(error.name === "AbortError" ? "验证码发送请求超时，请稍后重试" : error.message || "发送失败");
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
@@ -103,7 +164,7 @@ export default function ResetPasswordPage() {
               <p style={{ textAlign: "center", color: "var(--page-sub)", fontSize: 15, marginTop: 10 }}>
                 输入注册邮箱 我们将发送验证码
               </p>
-              <form onSubmit={handleSendCode} style={{ marginTop: 32 }}>
+              <form onSubmit={handleSendCode} noValidate style={{ marginTop: 32 }}>
                 <div className="form-field">
                   <label>注册邮箱</label>
                   <input
@@ -117,8 +178,8 @@ export default function ResetPasswordPage() {
                 {error && (
                   <p style={{ color: "#ef4444", fontSize: 13, margin: "8px 0" }}>{error}</p>
                 )}
-                <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 24 }}>
-                  发送验证码
+                <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 24 }} disabled={sending} aria-busy={sending}>
+                  {sending ? "发送中..." : "发送验证码"}
                 </button>
               </form>
             </>
@@ -129,7 +190,7 @@ export default function ResetPasswordPage() {
               <p style={{ textAlign: "center", color: "var(--page-sub)", fontSize: 15, marginTop: 10 }}>
                 验证码已发送至 {email}
               </p>
-              <form onSubmit={handleReset} style={{ marginTop: 32 }}>
+              <form onSubmit={handleReset} noValidate style={{ marginTop: 32 }}>
                 <div className="form-field">
                   <label>验证码</label>
                   <input
@@ -156,20 +217,20 @@ export default function ResetPasswordPage() {
                 {error && (
                   <p style={{ color: "#ef4444", fontSize: 13, margin: "8px 0" }}>{error}</p>
                 )}
-                <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 24 }}>
-                  重置密码
+                <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 24 }} disabled={resetting} aria-busy={resetting}>
+                  {resetting ? "重置中..." : "重置密码"}
                 </button>
                 <p style={{ textAlign: "center", marginTop: 14 }}>
                   <button
                     type="button"
                     onClick={resendCode}
-                    disabled={countdown > 0}
+                    disabled={countdown > 0 || sending}
                     style={{
                       background: "none", border: "none", color: countdown > 0 ? "#ccc" : "#6366f1",
                       cursor: countdown > 0 ? "default" : "pointer", fontSize: 13, fontWeight: 600,
                     }}
                   >
-                    {countdown > 0 ? `${countdown}s 后重新发送` : "重新发送验证码"}
+                    {sending ? "发送中..." : countdown > 0 ? `${countdown}s 后重新发送` : "重新发送验证码"}
                   </button>
                 </p>
               </form>

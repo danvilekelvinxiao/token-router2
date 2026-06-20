@@ -1,5 +1,5 @@
 import { getContent } from "@/lib/content-cms";
-import { getDashboard, listCustomers } from "@/lib/customer-store";
+import { getDashboard, listCustomerCalls, listCustomers } from "@/lib/customer-store";
 import { requireCustomerSession } from "@/lib/session";
 import { buildSavingsRank, calculateCustomerSavings, normalizeSavingsPeriod } from "@/lib/analytics/savings";
 
@@ -15,10 +15,11 @@ export default async function handler(req, res) {
   const period = normalizeSavingsPeriod(req.query.period || "30d");
   const customer = await getDashboard(session.customerId);
   if (!customer) return res.status(404).json({ error: "用户不存在" });
+  const customerCalls = await listCustomerCalls(session.customerId);
 
   const modelConfigs = getContent("models");
   const savings = calculateCustomerSavings({
-    calls: customer.calls || [],
+    calls: customerCalls,
     modelConfigs,
     period,
   });
@@ -44,9 +45,9 @@ export default async function handler(req, res) {
   try {
     const customers = await listCustomers();
     const rankedSavings = await Promise.all((customers || []).map(async (item) => {
-      const fullCustomer = await getDashboard(item.id);
+      const calls = await listCustomerCalls(item.id);
       const result = calculateCustomerSavings({
-        calls: fullCustomer?.calls || [],
+        calls,
         modelConfigs,
         period: "all",
       });

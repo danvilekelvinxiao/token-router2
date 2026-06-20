@@ -1,4 +1,4 @@
-import { getDashboard } from "@/lib/customer-store";
+import { getDashboard, listCustomerCalls } from "@/lib/customer-store";
 import { buildRecentCalls } from "@/lib/dashboard-metrics";
 import { requireCustomerSession } from "@/lib/session";
 
@@ -13,6 +13,7 @@ export default async function handler(req, res) {
 
   const customer = await getDashboard(session.customerId);
   if (!customer) return res.status(404).json({ error: "用户不存在" });
+  const calls = await listCustomerCalls(session.customerId);
 
-  return res.status(200).json(buildRecentCalls(customer, req.query.limit || 5));
+  return res.status(200).json(buildRecentCalls({ ...customer, calls }, req.query.limit || 5));
 }

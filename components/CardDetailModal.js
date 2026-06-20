@@ -1,7 +1,7 @@
 
 export function DetailRows({ rows = [] }) {
   if (!rows.length) {
-    return <div className="card-detail-empty">暂无详细数据，完成调用后这里会展示更完整的统计信息。</div>;
+    return <div className="card-detail-empty">—</div>;
   }
   return (
     <div className="card-detail-rows">
@@ -18,7 +18,7 @@ export function DetailRows({ rows = [] }) {
 
 export function DetailTable({ columns = [], rows = [] }) {
   if (!rows.length) {
-    return <div className="card-detail-empty">暂无详细数据，完成调用后这里会展示更完整的统计信息。</div>;
+    return <div className="card-detail-empty">—</div>;
   }
   return (
     <div className="card-detail-table-wrap">

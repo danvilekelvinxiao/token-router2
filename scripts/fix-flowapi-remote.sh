@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SERVER="${FLOWAPI_SERVER:-root@47.238.81.210}"
+SERVER="${FLOWAPI_SERVER:-root@198.18.0.76}"
 SSH_OPTS="${FLOWAPI_SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=10 -o StrictHostKeyChecking=no}"
 SSH_ID="${FLOWAPI_SSH_ID:-$HOME/.ssh/id_ed25519}"
 SSH_CMD=(ssh)
@@ -29,6 +29,12 @@ uptime
 df -h / | tail -1
 free -h | head -2
 
+echo "=== Sensitive proxy ==="
+if [ -d /opt/sensitive-proxy ]; then
+  pm2 describe sensitive-proxy >/dev/null 2>&1 || true
+  curl -fsS -m 5 http://127.0.0.1:8787/healthz >/dev/null && echo "sensitive-proxy health ok" || echo "sensitive-proxy not running"
+fi
+
 echo "=== Listen ports (80/443/3000) ==="
 ss -lntp 2>/dev/null | grep -E ':80|:443|:3000' || netstat -lntp 2>/dev/null | grep -E ':80|:443|:3000' || true
 
@@ -51,7 +57,7 @@ if [ ! -d .next ]; then
 fi
 
 pm2 delete flowapi >/dev/null 2>&1 || true
-pm2 start npm --name flowapi --cwd /var/www/flowapi -- start -- -p 3000
+NODE_OPTIONS="--dns-result-order=ipv4first ${NODE_OPTIONS:-}" pm2 start npm --name flowapi --cwd /var/www/flowapi -- start -- -p 3000
 pm2 save >/dev/null || true
 sleep 5
 
@@ -69,6 +75,10 @@ fi
 nginx -t
 systemctl enable nginx 2>/dev/null || true
 systemctl reload nginx
+
+if [ -d /opt/sensitive-proxy ] && curl -fsS -m 5 http://127.0.0.1:8787/healthz >/dev/null 2>&1; then
+  echo "=== Sensitive proxy reachable on 8787 ==="
+fi
 
 echo "=== Firewall (ufw) ==="
 if command -v ufw >/dev/null 2>&1; then

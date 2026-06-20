@@ -1,11 +1,6 @@
 import { createVerificationCode, createVerifyToken, registerCustomer } from "@/lib/customer-store";
 import { sendVerificationEmail } from "@/lib/mail";
-import { getClientIp, isDisposableEmail, rateLimit, securityLog } from "@/lib/security";
-
-const EMAIL_REGISTER_LIMIT = Number(process.env.SEND_CODE_EMAIL_REGISTER_LIMIT || 5);
-const DEVICE_REGISTER_LIMIT = Number(process.env.REGISTER_DEVICE_DAILY_LIMIT || 3);
-const EMAIL_WINDOW_MS = 60 * 60 * 1000;
-const DEVICE_WINDOW_MS = 24 * 60 * 60 * 1000;
+import { getClientIp, isDisposableEmail, securityLog } from "@/lib/security";
 
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store");
@@ -15,7 +10,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { email, password, invitationCode = "", purpose = "register", deviceId = "", acceptedTerms, acceptedTermsAt, termsVersion, acceptedPrivacy, privacyVersion } = req.body || {};
+  const { email, password, invitationCode = "", purpose = "register", acceptedTerms, acceptedTermsAt, termsVersion, acceptedPrivacy, privacyVersion } = req.body || {};
   if (!email) {
     return res.status(400).json({ error: "邮箱不能为空" });
   }
@@ -33,42 +28,13 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "密码至少 6 位" });
   }
 
-  // Store terms acceptance fields for later use when DB is ready
-  const termsMeta = acceptedTerms ? {
-    acceptedTerms: true,
-    acceptedTermsAt: acceptedTermsAt || new Date().toISOString(),
-    termsVersion: termsVersion || "2026-01-01",
-    acceptedPrivacy: !!acceptedPrivacy,
-    privacyVersion: privacyVersion || "2026-01-01",
-  } : null;
-
   const ip = getClientIp(req);
-  const normalizedDeviceId = String(deviceId || req.headers["x-flowapi-device"] || "").slice(0, 80);
 
   if (purpose === "register") {
     if (isDisposableEmail(cleanEmail)) {
       securityLog("blocked_disposable_email", { ip, emailDomain: cleanEmail.split("@")[1] });
       return res.status(400).json({ error: "暂不支持临时邮箱注册" });
     }
-
-    if (normalizedDeviceId) {
-      const deviceLimit = rateLimit(`register:device:${normalizedDeviceId}`, {
-        limit: DEVICE_REGISTER_LIMIT,
-        windowMs: DEVICE_WINDOW_MS,
-      });
-      if (!deviceLimit.ok) {
-        securityLog("register_device_limited", { ip, deviceId: normalizedDeviceId });
-        return res.status(429).json({ error: "该设备今日注册次数已达上限" });
-      }
-    }
-  }
-
-  const emailLimit = rateLimit(`send-code:${purpose}:${cleanEmail}`, {
-    limit: EMAIL_REGISTER_LIMIT,
-    windowMs: EMAIL_WINDOW_MS,
-  });
-  if (!emailLimit.ok) {
-    return res.status(429).json({ error: "该邮箱验证码发送次数已达上限" });
   }
 
   let registeredCustomer = null;

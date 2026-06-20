@@ -35,7 +35,9 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function formatDefault(value: number) {
-  return Number(value || 0).toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+  const next = Number(value);
+  if (!Number.isFinite(next)) return "—";
+  return next.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
 }
 
 export default function MiniMetricChart({
@@ -62,13 +64,14 @@ export default function MiniMetricChart({
   const tone = COLORS[color] || COLORS.purple;
   const points = useMemo(() => data.filter((item) => item.value !== null && item.value !== undefined), [data]);
   const hasData = points.length > 0;
-  const values = points.map((item) => Number(item.value || 0));
+  const values = points.map((item) => Number(item.value));
+  const nonZeroCount = values.filter((value) => value > 0).length;
   const min = Math.min(...values, 0);
   const max = Math.max(...values, 1);
   const range = Math.max(1, max - min);
   const getX = (index: number) => points.length <= 1 ? pad.left + plotW / 2 : pad.left + (index / (points.length - 1)) * plotW;
   const getY = (value: number) => points.length <= 1 ? pad.top + plotH * 0.52 : pad.top + plotH - ((value - min) / range) * plotH;
-  const coords = points.map((point, index) => ({ ...point, x: getX(index), y: getY(Number(point.value || 0)) }));
+  const coords = points.map((point, index) => ({ ...point, x: getX(index), y: getY(Number(point.value)) }));
   const singlePointPath = coords.length === 1
     ? `M ${(coords[0].x - 44).toFixed(2)} ${coords[0].y.toFixed(2)} L ${(coords[0].x + 44).toFixed(2)} ${coords[0].y.toFixed(2)}`
     : "";
@@ -80,7 +83,10 @@ export default function MiniMetricChart({
     return `L ${midX.toFixed(2)} ${prev.y.toFixed(2)} L ${midX.toFixed(2)} ${point.y.toFixed(2)} L ${point.x.toFixed(2)} ${point.y.toFixed(2)}`;
   }).join(" ");
   const path = type === "step" ? stepPath : linePath;
-  const areaPath = coords.length ? `${path} L ${coords[coords.length - 1].x.toFixed(2)} ${(pad.top + plotH).toFixed(2)} L ${coords[0].x.toFixed(2)} ${(pad.top + plotH).toFixed(2)} Z` : "";
+  const canFillArea = type === "area" && coords.length >= 3 && max > min && nonZeroCount >= 2;
+  const areaPath = canFillArea
+    ? `${path} L ${coords[coords.length - 1].x.toFixed(2)} ${(pad.top + plotH).toFixed(2)} L ${coords[0].x.toFixed(2)} ${(pad.top + plotH).toFixed(2)} Z`
+    : "";
   const active = activeIndex !== null ? coords[activeIndex] : null;
 
   useEffect(() => {
@@ -121,9 +127,9 @@ export default function MiniMetricChart({
   if (!hasData) {
     return (
       <div className="mini-metric-chart empty" style={{ height }}>
-        <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
-          <path className="mini-metric-placeholder" d={`M ${pad.left} ${height * 0.62} C ${width * 0.28} ${height * 0.45}, ${width * 0.52} ${height * 0.78}, ${width - pad.right} ${height * 0.55}`} />
-        </svg>
+        <div className="mini-metric-empty-line" aria-hidden="true">
+          <i />
+        </div>
         {emptyText ? <span>{emptyText}</span> : null}
       </div>
     );
@@ -151,12 +157,12 @@ export default function MiniMetricChart({
         {type === "bar" ? (
           coords.map((point, index) => {
             const barW = Math.max(5, plotW / Math.max(coords.length, 1) * 0.46);
-            const y = getY(Number(point.value || 0));
+            const y = getY(Number(point.value));
             return <rect key={`${point.label}-${index}`} x={point.x - barW / 2} y={y} width={barW} height={pad.top + plotH - y} rx="3" fill={tone} opacity={activeIndex === index ? 0.95 : 0.58} />;
           })
         ) : (
           <>
-            {(type === "area" || type === "line" || type === "step") && areaPath ? <path d={areaPath} fill={`url(#mini-area-${color})`} /> : null}
+            {areaPath ? <path d={areaPath} fill={`url(#mini-area-${color})`} /> : null}
             <path d={path} fill="none" stroke={tone} strokeWidth="2.35" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
             {coords.length === 1 ? <circle cx={coords[0].x} cy={coords[0].y} r="4" fill={tone} opacity="0.95" /> : null}
           </>
@@ -176,8 +182,8 @@ export default function MiniMetricChart({
           ) : (
             <>
               <strong>{active.label}</strong>
-              <span>{valueFormatter(Number(active.value || 0))}</span>
-              {active.secondaryValue !== null && active.secondaryValue !== undefined && secondaryFormatter ? <small>{secondaryFormatter(Number(active.secondaryValue || 0))}</small> : null}
+              <span>{valueFormatter(Number(active.value))}</span>
+              {active.secondaryValue !== null && active.secondaryValue !== undefined && secondaryFormatter ? <small>{secondaryFormatter(Number(active.secondaryValue))}</small> : null}
             </>
           )}
         </div>

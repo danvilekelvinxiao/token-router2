@@ -3,7 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useMemo, useState } from "react";
 
-const apiBaseUrl = "https://api.flowapi.fun/v1";
+const apiBaseUrl = "https://flowapi.fun/v1";
 
 const modelDirectory = [
   { name: "DeepSeek V4 Flash", modelId: "deepseek-chat", provider: "FlowAPI", bestFor: "中文内容、客服、批量文案" },

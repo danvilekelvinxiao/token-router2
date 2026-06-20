@@ -9,8 +9,8 @@ import { userCanUseMemberModel } from "@/lib/membership/store";
 import { getContent } from "@/lib/content-cms";
 import { hasDatabase, query } from "@/lib/db";
 import { assertSafeUpstreamUrl, sanitizeSecretText } from "@/lib/safe-upstream-url";
-import { validateTextModelProfitConfig } from "@/lib/model-profit-guard";
 import { buildResponseCacheKey, CACHE_TTLS, getCacheManager, shouldUseResponseCache } from "@/lib/cache-manager";
+import { clearUpstreamFailure, reportUpstreamFailure } from "@/lib/upstream-failure-state";
 import {
   buildRequestCacheKey,
   enforceTeamRateLimits,
@@ -273,19 +273,6 @@ function buildBillingSnapshotForCandidate(modelId, usage = {}, modelProduct = nu
   };
 }
 
-function candidateRequiresExplicitCost(candidate = {}) {
-  const haystack = [
-    candidate.id,
-    candidate.name,
-    candidate.providerName,
-    candidate.channelName,
-    candidate.groupName,
-    candidate.raw?.provider_key,
-    candidate.raw?.group_name,
-  ].filter(Boolean).join(" ").toLowerCase();
-  return Boolean(candidate.raw?.id && candidate.raw?.base_url) || haystack.includes("aicards") || haystack.includes("backup") || haystack.includes("备用");
-}
-
 const UPSTREAM_RESPONSE_KEYS = new Set([
   "provider",
   "upstream",
@@ -337,22 +324,6 @@ function buildSanitizedSsePlaceholder({ publicModelId = "", requestId = "" } = {
   };
 }
 
-function assertCandidateMargin(candidate = {}, { modelId = "", usage = {}, modelProduct = null, multiplier = 1 } = {}) {
-  if (candidate.name === "team-token-pool") return { ok: true, snapshot: buildBillingSnapshot(modelId, usage, modelProduct, multiplier) };
-  if (candidateRequiresExplicitCost(candidate) && estimateCandidateCostCny(candidate, usage) === null) {
-    return {
-      ok: false,
-      code: "CHANNEL_COST_MISSING",
-      snapshot: buildBillingSnapshot(modelId, usage, modelProduct, multiplier),
-    };
-  }
-  const snapshot = buildBillingSnapshotForCandidate(modelId, usage, modelProduct, multiplier, candidate);
-  if (shouldBlockForProfitProtection(snapshot)) {
-    return { ok: false, code: "CHANNEL_MARGIN_PROTECTED", snapshot };
-  }
-  return { ok: true, snapshot };
-}
-
 function mapModelForUpstream(upstreamName = "", modelId = "") {
   const normalizedUpstream = String(upstreamName || "").toLowerCase();
   const id = String(modelId || "").trim();
@@ -375,14 +346,6 @@ function estimateReserveCostForProduct(modelId, body = {}, promptTokens = 1, mod
   }, modelProduct);
   const minimum = Number(process.env.MIN_API_RESERVE_CNY || 0.001);
   return Number(Math.max(minimum, estimated * 1.25).toFixed(6));
-}
-
-function shouldBlockForProfitProtection(snapshot = {}) {
-  const configured = Number(process.env.FLOWAPI_MIN_TEXT_PROFIT_MARGIN ?? 0.2);
-  const minMargin = Number.isFinite(configured) ? Math.max(0, configured) : 0.2;
-  if (!Number.isFinite(snapshot.upstreamCostCny) || snapshot.upstreamCostCny <= 0) return true;
-  if (!Number.isFinite(snapshot.sellPriceCny) || snapshot.sellPriceCny <= 0) return true;
-  return snapshot.sellPriceCny < snapshot.upstreamCostCny * (1 + minMargin);
 }
 
 async function recordRouteAttempt(attempt = {}) {
@@ -477,7 +440,10 @@ function getNewApiGroupToken(group = "") {
 
 function getNewApiAuthorizationToken({ modelProduct } = {}) {
   const executionGroup = modelProduct?.executionGroup || modelProduct?.group || process.env.NEW_API_DEFAULT_GROUP || "default";
-  const serverToken = getNewApiGroupToken(executionGroup) || String(process.env.NEW_API_KEY || "").trim();
+  const serverToken =
+    getNewApiGroupToken(executionGroup)
+    || String(process.env.SUB2API_API_KEY || "").trim()
+    || String(process.env.NEW_API_KEY || "").trim();
   if (serverToken) return serverToken;
   return "";
 }
@@ -574,7 +540,9 @@ export default async function handler(req, res) {
   const billingMultiplier = Number((apiKeyPriceMultiplier * localePriceMultiplier).toFixed(6));
   const effectiveRequestedModel = requestedModel || boundPublicModel;
   const requestedManualModel = Boolean(effectiveRequestedModel);
-  if (boundPublicModel && effectiveRequestedModel && ![boundPublicModel, boundActualModel].includes(effectiveRequestedModel)) {
+  const normalizedBoundPublicModel = normalizeModelLookup(boundPublicModel);
+  const normalizedBoundActualModel = normalizeModelLookup(boundActualModel);
+  if (boundPublicModel && effectiveRequestedModel && ![normalizedBoundPublicModel, normalizedBoundActualModel].includes(effectiveRequestedModel)) {
     releaseConcurrency(concurrencyKey);
     return sendApiError(
       res,
@@ -635,18 +603,8 @@ export default async function handler(req, res) {
         `${modelProduct.displayName} 当前状态为"${modelProduct.statusLabel || '即将开放'}"，暂未开放调用。请在模型广场选择状态为"可用"的模型。`
       );
     }
-    const pricingGuard = validateTextModelProfitConfig(modelProduct, { multiplier: billingMultiplier });
-    if (!pricingGuard.ok) {
-      releaseConcurrency(concurrencyKey);
-      return sendApiError(
-        res,
-        503,
-        pricingGuard.code || "MODEL_PRICING_NOT_READY",
-        pricingGuard.userMessage || "该模型价格尚未通过毛利审核，请先选择其他模型。",
-        "该模型正在进行价格和成本审核。你可以先切换其他模型，或把 request_id 发给 FlowAPI 客服排查。"
-      );
-    }
   }
+  const publicSelectedModelId = modelProduct?.publicModelId || configuredModelProduct?.publicModelId || selected.publicModelId || selected.modelId;
   const upstreamModelId = modelProduct?.actualModelId || getActualModelId(selected);
 
   if (!upstreamModelId || String(upstreamModelId).trim() === "") {
@@ -763,43 +721,28 @@ export default async function handler(req, res) {
 
   const promptTokens = estimatePromptTokens(upstreamBody.messages || []);
   const estimatedCompletionTokens = Math.min(Number(upstreamBody.max_tokens || 1024) || 1024, Number(process.env.MAX_COMPLETION_TOKENS || 4096));
-  const estimatedBilling = buildBillingSnapshot(selected.modelId, {
-    prompt_tokens: promptTokens,
-    completion_tokens: estimatedCompletionTokens,
-  }, modelProduct, billingMultiplier);
+  const estimatedUserChargeCny = Number((
+    estimateModelProductCnyCost(
+      publicSelectedModelId,
+      {
+        prompt_tokens: promptTokens,
+        completion_tokens: estimatedCompletionTokens,
+      },
+      modelProduct,
+    ) * billingMultiplier
+  ).toFixed(6));
   let routeDecision = { strategy: "not_started" };
-  if (shouldBlockForProfitProtection(estimatedBilling)) {
-    releaseConcurrency(concurrencyKey);
-    return sendApiError(
-      res,
-      503,
-      "MODEL_MARGIN_PROTECTED",
-      "该模型当前维护中，请稍后再试。",
-      "该模型正在维护。你可以先切换其他模型，或把 request_id 发给 FlowAPI 客服排查。"
-    );
-  }
   routeDecision = await selectUpstream({
     modelId: upstreamModelId,
-    publicModelId: selected.modelId,
+    publicModelId: publicSelectedModelId,
     modelProduct,
     strategy: modelProduct?.routeStrategy || STRATEGY.AUTO,
     usageEstimate: {
       prompt_tokens: promptTokens,
       completion_tokens: estimatedCompletionTokens,
     },
-    userChargeEstimate: estimatedBilling.sellPriceCny,
+    userChargeEstimate: estimatedUserChargeCny,
   });
-  if (routeDecision?.error === "profit_protected") {
-    releaseConcurrency(concurrencyKey);
-    return sendApiError(
-      res,
-      503,
-      "MODEL_UPSTREAM_COST_TOO_HIGH",
-      "该模型当前上游成本过高，暂时维护中，请稍后再试。",
-      "FlowAPI 已阻止亏损线路，本次没有请求上游，也不会扣费。请稍后再试或切换其他模型。",
-      { request_id: requestId }
-    );
-  }
   if (clientRequestId) {
     const idempotency = await beginApiRequestIdempotency(customerMatch.customer.id, requestId);
     if (idempotency.duplicate) {
@@ -882,6 +825,8 @@ export default async function handler(req, res) {
   let upstreamLatencyMs = 0;
   let teamToken = null;
   let settlementFinalized = false;
+  let settledResponsePayload = null;
+  let settledHttpStatus = 0;
 
   if (cachedTeamResponse?.response) {
     const cachedUsageBase = normalizeSuccessUsage(cachedTeamResponse.response, promptTokens);
@@ -893,7 +838,7 @@ export default async function handler(req, res) {
           total_tokens: savedTokens,
         }
       : cachedUsageBase;
-    const billing = buildBillingSnapshot(selected.modelId, usage, modelProduct, billingMultiplier);
+    const billing = buildBillingSnapshot(publicSelectedModelId, usage, modelProduct, billingMultiplier);
 
     try {
       const customer = await finalizeReservedCallByToken(clientToken, {
@@ -901,7 +846,7 @@ export default async function handler(req, res) {
         endpoint: "/v1/chat/completions",
         requestedModel: body.model || "auto",
         routedModel: selected.name,
-        publicModelId: selected.modelId,
+        publicModelId: publicSelectedModelId,
         actualModelId: upstreamModelId,
         provider: selected.provider,
         upstreamChannel: "team-cache",
@@ -958,10 +903,10 @@ export default async function handler(req, res) {
 
       releaseConcurrency(concurrencyKey);
       return res.status(200).json({
-        ...sanitizeOpenAiResponseForClient(cachedTeamResponse.response, { publicModelId: selected.modelId, requestId }),
+        ...sanitizeOpenAiResponseForClient(cachedTeamResponse.response, { publicModelId: publicSelectedModelId, requestId }),
         token_router: {
           routed_model: selected.name,
-          routed_model_id: selected.modelId,
+          routed_model_id: publicSelectedModelId,
           flowapi_route: "cache",
           service_provider: "FlowAPI",
           cache_hit: true,
@@ -980,7 +925,7 @@ export default async function handler(req, res) {
         endpoint: "/v1/chat/completions",
         requestedModel: body.model || "auto",
         routedModel: selected.name,
-        publicModelId: selected.modelId,
+        publicModelId: publicSelectedModelId,
         actualModelId: upstreamModelId,
         provider: selected.provider,
         upstreamChannel: "team-cache",
@@ -1008,13 +953,13 @@ export default async function handler(req, res) {
 	    const cachedResponse = getCacheManager().get("responseCache", responseCacheKey);
 	    if (cachedResponse?.data) {
 	      const usage = cachedResponse.usage || normalizeSuccessUsage(cachedResponse.data, promptTokens);
-	      const billing = buildBillingSnapshot(selected.modelId, usage, modelProduct, billingMultiplier);
+      const billing = buildBillingSnapshot(publicSelectedModelId, usage, modelProduct, billingMultiplier);
       const customer = await finalizeReservedCallByToken(clientToken, {
         requestId,
         endpoint: "/v1/chat/completions",
         requestedModel: body.model || "auto",
         routedModel: selected.name,
-        publicModelId: selected.modelId,
+        publicModelId: publicSelectedModelId,
         actualModelId: upstreamModelId,
         provider: selected.provider,
         upstreamChannel: "response-cache",
@@ -1076,10 +1021,10 @@ export default async function handler(req, res) {
 	      }
 	      releaseConcurrency(concurrencyKey);
 	      return res.status(200).json({
-	        ...sanitizeOpenAiResponseForClient(cachedResponse.data, { publicModelId: selected.modelId, requestId }),
+        ...sanitizeOpenAiResponseForClient(cachedResponse.data, { publicModelId: publicSelectedModelId, requestId }),
         token_router: {
           routed_model: selected.name,
-          routed_model_id: selected.modelId,
+          routed_model_id: publicSelectedModelId,
 	          flowapi_route: "cache",
 	          service_provider: "FlowAPI",
           estimated_cost_cny: billing.sellPriceCny,
@@ -1148,45 +1093,14 @@ export default async function handler(req, res) {
     for (const candidate of orderedUpstreams) {
       routeAttemptCount += 1;
       if (candidate.upstreamUrl) await assertSafeUpstreamUrl(candidate.upstreamUrl);
-      const marginCheck = assertCandidateMargin(candidate, {
-        modelId: selected.modelId,
-        usage: {
-          prompt_tokens: promptTokens,
-          completion_tokens: estimatedCompletionTokens,
-        },
-        modelProduct,
-        multiplier: billingMultiplier,
-      });
-      if (!marginCheck.ok) {
-        await recordRouteAttempt({
-          requestId,
-          customerId: customerMatch.customer.id,
-          apiKeyId: customerMatch.apiKey.id,
-          publicModelId: selected.modelId,
-          actualModelId: candidate.actualModelId || upstreamModelId,
-          upstreamChannelId: candidate.id || "",
-          upstreamChannel: candidate.name || "",
-          upstreamProvider: candidate.label || "",
-          attemptIndex: routeAttemptCount,
-          attemptOrder: routeAttemptCount,
-          status: "skipped",
-          statusCode: 0,
-          ok: false,
-          latencyMs: 0,
-          errorCode: marginCheck.code || "CHANNEL_MARGIN_PROTECTED",
-          errorMessage: "候选渠道成本缺失或低于 FlowAPI 毛利保护线，已跳过。",
-        });
-        lastUpstreamError = new Error("候选渠道成本缺失或低于 FlowAPI 毛利保护线");
-        continue;
-      }
       const authorizationToken = String(candidate.apiKey || "").trim()
-        || (candidate.name === "new-api" ? getNewApiAuthorizationToken({ modelProduct }) : "");
+        || ((candidate.name === "new-api" || candidate.name === "sub2api") ? getNewApiAuthorizationToken({ modelProduct }) : "");
       if (!authorizationToken) {
         await recordRouteAttempt({
           requestId,
           customerId: customerMatch.customer.id,
           apiKeyId: customerMatch.apiKey.id,
-          publicModelId: selected.modelId,
+          publicModelId: publicSelectedModelId,
           actualModelId: upstreamModelId,
           upstreamChannelId: candidate.id || "",
           upstreamChannel: candidate.name || "",
@@ -1233,7 +1147,7 @@ export default async function handler(req, res) {
           requestId,
           customerId: customerMatch.customer.id,
           apiKeyId: customerMatch.apiKey.id,
-          publicModelId: selected.modelId,
+          publicModelId: publicSelectedModelId,
           actualModelId: upstreamModelId,
           upstreamChannelId: candidate.id || "",
           upstreamChannel: candidate.name || "",
@@ -1249,6 +1163,7 @@ export default async function handler(req, res) {
         });
 
         if (response.ok) {
+          clearUpstreamFailure(candidate);
           upstream = candidate;
           upstreamResponse = response;
           upstreamLatencyMs = latencyMs;
@@ -1256,6 +1171,10 @@ export default async function handler(req, res) {
         }
 
         lastUpstreamError = new Error(`${candidate.label} 返回 ${response.status}`);
+        reportUpstreamFailure(candidate, {
+          statusCode: response.status,
+          errorCode: `UPSTREAM_${response.status}`,
+        });
         const shouldTryNext = [401, 402, 403, 404, 408, 429, 500, 502, 503, 504].includes(response.status) || response.status >= 500;
         if (shouldTryNext) continue;
 
@@ -1265,11 +1184,15 @@ export default async function handler(req, res) {
         break;
       } catch (error) {
         lastUpstreamError = error;
+        reportUpstreamFailure(candidate, {
+          statusCode: 0,
+          errorCode: error?.name === "AbortError" ? "TIMEOUT" : (error?.name || "CONNECTION_ERROR"),
+        });
         await recordRouteAttempt({
           requestId,
           customerId: customerMatch.customer.id,
           apiKeyId: customerMatch.apiKey.id,
-          publicModelId: selected.modelId,
+          publicModelId: publicSelectedModelId,
           actualModelId: upstreamModelId,
           upstreamChannelId: candidate.id || "",
           upstreamChannel: candidate.name || "",
@@ -1332,10 +1255,10 @@ export default async function handler(req, res) {
 	            || event?.content?.[0]?.text
 	            || "";
 	          if (typeof delta === "string") outputTextLength += delta.length;
-	          const sanitized = sanitizeSseEventForClient(event, { publicModelId: selected.modelId, requestId });
+	          const sanitized = sanitizeSseEventForClient(event, { publicModelId: publicSelectedModelId, requestId });
 	          return `data: ${JSON.stringify(sanitized)}`;
 	        } catch {
-	          return `data: ${JSON.stringify(buildSanitizedSsePlaceholder({ publicModelId: selected.modelId, requestId }))}`;
+	          return `data: ${JSON.stringify(buildSanitizedSsePlaceholder({ publicModelId: publicSelectedModelId, requestId }))}`;
 	        }
 	      };
 
@@ -1372,7 +1295,7 @@ export default async function handler(req, res) {
           ? statusCode === 499 ? "stream_partial" : "stream_success"
           : "stream_failed";
         const billing = shouldBill
-          ? buildBillingSnapshotForCandidate(selected.modelId, usage, modelProduct, billingMultiplier, upstream)
+          ? buildBillingSnapshotForCandidate(publicSelectedModelId, usage, modelProduct, billingMultiplier, upstream)
           : {
               sellPriceCny: 0,
               upstreamCostCny: 0,
@@ -1385,7 +1308,7 @@ export default async function handler(req, res) {
           endpoint: "/v1/chat/completions",
           requestedModel: body.model || "auto",
           routedModel: selected.name,
-          publicModelId: selected.modelId,
+          publicModelId: publicSelectedModelId,
           actualModelId: upstreamModelId,
           provider: selected.provider,
           upstreamChannel: upstream?.name || "",
@@ -1487,7 +1410,7 @@ export default async function handler(req, res) {
       ? normalizeSuccessUsage(data, promptTokens)
       : { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
     const billing = shouldBill
-      ? buildBillingSnapshotForCandidate(selected.modelId, usage, modelProduct, billingMultiplier, upstream)
+      ? buildBillingSnapshotForCandidate(publicSelectedModelId, usage, modelProduct, billingMultiplier, upstream)
       : {
           sellPriceCny: 0,
           upstreamCostCny: 0,
@@ -1502,7 +1425,7 @@ export default async function handler(req, res) {
       endpoint: "/v1/chat/completions",
       requestedModel: body.model || "auto",
       routedModel: selected.name,
-      publicModelId: selected.modelId,
+      publicModelId: publicSelectedModelId,
       actualModelId: upstreamModelId,
       provider: selected.provider,
       upstreamChannel: upstream?.name || "",
@@ -1529,10 +1452,10 @@ export default async function handler(req, res) {
 
     releaseConcurrency(concurrencyKey);
     const responsePayload = {
-      ...sanitizeOpenAiResponseForClient(data, { publicModelId: selected.modelId, requestId }),
+      ...sanitizeOpenAiResponseForClient(data, { publicModelId: publicSelectedModelId, requestId }),
       token_router: {
         routed_model: selected.name,
-        routed_model_id: selected.modelId,
+        routed_model_id: publicSelectedModelId,
         flowapi_route: "router",
         service_provider: "FlowAPI",
         first_token_ms: 0,
@@ -1544,6 +1467,8 @@ export default async function handler(req, res) {
         cache_hit: false,
       },
     };
+    settledResponsePayload = responsePayload;
+    settledHttpStatus = upstreamResponse.status;
 
     if (requestedTeamId) {
       try {
@@ -1602,11 +1527,18 @@ export default async function handler(req, res) {
     }
 
     if (shouldBill && responseCacheEnabled) {
-      getCacheManager().set("responseCache", responseCacheKey, {
-        data: responsePayload,
-        usage,
-        createdAt: new Date().toISOString(),
-      }, CACHE_TTLS.responseCache);
+      try {
+        getCacheManager().set("responseCache", responseCacheKey, {
+          data: responsePayload,
+          usage,
+          createdAt: new Date().toISOString(),
+        }, CACHE_TTLS.responseCache);
+      } catch (error) {
+        console.error("[flowapi] response cache store failed:", {
+          requestId,
+          message: error?.message || String(error),
+        });
+      }
     }
 
     if (!shouldBill) {
@@ -1621,6 +1553,18 @@ export default async function handler(req, res) {
 
     return res.status(upstreamResponse.status).json(responsePayload);
   } catch (error) {
+    console.error("[flowapi] chat/completions failed", {
+      requestId,
+      requestedModel: body?.model || "auto",
+      routedModel: selected?.name || "",
+      upstreamStatus: typeof upstreamResponse !== "undefined" ? upstreamResponse?.status : "",
+      message: error?.message || String(error),
+      stack: error?.stack || "",
+    });
+    if (settlementFinalized && settledResponsePayload) {
+      releaseConcurrency(concurrencyKey);
+      return res.status(settledHttpStatus || 200).json(settledResponsePayload);
+    }
     if (requestedTeamId) {
       await recordTeamUsageLog({
         requestId: makeRequestId("err"),
@@ -1647,7 +1591,7 @@ export default async function handler(req, res) {
         endpoint: "/v1/chat/completions",
         requestedModel: body.model || "auto",
         routedModel: selected.name,
-        publicModelId: selected.modelId,
+          publicModelId: publicSelectedModelId,
         actualModelId: upstreamModelId,
         provider: selected.provider,
         upstreamChannel: "",

@@ -4,7 +4,7 @@ import { assertCustomerOwner } from "@/lib/session";
 import { getLocalePriceMultiplier, normalizeLocale } from "@/lib/pricing/locale-pricing";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
 import { assertCanCreateTeamApiKey, linkTeamApiKey } from "@/lib/team-management";
-import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { toPublicModelCatalogItem } from "@/lib/public-model-provider";
 
 function parseBody(body) {
   if (!body) return {};
@@ -19,10 +19,11 @@ function parseBody(body) {
 }
 
 function publicCreatedModelProduct(modelProduct = {}) {
-  return sanitizePublicModelForClient({
-    id: modelProduct.publicModelId || modelProduct.id,
-    modelId: modelProduct.publicModelId || modelProduct.id,
-    publicModelId: modelProduct.publicModelId || modelProduct.id,
+  return toPublicModelCatalogItem({
+    id: modelProduct.id || modelProduct.publicModelId || modelProduct.actualModelId,
+    modelId: modelProduct.actualModelId || modelProduct.publicModelId || modelProduct.id,
+    publicModelId: modelProduct.actualModelId || modelProduct.publicModelId || modelProduct.id,
+    actualModelId: modelProduct.actualModelId || modelProduct.publicModelId || modelProduct.id,
     displayName: modelProduct.displayName || modelProduct.publicModelId || modelProduct.id,
     name: modelProduct.displayName || modelProduct.publicModelId || modelProduct.id,
     provider: "FlowAPI",
@@ -83,7 +84,8 @@ export default async function handler(req, res) {
       const modelProduct = modelProducts.find((item) => (
         item.id === modelId ||
         item.publicModelId === modelId ||
-        item.modelId === modelId
+        item.modelId === modelId ||
+        item.actualModelId === modelId
       ));
       if (!modelProduct) {
         return res.status(404).json({
@@ -125,7 +127,6 @@ export default async function handler(req, res) {
         {
           localePriceMultiplier: getLocalePriceMultiplier(normalizeLocale(body?.locale)),
           limit: body?.limit || body?.quotaLimit || {},
-          groupId: body?.groupId || body?.modelGroup || "",
           teamId,
           usagePurpose: body?.usagePurpose || body?.usage_purpose || "",
           usageScope: sharedTeamKey ? "team_shared" : (body?.usageScope || body?.usage_scope || ""),
@@ -169,15 +170,6 @@ export default async function handler(req, res) {
             message: error.message,
             type: error.type,
           },
-        });
-      }
-      if (error?.type === "model_profit_guard") {
-        return res.status(400).json({
-          error: {
-            message: error.message || "该模型价格尚未通过毛利审核，请先选择其他模型。",
-            type: error.code || "model_profit_guard",
-          },
-          suggestion: "请先选择已通过价格审核的模型，或联系 FlowAPI 客服开通该模型。",
         });
       }
       if (error?.code === "INVALID_NEW_API_TOKEN_FORMAT") {

@@ -1,13 +1,12 @@
 import Head from "next/head";
-import Image from "next/image";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import CardDetailModal from "@/components/CardDetailModal";
+import ModelUsageVisualization from "@/components/dashboard/model-usage-visualization";
 import UserBadges from "@/components/profile/user-badges";
 import UserBadgeDrawer from "@/components/profile/user-badge-drawer";
 import LiveNumber from "@/components/ui/live-number";
-import { useSafePolling } from "@/hooks/useSafePolling";
 
 const ANNOUNCEMENTS = [
   {
@@ -83,38 +82,13 @@ function formatProfileTime(value) {
   });
 }
 
-function formatRelativeUpdate(value) {
-  if (!value) return "等待更新";
-  const diff = Date.now() - new Date(value).getTime();
-  if (diff < 60_000) return "刚刚";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
-  return formatProfileTime(value);
-}
-
 function formatMoney(value) {
   return `¥${Number(value || 0).toFixed(2)}`;
 }
 
 function formatDate(value) {
-  if (!value) return "-";
+  if (value === null || value === undefined || value === "") return "—";
   return new Date(value).toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
-}
-
-function buildLocalRanking(customer = {}) {
-  const calls = Array.isArray(customer.calls) ? customer.calls : [];
-  const totalSpendCny = Number(customer.totalSpend || calls.reduce((sum, call) => sum + Number(call.cost || 0), 0));
-  const totalTokens = calls.reduce((sum, call) => sum + Number(call.tokens || 0), 0);
-  const spendPercentileTop = totalSpendCny >= 300 ? 8 : totalSpendCny >= 100 ? 18 : totalSpendCny > 0 ? 36 : 88;
-  const tokenPercentileTop = totalTokens >= 1000000 ? 1 : totalTokens >= 300000 ? 9 : totalTokens > 0 ? 28 : 92;
-  return {
-    totalSpendCny,
-    totalTokens,
-    spendPercentileTop,
-    tokenPercentileTop,
-    spendBeatsUsersPercent: Math.max(1, 100 - spendPercentileTop),
-    tokenBeatsUsersPercent: Math.max(1, 100 - tokenPercentileTop),
-    rankUpdatedAt: new Date().toISOString(),
-  };
 }
 
 export default function ProfilePage() {
@@ -126,7 +100,6 @@ export default function ProfilePage() {
   const [qqCopied, setQqCopied] = useState(false);
   const [qqQrFailed, setQqQrFailed] = useState(false);
   const [showAnnouncements, setShowAnnouncements] = useState(false);
-  const [assetRanking, setAssetRanking] = useState(null);
   const [referral, setReferral] = useState(null);
   const [referralCopied, setReferralCopied] = useState("");
   const [invitesExpanded, setInvitesExpanded] = useState(false);
@@ -171,29 +144,6 @@ export default function ProfilePage() {
     queueMicrotask(() => refreshProfile(c));
   }, [refreshProfile, router]);
 
-  const refreshAssetRanking = useCallback(async (currentCustomer = customer) => {
-    if (!currentCustomer?.id) return;
-    try {
-      const res = await fetch(`/api/user/asset-ranking?customerId=${encodeURIComponent(currentCustomer.id)}`);
-      if (!res.ok) throw new Error("ranking unavailable");
-      const data = await res.json();
-      setAssetRanking(data);
-    } catch {
-      setAssetRanking(buildLocalRanking(currentCustomer));
-    }
-  }, [customer]);
-
-  useEffect(() => {
-    if (!customer?.id) return undefined;
-    queueMicrotask(() => refreshAssetRanking(customer));
-  }, [customer, refreshAssetRanking]);
-
-  useSafePolling({
-    intervalMs: 30000,
-    enabled: Boolean(customer?.id),
-    callback: () => refreshAssetRanking(customer),
-  });
-
   const refreshReferral = useCallback(async (currentCustomer = customer) => {
     if (!currentCustomer?.id) return;
     try {
@@ -228,6 +178,7 @@ export default function ProfilePage() {
       .then((res) => res.json())
       .then((data) => { if (!cancelled) setWalletData(data); })
       .catch(() => { if (!cancelled) setWalletData({ source: "empty", wallet: null, plan: null }); })
+      .finally(() => { if (!cancelled) setWalletData((current) => current || { source: "empty", wallet: null, plan: null }); });
     return () => { cancelled = true; };
   }, [customer?.id, customer?.balance, customer?.calls?.length]);
 
@@ -262,7 +213,6 @@ export default function ProfilePage() {
   }
 
   const apiKeys = customer.apiKeys || [];
-  const calls = customer.calls || [];
   const inviteCount = customer.inviteCount || 0;
   const joinDate = customer.createdAt
     ? new Date(customer.createdAt).toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" })
@@ -270,7 +220,6 @@ export default function ProfilePage() {
   const announcements = ANNOUNCEMENTS
     .filter((item) => item.status === "已发布" || item.status === "进行中")
     .sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.publishedAt) - new Date(a.publishedAt));
-  const ranking = assetRanking || buildLocalRanking(customer);
   const isBlackGoldMember = walletData?.membership?.status === "active";
 
   async function copyQqGroup() {
@@ -359,6 +308,9 @@ export default function ProfilePage() {
         </div>
 
         {/* ===== Two-column layout ===== */}
+        <section className="profile-model-usage-shell">
+          <ModelUsageVisualization title="我的模型使用画像" subtitle="Personal Model Profile" />
+        </section>
         <div className="profile-main-grid">
 
           {/* ---- Left ---- */}
@@ -391,31 +343,6 @@ export default function ProfilePage() {
                 </button>
               </form>
             </div>
-
-            <section className="profile-asset-rank-card">
-              <div className="profile-panel-head">
-                <div>
-                  <span>资产排名</span>
-                  <h2>我的 FlowAPI 资产排名</h2>
-                </div>
-                <em>平台参考</em>
-              </div>
-              <div className="profile-rank-grid">
-                <div>
-                  <span>累计消费</span>
-                  <strong>¥{Number(ranking.totalSpendCny || 0).toFixed(2)}</strong>
-                  <p>消费排名：<b>前 {Number(ranking.spendPercentileTop || 0)}%</b></p>
-                  <small>你的累计消费超过了平台 {Number(ranking.spendBeatsUsersPercent || 0)}% 的用户。</small>
-                </div>
-                <div>
-                  <span>累计消耗 Token</span>
-                  <strong>{Number(ranking.totalTokens || 0) >= 1000000 ? `${(Number(ranking.totalTokens || 0) / 1000000).toFixed(2)}M` : Number(ranking.totalTokens || 0).toLocaleString()} Token</strong>
-                  <p>Token 消耗排名：<b>前 {Number(ranking.tokenPercentileTop || 0)}%</b></p>
-                  <small>你的 Token 使用量超过了平台 {Number(ranking.tokenBeatsUsersPercent || 0)}% 的用户。</small>
-                </div>
-              </div>
-              <p className="profile-rank-updated">排名更新时间：{formatRelativeUpdate(ranking.rankUpdatedAt)}</p>
-            </section>
 
           </div>
 
@@ -524,10 +451,11 @@ export default function ProfilePage() {
               {qqQrFailed ? (
                 <div className="profile-qq-fallback">
                   <strong>QQ 群：217637139</strong>
+                  <span>二维码加载失败，直接复制群号即可加入。</span>
                   <button type="button" onClick={copyQqGroup}>{qqCopied ? "已复制" : "复制群号"}</button>
                 </div>
               ) : (
-                <Image src="/images/qrcode/flowapi-qq-group.png" alt="FlowAPI QQ 交流群二维码" width={190} height={190} onError={() => setQqQrFailed(true)} />
+                <img src="/images/qq-group-qr.png" alt="FlowAPI QQ 交流群二维码" width={190} height={190} onError={() => setQqQrFailed(true)} />
               )}
             </div>
             <div className="profile-qq-number">
@@ -646,6 +574,7 @@ function ReferralProgram({
 }) {
   const code = referral?.code || fallbackCode || "FLOW8888";
   const inviteUrl = referral?.inviteUrl || `https://www.flowapi.fun/register?invite=${code}`;
+  const hasInviteData = referral?.validInvites != null;
   const rules = referral?.rules?.length ? referral.rules : [
     { key: "basic", level: "普通邀请", rangeLabel: "0 - 19 人", commissionRate: 0, creditBonusRate: 10 },
     { key: "advanced", level: "进阶邀请", rangeLabel: "20 - 49 人", commissionRate: 10, creditBonusRate: 10 },
@@ -699,13 +628,13 @@ function ReferralProgram({
 
       <div className="profile-referral-summary">
         {[
-          { label: "累计邀请", value: Number(referral?.totalInvites || 0), suffix: "人", hint: "通过你的链接注册的好友" },
-          { label: "有效邀请", value: Number(referral?.validInvites || 0), suffix: "人", hint: "累计充值满 ￥30 后计入" },
-          { label: "可提现佣金", value: Number(referral?.withdrawableCommissionCny || 0), prefix: "¥", decimals: 2, hint: "可申请提现或购买 Token" },
+          { label: "累计邀请", value: referral?.totalInvites == null ? null : Number(referral.totalInvites || 0), suffix: referral?.totalInvites == null ? "" : "人", hint: "通过你的链接注册的好友" },
+          { label: "有效邀请", value: referral?.validInvites == null ? null : Number(referral.validInvites || 0), suffix: referral?.validInvites == null ? "" : "人", hint: "累计充值满 ￥30 后计入" },
+          { label: "可提现佣金", value: referral?.withdrawableCommissionCny == null ? null : Number(referral.withdrawableCommissionCny || 0), prefix: referral?.withdrawableCommissionCny == null ? "" : "¥", decimals: 2, hint: "可申请提现或购买 Token" },
         ].map((item) => (
           <div key={item.label} className="profile-referral-kpi">
             <span>{item.label}</span>
-            <strong><LiveNumber value={item.value} prefix={item.prefix || ""} suffix={item.suffix || ""} decimals={item.decimals} /></strong>
+            <strong>{item.value == null ? "—" : <LiveNumber value={item.value} prefix={item.prefix || ""} suffix={item.suffix || ""} decimals={item.decimals} />}</strong>
             <p>{item.hint}</p>
           </div>
         ))}
@@ -719,14 +648,14 @@ function ReferralProgram({
 
       <div className="profile-referral-section">
         <div className="profile-panel-head">
-          <div><span>邀请等级进度</span><h2>当前有效邀请人数：{validInvites} 人</h2></div>
+          <div><span>邀请等级进度</span><h2>当前有效邀请人数：{hasInviteData ? `${validInvites} 人` : "—"}</h2></div>
           <em>{referral?.level || "普通邀请"}</em>
         </div>
         <div className="profile-referral-progress-card">
           <div className="profile-referral-progress-summary">
             <div>
               <span>当前进度</span>
-              <strong>{validInvites >= 50 ? "50+" : `${validInvites} / 50`}</strong>
+              <strong>{hasInviteData ? (validInvites >= 50 ? "50+" : `${validInvites} / 50`) : "—"}</strong>
             </div>
             <div className="profile-referral-next-goal">
               <span>{nextTarget ? "下一目标" : "已达最高等级"}</span>
@@ -736,9 +665,9 @@ function ReferralProgram({
           </div>
           <div className="profile-referral-progress-track"><i style={{ width: `${progressValue}%` }} /></div>
           <div className="profile-referral-progress-nodes">
-            <span className={validInvites >= 0 ? "active" : ""}><b>0</b>普通邀请</span>
-            <span className={validInvites >= 20 ? "active" : ""}><b>20</b>进阶邀请</span>
-            <span className={validInvites >= 50 ? "active" : ""}><b>50</b>高级邀请</span>
+            <span className={validInvites > 0 ? "active" : ""}><b>{hasInviteData ? (validInvites > 0 ? "已激活" : "—") : "—"}</b>普通邀请</span>
+            <span className={validInvites >= 20 ? "active" : ""}><b>{hasInviteData ? (validInvites >= 20 ? "已激活" : "—") : "—"}</b>进阶邀请</span>
+            <span className={validInvites >= 50 ? "active" : ""}><b>{hasInviteData ? (validInvites >= 50 ? "已激活" : "—") : "—"}</b>高级邀请</span>
           </div>
           <div className="profile-referral-reward-steps" aria-label="邀请等级奖励">
             {rewardSteps.map((rule) => (
@@ -857,7 +786,7 @@ function ReferralList({ title, subtitle, children, expanded, setExpanded, total 
         {total > 5 ? <button type="button" onClick={() => setExpanded(!expanded)}>{expanded ? "收起" : "展开全部"}</button> : null}
       </div>
       <div className="profile-referral-list">
-        {total ? children : <p className="profile-referral-empty">暂无记录。好友通过邀请链接注册并完成充值后，这里会显示佣金和奖励额度。</p>}
+        {total ? children : <p className="profile-referral-empty">—</p>}
       </div>
     </div>
   );

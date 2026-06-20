@@ -34,7 +34,12 @@ export default async function handler(req, res) {
   }
 
   const clientToken = getClientToken(req);
-  const isLocalKey = !!(clientToken && await findCustomerByToken(clientToken));
+  let isLocalKey = false;
+  try {
+    isLocalKey = !!(clientToken && await findCustomerByToken(clientToken));
+  } catch {
+    isLocalKey = false;
+  }
 
   if (!isLocalKey) {
     return res.status(401).json({

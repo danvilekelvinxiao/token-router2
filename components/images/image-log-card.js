@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 function StatusTag({ status }) {
   const label = status === "success"
     ? "成功"

@@ -24,7 +24,7 @@ export default function WalletSummaryStat({
   actionLabel = "查看详情",
 }: WalletSummaryStatProps) {
   const hasNumericValue = typeof value === "number" && Number.isFinite(value);
-  const display = value === null || value === undefined || value === "" ? "暂无数据" : value;
+  const display = value === null || value === undefined || value === "" ? "—" : value;
   const className = `wallet-summary-stat tone-${tone}${hasNumericValue ? " is-numeric-value" : " is-text-value"}${onClick ? " is-clickable" : ""}`;
   const content = (
     <>

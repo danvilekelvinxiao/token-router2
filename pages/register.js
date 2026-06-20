@@ -13,22 +13,24 @@ export default function RegisterPage() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [verifyToken, setVerifyToken] = useState("");
-  const [deviceId, setDeviceId] = useState("");
   const [agreedTerms, setAgreedTerms] = useState(false);
   const [termsModal, setTermsModal] = useState(false);
   const [privacyModal, setPrivacyModal] = useState(false);
 
-  useEffect(() => {
-    const key = "flowapi_device_id";
-    let current = localStorage.getItem(key);
-    if (!current) {
-      current = `dev_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
-      localStorage.setItem(key, current);
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
     }
-    queueMicrotask(() => setDeviceId(current));
+  }
 
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const invite = params.get("invite");
     if (invite) queueMicrotask(() => setInvitationCode(invite.toUpperCase()));
@@ -47,82 +49,113 @@ export default function RegisterPage() {
   async function handleRegister(e) {
     e.preventDefault();
     setError("");
+    setSending(true);
 
     if (!agreedTerms) {
       setError("请先阅读并同意 FlowAPI 用户协议和隐私政策。");
+      setSending(false);
       return;
     }
 
-    const res = await fetch("/api/auth/send-code", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email, password, invitationCode, purpose: "register", deviceId,
-        acceptedTerms: true,
-        acceptedTermsAt: new Date().toISOString(),
-        termsVersion: TERMS_VERSION,
-        acceptedPrivacy: true,
-        privacyVersion: PRIVACY_VERSION,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "注册失败");
+    if (!email || !password) {
+      setError("请输入邮箱和密码");
+      setSending(false);
       return;
     }
-    if (data.verifyToken) setVerifyToken(data.verifyToken);
-    startCountdown();
-    setStep("verify");
+
+    if (password.length < 6) {
+      setError("密码至少 6 位");
+      setSending(false);
+      return;
+    }
+
+    try {
+      const res = await fetchWithTimeout("/api/auth/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email, password, invitationCode, purpose: "register",
+          acceptedTerms: true,
+          acceptedTermsAt: new Date().toISOString(),
+          termsVersion: TERMS_VERSION,
+          acceptedPrivacy: true,
+          privacyVersion: PRIVACY_VERSION,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || `注册失败 (HTTP ${res.status})`);
+        return;
+      }
+      if (data.verifyToken) setVerifyToken(data.verifyToken);
+      startCountdown();
+      setStep("verify");
+    } catch (error) {
+      setError(error.message || "注册请求失败");
+    } finally {
+      setSending(false);
+    }
   }
 
   async function handleVerify(e) {
     e.preventDefault();
     setError("");
+    setVerifying(true);
 
-    const res = await fetch("/api/auth/verify-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email, code, verifyToken, password, invitationCode,
-        acceptedTerms: true,
-        acceptedTermsAt: new Date().toISOString(),
-        termsVersion: TERMS_VERSION,
-        acceptedPrivacy: true,
-        privacyVersion: PRIVACY_VERSION,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "验证失败");
-      return;
+    try {
+      const res = await fetch("/api/auth/verify-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email, code, verifyToken, password, invitationCode,
+          acceptedTerms: true,
+          acceptedTermsAt: new Date().toISOString(),
+          termsVersion: TERMS_VERSION,
+          acceptedPrivacy: true,
+          privacyVersion: PRIVACY_VERSION,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "验证失败");
+        return;
+      }
+      if (data.customer) {
+        localStorage.setItem("flowapi_customer", JSON.stringify(data.customer));
+      }
+      setStep("done");
+    } catch (error) {
+      setError(error.name === "AbortError" ? "验证请求超时，请检查网络后重试" : error.message || "验证失败");
+    } finally {
+      setVerifying(false);
     }
-    if (data.customer) {
-      localStorage.setItem("flowapi_customer", JSON.stringify(data.customer));
-    }
-    setStep("done");
   }
 
   async function resendCode() {
     setSending(true);
     setError("");
-    const res = await fetch("/api/auth/send-code", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email, password, invitationCode, purpose: "register", deviceId,
-        acceptedTerms: true,
-        acceptedTermsAt: new Date().toISOString(),
-        termsVersion: TERMS_VERSION,
-        acceptedPrivacy: true,
-        privacyVersion: PRIVACY_VERSION,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error || "验证码发送失败");
-    } else {
-      if (data.verifyToken) setVerifyToken(data.verifyToken);
-      startCountdown();
+    try {
+      const res = await fetchWithTimeout("/api/auth/send-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email, password, invitationCode, purpose: "register",
+          acceptedTerms: true,
+          acceptedTermsAt: new Date().toISOString(),
+          termsVersion: TERMS_VERSION,
+          acceptedPrivacy: true,
+          privacyVersion: PRIVACY_VERSION,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || `验证码发送失败 (HTTP ${res.status})`);
+      } else {
+        if (data.verifyToken) setVerifyToken(data.verifyToken);
+        startCountdown();
+      }
+    } catch (error) {
+      setError(error.name === "AbortError" ? "验证码发送请求超时，请稍后重试" : error.message || "验证码发送失败");
     }
     setSending(false);
   }
@@ -161,7 +194,7 @@ export default function RegisterPage() {
               <p style={{ textAlign: "center", color: "var(--page-sub)", fontSize: 15, marginTop: 10 }}>
                 注册即送体验额度，可先测试 API 是否跑通
               </p>
-              <form onSubmit={handleRegister} style={{ marginTop: 32 }}>
+              <form onSubmit={handleRegister} noValidate style={{ marginTop: 32 }}>
                 <div className="form-field">
                   <label>邮箱</label>
                   <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="请输入邮箱地址" required />
@@ -196,8 +229,8 @@ export default function RegisterPage() {
                 {error && (
                   <p style={{ color: "#ef4444", fontSize: 13, margin: "8px 0" }}>{error}</p>
                 )}
-                <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 24 }} disabled={!agreedTerms}>
-                  发送验证码
+                <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 24 }} disabled={sending} aria-busy={sending}>
+                  {sending ? "发送中..." : "发送验证码"}
                 </button>
               </form>
             </>
@@ -208,17 +241,19 @@ export default function RegisterPage() {
               <p style={{ textAlign: "center", color: "var(--page-sub)", fontSize: 15, marginTop: 10 }}>
                 验证码已发送至 {email}
               </p>
-              <form onSubmit={handleVerify} style={{ marginTop: 32 }}>
+              <form onSubmit={handleVerify} noValidate style={{ marginTop: 32 }}>
                 <div className="form-field">
                   <label>邮箱验证码</label>
                   <input type="text" value={code} onChange={(e) => setCode(e.target.value)} placeholder="请输入 6 位验证码" required maxLength={6} inputMode="numeric" autoComplete="one-time-code" />
                 </div>
                 {error && <p style={{ color: "#ef4444", fontSize: 13, margin: "8px 0" }}>{error}</p>}
-                <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 24 }}>完成注册</button>
+                <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 24 }} disabled={verifying} aria-busy={verifying}>
+                  {verifying ? "验证中..." : "完成注册"}
+                </button>
                 <div style={{ textAlign: "center", marginTop: 14 }}>
                   <button type="button" onClick={resendCode} disabled={countdown > 0 || sending}
                     style={{ background: "none", border: "none", color: countdown > 0 ? "#ccc" : "#6366f1", cursor: countdown > 0 ? "default" : "pointer", fontSize: 13, fontWeight: 600 }}>
-                    {countdown > 0 ? `${countdown}s 后重新发送` : "重新发送验证码"}
+                    {sending ? "发送中..." : countdown > 0 ? `${countdown}s 后重新发送` : "重新发送验证码"}
                   </button>
                 </div>
               </form>

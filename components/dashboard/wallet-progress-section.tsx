@@ -39,11 +39,11 @@ export default function WalletProgressSection({ walletProgress, onOpenDetail, va
                 ? `剩余 ${formatWalletTokens(plan.remainingTokens)}${Number.isFinite(Number(plan.remainingDays)) ? ` · 剩余 ${plan.remainingDays} 天` : ""}`
                 : `剩余 ${formatWalletCny(plan.remainingCny)}${Number.isFinite(Number(plan.remainingDays)) ? ` · 剩余 ${plan.remainingDays} 天` : ""}`
             )
-            : "0 Token"}
+            : "—"}
           currentValue={plan.remainingTokens ?? plan.remainingCny}
           totalValue={plan.totalTokens ?? plan.totalCny}
           percent={plan.tokenPercent}
-          leftLabel={plan.totalTokens ? `已用 ${formatWalletTokens(plan.usedTokens)}` : (plan.enabled ? `已用 ${formatWalletCny(plan.usedCny)}` : "已用 0 Token")}
+          leftLabel={plan.totalTokens ? `已用 ${formatWalletTokens(plan.usedTokens)}` : (plan.enabled ? `已用 ${formatWalletCny(plan.usedCny)}` : "已用 —")}
           rightLabel={plan.totalTokens ? `总 ${formatWalletTokens(plan.totalTokens)}` : (plan.enabled ? `总 ${formatWalletCny(plan.totalCny)}` : "总 0 Token")}
           unit={plan.totalTokens ? "Token" : "CNY"}
           expiresAt={plan.expiresAt}
@@ -63,12 +63,12 @@ export default function WalletProgressSection({ walletProgress, onOpenDetail, va
             <AssetProgressBar
               type="plan"
               title="套餐剩余天数"
-              subtitle={Number.isFinite(Number(plan.remainingDays)) ? `剩余 ${plan.remainingDays} 天` : "0 天"}
+              subtitle={Number.isFinite(Number(plan.remainingDays)) ? `剩余 ${plan.remainingDays} 天` : "—"}
               currentValue={Number.isFinite(Number(plan.remainingDays)) ? Number(plan.remainingDays) : 0}
               totalValue={Number.isFinite(Number(plan.totalDays)) ? Number(plan.totalDays) : 0}
               percent={Number.isFinite(Number(plan.timePercent)) ? Number(plan.timePercent) : 0}
-              leftLabel={Number.isFinite(Number(plan.usedDays)) && Number.isFinite(Number(plan.totalDays)) ? `已用 ${plan.usedDays} / ${plan.totalDays} 天` : "已用 0 天"}
-              rightLabel={Number.isFinite(Number(plan.remainingDays)) ? `剩余 ${plan.remainingDays} 天` : "剩余 0 天"}
+              leftLabel={Number.isFinite(Number(plan.usedDays)) && Number.isFinite(Number(plan.totalDays)) ? `已用 ${plan.usedDays} / ${plan.totalDays} 天` : "已用 —"}
+              rightLabel={Number.isFinite(Number(plan.remainingDays)) ? `剩余 ${plan.remainingDays} 天` : "剩余 —"}
               unit="day"
               expiresAt={plan.expiresAt}
               status={getPlanStatus(plan)}
@@ -78,12 +78,12 @@ export default function WalletProgressSection({ walletProgress, onOpenDetail, va
             <AssetProgressBar
               type="membership"
               title="黑金会员剩余天数"
-              subtitle={Number.isFinite(Number(membership.remainingDays)) ? `剩余 ${membership.remainingDays} 天` : "0 天"}
+              subtitle={Number.isFinite(Number(membership.remainingDays)) ? `剩余 ${membership.remainingDays} 天` : "—"}
               currentValue={Number.isFinite(Number(membership.remainingDays)) ? Number(membership.remainingDays) : 0}
               totalValue={Number.isFinite(Number(membership.totalDays)) ? Number(membership.totalDays) : 0}
               percent={Number.isFinite(Number(membership.percent)) ? Number(membership.percent) : 0}
-              leftLabel={Number.isFinite(Number(membership.usedDays)) && Number.isFinite(Number(membership.totalDays)) ? `已用 ${membership.usedDays} / ${membership.totalDays} 天` : "已用 0 天"}
-              rightLabel={Number.isFinite(Number(membership.remainingDays)) ? `剩余 ${membership.remainingDays} 天` : "剩余 0 天"}
+              leftLabel={Number.isFinite(Number(membership.usedDays)) && Number.isFinite(Number(membership.totalDays)) ? `已用 ${membership.usedDays} / ${membership.totalDays} 天` : "已用 —"}
+              rightLabel={Number.isFinite(Number(membership.remainingDays)) ? `剩余 ${membership.remainingDays} 天` : "剩余 —"}
               unit="day"
               expiresAt={membership.expiresAt}
               status={membership.status === "expired" ? "expired" : membership.enabled ? "normal" : "empty"}
@@ -93,12 +93,12 @@ export default function WalletProgressSection({ walletProgress, onOpenDetail, va
             <AssetProgressBar
               type="balance"
               title="余额 Token"
-              subtitle={balanceToken.remainingTokens ? `剩余 ${formatWalletTokens(balanceToken.remainingTokens)}` : "0 Token"}
+              subtitle={balanceToken.remainingTokens ? `剩余 ${formatWalletTokens(balanceToken.remainingTokens)}` : "—"}
               currentValue={balanceToken.remainingTokens || 0}
               totalValue={balanceToken.totalTokens || 0}
               percent={balanceToken.percent || 0}
-              leftLabel={balanceToken.usedTokens ? `已用 ${formatWalletTokens(balanceToken.usedTokens)}` : "已用 0 Token"}
-              rightLabel={balanceToken.remainingTokens ? `剩余 ${formatWalletTokens(balanceToken.remainingTokens)}` : "剩余 0 Token"}
+              leftLabel={balanceToken.usedTokens ? `已用 ${formatWalletTokens(balanceToken.usedTokens)}` : "已用 —"}
+              rightLabel={balanceToken.remainingTokens ? `剩余 ${formatWalletTokens(balanceToken.remainingTokens)}` : "剩余 —"}
               unit="Token"
               status={balanceToken.enabled ? "normal" : "empty"}
               onClick={() => onOpenDetail?.("余额 Token")}

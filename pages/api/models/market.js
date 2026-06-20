@@ -1,8 +1,10 @@
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { listModelPricing, listPublishedModels } from "@/lib/admin-commercial-config";
 import { getContent } from "@/lib/content-cms";
-import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { toPublicModelCatalogItem } from "@/lib/public-model-provider";
 import { listImageModels, mapPublicImageModel } from "@/lib/image-studio";
+import { sortModelsForDisplay } from "@/lib/models/model-sorter";
+import { normalizeModelDisplayLabel } from "@/lib/models/model-name-normalizer";
 
 const CATEGORY_META = {
   chatgpt: { providerId: "openai", providerName: "ChatGPT" },
@@ -26,10 +28,10 @@ export default async function handler(req, res) {
     const pricingMap = new Map(pricingConfigs.map((item) => [item.modelId, item]));
     const staticModels = products
       .filter((p) => p.isAvailable && p.showInModelSquare !== false)
-      .map((p) => sanitizePublicModelForClient(normalizeMarketModel({
+      .map((p) => toPublicModelCatalogItem(normalizeMarketModel({
         id: p.id,
         modelId: p.publicModelId || p.id,
-        displayName: p.displayName,
+        displayName: normalizeModelDisplayLabel(p) || p.displayName,
         provider: p.provider || "FlowAPI",
         description: p.description || "",
         tags: p.useCases || [],
@@ -38,18 +40,18 @@ export default async function handler(req, res) {
         sortOrder: p.sortOrder || 999,
         pricing: p.pricing,
       })));
-    const existing = new Set(staticModels.map((model) => model.modelId));
+    const existing = new Set(staticModels.map((model) => model.id));
     const adminModels = publishedModels
-      .filter((model) => model.enabled && model.showInModelSquare && !existing.has(model.modelId))
-      .map((model) => sanitizePublicModelForClient(normalizeMarketModel({ ...model, pricing: pricingMap.get(model.modelId) })));
-    adminModels.forEach((model) => existing.add(model.modelId));
+      .filter((model) => model.enabled && model.showInModelSquare && !existing.has(model.id))
+      .map((model) => toPublicModelCatalogItem(normalizeMarketModel({ ...model, pricing: pricingMap.get(model.modelId) })));
+    adminModels.forEach((model) => existing.add(model.id));
     const publicImageModels = imageModels
-      .filter((model) => model.enabled && !existing.has(model.modelId || model.publicModelId || model.id))
-      .map((model) => sanitizePublicModelForClient(normalizeMarketModel({
+      .filter((model) => model.enabled && !existing.has(model.id || model.publicModelId || model.modelId))
+      .map((model) => toPublicModelCatalogItem(normalizeMarketModel({
         id: model.id,
         modelId: model.modelId || model.publicModelId || model.id,
         publicModelId: model.publicModelId || model.modelId || model.id,
-        displayName: model.displayName,
+        displayName: normalizeModelDisplayLabel(model) || model.displayName,
         provider: "FlowAPI",
         modelType: "image",
         description: model.sceneDescription || "",
@@ -64,8 +66,7 @@ export default async function handler(req, res) {
         },
       })));
 
-    const models = [...staticModels, ...adminModels, ...publicImageModels]
-      .sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
+    const models = sortModelsForDisplay([...staticModels, ...adminModels, ...publicImageModels]);
     const categories = getCategoryCounts(models);
 
     return res.status(200).json({
@@ -90,9 +91,10 @@ function normalizeMarketModel(model) {
   const fallbackPrice = findContentPrice(model);
   const inputSellPrice = model.pricing?.inputSellPricePerMTokens ?? fallbackPrice.inputPricePerM ?? null;
   const outputSellPrice = model.pricing?.outputSellPricePerMTokens ?? fallbackPrice.outputPricePerM ?? null;
+  const displayName = normalizeModelDisplayLabel(model) || model.displayName;
   return {
     id: model.id || model.modelId,
-    displayName: model.displayName,
+    displayName,
     modelId: model.modelId,
     publicModelId: model.modelId,
     provider: model.provider || meta.providerName,
@@ -111,6 +113,11 @@ function normalizeMarketModel(model) {
     imageSellPricePerImageCny: model.pricing?.imageSellPricePerImageCny ?? null,
     billingUnit: model.pricing?.billingMode?.startsWith("per_image") ? "张" : "1M Token",
     officialReleaseDate: model.officialReleaseDate || "",
+    displayOrder: model.displayOrder,
+    featured: Boolean(model.featured || model.hot || model.recommended),
+    providerFamily: model.providerFamily || "",
+    releaseDate: model.releaseDate || model.officialReleaseDate || "",
+    popularityScore: Number(model.popularityScore || 0),
     isAvailable: model.enabled !== false,
     enabled: model.enabled !== false,
     status: model.enabled === false ? "unavailable" : "available",

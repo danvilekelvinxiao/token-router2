@@ -13,7 +13,6 @@ function StatusBadge({ status }) {
 }
 
 export default function AdminChannels() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -23,14 +22,13 @@ export default function AdminChannels() {
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
-    fetchChannels(s);
+    fetchChannels();
   }, []);
 
-  async function fetchChannels(sec) {
+  async function fetchChannels() {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/channels", { headers: { "x-admin-secret": sec } });
+      const res = await fetch("/api/admin/channels", { credentials: "include" });
       const data = await res.json();
       if (res.ok) setChannels(data.channels || []);
       else setMsg(data.error || "加载失败");
@@ -39,9 +37,8 @@ export default function AdminChannels() {
   }
 
   async function apiCall(method, body) {
-    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     const res = await fetch("/api/admin/channels", {
-      method, headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(body),
+      method, headers: { "content-type": "application/json" }, credentials: "include", body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "请求失败");
@@ -56,7 +53,7 @@ export default function AdminChannels() {
     try {
       const models = typeof form.models === "string" ? form.models.split(",").map((s) => s.trim()).filter(Boolean) : form.models;
       await apiCall("POST", { ...form, id: editing || undefined, models });
-      await fetchChannels(secret);
+      await fetchChannels();
       setModalOpen(false);
     } catch (e) { setMsg(e.message); }
     setSaving(false);
@@ -64,22 +61,14 @@ export default function AdminChannels() {
 
   async function handleDelete(id) {
     if (!confirm("确认删除此渠道？")) return;
-    try { await apiCall("DELETE", { id }); await fetchChannels(secret); } catch (e) { setMsg(e.message); }
+    try { await apiCall("DELETE", { id }); await fetchChannels(); } catch (e) { setMsg(e.message); }
   }
 
   async function handleToggle(ch) {
     try {
       await apiCall("POST", { ...ch, status: ch.status === "active" ? "disabled" : "active" });
-      await fetchChannels(secret);
+      await fetchChannels();
     } catch (e) { setMsg(e.message); }
-  }
-
-  function handleSecretSave() {
-    const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
-    sessionStorage.setItem("flowapi_admin_secret", s);
-    setMsg("");
-    fetchChannels(s);
   }
 
   return (
@@ -93,8 +82,6 @@ export default function AdminChannels() {
               <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>管理所有上游 API 渠道的接入配置、权重和定价</p>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={handleSecretSave} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>验证</button>
               <button onClick={openNew} style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>+ 新增渠道</button>
             </div>
           </header>

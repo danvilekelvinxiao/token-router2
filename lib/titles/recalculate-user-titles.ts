@@ -1,6 +1,6 @@
 import { calculateCustomerSavings } from "@/lib/analytics/savings";
 import { getContent } from "@/lib/content-cms";
-import { getDashboard, listCustomers } from "@/lib/customer-store";
+import { getDashboard, listCustomerCalls, listCustomers } from "@/lib/customer-store";
 import { hasDatabase, query } from "@/lib/db";
 import {
   STATIC_TITLE_METRICS,
@@ -130,7 +130,12 @@ function addMetric(metrics: Record<string, number>, key: string, value: number) 
 async function buildSnapshots(): Promise<{ snapshots: TitleMetricSnapshot[]; metrics: TitleMetricDefinition[] }> {
   const modelConfigs = getContent("models");
   const customers = await listCustomers();
-  const dashboards = await Promise.all((customers || []).map((customer: any) => getDashboard(customer.id)));
+  const dashboards = await Promise.all((customers || []).map(async (customer: any) => {
+    const dashboard = await getDashboard(customer.id);
+    if (!dashboard) return null;
+    const calls = await listCustomerCalls(customer.id);
+    return { ...dashboard, calls };
+  }));
   const dbRows = await getDbMetricRows();
   const modelLabelMap = new Map<string, { model: string; provider: string }>();
 

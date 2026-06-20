@@ -26,6 +26,7 @@ const amounts = [
 const paymentMethods = [
   { key: "wechat", name: "微信支付" },
   { key: "alipay", name: "支付宝" },
+  { key: "xpay", name: "XPay 收款码" },
   { key: "crypto", name: "加密货币支付" },
   { key: "taobao_code", name: "淘宝激活码" },
 ];
@@ -64,6 +65,7 @@ const addOnServices = [
 const paymentQrImages = {
   wechat: "/images/pay/wechat-manual-20260601.jpg",
   alipay: "/images/pay/alipay-manual-20260601.png",
+  xpay: "",
   crypto: "",
   taobao_code: "/images/pay/taobao.jpg",
 };
@@ -175,6 +177,27 @@ async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 1500) {
   }
 }
 
+async function fetchXPayGateway() {
+  try {
+    const res = await fetch("/api/payments/xpay/config");
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.gateway || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchXPayStatus(orderId) {
+  try {
+    const res = await fetch(`/api/payments/xpay/status?orderId=${encodeURIComponent(orderId)}`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 function calculateCryptoUsdAmount(amountCny) {
   const value = Number(amountCny);
   if (!Number.isFinite(value) || value <= 0) return 0;
@@ -223,10 +246,12 @@ export default function RechargePage() {
   const [commissionMessage, setCommissionMessage] = useState("");
   const [walletData, setWalletData] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
+  const [xpayGateway, setXpayGateway] = useState(null);
 
   const localizedPaymentMethods = useMemo(() => paymentMethods.map((method) => {
     if (method.key === "wechat") return { ...method, name: isEn ? "WeChat Pay" : "微信支付" };
     if (method.key === "alipay") return { ...method, name: isEn ? "Alipay" : "支付宝" };
+    if (method.key === "xpay") return { ...method, name: isEn ? "XPay QR Code" : "XPay 收款码" };
     if (method.key === "crypto") return { ...method, name: isEn ? "Crypto (USDT / USDC)" : "加密货币支付" };
     if (method.key === "taobao_code") return { ...method, name: isEn ? "Taobao Activation Code" : "淘宝激活码" };
     return method;
@@ -251,7 +276,9 @@ export default function RechargePage() {
       let c;
       try { c = JSON.parse(stored); } catch { router.push("/login"); return; }
       setCustomer(c);
-      refreshCustomer(c);
+      refreshCustomer(c).catch(() => {
+        router.push("/login");
+      });
     }, 0);
     return () => window.clearTimeout(timer);
   }, [router]);
@@ -293,6 +320,16 @@ export default function RechargePage() {
       .finally(() => { if (!cancelled) setWalletLoading(false); });
     return () => { cancelled = true; };
   }, [customer?.id, customer?.balance, orders.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchXPayGateway().then((gateway) => {
+      if (!cancelled) setXpayGateway(gateway);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const pollRechargeOrder = useCallback(async () => {
     if (!submittedOrder?.id) return;
@@ -339,6 +376,7 @@ export default function RechargePage() {
   const manualModeNotice = useMemo(() => {
     if (paymentMethod === "wechat") return "当前为人工确认模式，通常 5-15 分钟到账，异常可凭订单号处理。";
     if (paymentMethod === "alipay") return "当前为人工确认模式，通常 5-15 分钟到账，异常可凭订单号处理。";
+    if (paymentMethod === "xpay") return "XPay 支付通道已启用，扫码付款后请提交备注或订单号等待人工确认。";
     if (paymentMethod === "crypto" && manualFallback) return "链上收银台暂时未能生成，当前订单已切换到人工确认。";
     return "";
   }, [paymentMethod, manualFallback]);
@@ -402,9 +440,13 @@ export default function RechargePage() {
     return `$${calculateCryptoUsdAmount(finalAmount).toFixed(2)}`;
   }, [finalAmount, paymentSession?.amountUsd]);
   const qrModalTitle = paymentMethod === "wechat" ? L("微信支付", "WeChat Pay") : L("支付宝支付", "Alipay");
+  const qrModalTitleWithXPay = paymentMethod === "xpay" ? L("XPay 收款码", "XPay QR Code") : qrModalTitle;
   const launchTitle = paymentMethod === "crypto"
     ? L("正在生成链上支付订单...", "Generating on-chain payment order...")
     : L("正在拉起支付中...", "Preparing your payment...");
+  const xpayQrSrc = xpayGateway?.qrImage || paymentSession?.qrImage || "";
+  const xpayQrValue = xpayGateway?.qrContent || paymentSession?.qrContent || "";
+  const xpayConfigured = Boolean(xpayGateway?.qrImage || xpayGateway?.qrContent);
 
   /* ---------- Handlers ---------- */
 
@@ -504,6 +546,29 @@ export default function RechargePage() {
       setPaying(false);
       return;
     }
+    if (paymentMethod === "xpay") {
+      setPaying(true);
+      try {
+        const { response: res, data } = await fetchJsonWithTimeout("/api/recharge/create-payment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+        if (res.ok && data.order) {
+          setSubmittedOrder(data.order);
+          setPaymentSession(data.payment || null);
+          setStep("pay");
+          setActivePaymentModal("qr");
+          setManualFallback(true);
+          setPaymentError(data.reason || L("XPay 收款码已生成，请扫码后提交人工确认。", "XPay QR code is ready. Please scan it and submit manual confirmation."));
+        } else {
+          setPaymentError(data.error || L("支付订单创建失败，请稍后重试或联系客服。", "Payment order creation failed. Please try again or contact support."));
+          setStep("choose");
+        }
+      } catch {
+        setPaymentError(L("支付订单创建失败，请稍后重试或联系客服。", "Payment order creation failed. Please try again or contact support."));
+        setStep("choose");
+      }
+      setLaunchVisible(false);
+      setPaying(false);
+      return;
+    }
     setPaying(true);
     try {
       const { response: res, data } = await fetchJsonWithTimeout("/api/recharge/create-payment", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -556,6 +621,36 @@ export default function RechargePage() {
         if (res.ok && data.order) {
           setSubmittedOrder(data.order);
           setPaymentError(data.message || L("已提交人工确认，请等待后台核对到账。", "Manual confirmation submitted. Please wait for review."));
+        } else {
+          alert(data.error || L("提交失败，请稍后再试", "Submit failed. Please try again."));
+        }
+      } catch {
+        alert(L("网络异常，请稍后再试", "Network error. Please try again."));
+      }
+      setPaying(false);
+      return;
+    }
+    if (paymentMethod === "xpay" && submittedOrder?.id) {
+      setPaying(true);
+      try {
+        const res = await fetch("/api/payments/xpay/notify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: submittedOrder.outTradeNo || submittedOrder.id,
+            paymentRef: paymentRef || paymentSession?.paymentNote || paymentSession?.orderId || "",
+            providerTradeNo: paymentSession?.paymentNote || paymentSession?.orderId || "",
+            gatewayPayload: JSON.stringify({
+              provider: "xpay",
+              paymentNote: paymentSession?.paymentNote || "",
+              qrContent: paymentSession?.qrContent || "",
+            }),
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && data.order) {
+          setSubmittedOrder(data.order);
+          setPaymentError(data.message || L("已提交 XPay 人工确认，请等待后台核对到账。", "XPay manual confirmation submitted. Please wait for review."));
         } else {
           alert(data.error || L("提交失败，请稍后再试", "Submit failed. Please try again."));
         }
@@ -627,6 +722,23 @@ export default function RechargePage() {
     intervalMs: 3000,
     enabled: paymentMethod === "crypto" && step === "pay" && !manualFallback && Boolean(submittedOrder?.id) && submittedOrder?.status !== "approved",
     callback: pollCryptoPayment,
+  });
+
+  useSafePolling({
+    intervalMs: 3000,
+    enabled: paymentMethod === "xpay" && step === "pay" && Boolean(submittedOrder?.id) && submittedOrder?.status !== "approved",
+    callback: async () => {
+      const data = await fetchXPayStatus(submittedOrder.id);
+      if (data?.order) {
+        setSubmittedOrder(data.order);
+        if (data.paid) {
+          setLaunchVisible(false);
+          setActivePaymentModal("");
+          setPaymentSuccessVisible(true);
+          if (customer) refreshCustomer(customer);
+        }
+      }
+    },
   });
 
   useSafePolling({
@@ -943,6 +1055,20 @@ export default function RechargePage() {
                     </div>
                   </div>
                 )}
+                {paymentMethod === "xpay" && (
+                  <div className="payment-method-config-card">
+                    <div className="payment-method-config-head">
+                      <strong>XPay 支付通道</strong>
+                      <span>扫码支付后，系统使用订单号完成人工确认</span>
+                    </div>
+                    <div className="payment-method-store-card">
+                      <span>支付方式</span>
+                      <strong>扫码转账</strong>
+                      <p>适合使用你自己的收款码接入 FlowAPI 充值页。付款后提交备注，后台按订单确认到账。</p>
+                      <p>{xpayConfigured ? "当前已读取 XPay 收款码配置，前台会显示独立二维码。" : "当前尚未配置 XPay 收款码，请先在服务器环境变量中填写 XPay 配置。"}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Pay button */}
@@ -1042,7 +1168,8 @@ export default function RechargePage() {
                   <div className="payment-workspace">
                     <p className="pay-error">{paymentError || manualModeNotice}</p>
                     <PaymentQr
-                      src={paymentQrImages[paymentMethod]}
+                      src={paymentMethod === "xpay" ? xpayQrSrc : paymentQrImages[paymentMethod]}
+                      qrValue={paymentMethod === "xpay" ? xpayQrValue : ""}
                       methodName={currentMethod.name}
                       loading={false}
                       error={paymentError}
@@ -1094,13 +1221,15 @@ export default function RechargePage() {
         />
         <QrPaymentModal
           open={activePaymentModal === "qr"}
-          title={qrModalTitle}
+          title={qrModalTitleWithXPay}
           amountLabel={formatMoney(finalAmount)}
           orderNumber={paymentOrderNumber}
           methodName={currentMethod.name}
-          qrSrc={paymentSession?.qrImage || paymentQrImages[paymentMethod]}
-          qrValue={paymentSession?.qrContent || ""}
-          hint={L("请使用对应支付 App 扫码，支付后填写备注并提交，方便更快核对。", "Scan with the corresponding app, then submit your payment note for faster verification.")}
+          qrSrc={paymentMethod === "xpay" ? (paymentSession?.qrImage || xpayQrSrc) : (paymentSession?.qrImage || paymentQrImages[paymentMethod])}
+          qrValue={paymentMethod === "xpay" ? (paymentSession?.qrContent || xpayQrValue) : (paymentSession?.qrContent || "")}
+          hint={paymentMethod === "xpay"
+            ? L("请使用 XPay 收款码完成支付，支付后提交备注并等待人工确认。", "Use the XPay QR code, then submit your note for manual confirmation.")
+            : L("请使用对应支付 App 扫码，支付后填写备注并提交，方便更快核对。", "Scan with the corresponding app, then submit your payment note for faster verification.")}
           notice={manualModeNotice || L("当前走人工确认模式，付款备注越清晰，到账越快。", "This payment is currently under manual confirmation. Clear notes help us credit it faster.")}
           statusLabel={paymentStatusLabel}
           paymentRef={paymentRef}
@@ -1111,7 +1240,7 @@ export default function RechargePage() {
           copied={copied}
           error={paymentError}
           processing={paying}
-          confirmLabel={L("提交人工确认订单", "Submit for manual confirmation")}
+          confirmLabel={paymentMethod === "xpay" ? L("提交 XPay 备注", "Submit XPay note") : L("提交人工确认订单", "Submit for manual confirmation")}
         />
         <CryptoPaymentModal
           open={activePaymentModal === "crypto"}

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const fs = require("fs");
 const pg = require("pg");
+require("./ipv4-first.cjs");
 
 const { Pool } = pg;
 
@@ -25,7 +26,8 @@ function loadEnvFile(file) {
 
 loadEnvFile(envPath);
 
-const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+const rawConnectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+const connectionString = rawConnectionString.replace("postgresql://", "postgres://");
 if (!connectionString) {
   console.log("[cleanup] DATABASE_URL is not configured, skipping database cleanup");
   process.exit(0);
@@ -36,7 +38,8 @@ const maxCallRows = Number(process.env.CALL_LOG_MAX_ROWS || 50000);
 
 const pool = new Pool({
   connectionString,
-  ssl: connectionString.includes("sslmode=require") ? { rejectUnauthorized: false } : undefined,
+  family: 4,
+  ssl: process.env.DATABASE_SSL !== "false" ? { rejectUnauthorized: false } : undefined,
 });
 
 async function main() {

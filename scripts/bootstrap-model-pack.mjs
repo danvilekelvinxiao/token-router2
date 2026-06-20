@@ -13,10 +13,11 @@ const baseUrl = readArg("base-url", process.env.FLOWAPI_BASE_URL || `http://127.
 const pack = readArg("pack", "full");
 const customerId = readArg("customer-id", process.env.FLOWAPI_ADMIN_CUSTOMER_ID || "cus_admin");
 const email = readArg("email", process.env.FLOWAPI_ADMIN_EMAIL || "xiaoyijie@flowapi.fun");
-const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || process.env.ADMIN_SECRET || process.env.JWT_SECRET || "";
+const adminCookie = String(process.env.FLOWAPI_ADMIN_COOKIE || process.env.FLOWAPI_E2E_ADMIN_COOKIE || "").trim();
+const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || "";
 
-if (!secret) {
-  console.error("缺少 SESSION_SECRET / NEXTAUTH_SECRET / ADMIN_SECRET / JWT_SECRET，无法生成管理员会话。");
+if (!adminCookie && !secret) {
+  console.error("缺少 FLOWAPI_ADMIN_COOKIE / FLOWAPI_E2E_ADMIN_COOKIE 或 SESSION_SECRET / NEXTAUTH_SECRET / JWT_SECRET，无法生成管理员会话。");
   process.exit(1);
 }
 
@@ -31,11 +32,18 @@ function createSessionToken() {
   return `${encoded}.${signature}`;
 }
 
+function buildAdminCookie() {
+  if (adminCookie) {
+    return adminCookie.includes("=") ? adminCookie : `flowapi_session=${encodeURIComponent(adminCookie)}`;
+  }
+  return `flowapi_session=${createSessionToken()}`;
+}
+
 const response = await fetch(`${String(baseUrl).replace(/\/+$/, "")}/api/admin/model-market`, {
   method: "POST",
   headers: {
     "Content-Type": "application/json",
-    Cookie: `flowapi_session=${createSessionToken()}`,
+    Cookie: buildAdminCookie(),
   },
   body: JSON.stringify({
     action: "bootstrap_model_pack",

@@ -4,7 +4,6 @@ import { useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
 export default function AdminLogs() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -14,7 +13,7 @@ export default function AdminLogs() {
   const [page, setPage] = useState(0);
   const pageSize = 50;
 
-  async function fetchLogs(sec, filt, pg) {
+  async function fetchLogs(filt, pg) {
     setLoading(true);
     setMsg("");
     const params = new URLSearchParams();
@@ -27,7 +26,7 @@ export default function AdminLogs() {
 
     try {
       const res = await fetch(`/api/admin/logs?${params.toString()}`, {
-        headers: { "x-admin-secret": sec },
+        credentials: "include",
       });
       const data = await res.json();
       if (res.ok) {
@@ -39,28 +38,14 @@ export default function AdminLogs() {
   }
 
   function handleSearch() {
-    const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
-    sessionStorage.setItem("flowapi_admin_secret", s);
     setAppliedFilters({ ...filters });
     setPage(0);
-    fetchLogs(s, filters, 0);
+    fetchLogs(filters, 0);
   }
 
   function handlePageChange(newPage) {
-    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     setPage(newPage);
-    fetchLogs(s, appliedFilters, newPage);
-  }
-
-  function handleSecretSave() {
-    const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
-    sessionStorage.setItem("flowapi_admin_secret", s);
-    setMsg("");
-    setAppliedFilters({ user: "", model: "", status: "", channel: "" });
-    setPage(0);
-    fetchLogs(s, { user: "", model: "", status: "", channel: "" }, 0);
+    fetchLogs(appliedFilters, newPage);
   }
 
   const totalPages = Math.ceil(total / pageSize);
@@ -74,10 +59,6 @@ export default function AdminLogs() {
             <div>
               <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>调用日志</h1>
               <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>查看每一次 API 调用的详细记录，支持多维度筛选</p>
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={handleSecretSave} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>验证</button>
             </div>
           </header>
 

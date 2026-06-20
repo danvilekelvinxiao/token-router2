@@ -1,4 +1,7 @@
+import Image from "next/image";
+import { useMemo, useState } from "react";
 import { getModelBrand, getModelBrandInitial, getModelBrandLabel } from "@/lib/models/brand";
+import { getProvider } from "@/lib/providers";
 import { getPublicModelProvider } from "@/lib/public-model-provider";
 
 export function getModelProvider(model = "", provider = "") {
@@ -13,6 +16,9 @@ export default function ModelLogo({ model = "", provider = "", size = 24, classN
   const key = getModelProvider(model, provider);
   const label = getModelBrandLabel(model, provider);
   const initial = getModelBrandInitial(model, provider);
+  const providerInfo = useMemo(() => getProvider(key), [key]);
+  const [imgFailed, setImgFailed] = useState(false);
+  const logoUrl = providerInfo?.logo || "";
 
   return (
     <span
@@ -22,7 +28,18 @@ export default function ModelLogo({ model = "", provider = "", size = 24, classN
       style={{ "--model-logo-size": `${size}px` }}
       title={label}
     >
-      <span className="model-logo-fallback">{initial}</span>
+      {logoUrl && !imgFailed ? (
+        <Image
+          src={logoUrl}
+          alt={label}
+          width={size}
+          height={size}
+          draggable={false}
+          onError={() => setImgFailed(true)}
+        />
+      ) : (
+        <span className="model-logo-fallback">{initial}</span>
+      )}
     </span>
   );
 }

@@ -1,5 +1,6 @@
 import pg from "pg";
 import fs from "fs";
+import "./ipv4-first.cjs";
 
 const { Pool } = pg;
 
@@ -23,7 +24,9 @@ function loadEnvFile(filePath) {
 loadEnvFile(".env.production");
 loadEnvFile(".env.local");
 
-const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+const rawConnectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+const connectionString = rawConnectionString.replace("postgresql://", "postgres://");
+const useSsl = process.env.DATABASE_SSL !== "false";
 const requireDatabase = process.env.FLOWAPI_REQUIRE_DATABASE === "true" || process.env.NODE_ENV === "production";
 
 if (!connectionString) {
@@ -38,7 +41,8 @@ if (!connectionString) {
 
 const pool = new Pool({
   connectionString,
-  ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
+  family: 4,
+  ssl: useSsl ? { rejectUnauthorized: false } : undefined,
   connectionTimeoutMillis: 8000,
   statement_timeout: 30000,
   idleTimeoutMillis: 10000,

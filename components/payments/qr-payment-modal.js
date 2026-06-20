@@ -29,7 +29,7 @@ function PaymentQrPreview({ qrSrc, qrValue, methodName }) {
     return <img src={directSrc} alt={`${methodName}二维码`} className="payment-modal-qr-image" onError={() => setMissing(true)} />;
   }
 
-  return <div className="payment-modal-empty">收款码同步中</div>;
+  return <div className="payment-modal-empty">支付通道加载中</div>;
 }
 
 export default function QrPaymentModal({

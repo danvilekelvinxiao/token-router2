@@ -262,7 +262,7 @@ export default function HomePage() {
             <div className="community-right">
               <div className="qr-placeholder">
                 {/* QQ 群二维码图片：主路径 public/images/qrcode/flowapi-qq-group.png，失败时显示群号卡片 */}
-                {/* eslint-disable-next-line @next/next/no-img-element -- 需要 onError 回退占位 */}
+                {/* */}
                 <img
                   src="/images/qrcode/flowapi-qq-group.png"
                   alt="FlowAPI QQ 群二维码"

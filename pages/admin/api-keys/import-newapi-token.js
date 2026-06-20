@@ -16,7 +16,7 @@ export default function ImportNewApiTokenPage() {
     fetch("/api/admin/customers")
       .then((r) => r.ok && r.json())
       .then((d) => d?.customers && setCustomers(d.customers))
-      .catch(() => {});
+      .catch(() => setError("用户列表加载失败"));
   }, []);
 
   function update(field) {

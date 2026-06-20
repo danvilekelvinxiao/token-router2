@@ -11,10 +11,11 @@ fi
 export NODE_OPTIONS=--max-old-space-size=512
 npm install --omit=dev
 pm2 delete flowapi >/dev/null 2>&1 || true
-pm2 start npm --name flowapi --cwd "$APP" -- start -- -p 3000
+NODE_OPTIONS="--dns-result-order=ipv4first ${NODE_OPTIONS:-}" pm2 start npm --name flowapi --cwd "$APP" -- start -- -p 3000
 pm2 save >/dev/null || true
 systemctl restart nginx
 sleep 5
 curl -sS http://127.0.0.1:3000/api/health
+curl -fsS http://127.0.0.1:8787/healthz >/dev/null || true
 pm2 list
 node scripts/check-public-page-assets.mjs "${FLOWAPI_PUBLIC_BASE_URL:-https://flowapi.fun}" /admin/model-market /admin/image-models

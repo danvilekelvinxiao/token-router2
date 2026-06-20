@@ -2,9 +2,9 @@
 
 const BASE_URL = (process.env.FLOWAPI_E2E_BASE_URL || process.env.E2E_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
 const API_KEY = process.env.FLOWAPI_E2E_API_KEY || process.env.E2E_API_KEY || "";
-const ADMIN_SECRET = process.env.FLOWAPI_ADMIN_SECRET || process.env.ADMIN_SECRET || process.env.E2E_ADMIN_SECRET || "";
+const ADMIN_COOKIE = process.env.FLOWAPI_E2E_ADMIN_COOKIE || process.env.FLOWAPI_ADMIN_COOKIE || "";
 const RUN_PAID = process.env.FLOWAPI_E2E_RUN_PAID_CALL === "true" || process.env.E2E_RUN_PAID_CALL === "true";
-const MODEL = process.env.FLOWAPI_E2E_MODEL || "deepseek-chat";
+const MODEL = process.env.FLOWAPI_E2E_MODEL || "gpt-5.5";
 
 const results = [];
 
@@ -70,9 +70,9 @@ async function testStreamFirstToken() {
 }
 
 async function testAdminRoutes() {
-  if (!ADMIN_SECRET) return skip("/api/admin/routes", "未提供 FLOWAPI_ADMIN_SECRET / ADMIN_SECRET");
+  if (!ADMIN_COOKIE) return skip("/api/admin/routes", "未提供 FLOWAPI_E2E_ADMIN_COOKIE / FLOWAPI_ADMIN_COOKIE");
   const { response, json } = await request("/api/admin/routes", {
-    headers: { "x-admin-secret": ADMIN_SECRET },
+    headers: { Cookie: ADMIN_COOKIE.includes("=") ? ADMIN_COOKIE : `flowapi_session=${encodeURIComponent(ADMIN_COOKIE)}` },
   });
   push("/api/admin/routes 路由矩阵", response.ok && Array.isArray(json?.routes), `status=${response.status}, routes=${json?.routes?.length || 0}`);
   push("/api/admin/routes 性能监控", response.ok && json?.performance && typeof json.performance.cacheHitRate === "number", `cacheHitRate=${json?.performance?.cacheHitRate ?? "-"}`);

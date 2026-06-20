@@ -1,6 +1,15 @@
 import Head from "next/head";
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
+import { DEFAULT_ROUTE_POLICY } from "@/lib/route-policy-constants";
+
+const ROUTE_TIER_OPTIONS = [
+  { value: "sub2api", label: "Sub2API 自有号池" },
+  { value: "newApi", label: "New API 正式实例" },
+  { value: "backup", label: "其他商业中转站" },
+  { value: "uniapi", label: "UniAPI" },
+  { value: "openrouter", label: "OpenRouter 备用" },
+];
 
 const STRATEGIES = [
   { value: "balanced", label: "综合平衡" },
@@ -14,6 +23,7 @@ export default function AdminRoutesPage() {
   const [routes, setRoutes] = useState([]);
   const [failures, setFailures] = useState([]);
   const [performance, setPerformance] = useState(null);
+  const [routePolicy, setRoutePolicy] = useState(DEFAULT_ROUTE_POLICY);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [selectedModel, setSelectedModel] = useState("");
@@ -21,8 +31,8 @@ export default function AdminRoutesPage() {
   const [form, setForm] = useState({
     publicModelId: "",
     actualModelId: "",
-    providerName: "New API",
-    channelName: "New API 主通道",
+    providerName: "Sub2API",
+    channelName: "Sub2API 主通道",
     baseUrl: "",
     inputCostPerMillion: "",
     outputCostPerMillion: "",
@@ -42,6 +52,7 @@ export default function AdminRoutesPage() {
       setRoutes(data.routes || []);
       setFailures(data.failures || []);
       setPerformance(data.performance || null);
+      setRoutePolicy(data.routePolicy || DEFAULT_ROUTE_POLICY);
     } catch (error) {
       setMessage(error.message || "加载失败");
     } finally {
@@ -51,7 +62,6 @@ export default function AdminRoutesPage() {
 
   useEffect(() => {
     queueMicrotask(() => load(""));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const activeRows = useMemo(() => {
@@ -75,6 +85,24 @@ export default function AdminRoutesPage() {
       setMessage(error.message || "保存失败");
     } finally {
       setSavingId("");
+    }
+  }
+
+  async function saveRoutePolicy(nextPolicy) {
+    setMessage("");
+    try {
+      const res = await fetch("/api/admin/routes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save-route-policy", routePolicy: nextPolicy }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "保存失败");
+      setRoutePolicy(data.routePolicy || nextPolicy);
+      await load(selectedModel);
+      setMessage("路由策略已保存，新的自动切换顺序已生效。");
+    } catch (error) {
+      setMessage(error.message || "保存失败");
     }
   }
 
@@ -106,7 +134,7 @@ export default function AdminRoutesPage() {
             <div>
               <h1 style={{ margin: 0, fontSize: 26, fontWeight: 950 }}>智能路由渠道</h1>
               <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13 }}>
-                每个 FlowAPI 模型背后的上游候选、首字速度、成功率、成本和利润保护都在这里看。
+                每个 FlowAPI 模型背后的上游候选、首字速度、成功率、成本和路由策略都在这里看。
               </p>
             </div>
             <button onClick={() => load(selectedModel)} style={primaryButton}>刷新</button>
@@ -123,7 +151,6 @@ export default function AdminRoutesPage() {
                 ["P95 首字", `${performance?.p95FirstTokenMs || 0}ms`],
                 ["平均总耗时", `${performance?.avgLatencyMs || 0}ms`],
                 ["缓存命中率", `${Math.round(Number(performance?.cacheHitRate || 0) * 100)}%`],
-                ["利润保护", `${performance?.profitProtectionHits || 0} 次`],
                 ["路由切换", `${performance?.routeSwitchCount || 0} 次`],
                 ["上游失败率", `${Math.round(Number(performance?.upstreamFailureRate || 0) * 100)}%`],
                 ["上游 429", `${performance?.upstream429Count || 0} 次`],
@@ -135,6 +162,61 @@ export default function AdminRoutesPage() {
                   <strong style={{ display: "block", marginTop: 6, fontSize: 18 }}>{value}</strong>
                 </article>
               ))}
+            </div>
+          </section>
+
+          <section style={{ ...panelStyle, marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+              <div>
+                <h2 style={sectionTitle}>自动路由策略</h2>
+                <p style={sectionSub}>前台默认不再手选线路，实际请求按这里的层级顺序自动切换。</p>
+              </div>
+              <button onClick={() => saveRoutePolicy(routePolicy)} style={primaryButton}>保存策略</button>
+            </div>
+            <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
+              <label style={fieldLabelStyle}>
+                <span>启用自动切换</span>
+                <input
+                  type="checkbox"
+                  checked={routePolicy.enabled !== false}
+                  onChange={(event) => setRoutePolicy((current) => ({ ...current, enabled: event.target.checked }))}
+                />
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 10 }}>
+                {ROUTE_TIER_OPTIONS.map((option) => (
+                  <label key={option.value} style={tierCardStyle}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+                      <strong>{option.label}</strong>
+                      <input
+                        type="checkbox"
+                        checked={routePolicy.tierEnabled?.[option.value] !== false}
+                        onChange={(event) => setRoutePolicy((current) => ({
+                          ...current,
+                          tierEnabled: {
+                            ...(current.tierEnabled || {}),
+                            [option.value]: event.target.checked,
+                          },
+                        }))}
+                      />
+                    </div>
+                    <small style={{ display: "block", marginTop: 8, color: "var(--dash-sub)" }}>
+                      顺序位置
+                      <select
+                        value={(routePolicy.fallbackOrder || []).indexOf(option.value) + 1 || ""}
+                        onChange={(event) => {
+                          const nextIndex = Number(event.target.value || 1) - 1;
+                          const currentOrder = (routePolicy.fallbackOrder || []).filter((item) => item !== option.value);
+                          currentOrder.splice(Math.max(0, nextIndex), 0, option.value);
+                          setRoutePolicy((current) => ({ ...current, fallbackOrder: currentOrder }));
+                        }}
+                        style={{ display: "block", width: "100%", marginTop: 8 }}
+                      >
+                        {ROUTE_TIER_OPTIONS.map((_, index) => <option key={index} value={index + 1}>{index + 1}</option>)}
+                      </select>
+                    </small>
+                  </label>
+                ))}
+              </div>
             </div>
           </section>
 
@@ -173,7 +255,7 @@ export default function AdminRoutesPage() {
                       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
                         <thead>
                           <tr>
-                            {["渠道", "成本/1M", "首字", "总耗时", "成功率", "质量分", "评分", "利润保护", "操作"].map((item) => (
+                            {["渠道", "成本/1M", "首字", "总耗时", "成功率", "质量分", "评分", "操作"].map((item) => (
                               <th key={item} style={thStyle}>{item}</th>
                             ))}
                           </tr>
@@ -203,12 +285,6 @@ export default function AdminRoutesPage() {
                                 />
                               </td>
                               <td style={tdStyle}><strong>{Number(candidate.score || 0).toFixed(1)}</strong></td>
-                              <td style={tdStyle}>
-                                <span style={{ ...pillStyle, color: candidate.profitProtected ? "#ef4444" : "#22c55e", background: candidate.profitProtected ? "rgba(239,68,68,.1)" : "rgba(34,197,94,.1)" }}>
-                                  {candidate.profitProtected ? "已拦截" : "安全"}
-                                </span>
-                                <span style={mutedBlock}>{candidate.profitProtectionHits || 0} 次</span>
-                              </td>
                               <td style={tdStyle}>
                                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                                   <button
@@ -240,7 +316,7 @@ export default function AdminRoutesPage() {
 
           <section style={{ ...panelStyle, marginTop: 16 }}>
             <h2 style={sectionTitle}>手动增加候选上游</h2>
-            <p style={sectionSub}>适合你接入 AHEAPI、UniAPI、官方 API 或 New API 分组后，为某个前台模型补一条候选线路。</p>
+            <p style={sectionSub}>保留后台维护能力，用于补充某个前台模型的候选线路。</p>
             <form onSubmit={seedChannel} style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginTop: 14 }}>
               <Field label="Public Model ID" value={form.publicModelId} onChange={(v) => setForm({ ...form, publicModelId: v })} />
               <Field label="Actual Model ID" value={form.actualModelId} onChange={(v) => setForm({ ...form, actualModelId: v })} />
@@ -306,3 +382,5 @@ const smallSelectStyle = { ...inputStyle, minWidth: 96, minHeight: 32, fontSize:
 const numberInputStyle = { ...inputStyle, width: 70, minHeight: 32 };
 const noticeStyle = { marginBottom: 14, borderRadius: 10, padding: "10px 14px", background: "rgba(99,102,241,.12)", color: "var(--dash-accent)", fontSize: 13, fontWeight: 750 };
 const failureRowStyle = { display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr .5fr 2fr", gap: 10, alignItems: "center", padding: "10px 12px", border: "1px solid var(--dash-border)", borderRadius: 10, fontSize: 12 };
+const fieldLabelStyle = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", padding: "10px 12px", border: "1px solid var(--dash-border)", borderRadius: 10, background: "var(--dash-card-hover)" };
+const tierCardStyle = { border: "1px solid var(--dash-border)", borderRadius: 12, padding: 14, background: "var(--dash-card-hover)" };

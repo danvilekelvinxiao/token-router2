@@ -1,7 +1,8 @@
 import { requireAdmin } from "@/lib/admin-auth";
+import { resolveNewApiBaseUrl, resolveNewApiAdminToken } from "@/lib/new-api/runtime";
 
-const NEW_API_BASE = process.env.NEW_API_BASE_URL || "http://localhost:3001";
-const NEW_API_ADMIN_TOKEN = process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || "";
+const NEW_API_BASE = resolveNewApiBaseUrl();
+const NEW_API_ADMIN_TOKEN = resolveNewApiAdminToken() || process.env.NEW_API_KEY || "";
 const UNIAPI_API_KEY = process.env.UNIAPI_API_KEY || "";
 const UNIAPI_BASE_URL = "https://api.uniapi.io";
 
@@ -33,6 +34,10 @@ export default async function handler(req, res) {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
 
+  if (!NEW_API_BASE) {
+    return res.status(500).json({ error: "NEW_API_BASE_URL 未配置" });
+  }
+
   if (!NEW_API_ADMIN_TOKEN) {
     return res.status(500).json({
       error: "NEW_API_ADMIN_TOKEN 未配置，无法创建 New API 渠道。",
@@ -54,7 +59,7 @@ export default async function handler(req, res) {
       method: "POST",
       headers: {
         Authorization: `Bearer ${NEW_API_ADMIN_TOKEN}`,
-        "New-Api-User": "1",
+        "New-Api-User": process.env.NEW_API_ADMIN_USER_ID || "1",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

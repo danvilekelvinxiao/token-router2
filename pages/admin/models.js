@@ -1,23 +1,15 @@
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
-
-const STATUS_STYLES = {
-  available: { label: "可用", color: "#16a34a", bg: "rgba(22,163,74,0.1)" },
-  testing: { label: "检测中", color: "#f59e0b", bg: "rgba(245,158,11,0.12)" },
-  unavailable: { label: "暂不可用", color: "#ef4444", bg: "rgba(239,68,68,0.1)" },
-  coming_soon: { label: "即将开放", color: "#9ca3af", bg: "rgba(156,163,175,0.1)" },
-};
+import ModelDiagnosticsTable from "@/components/admin/ModelDiagnosticsTable";
 
 export default function AdminModelsPage() {
   const [products, setProducts] = useState([]);
   const [upstreamModels, setUpstreamModels] = useState([]);
-  const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [testingModel, setTestingModel] = useState("");
   const [togglingModel, setTogglingModel] = useState("");
-  const [releaseDrafts, setReleaseDrafts] = useState({});
   const [errorModal, setErrorModal] = useState(null);
   const [toast, setToast] = useState("");
   const [syncResult, setSyncResult] = useState(null);
@@ -30,16 +22,10 @@ export default function AdminModelsPage() {
   async function loadData() {
     setLoading(true);
     try {
-      const [configRes, healthRes] = await Promise.all([
-        fetch("/api/admin/models-config"),
-        fetch("/api/admin/newapi/health"),
-      ]);
+      const configRes = await fetch("/api/admin/models-config");
       const configData = await configRes.json().catch(() => ({}));
-      const healthData = await healthRes.json().catch(() => null);
       setProducts(configData.products || []);
-      setReleaseDrafts(Object.fromEntries((configData.products || []).map((product) => [product.id, product.officialReleaseDate || ""])));
       setUpstreamModels(configData.upstreamModels || []);
-      setHealth(healthData);
     } catch {
       showToast("加载数据失败");
     }
@@ -47,10 +33,8 @@ export default function AdminModelsPage() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+        loadData();
+      }, []);
 
   async function syncUniApi() {
     setSyncing(true);
@@ -120,12 +104,7 @@ export default function AdminModelsPage() {
     setTogglingModel("");
   }
 
-  async function saveReleaseDate(productId) {
-    const value = String(releaseDrafts[productId] || "").trim();
-    if (value && !/^\d{4}-(0[1-9]|1[0-2])(-([0-2]\d|3[01]))?$/.test(value)) {
-      showToast("官方发布时间格式必须是 YYYY-MM-DD 或 YYYY-MM");
-      return;
-    }
+  async function saveReleaseDate(productId, value) {
     try {
       const res = await fetch("/api/admin/models-config", {
         method: "PUT",
@@ -134,13 +113,15 @@ export default function AdminModelsPage() {
       });
       const data = await res.json().catch(() => null);
       if (data?.ok) {
-        showToast("官方发布时间已保存");
         await loadData();
+        return true;
       } else {
         showToast(data?.error || "保存失败");
+        return false;
       }
     } catch {
       showToast("保存请求失败");
+      return false;
     }
   }
 
@@ -239,106 +220,15 @@ export default function AdminModelsPage() {
           {/* Model diagnostics table */}
           <div style={{ marginBottom: 24 }}>
             <h3 style={{ fontSize: 16, fontWeight: 900, color: "var(--page-heading)", margin: "0 0 12px" }}>模型诊断</h3>
-            <div className="redeem-table-wrap">
-              <table className="redeem-table">
-                <thead>
-                  <tr>
-                    <th>public_model_id</th>
-                    <th>actual_model_id</th>
-                    <th>供应商</th>
-                    <th>上游渠道</th>
-                    <th>分组</th>
-                    <th>官方发布时间</th>
-                    <th>状态</th>
-                    <th>可用</th>
-                    <th>可创建 Key</th>
-                    <th>最后检测</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.map((p) => {
-                    const st = statusStyle(p);
-                    return (
-                      <tr key={p.id}>
-                        <td><code style={{ fontSize: 11 }}>{p.publicModelId}</code></td>
-                        <td>
-                          <code style={{ fontSize: 11, color: p.actualModelId ? "var(--dash-text)" : "#ef4444" }}>
-                            {p.actualModelId || "未设置"}
-                          </code>
-                        </td>
-                        <td>{p.provider}</td>
-                        <td>{p.upstreamChannel || "uniapi"}</td>
-                        <td><code style={{ fontSize: 11 }}>{p.group}</code></td>
-                        <td>
-                          <div style={{ display: "flex", gap: 6, alignItems: "center", minWidth: 160 }}>
-                            <input
-                              value={releaseDrafts[p.id] || ""}
-                              onChange={(event) => setReleaseDrafts((current) => ({ ...current, [p.id]: event.target.value }))}
-                              placeholder="YYYY-MM 或 YYYY-MM-DD"
-                              style={{ width: 118, padding: "5px 7px", borderRadius: 6, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 11 }}
-                            />
-                            <button type="button" className="redeem-btn small" style={{ fontSize: 11, padding: "2px 8px" }} onClick={() => saveReleaseDate(p.id)}>
-                              保存
-                            </button>
-                          </div>
-                        </td>
-                        <td>
-                          <span style={{ padding: "2px 8px", borderRadius: 6, fontSize: 11, fontWeight: 700, background: st.bg, color: st.color }}>
-                            {p.statusLabel || st.label}
-                          </span>
-                        </td>
-                        <td>
-                          <span style={{ color: p.isAvailable ? "#16a34a" : "#ef4444", fontWeight: 700 }}>
-                            {p.isAvailable ? "是" : "否"}
-                          </span>
-                        </td>
-                        <td>
-                          <span style={{ color: p.canCreateKey !== false ? "#16a34a" : "#9ca3af", fontWeight: 700 }}>
-                            {p.canCreateKey !== false ? "是" : "否"}
-                          </span>
-                        </td>
-                        <td style={{ fontSize: 11 }}>
-                          {p.lastHealthCheckAt ? new Date(p.lastHealthCheckAt).toLocaleString("zh-CN") : "从未"}
-                        </td>
-                        <td>
-                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                            <button
-                              type="button"
-                              className="redeem-btn small"
-                              style={{ fontSize: 11, padding: "2px 8px" }}
-                              disabled={testingModel === p.id || !p.actualModelId}
-                              onClick={() => healthCheckModel(p.id, p.actualModelId)}
-                            >
-                              {testingModel === p.id ? "检测中..." : "测试"}
-                            </button>
-                            {p.lastError && (
-                              <button
-                                type="button"
-                                className="redeem-btn small"
-                                style={{ fontSize: 11, padding: "2px 8px", background: "rgba(239,68,68,0.08)", color: "#ef4444" }}
-                                onClick={() => setErrorModal({ model: p.displayName, error: p.lastError })}
-                              >
-                                错误
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              className="redeem-btn small"
-                              style={{ fontSize: 11, padding: "2px 8px" }}
-                              disabled={togglingModel === p.id}
-                              onClick={() => toggleModel(p.id, p.isAvailable)}
-                            >
-                              {togglingModel === p.id ? "..." : p.isAvailable ? "禁用" : "启用"}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <ModelDiagnosticsTable
+              products={products}
+              testingModel={testingModel}
+              togglingModel={togglingModel}
+              onHealthCheck={healthCheckModel}
+              onToggle={toggleModel}
+              onSaveReleaseDate={saveReleaseDate}
+              onErrorOpen={(model, error) => setErrorModal({ model, error })}
+            />
           </div>
 
           {/* Upstream models list */}

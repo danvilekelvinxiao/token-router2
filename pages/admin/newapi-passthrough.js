@@ -23,7 +23,9 @@ export default function AdminPassthroughPage() {
       if (tData.success) setTokens(tData.tokens);
       if (lData.success) setLogs(lData.logs);
       if (sData.success) setStats(sData.stats);
-    } catch {}
+    } catch {
+      setError("白名单数据加载失败");
+    }
   }, []);
 
   useEffect(() => {
@@ -62,22 +64,40 @@ export default function AdminPassthroughPage() {
   }
 
   async function handleToggle(id, enabled) {
-    await fetch("/api/admin/newapi-passthrough/toggle", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, enabled }),
-    });
-    load();
+    setMessage("");
+    setError("");
+    try {
+      const res = await fetch("/api/admin/newapi-passthrough/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, enabled }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "切换状态失败");
+      setMessage(enabled ? "已启用" : "已禁用");
+      load();
+    } catch (error) {
+      setError(error.message || "切换状态失败");
+    }
   }
 
   async function handleDelete(id) {
     if (!confirm("确认删除？")) return;
-    await fetch("/api/admin/newapi-passthrough/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    });
-    load();
+    setMessage("");
+    setError("");
+    try {
+      const res = await fetch("/api/admin/newapi-passthrough/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || "删除失败");
+      setMessage("已删除");
+      load();
+    } catch (error) {
+      setError(error.message || "删除失败");
+    }
   }
 
   return (

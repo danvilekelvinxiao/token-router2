@@ -1,8 +1,9 @@
 import Head from "next/head";
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
+import VirtualUsageLogTable from "@/components/logs/virtual-usage-log-table";
 
 const TABS = [
   { id: "all", label: "全部" },
@@ -43,6 +44,7 @@ export default function DashboardLogsPage() {
   const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState("");
   const requestId = router.isReady && typeof router.query.requestId === "string" ? router.query.requestId : "";
+  const typeLabels = useMemo(() => Object.fromEntries(TABS.map((item) => [item.id, item.label])), []);
 
   function updateRequestId(nextValue) {
     const nextQuery = { ...router.query };
@@ -87,8 +89,7 @@ export default function DashboardLogsPage() {
     }
     loadLogs();
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, requestId]);
+      }, [filters, requestId]);
 
   function filenameFromDisposition(disposition) {
     const encoded = String(disposition || "").match(/filename\*=UTF-8''([^;]+)/i)?.[1];
@@ -217,54 +218,23 @@ export default function DashboardLogsPage() {
           <div className="image-logs-table-wrap">
             {loading ? <div className="image-studio-empty">正在加载日志...</div> : null}
             {!loading ? (
-              <table className="image-logs-table">
-                <thead>
-                  <tr>
-                    <th>时间</th>
-                    <th>请求 ID</th>
-                    <th>API Key</th>
-                    <th>模型</th>
-                    <th>类型</th>
-                    <th>分组</th>
-                    <th>消耗 Token</th>
-                    <th>消耗金额</th>
-                    <th>状态</th>
-                    <th>耗时</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => (
-                    <tr key={item.id}>
-                      <td>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
-                      <td>{item.id}</td>
-                      <td>{item.apiKeyLabel ? `${item.apiKeyLabel} · ${item.apiKeyMasked}` : "-"}</td>
-                      <td>{item.model || "-"}</td>
-                      <td>{TABS.find((entry) => entry.id === item.type)?.label || item.type}</td>
-                      <td>{item.group || "-"}</td>
-                      <td>{Number(item.totalTokens || 0).toFixed(1)}</td>
-                      <td>￥{Number(item.moneyCost || 0).toFixed(2)}</td>
-                      <td>{item.status}</td>
-                      <td>{item.latencyMs ? `${item.latencyMs} ms` : "-"}</td>
-                      <td><a href={item.type === "image" || item.id?.startsWith("img_") ? `/images/history?requestId=${encodeURIComponent(item.id)}` : `/dashboard?callId=${encodeURIComponent(item.id || "")}`}>查看</a></td>
-                    </tr>
-                  ))}
-                  {items.length === 0 ? (
-                    <tr>
-                      <td colSpan={11} className="usage-log-zero-row">
-                        <div className="usage-log-empty-state">
-                          <strong>还没有扣费日志</strong>
-                          <p>完成一次模型调用后，这里会显示 Token、金额、状态和 request_id。现在可以去复制教程跑通第一次调用。</p>
-                          <div>
-                            <Link href="/api-management">创建 API Key</Link>
-                            <Link href="/help">查看三步教程</Link>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
+              items.length === 0 ? (
+                <div className="usage-log-empty-state">
+                  <strong>还没有扣费日志</strong>
+                  <p>完成一次模型调用后，这里会显示 Token、金额、状态和 request_id。现在可以去复制教程跑通第一次调用。</p>
+                  <div>
+                    <Link href="/api-management">创建 API Key</Link>
+                    <Link href="/help">查看三步教程</Link>
+                  </div>
+                </div>
+              ) : (
+                <VirtualUsageLogTable
+                  items={items}
+                  typeLabels={typeLabels}
+                  onOpenImage={(href) => router.push(href)}
+                  onOpenCall={(href) => router.push(href)}
+                />
+              )
             ) : null}
           </div>
         </main>

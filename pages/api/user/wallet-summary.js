@@ -1,9 +1,11 @@
-import { getDashboard, listRechargeOrders } from "@/lib/customer-store";
+import { getDashboard, listCustomerCalls, listRechargeOrders } from "@/lib/customer-store";
+import { hasDatabase, query } from "@/lib/db";
 import { requireCustomerSession } from "@/lib/session";
 import { getBillingPreference, resolveDeductionOrder } from "@/lib/billing/deduction-priority";
 import { claimDailyBonus, getMemberWallets, getUserMembership } from "@/lib/membership/store";
 import { listUserPackages } from "@/lib/packages/store";
 import { buildWalletProgress, parseQuotaTokens } from "@/lib/wallet/build-wallet-progress";
+import { getUserWallet, listWalletTransactions } from "@/lib/wallet/ledger";
 
 function parsePackageRef(ref = "") {
   const text = String(ref || "");
@@ -28,15 +30,16 @@ function addDays(iso, days) {
   return date.toISOString();
 }
 
-function isApproved(order) {
-  return order?.status === "approved";
+function isWithin(value, start, end) {
+  const time = new Date(value || 0).getTime();
+  if (Number.isNaN(time)) return false;
+  const startTime = start ? new Date(start).getTime() : -Infinity;
+  const endTime = end ? new Date(end).getTime() : Infinity;
+  return time >= startTime && time <= endTime;
 }
 
-function isWithin(value, start, end) {
-  const ts = new Date(value || 0).getTime();
-  const startTs = start ? new Date(start).getTime() : 0;
-  const endTs = end ? new Date(end).getTime() : Infinity;
-  return ts >= startTs && ts <= endTs;
+function isApproved(order) {
+  return order?.status === "approved";
 }
 
 function mapBalanceLog(order) {
@@ -224,6 +227,49 @@ function buildModelConsumptionChart(calls = [], days = 7) {
   };
 }
 
+async function fetchCallUsageWindow(customerId, { startedAt = null, expiresAt = null } = {}) {
+  if (!customerId) {
+    return { totalCostCny: 0, totalTokens: 0 };
+  }
+  if (!startedAt && !expiresAt) {
+    const result = await query(
+      `SELECT
+         COALESCE(SUM(COALESCE(user_charge, sell_price_cny, cost, 0)), 0) AS total_cost_cny,
+         COALESCE(SUM(COALESCE(total_tokens, tokens, prompt_tokens + completion_tokens, 0)), 0) AS total_tokens
+       FROM calls
+       WHERE customer_id = $1`,
+      [customerId]
+    ).catch(() => null);
+    return {
+      totalCostCny: Number(result?.rows?.[0]?.total_cost_cny || 0),
+      totalTokens: Number(result?.rows?.[0]?.total_tokens || 0),
+    };
+  }
+
+  const params = [customerId];
+  const conditions = ["customer_id = $1"];
+  if (startedAt) {
+    params.push(startedAt);
+    conditions.push(`created_at >= $${params.length}`);
+  }
+  if (expiresAt) {
+    params.push(expiresAt);
+    conditions.push(`created_at <= $${params.length}`);
+  }
+  const result = await query(
+    `SELECT
+       COALESCE(SUM(COALESCE(user_charge, sell_price_cny, cost, 0)), 0) AS total_cost_cny,
+       COALESCE(SUM(COALESCE(total_tokens, tokens, prompt_tokens + completion_tokens, 0)), 0) AS total_tokens
+     FROM calls
+     WHERE ${conditions.join(" AND ")}`,
+    params
+  ).catch(() => null);
+  return {
+    totalCostCny: Number(result?.rows?.[0]?.total_cost_cny || 0),
+    totalTokens: Number(result?.rows?.[0]?.total_tokens || 0),
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     res.setHeader("Allow", "GET");
@@ -235,6 +281,8 @@ export default async function handler(req, res) {
 
   const customer = await getDashboard(session.customerId);
   if (!customer) return res.status(404).json({ error: "用户不存在" });
+  const userWallet = await getUserWallet(session.customerId);
+  const walletTransactions = await listWalletTransactions(session.customerId, { limit: 20 }).catch(() => []);
 
   const orders = await listRechargeOrders({ customerId: session.customerId, limit: 50 });
   const userPackages = await listUserPackages(session.customerId).catch(() => []);
@@ -247,7 +295,7 @@ export default async function handler(req, res) {
   const latestUserPackage = userPackages[0] || null;
   const latestPackage = latestUserPackage || packageOrders[0] || null;
   const now = new Date();
-  const calls = Array.isArray(customer.calls) ? customer.calls : [];
+  const calls = await listCustomerCalls(session.customerId);
   const currentBalance = Number(customer.balance || 0);
 
   let plan = null;
@@ -261,9 +309,8 @@ export default async function handler(req, res) {
     startedAt = latestUserPackage.startedAt;
     expiresAt = latestUserPackage.expiresAt || null;
     totalQuotaCny = Number((Number(latestUserPackage.quotaTokens || 0) / 10000).toFixed(6));
-    usedQuotaCny = calls
-      .filter((call) => isWithin(call.createdAt, startedAt, expiresAt))
-      .reduce((sum, call) => sum + Number(call.cost || 0), 0);
+    const usage = await fetchCallUsageWindow(session.customerId, { startedAt, expiresAt });
+    usedQuotaCny = Number(usage.totalCostCny.toFixed(6));
     progressPercent = totalQuotaCny > 0 ? (usedQuotaCny / totalQuotaCny) * 100 : 0;
     const remainingDays = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now.getTime()) / 86_400_000)) : null;
     plan = {
@@ -274,16 +321,19 @@ export default async function handler(req, res) {
       expiresAt,
       remainingDays,
       quotaText: latestUserPackage.quotaText,
+      totalCny: totalQuotaCny,
+      usedCny: usedQuotaCny,
+      totalTokens: Number(latestUserPackage.quotaTokens || 0),
+      usedTokens: Number(usage.totalTokens || 0),
       quotaTokens: Number(latestUserPackage.quotaTokens || 0),
-      remainingTokens: Number(latestUserPackage.remainingTokens || 0),
+      remainingTokens: Math.max(0, Number(latestUserPackage.quotaTokens || 0) - Number(usage.totalTokens || 0)),
     };
   } else if (latestPackage) {
     startedAt = latestPackage.order.approvedAt || latestPackage.order.createdAt;
     expiresAt = latestPackage.packageInfo.validDays ? addDays(startedAt, latestPackage.packageInfo.validDays) : null;
     totalQuotaCny = Number(latestPackage.order.amount || 0);
-    usedQuotaCny = calls
-      .filter((call) => isWithin(call.createdAt, startedAt, expiresAt))
-      .reduce((sum, call) => sum + Number(call.cost || 0), 0);
+    const usage = await fetchCallUsageWindow(session.customerId, { startedAt, expiresAt });
+    usedQuotaCny = Number(usage.totalCostCny.toFixed(6));
     progressPercent = totalQuotaCny > 0 ? (usedQuotaCny / totalQuotaCny) * 100 : 0;
     const remainingDays = expiresAt ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - now.getTime()) / 86_400_000)) : null;
     plan = {
@@ -294,14 +344,18 @@ export default async function handler(req, res) {
       expiresAt,
       remainingDays,
       quotaText: latestPackage.packageInfo.quotaText,
+      totalCny: totalQuotaCny,
+      usedCny: usedQuotaCny,
+      totalTokens: parseQuotaTokens(latestPackage.packageInfo.quotaText || ""),
+      usedTokens: Number(usage.totalTokens || 0),
+      remainingTokens: Math.max(0, parseQuotaTokens(latestPackage.packageInfo.quotaText || "") - Number(usage.totalTokens || 0)),
     };
   } else {
     const lastApproved = approvedOrders[0] || null;
     startedAt = lastApproved?.approvedAt || lastApproved?.createdAt || null;
     if (startedAt) {
-      usedQuotaCny = calls
-        .filter((call) => isWithin(call.createdAt, startedAt, null))
-        .reduce((sum, call) => sum + Number(call.cost || 0), 0);
+      const usage = await fetchCallUsageWindow(session.customerId, { startedAt, expiresAt: null });
+      usedQuotaCny = Number(usage.totalCostCny.toFixed(6));
       totalQuotaCny = Number((currentBalance + usedQuotaCny).toFixed(6));
       progressPercent = totalQuotaCny > 0 ? (usedQuotaCny / totalQuotaCny) * 100 : 0;
     }
@@ -359,16 +413,25 @@ export default async function handler(req, res) {
       source: "empty",
       updatedAt: new Date().toISOString(),
       wallet: emptyPayload,
+      userWallet,
       token: {
         totalTokens: null,
         usedTokens: 0,
         remainingTokens: null,
+      },
+      tokenWallet: {
+        usdTokenBalance: Number(userWallet?.usdTokenBalance || 0),
+        usdTokenTotalObtained: Number(userWallet?.usdTokenTotalObtained || 0),
+        usdTokenTotalUsed: Number(userWallet?.usdTokenTotalUsed || 0),
+        usdTokenBonusTotal: Number(userWallet?.usdTokenBonusTotal || 0),
+        usdTokenReferralTotal: Number(userWallet?.usdTokenReferralTotal || 0),
       },
       plan: null,
       recentRecharges: [],
       recentConsumptions: [],
       balanceLogs: [],
       spendTrend7d: [],
+      walletTransactions,
       wallets,
       billingPreference,
       membership,
@@ -409,12 +472,21 @@ export default async function handler(req, res) {
     source: "real",
     updatedAt: new Date().toISOString(),
     wallet: walletPayload,
+    userWallet,
     token: tokenPayload,
+    tokenWallet: {
+      usdTokenBalance: Number(userWallet?.usdTokenBalance || 0),
+      usdTokenTotalObtained: Number(userWallet?.usdTokenTotalObtained || 0),
+      usdTokenTotalUsed: Number(userWallet?.usdTokenTotalUsed || 0),
+      usdTokenBonusTotal: Number(userWallet?.usdTokenBonusTotal || 0),
+      usdTokenReferralTotal: Number(userWallet?.usdTokenReferralTotal || 0),
+    },
     plan,
     wallets,
     billingPreference,
     membership,
     walletProgress,
+    walletTransactions,
     recentRecharges: (orders || []).slice(0, 5).map(mapBalanceLog),
     recentConsumptions: calls.slice(0, 5).map((call) => ({
       id: call.id,

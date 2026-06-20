@@ -396,27 +396,13 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   const [modal, setModal] = useState(null);
   const [openMoreKeyId, setOpenMoreKeyId] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ label: "", expiresAt: "never", customDate: "", modelId: "", groupId: "" });
-  const [apiGroups, setApiGroups] = useState([]);
+  const [form, setForm] = useState({ label: "", expiresAt: "never", customDate: "", modelId: "" });
   const [detailKey, setDetailKey] = useState(null);
   const [detailData, setDetailData] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => setApiBaseUrl(getPublicApiBaseUrl()));
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/groups/available")
-      .then((res) => res.ok ? res.json() : { groups: [] })
-      .then((data) => {
-        if (!cancelled) setApiGroups(data.groups || []);
-      })
-      .catch(() => {
-        if (!cancelled) setApiGroups([]);
-      });
-    return () => { cancelled = true; };
   }, []);
 
   const apiKeys = useMemo(() => customer?.apiKeys || [], [customer]);
@@ -494,10 +480,9 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   }
 
   const openCreateModal = useCallback(() => {
-    const defaultGroupId = apiGroups.find((group) => group.recommended && group.available)?.id || apiGroups.find((group) => group.available)?.id || apiGroups[0]?.id || "";
-    setForm({ label: `API Key ${apiKeys.length + 1}`, expiresAt: "never", customDate: "", modelId: "", groupId: defaultGroupId });
+    setForm({ label: `API Key ${apiKeys.length + 1}`, expiresAt: "never", customDate: "", modelId: "" });
     setModal({ type: "create" });
-  }, [apiGroups, apiKeys.length]);
+  }, [apiKeys.length]);
 
   useEffect(() => {
     if (createSignal <= 0 || !customer) return;
@@ -533,7 +518,6 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       customerId: customer.id, label: form.label.trim() || fallbackLabel,
       expiresAt: computeExpiry(form.expiresAt, form.customDate),
       modelId: form.modelId,
-      groupId: form.groupId,
     };
     try {
       const res = await fetch("/api/keys", {
@@ -597,18 +581,8 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
     if (!customer) return "请先登录后创建 API Key";
     if (saving) return "";
     if (modal.type !== "edit" && !form.modelId) return "请选择默认模型后创建 API Key";
-    if (modal.type !== "edit" && !form.groupId) return "请选择 API 线路后创建 API Key";
     if (form.expiresAt === "custom" && !form.customDate) return "请选择自定义过期日期";
     return "";
-  }
-
-  function groupSupportsProduct(group, product) {
-    const supported = Array.isArray(group?.supportedModels) ? group.supportedModels : [];
-    if (!supported.length) return true;
-    const aliases = [product?.id, product?.publicModelId, product?.displayName]
-      .map((item) => String(item || "").toLowerCase())
-      .filter(Boolean);
-    return supported.some((item) => aliases.includes(String(item || "").toLowerCase()));
   }
 
   function toggleSelected(keyId) {
@@ -702,7 +676,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
               }}>
                 {visibleTokens[primaryKey.id] ? "隐藏" : "显示"}
               </button>
-              <button type="button" onClick={() => copyText(primaryKey.label, primaryKey.token)}>复制</button>
+              <button type="button" onClick={() => copyText(primaryKey.label, maskToken(primaryKey.token))}>复制脱敏值</button>
             </div>
           ) : null}
           <span>{primaryKey?.lastUsedAt ? formatDate(primaryKey.lastUsedAt) : "未使用"}</span>
@@ -727,7 +701,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
             <button type="button" className="primary" onClick={openCreateModal}>选择模型创建 API Key</button>
             <Link href="/models" className="flow-token-link">前往模型广场</Link>
             <button type="button" disabled={selectedKeys.length === 0} onClick={() => copyText("CC Switch 配置", makeCcSwitchConfig(selectedKeys, apiBaseUrl))}>CC Switch 备用配置</button>
-            <button type="button" disabled={selectedKeys.length === 0} onClick={() => copyText("所选 API Key", selectedKeys.map((key) => key.token).join("\n"))}>复制所选</button>
+            <button type="button" disabled={selectedKeys.length === 0} onClick={() => copyText("所选 API Key 脱敏值", selectedKeys.map((key) => maskToken(key.token)).join("\n"))}>复制所选脱敏值</button>
             <button type="button" className="danger" disabled={selectedKeys.length === 0 || saving} onClick={() => deleteKeys(selectedKeys)}>删除所选</button>
           </div>
           <div className="flow-token-searches">
@@ -779,7 +753,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
                           setVisibleTimers((t) => ({ ...t, [key.id]: timer }));
                         }
                       }}>{isVisible ? "隐藏" : "显示"}</button>
-                      <button type="button" className="copy" onClick={() => copyText(key.label, key.token)}>复制</button>
+                      <button type="button" className="copy" onClick={() => copyText(key.label, maskToken(key.token))}>复制脱敏值</button>
                     </span>
                   </td>
                   <td className="flow-last-used">{key.lastUsedAt ? formatDate(key.lastUsedAt) : "从未调用"}</td>
@@ -863,36 +837,6 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
                         </small>
                       </button>
                     ))}
-                  </div>
-                </div>
-              ) : null}
-              {modal.type !== "edit" ? (
-                <div className="api-expiry-field api-group-choice-field">
-                  <span>选择线路</span>
-                  <div className="api-group-choice-grid">
-                    {apiGroups.map((group) => {
-                      const product = MODEL_PRODUCT_OPTIONS.find((item) => item.id === form.modelId || item.publicModelId === form.modelId);
-                      const disabled = !group.available || !groupSupportsProduct(group, product);
-                      return (
-                        <button
-                          key={group.id}
-                          type="button"
-                          className={`${form.groupId === group.id ? "active" : ""} ${disabled ? "disabled" : ""}`}
-                          aria-disabled={disabled}
-                          onClick={() => {
-                            if (disabled) {
-                              showMessage(group.available ? "该线路不支持当前模型" : "该线路已停用");
-                              return;
-                            }
-                            setForm((current) => ({ ...current, groupId: group.id }));
-                          }}
-                        >
-                          <span><strong>{group.displayName}</strong><em>{group.billingMultiplier}x</em></span>
-                          <small>{group.recommended ? "系统推荐 · " : ""}{group.description || "自动调度线路"}</small>
-                        </button>
-                      );
-                    })}
-                    {!apiGroups.length ? <div className="api-management-empty-text">线路配置同步中，请稍后刷新。</div> : null}
                   </div>
                 </div>
               ) : null}

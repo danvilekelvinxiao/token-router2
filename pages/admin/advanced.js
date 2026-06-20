@@ -7,7 +7,6 @@ const links = [
   { label: "API 分组管理", href: "/admin/groups", desc: "控制不同模型走哪个上游分组。" },
   { label: "Token 直通白名单", href: "/admin/newapi-passthrough", desc: "高风险入口，只给调试和迁移使用。" },
   { label: "导入 New API Token", href: "/admin/api-keys/import-newapi-token", desc: "把外部 token 导入管理。" },
-  { label: "全局转发规则", href: "/admin/routing", desc: "调整模型路由策略和故障切换。" },
   { label: "限流规则", href: "/admin/rate-limits", desc: "控制请求频率、并发和风控。" },
   { label: "请求缓存", href: "/admin/request-cache", desc: "控制团队重复请求缓存。" },
   { label: "维护任务中心", href: "/admin/maintenance-tasks", desc: "执行维护脚本和检查任务。" },

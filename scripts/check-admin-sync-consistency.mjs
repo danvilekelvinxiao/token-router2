@@ -1,19 +1,63 @@
 #!/usr/bin/env node
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
+
+function loadEnv(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  const content = fs.readFileSync(filePath, "utf8");
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match) continue;
+    const [, key, rawValue] = match;
+    if (process.env[key] !== undefined) continue;
+    process.env[key] = rawValue.replace(/^['"]|['"]$/g, "");
+  }
+}
+
+loadEnv(path.join(repoRoot, ".env.local"));
 
 const baseUrl = String(process.env.FLOWAPI_ADMIN_SYNC_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
-const adminSecret = process.env.FLOWAPI_ADMIN_SECRET || process.env.ADMIN_SECRET || "";
+const adminCookie = String(process.env.FLOWAPI_ADMIN_COOKIE || process.env.FLOWAPI_E2E_ADMIN_COOKIE || "").trim();
+const sessionSecret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || process.env.JWT_SECRET || "";
+const customerId = process.env.FLOWAPI_ADMIN_CUSTOMER_ID || "cus_admin";
+const email = process.env.FLOWAPI_ADMIN_EMAIL || "xiaoyijie@flowapi.fun";
+
+if (!adminCookie && !sessionSecret) {
+  console.error("缺少 FLOWAPI_ADMIN_COOKIE / FLOWAPI_E2E_ADMIN_COOKIE 或 SESSION_SECRET / NEXTAUTH_SECRET / JWT_SECRET，无法生成管理员会话。");
+  process.exit(1);
+}
+
+function createSessionToken() {
+  const payload = {
+    customerId,
+    email,
+    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
+  };
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = crypto.createHmac("sha256", sessionSecret).update(encoded).digest("base64url");
+  return `${encoded}.${signature}`;
+}
+
+function buildAdminCookie() {
+  if (adminCookie) {
+    return adminCookie.includes("=") ? adminCookie : `flowapi_session=${encodeURIComponent(adminCookie)}`;
+  }
+  return `flowapi_session=${encodeURIComponent(createSessionToken())}`;
+}
 
 async function main() {
-  if (!adminSecret) {
-    console.error("缺少 FLOWAPI_ADMIN_SECRET 或 ADMIN_SECRET，无法调用管理员同步检查接口。");
-    process.exit(1);
-  }
-
   const response = await fetch(`${baseUrl}/api/admin/sync-consistency/check`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-admin-secret": adminSecret,
+      Cookie: buildAdminCookie(),
     },
   });
   const data = await response.json().catch(() => ({}));

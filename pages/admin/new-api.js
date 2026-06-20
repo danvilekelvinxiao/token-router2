@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
-// New API admin pages are proxied via /newapi-admin/* → localhost:3001/*
+// New API admin pages are proxied via /newapi-admin/* → upstream proxy
 
 const NAV_CARDS = [
   {
@@ -59,6 +59,13 @@ export default function AdminNewApiPage() {
   }, []);
 
   const config = health?.config || {};
+  const healthTone = health?.status === "ok" ? "ok" : health?.status === "warn" ? "warn" : "fail";
+  const healthLabel =
+    health?.status === "ok"
+      ? "在线"
+      : health?.status === "warn"
+        ? "可用但存在鉴权警告"
+        : (health?.adminOk ? "模型通道可用" : "管理接口待补充");
 
   return (
     <AdminLayout currentPath="/admin/new-api">
@@ -70,8 +77,14 @@ export default function AdminNewApiPage() {
           </p>
         </div>
 
-        {/* Action cards — open New API via proxy path */}
-        <div className="admin-stat-grid" style={{ marginBottom: 28, gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
+        {/* Action cards are intentionally hidden from the default admin surface. */}
+        <div style={{ border: "1px solid var(--page-card-border)", background: "var(--page-card-bg)", borderRadius: 14, padding: 18, marginBottom: 24 }}>
+          <strong style={{ display: "block", fontSize: 15, marginBottom: 6, color: "var(--page-heading)" }}>已收起路由入口</strong>
+          <p style={{ margin: 0, fontSize: 13, color: "var(--page-sub)", lineHeight: 1.6 }}>
+            普通管理界面已隐藏线路选择与 New API 直达入口，底层路由和渠道配置仍保留在后台接口里。
+          </p>
+        </div>
+        <div className="admin-stat-grid" style={{ display: "none", marginBottom: 28, gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
           {NAV_CARDS.map((card) => (
             <a
               key={card.key}
@@ -135,10 +148,10 @@ export default function AdminNewApiPage() {
                 style={{
                   fontSize: 14,
                   fontWeight: 600,
-                  color: health.status === "ok" ? "var(--page-success-text)" : "var(--page-warning-text)",
+                  color: healthTone === "ok" ? "var(--page-success-text)" : "var(--page-warning-text)",
                 }}
               >
-                {health.status === "ok" ? "● 在线" : `● ${health.message || "离线"}`}
+                {healthTone === "ok" ? "● 在线" : healthTone === "warn" ? "● 警告" : `● ${healthLabel}`}
                 {health.latencyMs != null ? ` (${health.latencyMs}ms)` : ""}
               </span>
             )}
@@ -148,6 +161,9 @@ export default function AdminNewApiPage() {
               <pre style={{ fontSize: 13, color: "var(--page-code-text)", background: "var(--page-code-bg)", padding: "12px 16px", borderRadius: 8, overflow: "auto", maxHeight: 200 }}>
                 {JSON.stringify(health, null, 2)}
               </pre>
+              {health.warning ? <p style={{ margin: "10px 0 0", color: "var(--page-warning-text)", fontSize: 12, lineHeight: 1.6 }}>警告：{health.warning}</p> : null}
+              {health.runtimeError ? <p style={{ margin: "10px 0 0", color: "var(--page-warning-text)", fontSize: 12, lineHeight: 1.6 }}>运行时接口：{health.runtimeError}</p> : null}
+              {health.adminError ? <p style={{ margin: "10px 0 0", color: "var(--page-warning-text)", fontSize: 12, lineHeight: 1.6 }}>管理接口：{health.adminError}</p> : null}
             </div>
           )}
         </div>

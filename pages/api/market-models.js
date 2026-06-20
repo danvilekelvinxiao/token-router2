@@ -1,5 +1,6 @@
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { sortModelsForDisplay } from "@/lib/models/model-sorter";
 
 function toMarketMetric(model = {}, index = 0) {
   const inputPrice = Number(model.flowapiInputPricePerM || model.inputPricePerM || model.inputPrice || 0);
@@ -9,6 +10,11 @@ function toMarketMetric(model = {}, index = 0) {
   return {
     id: model.publicModelId || model.modelId || model.id,
     name: model.displayName || model.name || model.publicModelId || "FlowAPI 模型",
+    displayOrder: model.displayOrder,
+    featured: Boolean(model.featured || model.hot || model.recommended),
+    providerFamily: model.providerFamily || "",
+    releaseDate: model.releaseDate || model.officialReleaseDate || "",
+    popularityScore: Number(model.popularityScore || 0),
     fullName: model.displayName || model.name || "FlowAPI 模型",
     provider: "FlowAPI",
     providerName: "FlowAPI",
@@ -27,7 +33,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const models = (await listModelProductsWithConfig({ includeUnavailable: false }))
+    const models = sortModelsForDisplay(await listModelProductsWithConfig({ includeUnavailable: false }))
       .map(sanitizePublicModelForClient)
       .filter((model) => model.enabled !== false && model.isAvailable !== false)
       .slice(0, 6)

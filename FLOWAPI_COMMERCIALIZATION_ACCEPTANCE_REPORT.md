@@ -311,3 +311,55 @@ FlowAPI 当前已经接近“可灰度收费上线”的状态：注册、充值
 
 现在可以进入“灰度收费上线”阶段，但建议先用可信客户测试，不要直接公开投流。你下一步最应该做的是：用老板后台向导接入一个便宜上游，发布 1 个低价文本模型和 1 个图片模型，然后用真实账号从注册到扣费完整跑通。
 
+
+## 11. 当前新增验收结论（2026-06-14）
+
+### 11.1 Figma 落地材料
+
+已补齐：
+- `FIGMA_PAGE_BREAKDOWN.md`
+- `FIGMA_UI_SPEC.md`
+- `FIGMA_TOKENS.md`
+
+结论：可以直接按页面级施工单在 Figma 搭建，不需要再靠口头描述。
+
+### 11.2 模型使用看板空态收口
+
+已完成：
+- `components/dashboard/model-usage-visualization.tsx` 继续压缩空态，避免出现像真实数据的“空标签”。
+- `pages/profile.js` 清除了 `null人`、`¥null` 这类误导性空值展示。
+- `pages/dashboard.js` 继续收紧若干空面板的中性表达。
+
+结论：空态误导已明显降低，但 dashboard 页面整体长度仍偏长，真实商业感仍可继续提升。
+
+### 11.3 当前商业化判断
+
+当前状态：仍然适合灰度，不适合直接大规模公域放量。
+
+原因：
+1. 账本边界与管理代理边界还需要最终封口。
+2. 需要继续做真实浏览器验收和小白路径测试。
+3. 需要把页面级体验、空态、文案、视觉压迫感进一步收紧。
+
+## 12. 2026-06-18 追加真实调用证据
+
+已完成两笔真实计费调用，均写入 `calls`、`wallet_transactions` 和 `route_attempts`：
+
+- Claude 族：`claude-sonnet-4.6`
+  - `request_id`: `chat_mqihzyaf_fc4b82ed`
+  - `input_tokens`: 1383
+  - `output_tokens`: 68
+  - `total_tokens`: 1451
+  - `user_charge`: `0.018006`
+  - `wallet_deduct_amount`: `0.090030`
+  - `upstream_channel`: `sub2api`
+- GPT 族：`gpt-5.5`
+  - `request_id`: `chat_mqihtnmj_f0fa3c54`
+  - `input_tokens`: 135
+  - `output_tokens`: 5
+  - `total_tokens`: 140
+  - `user_charge`: `0.003917`
+  - `wallet_deduct_amount`: `0.019585`
+  - `upstream_channel`: `sub2api`
+
+结论：FlowAPI 到账本的真实扣费链路已再次验证通过，Sub2API 已恢复首路由，新 API 侧的独立稳定接通证据仍需继续补齐。

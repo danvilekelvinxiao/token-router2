@@ -148,7 +148,7 @@ assert(
 );
 assert(
   providerSource.includes('const modelFilter = modelId ? "AND actual_model_id = $7" : ""')
-    && providerSource.includes("WHERE (provider_key = $1 OR provider_name = $1) ${modelFilter}"),
+    && providerSource.includes("WHERE (provider_key = ANY($1::text[]) OR provider_name = ANY($1::text[])) ${modelFilter}"),
   "AICards 单模型健康检查不能更新同 provider 下所有候选通道",
 );
 assert(
@@ -159,7 +159,9 @@ assert(
   "AICards 取消发布必须同步下架模型广场、API Key 创建和运行时入口",
 );
 assert(
-  providerSource.includes("export async function bulkPublishAicardsCandidates")
+  providerSource.includes("export const AICARDS_CLAUDE_PROVIDER_KEY")
+    && providerSource.includes("export const AICARDS_PROVIDER_KEYS")
+    && providerSource.includes("export async function bulkPublishAicardsCandidates")
     && bulkPublishApiSource.includes("bulkPublishAicardsCandidates"),
   "AICards 必须提供批量发布达标候选的管理员 API",
 );
@@ -169,6 +171,10 @@ assert(
     && providerSource.includes("FLOWAPI_AICARDS_ALLOW_ESTIMATED_COST")
     && providerSource.includes("estimated_guardrail")
     && providerSource.includes("extractAicardsRawPricing")
+    && providerSource.includes("normalizeAicardsCatalogItem")
+    && providerSource.includes("fetchAicardsPublicCatalog")
+    && providerSource.includes("publicCatalog")
+    && providerSource.includes("publicPricing")
     && providerSource.includes("缺少真实上游成本")
     && providerSource.includes("autoSync")
     && providerSource.includes("autoHealthCheck")
@@ -185,7 +191,8 @@ assert(
 );
 assert(
   chatCompletionsSource.includes("String(candidate.apiKey || \"\").trim()")
-    && chatCompletionsSource.includes("candidate.name === \"new-api\" ? getNewApiAuthorizationToken"),
+    && chatCompletionsSource.includes('candidate.name === "new-api" || candidate.name === "sub2api"')
+    && chatCompletionsSource.includes("getNewApiAuthorizationToken({ modelProduct })"),
   "New API 后台保存线路必须优先使用候选自身密钥，环境变量组 token 只能作为兜底",
 );
 assert(
@@ -278,7 +285,8 @@ assert(
     && aicardsSyncScriptSource.includes("syncAicardsModels")
     && aicardsSyncScriptSource.includes("healthCheckAicards")
     && aicardsSyncScriptSource.includes("AICARDS_API_KEY")
-    && aicardsSyncScriptSource.includes("mask(process.env.AICARDS_API_KEY)")
+    && aicardsSyncScriptSource.includes("AICARDS_API_KEY_CLAUDE")
+    && aicardsSyncScriptSource.includes("mask(process.env.AICARDS_API_KEY_NON_CLAUDE || process.env.AICARDS_API_KEY)")
     && aicardsSyncScriptSource.includes("loadEnvFileIfExists")
     && !aicardsSyncScriptSource.includes('from "node:process"')
     && aicardsSyncScriptSource.includes("spawnSync")
@@ -314,7 +322,7 @@ assert(
     && imageStudioSource.includes('logo: "image"')
     && imageStudioSource.includes('family: "image"')
     && imageStudioSource.includes("blockedTagPattern")
-    && imageModelsApiSource.includes("(await listImageModels()).map(mapPublicImageModel)")
+    && imageModelsApiSource.includes("await listImageModels().then((items) => items.map(mapPublicImageModel)).catch(() => [])")
     && !imageModelsApiSource.includes("const models = await listImageModels();"),
   "公开图片模型接口必须返回 mapPublicImageModel 后的结果，不能暴露 upstreamModel/provider",
 );
@@ -326,20 +334,28 @@ assert(
   "图片历史接口必须复用 sanitizeImageLogForViewer，普通用户不能看到 upstreamModel/upstreamProvider",
 );
 assert(
-  imageStudioSource.includes("FLOWAPI_MIN_IMAGE_PROFIT_MARGIN")
-    && imageStudioSource.includes("IMAGE_MODEL_MARGIN_TOO_LOW")
-    && imageStudioSource.includes("IMAGE_MODEL_COST_NOT_CONFIGURED")
-    && imageStudioSource.includes("sellPerImage < costPerImage * (1 + minMargin)")
-    && !imageStudioSource.includes("const profitPerImage = Math.max(0, sellPerImage - costPerImage)"),
-  "图片固定利润模式必须硬性阻断成本缺失、价格缺失和低毛利配置，不能把亏损压成 0",
+  imageStudioSource.includes("IMAGE_MODEL_COST_NOT_CONFIGURED")
+    && imageStudioSource.includes("IMAGE_MODEL_PRICE_NOT_CONFIGURED")
+    && imageStudioSource.includes("const profitPerImage = sellPerImage - costPerImage")
+    && !imageStudioSource.includes("sellPerImage < costPerImage * (1 + minMargin)"),
+  "图片固定利润模式只保留成本与售价存在性检查，不再使用最低毛利阈值阻断",
 );
 assert(
-  adminConfigSource.includes("function assertPublishedModelCommercialGuard")
-    && adminConfigSource.includes("公开模型必须先配置真实成本")
-    && adminConfigSource.includes("公开模型售价必须覆盖成本")
+  adminConfigSource.includes("export function makeFlowApiPublicModelId")
+    && adminConfigSource.includes("function safePublicModelId")
+    && adminConfigSource.includes('requested.startsWith("flowapi-")')
+    && adminConfigSource.includes('provider: "FlowAPI"')
+    && adminConfigSource.includes('logo: "FlowAPI"')
+    && adminConfigSource.includes("containsUnsafePublicModelText(requested)")
+    && adminConfigSource.includes("safeFlowApiDisplayName("),
+  "老板后台通用发布入口必须强制 FlowAPI 公共模型 ID、FlowAPI provider/logo，并清洗公开名称",
+);
+assert(
+  !adminConfigSource.includes("assertPublishedModelCommercialGuard")
+    && !adminConfigSource.includes("公开模型必须先配置真实成本")
+    && !adminConfigSource.includes("公开模型售价必须覆盖成本")
     && adminConfigSource.includes("normalizePricingPayload(")
-    && adminConfigSource.includes("assertPublishedModelCommercialGuard("),
-  "通用模型发布入口必须复用服务端财务 guard，公开收费模型不能绕过成本/售价/毛利检查",
+  , "通用模型发布入口不再依赖毛利 guard，发布逻辑应仅保留定价数据归一化",
 );
 assert(
   adminConfigSource.includes("export function makeFlowApiPublicModelId")
@@ -405,8 +421,8 @@ assert(
   modelProductsSource.includes("const publishedEntries = publishedModels.map")
     && modelProductsSource.includes("const publishedByAlias = new Map()")
     && modelProductsSource.includes("const publishedMatch = [")
-    && modelProductsSource.includes("showInModelSquare: publishedMatch.showInModelSquare")
-    && modelProductsSource.includes("canCreateKey: publishedMatch.canCreateKey"),
+    && modelProductsSource.includes("const publishedShowInModelSquare = publishedCfg.showInModelSquare !== undefined ? Boolean(publishedCfg.showInModelSquare) : Boolean(publishedMatch.showInModelSquare)")
+    && modelProductsSource.includes("canCreateKey: publishedShowInApiKeyCreate"),
   "模型产品聚合层必须让后台已发布配置覆盖系统默认可用性，否则一键开通后前台和 API Key 入口仍会错拿未开通版本",
 );
 assert(

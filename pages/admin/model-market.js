@@ -2,6 +2,7 @@ import Head from "next/head";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
+import { sortModelsForDisplay } from "@/lib/models/model-sorter";
 
 const MODEL_TYPES = [
   ["text", "文本对话"],
@@ -144,7 +145,6 @@ export default function AdminModelMarketPage() {
   const [toast, setToast] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
 
   function showToast(message) {
     setToast(message);
@@ -154,17 +154,16 @@ export default function AdminModelMarketPage() {
   function adminHeaders() {
     return {
       "Content-Type": "application/json",
-      ...(secret ? { "x-admin-secret": secret } : {}),
     };
   }
 
   async function loadData() {
     setLoading(true);
     try {
-      const response = await fetch("/api/admin/model-market", { headers: secret ? { "x-admin-secret": secret } : {} });
+      const response = await fetch("/api/admin/model-market", { credentials: "include" });
       const data = await response.json().catch(() => ({}));
       if (!data.ok) throw new Error(data.error || "模型广场配置加载失败");
-      setModels(data.models || []);
+      setModels(sortModelsForDisplay(data.models || []));
       setSync(data.sync || null);
     } catch (error) {
       showToast(error.message || "模型广场配置加载失败");
@@ -174,12 +173,11 @@ export default function AdminModelMarketPage() {
 
   useEffect(() => {
     queueMicrotask(() => loadData());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      }, []);
 
   const filteredModels = useMemo(() => {
     const text = query.trim().toLowerCase();
-    return models.filter((model) => {
+    return sortModelsForDisplay(models).filter((model) => {
       const matchesText = !text || [model.modelId, model.displayName, model.provider].some((value) => String(value || "").toLowerCase().includes(text));
       const matchesType = typeFilter === "all" || model.modelType === typeFilter;
       return matchesText && matchesType;
@@ -249,7 +247,6 @@ export default function AdminModelMarketPage() {
     if (!draft.displayName.trim()) return showToast("请先填写前台展示名");
     setSaving(true);
     try {
-      sessionStorage.setItem("flowapi_admin_secret", secret);
       const payload = {
         ...draft,
         tags: draft.tags,
@@ -275,7 +272,6 @@ export default function AdminModelMarketPage() {
   async function bootstrapModelPack(pack) {
     setBootstrapping(pack);
     try {
-      sessionStorage.setItem("flowapi_admin_secret", secret);
       const response = await fetch("/api/admin/model-market", {
         method: "POST",
         headers: adminHeaders(),
@@ -364,14 +360,6 @@ export default function AdminModelMarketPage() {
               <p>这个页面用于管理前台模型广场、API Key 创建页、生成图片页的可见模型、价格和上下架状态。你改完保存，刷新前台即可看到效果。</p>
             </div>
             <div className="model-market-admin__actions">
-              <input
-                value={secret}
-                onChange={(event) => setSecret(event.target.value)}
-                onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)}
-                type="password"
-                placeholder="管理密钥"
-                aria-label="管理密钥"
-              />
               <button type="button" className="model-market-admin__ghost" onClick={loadData}>刷新同步</button>
               <button type="button" className="model-market-admin__primary" onClick={openCreate}>新增模型</button>
             </div>

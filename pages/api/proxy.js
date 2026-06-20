@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { sanitizeSecretText } from "@/lib/safe-upstream-url";
+import { getUpstreamConfigsAsync } from "@/lib/upstream";
 
 const ALLOWED_ENDPOINTS = [
   "chat/completions",
@@ -12,30 +13,6 @@ function normalizeTarget(target) {
   return String(target).replace(/^\/+/, "").trim();
 }
 
-function getUpstreamConfig() {
-  const newApiBase = process.env.NEW_API_BASE_URL;
-  const newApiKey = process.env.NEW_API_KEY;
-  const openRouterKey = process.env.OPENROUTER_API_KEY;
-
-  if (newApiBase && newApiKey) {
-    return {
-      name: "new-api",
-      baseUrl: newApiBase.replace(/\/+$/, ""),
-      apiKey: newApiKey,
-    };
-  }
-
-  if (openRouterKey) {
-    return {
-      name: "openrouter",
-      baseUrl: "https://openrouter.ai/api",
-      apiKey: openRouterKey,
-    };
-  }
-
-  return null;
-}
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -45,7 +22,8 @@ export default async function handler(req, res) {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
 
-  const upstream = getUpstreamConfig();
+  const upstreams = await getUpstreamConfigsAsync({ includeReviewOnly: true }).catch(() => []);
+  const upstream = upstreams[0] || null;
   if (!upstream) {
     return res.status(500).json({ error: "未配置上游 API" });
   }

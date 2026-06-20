@@ -59,8 +59,8 @@ export default function ActivityHeatmapCard({
         </>
       ) : (
         <div className="activity-heatmap-empty">
-          <strong>暂无活跃记录</strong>
-          <p>完成首次 API 调用后，这里会显示你的每日调用活跃情况。</p>
+          <strong>—</strong>
+          <p>—</p>
         </div>
       )}
 

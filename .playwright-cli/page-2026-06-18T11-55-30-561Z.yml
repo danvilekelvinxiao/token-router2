@@ -1,0 +1,22 @@
+- generic [ref=e3]:
+  - generic [ref=e7]:
+    - link "logo" [ref=e9] [cursor=pointer]:
+      - /url: /
+      - img "logo" [ref=e12]
+    - navigation [ref=e17]
+    - generic [ref=e30]:
+      - button "系统公告" [ref=e31] [cursor=pointer]:
+        - img [ref=e33]
+      - button "切换主题" [ref=e37] [cursor=pointer]:
+        - img [ref=e39]
+      - button "common.changeLanguage" [ref=e41] [cursor=pointer]:
+        - img [ref=e43]
+  - generic [ref=e54]:
+    - main [ref=e55]:
+      - img [ref=e59]
+    - generic [ref=e67]:
+      - generic [ref=e69]: © 2026 New API. 版权所有
+      - generic [ref=e70]:
+        - generic [ref=e71]: 设计与开发由
+        - link "New API" [ref=e72] [cursor=pointer]:
+          - /url: https://github.com/QuantumNous/new-api

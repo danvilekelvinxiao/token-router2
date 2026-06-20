@@ -4,6 +4,16 @@ import { logActivity } from "@/lib/customer-store";
 import { setCustomerSession } from "@/lib/session";
 import { claimDailyBonus, getUserMembership } from "@/lib/membership/store";
 
+const LOGIN_RATE_LIMIT_ENABLED = process.env.LOGIN_RATE_LIMIT_ENABLED === "true" && process.env.NODE_ENV === "production" && process.env.LOGIN_RATE_LIMIT_ENABLED !== "false";
+
+function fireAndForget(task) {
+  queueMicrotask(() => {
+    Promise.resolve()
+      .then(task)
+      .catch((error) => console.warn("[auth/login] background task failed:", error));
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -19,11 +29,11 @@ export default async function handler(req, res) {
   const cleanEmail = String(email).trim().toLowerCase();
   const isDev = process.env.NODE_ENV !== "production";
 
-  if (!isDev && isGraylisted(`login:${ip}`)) {
+  if (LOGIN_RATE_LIMIT_ENABLED && !isDev && isGraylisted(`login:${ip}`)) {
     return res.status(429).json({ error: "登录请求过多，请稍后再试" });
   }
 
-  if (!isDev) {
+  if (LOGIN_RATE_LIMIT_ENABLED && !isDev) {
     const ipLimit = rateLimit(`login:ip:${ip}`, { limit: 30, windowMs: 10 * 60 * 1000 });
     const emailLimit = rateLimit(`login:email:${cleanEmail}`, { limit: 10, windowMs: 10 * 60 * 1000 });
     if (!ipLimit.ok || !emailLimit.ok) {
@@ -36,7 +46,7 @@ export default async function handler(req, res) {
   const result = await loginCustomer({ email, password });
 
   if (!result) {
-    if (!isDev) {
+    if (LOGIN_RATE_LIMIT_ENABLED && !isDev) {
       const failLimit = rateLimit(`login-fail:${ip}:${cleanEmail}`, { limit: 5, windowMs: 10 * 60 * 1000 });
       if (!failLimit.ok) {
         graylistKey(`login:${ip}`, 30 * 60 * 1000);
@@ -60,7 +70,7 @@ export default async function handler(req, res) {
     userAgent: req.headers["user-agent"] || "",
   });
   if (getUserMembership(result.id)?.status === "active") {
-    await claimDailyBonus(result.id);
+    fireAndForget(() => claimDailyBonus(result.id));
   }
 
   const sessionToken = setCustomerSession(res, result);

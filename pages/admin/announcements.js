@@ -43,6 +43,7 @@ function emptyForm() {
 export default function AdminAnnouncementsPage() {
   const [items, setItems] = useState(initialAnnouncements);
   const [form, setForm] = useState(emptyForm());
+  const [error, setError] = useState("");
 
   const sortedItems = useMemo(() => (
     [...items].sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.publishedAt) - new Date(a.publishedAt))
@@ -50,7 +51,11 @@ export default function AdminAnnouncementsPage() {
 
   function saveAnnouncement(event) {
     event.preventDefault();
-    if (!form.title.trim() || !form.content.trim()) return;
+    setError("");
+    if (!form.title.trim() || !form.content.trim()) {
+      setError("公告标题和内容不能为空");
+      return;
+    }
     const next = {
       ...form,
       id: form.id || `ann-${Date.now()}`,
@@ -91,7 +96,7 @@ export default function AdminAnnouncementsPage() {
         </div>
 
         <div className="admin-announcement-layout">
-          <form className="admin-card admin-announcement-form" onSubmit={saveAnnouncement}>
+          <form className="admin-card admin-announcement-form" onSubmit={saveAnnouncement} noValidate>
             <h2>{form.id ? "编辑公告" : "新增公告"}</h2>
             <label>公告标题<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="例如：FlowAPI 数据面板升级" /></label>
             <label>公告内容<textarea value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} rows={6} placeholder="写给普通用户看的中文说明" /></label>
@@ -101,6 +106,7 @@ export default function AdminAnnouncementsPage() {
             </div>
             <label>发布时间<input type="datetime-local" value={form.publishedAt} onChange={(event) => setForm({ ...form, publishedAt: event.target.value })} /></label>
             <label className="admin-check-row"><input type="checkbox" checked={form.pinned} onChange={(event) => setForm({ ...form, pinned: event.target.checked })} /> 设置为置顶公告</label>
+            {error ? <p style={{ margin: 0, color: "#ef4444", fontSize: 13 }}>{error}</p> : null}
             <div className="admin-form-actions">
               <button type="submit">{form.id ? "保存修改" : "新增公告"}</button>
               {form.id ? <button type="button" onClick={() => setForm(emptyForm())}>取消编辑</button> : null}

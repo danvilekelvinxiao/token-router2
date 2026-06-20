@@ -2,7 +2,7 @@ import Image from "next/image";
 import { useState } from "react";
 
 type PaymentMethodIconProps = {
-  method: "alipay" | "wechat" | "usdt" | "taobao" | "crypto" | string;
+  method: "alipay" | "wechat" | "usdt" | "taobao" | "xpay" | "crypto" | string;
   size?: number;
   className?: string;
 };
@@ -12,11 +12,12 @@ const PAYMENT_LOGOS: Record<string, { src: string; alt: string }> = {
   wechat: { src: "/icons/payments/wechat-pay.svg", alt: "WeChat Pay" },
   usdt: { src: "/icons/payments/usdt.svg", alt: "USDT" },
   taobao: { src: "/icons/payments/taobao-code.svg", alt: "Taobao" },
+  xpay: { src: "/icons/payments/xpay.svg", alt: "XPay" },
 };
 
 export default function PaymentMethodIcon({ method, size = 42, className = "" }: PaymentMethodIconProps) {
   const key = String(method || "").toLowerCase();
-  const normalized = key === "taobao_code" ? "taobao" : key === "crypto" ? "usdt" : key;
+  const normalized = key === "taobao_code" ? "taobao" : key === "xpay" ? "xpay" : key === "crypto" ? "usdt" : key;
   const logo = PAYMENT_LOGOS[normalized] || PAYMENT_LOGOS.usdt;
   const [failedSrc, setFailedSrc] = useState("");
   const failed = failedSrc === logo.src;

@@ -18,7 +18,7 @@ loadEnvFileIfExists(".env.production");
 loadEnvFileIfExists(".env.local");
 
 const adminId = process.env.FLOWAPI_DEPLOY_ADMIN_ID || "workbench-aicards-sync";
-const maxCount = Number(process.env.FLOWAPI_AICARDS_SYNC_MAX_COUNT || 80);
+const maxCount = Number(process.env.FLOWAPI_AICARDS_SYNC_MAX_COUNT || 999);
 const autoPrice = process.env.FLOWAPI_AICARDS_AUTO_PRICE !== "false";
 const autoHealthCheck = process.env.FLOWAPI_AICARDS_AUTO_HEALTH_CHECK !== "false";
 const perModelHealthCheck = process.env.FLOWAPI_AICARDS_PER_MODEL_HEALTH_CHECK === "true";
@@ -35,7 +35,8 @@ async function main() {
   console.log("==> FlowAPI AICards sync/publish");
   console.log(JSON.stringify({
     aicardsBaseUrl: process.env.AICARDS_API_BASE_URL || process.env.AICARDS_BASE_URL || "(admin upstream or not set)",
-    aicardsApiKey: mask(process.env.AICARDS_API_KEY),
+    aicardsApiKey: mask(process.env.AICARDS_API_KEY_NON_CLAUDE || process.env.AICARDS_API_KEY),
+    aicardsClaudeApiKey: mask(process.env.AICARDS_API_KEY_CLAUDE || process.env.AICARDS_CLAUDE_API_KEY),
     maxCount,
     autoPrice,
     autoHealthCheck,
@@ -44,10 +45,10 @@ async function main() {
     publicBase,
   }, null, 2));
 
-  const { getAicardsConfig, syncAicardsModels, healthCheckAicards, bulkPublishAicardsCandidates } = await import("../lib/aicards-provider.js");
+  const { getAicardsConfig, syncAicardsModels, healthCheckAicards, bulkPublishAicardsCandidates, listAicardsSyncedModels } = await import("../lib/aicards-provider.js");
   const config = await getAicardsConfig();
   if (!config.enabled) {
-    throw new Error("AICards is not configured. Set AICARDS_API_BASE_URL/AICARDS_BASE_URL and AICARDS_API_KEY on the server.");
+    throw new Error("AICards is not configured. Set AICARDS_API_BASE_URL/AICARDS_BASE_URL and at least one AICARDS API Key on the server.");
   }
 
   const sync = await syncAicardsModels({ adminId });
@@ -100,6 +101,9 @@ async function main() {
     skippedExamples: publish.skipped?.slice(0, 10) || [],
   }, null, 2));
 
+  const currentSyncedModels = await listAicardsSyncedModels().catch(() => []);
+  const activeCount = currentSyncedModels.filter((model) => model.isPublic || model.routeAvailable).length;
+
   console.log("==> public branding scan");
   const { spawnSync } = await import("node:child_process");
   const scan = spawnSync(process.execPath, ["scripts/scan-public-branding.mjs", publicBase], {
@@ -107,8 +111,11 @@ async function main() {
     env: { ...process.env, FLOWAPI_PUBLIC_BASE_URL: publicBase },
   });
   if (scan.status !== 0) throw new Error("Public branding scan failed after AICards publish.");
-  if (!publish.ok) {
+  if (!publish.ok && activeCount === 0) {
     throw new Error("No AICards candidates were published. Check upstream cost/pricing/health details above.");
+  }
+  if (!publish.ok && activeCount > 0) {
+    console.log(`==> publish already active (${activeCount} models)`);
   }
 }
 

@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/admin-auth";
+import { getRoutePolicyConfig, saveRoutePolicyConfig } from "@/lib/route-policy";
 import { hasDatabase, query } from "@/lib/db";
 import { getCacheManager, invalidateRouteCaches } from "@/lib/cache-manager";
 import { listRouteMatrix, updateRouteChannel } from "@/lib/smart-router";
@@ -105,7 +106,6 @@ async function performanceStats(matrix = []) {
     routeSwitchCount: 0,
     upstreamFailureRate: 0,
     upstream429Count: 0,
-    profitProtectionHits: matrix.reduce((sum, route) => sum + (route.candidates || []).reduce((inner, item) => inner + Number(item.profitProtectionHits || 0), 0), 0),
     fastestByModel: [],
     cheapestByModel: [],
     stableByModel: [],
@@ -159,15 +159,17 @@ export default async function handler(req, res) {
   if (req.method === "GET") {
     const matrix = await listRouteMatrix();
     const publicModelId = String(req.query.publicModelId || "").trim();
-    const [failures, performance] = await Promise.all([
+    const [failures, performance, routePolicy] = await Promise.all([
       recentFailures(publicModelId),
       performanceStats(matrix),
+      getRoutePolicyConfig(),
     ]);
     return res.status(200).json({
       ok: true,
       routes: matrix,
       failures,
       performance,
+      routePolicy,
       database: hasDatabase() ? "connected" : "memory_only",
       updatedAt: new Date().toISOString(),
     });
@@ -193,6 +195,11 @@ export default async function handler(req, res) {
       if (body.action === "invalidate") {
         invalidateRouteCaches(body.publicModelId || "");
         return res.status(200).json({ ok: true });
+      }
+      if (body.action === "save-route-policy") {
+        const routePolicy = await saveRoutePolicyConfig(body.routePolicy || body.data || body.config || {});
+        invalidateRouteCaches();
+        return res.status(200).json({ ok: true, routePolicy });
       }
       return res.status(400).json({ ok: false, error: "未知操作" });
     } catch (error) {

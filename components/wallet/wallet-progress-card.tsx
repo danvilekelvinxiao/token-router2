@@ -99,6 +99,8 @@ export default function WalletProgressCard({
     expiresAt,
   }), [expiresAt, planStatus, remaining, totalQuotaCny]);
   const membership = data?.membership;
+  const userWallet = data?.userWallet || {};
+  const tokenWallet = data?.tokenWallet || {};
   const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
   const hasPlan = planStatus === "active" && Number(totalQuotaCny || 0) > 0;
   const usedTotalLabel = hasPlan ? `${formatWalletCny(usedQuotaCny)} / ${formatWalletCny(totalQuotaCny)}` : "普通余额钱包";
@@ -188,15 +190,15 @@ export default function WalletProgressCard({
       <>
         <section className={`wallet-progress-card wallet-mode-${mode} wallet-empty`}>
           <div className="wallet-card-head">
-            <div><span>{renderEyebrow()}</span><h2>{renderTitle()}</h2><p>{mode === "dashboard" ? "0 Token / 0 天" : copy.subtitle}</p></div>
+            <div><span>{renderEyebrow()}</span><h2>{renderTitle()}</h2><p>{mode === "dashboard" ? "暂无套餐 / 等待真实调用" : copy.subtitle}</p></div>
             <em className="wallet-status-pill tone-none">暂无套餐</em>
           </div>
           {mode === "dashboard" ? (
             <WalletProgressSection walletProgress={walletProgress} onOpenDetail={openDetail} />
           ) : (
             <div className="wallet-empty-state">
-              <strong>￥0.00</strong>
-              <p>0 Token</p>
+              <strong>—</strong>
+              <p>暂无可用额度</p>
               <Link href="/recharge">立即充值</Link>
             </div>
           )}
@@ -217,6 +219,42 @@ export default function WalletProgressCard({
           </div>
           <em className={`wallet-status-pill tone-${status.tone}`}>{status.label}</em>
         </div>
+
+        {(Number(userWallet.cnyPaidTotal || 0) > 0 || Number(tokenWallet.usdTokenBalance || 0) > 0 || Number(tokenWallet.usdTokenTotalUsed || 0) > 0) ? (
+          <div className="wallet-summary-grid wallet-summary-grid-compact wallet-wallet-split-grid">
+            <WalletSummaryStat
+              label="人民币充值总额"
+              value={Number(userWallet.cnyPaidTotal || 0)}
+              prefix="¥"
+              decimals={2}
+              tone="primary"
+            />
+            <WalletSummaryStat
+              label="Token 钱包余额"
+              value={Number(tokenWallet.usdTokenBalance || 0)}
+              prefix="$"
+              suffix=" Token"
+              decimals={2}
+              tone="token"
+            />
+            <WalletSummaryStat
+              label="Token 已消耗"
+              value={Number(tokenWallet.usdTokenTotalUsed || 0)}
+              prefix="$"
+              suffix=" Token"
+              decimals={2}
+              tone="saving"
+            />
+            <WalletSummaryStat
+              label="返利奖励累计"
+              value={Number(tokenWallet.usdTokenReferralTotal || 0)}
+              prefix="$"
+              suffix=" Token"
+              decimals={2}
+              tone="warning"
+            />
+          </div>
+        ) : null}
 
         {mode === "dashboard" ? (
           <WalletProgressSection walletProgress={walletProgress} onOpenDetail={openDetail} />

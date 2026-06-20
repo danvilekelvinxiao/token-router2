@@ -1,0 +1,17 @@
+services:
+  sensitive-proxy:
+    build: .
+    container_name: sensitive-proxy
+    ports:
+      - "8787:8787"
+    environment:
+      - PORT=8787
+      - UPSTREAM_BASE_URL=http://new-api:3000
+      - SENSITIVE_FILTER_ENABLED=true
+      - USE_SYSTEM_WORDS=false
+      - BLOCKLIST_PATH=./words/blocklist.example.txt
+      - ALLOWLIST_PATH=./words/allowlist.example.txt
+      - EXPOSE_MATCHED_WORDS=false
+      - AUDIT_LOG_ENABLED=true
+      - LOG_RAW_PROMPT=false
+    restart: unless-stopped

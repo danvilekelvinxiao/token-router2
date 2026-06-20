@@ -1,6 +1,6 @@
 import { calculateCustomerSavings } from "@/lib/analytics/savings";
 import { getContent } from "@/lib/content-cms";
-import { getDashboard, listCustomers } from "@/lib/customer-store";
+import { getDashboard, listCustomerCalls, listCustomers } from "@/lib/customer-store";
 import { getUserTitles } from "@/lib/titles/recalculate-user-titles";
 
 type BadgeType =
@@ -231,7 +231,14 @@ export async function generateUserBadges(userId: string) {
 
   const modelConfigs = getContent("models");
   const updatedAt = new Date().toISOString();
-  const fullCustomers = await Promise.all((customers || []).map((customer: any) => getDashboard(customer.id)));
+  const fullCustomers = await Promise.all((customers || []).map(async (customer: any) => {
+    const dashboard = await getDashboard(customer.id);
+    if (!dashboard) return null;
+    return {
+      ...dashboard,
+      calls: await listCustomerCalls(customer.id),
+    };
+  }));
   const summaries = fullCustomers.filter(Boolean).map((customer: any) => summarizeCustomer(customer, modelConfigs));
   const currentSummary = summaries.find((item) => item.userId === userId);
   if (!currentSummary) return null;

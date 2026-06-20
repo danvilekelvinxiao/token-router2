@@ -15,7 +15,6 @@ const STRATEGY_INFO = {
 };
 
 export default function AdminRouting() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -32,14 +31,13 @@ export default function AdminRouting() {
   const [simRunning, setSimRunning] = useState(false);
 
   useEffect(() => {
-    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
-    fetchData(s);
+    fetchData();
   }, []);
 
-  async function fetchData(sec) {
+  async function fetchData() {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/routing", { headers: { "x-admin-secret": sec } });
+      const res = await fetch("/api/admin/routing", { credentials: "include" });
       const data = await res.json();
       if (res.ok) setRules(data.rules || []);
       else setMsg(data.error || "加载失败");
@@ -48,9 +46,8 @@ export default function AdminRouting() {
   }
 
   async function apiCall(method, body) {
-    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     const res = await fetch("/api/admin/routing", {
-      method, headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(body),
+      method, headers: { "content-type": "application/json" }, credentials: "include", body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "请求失败");
@@ -64,7 +61,7 @@ export default function AdminRouting() {
     setSaving(true);
     try {
       await apiCall("POST", { ...form, id: editing || undefined });
-      await fetchData(secret);
+      await fetchData();
       setModalOpen(false);
     } catch (e) { setMsg(e.message); }
     setSaving(false);
@@ -72,32 +69,24 @@ export default function AdminRouting() {
 
   async function handleDelete(id) {
     if (!confirm("确认删除此规则？")) return;
-    try { await apiCall("DELETE", { id }); await fetchData(secret); } catch (e) { setMsg(e.message); }
+    try { await apiCall("DELETE", { id }); await fetchData(); } catch (e) { setMsg(e.message); }
   }
 
   async function handleToggle(rule) {
     try {
       await apiCall("POST", { ...rule, enabled: !rule.enabled });
-      await fetchData(secret);
+      await fetchData();
     } catch (e) { setMsg(e.message); }
-  }
-
-  function handleSecretSave() {
-    const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
-    sessionStorage.setItem("flowapi_admin_secret", s);
-    setMsg("");
-    fetchData(s);
   }
 
   async function runSimulation() {
     setSimRunning(true);
     setSimResult(null);
-    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     try {
       const res = await fetch("/api/admin/smart-routing", {
         method: "POST",
-        headers: { "content-type": "application/json", "x-admin-secret": s },
+        headers: { "content-type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ action: "simulate", data: { prompt: simPrompt, model: simModel || null } }),
       });
       const data = await res.json();
@@ -112,14 +101,15 @@ export default function AdminRouting() {
       <Head><title>智能路由 - FlowAPI</title></Head>
       <AdminLayout currentPath="/admin/routing">
         <div style={{ color: "var(--dash-text)" }}>
+          <div style={{ marginBottom: 16, padding: "14px 16px", border: "1px solid var(--dash-border)", borderRadius: 10, background: "var(--dash-card-bg)", color: "var(--dash-sub)", fontSize: 13, lineHeight: 1.7 }}>
+            路由能力已收口到后台接口与自动切换逻辑。这里保留给管理员排障，不再作为普通操作入口暴露。
+          </div>
           <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
             <div>
               <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>智能路由管理</h1>
               <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>管理 OpenAI 兼容路径、路由策略，实时模拟测试路由决策</p>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={handleSecretSave} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>验证</button>
               <button onClick={() => setSimOpen(true)} style={{ padding: "10px 18px", borderRadius: 8, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>🧪 模拟测试</button>
               <button onClick={openNew} style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>+ 新增规则</button>
             </div>

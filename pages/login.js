@@ -8,30 +8,54 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 12000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 
   async function handleLogin(e) {
     e.preventDefault();
     setError("");
+    setSubmitting(true);
 
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      if (data.needsVerification) {
-        setError("该邮箱尚未验证 请先完成注册验证");
-      } else {
-        setError(data.error || "登录失败");
-      }
+    if (!email || !password) {
+      setError("请输入邮箱和密码");
+      setSubmitting(false);
       return;
     }
 
-    localStorage.setItem("flowapi_customer", JSON.stringify(data.customer));
-    router.push("/api-management?source=login");
+    try {
+      const res = await fetchWithTimeout("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (data.needsVerification) {
+          setError("该邮箱尚未验证 请先完成注册验证");
+        } else {
+          setError(data.error || `登录失败 (HTTP ${res.status})`);
+        }
+        return;
+      }
+
+      localStorage.setItem("flowapi_customer", JSON.stringify(data.customer));
+      router.push("/api-management?source=login");
+    } catch (error) {
+      setError(error.name === "AbortError" ? "登录请求超时，请检查网络后重试" : error.message || "登录请求失败");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -63,7 +87,7 @@ export default function LoginPage() {
             登录你的账号 管理 AI Token 资产
           </p>
 
-          <form onSubmit={handleLogin} style={{ marginTop: 32 }}>
+          <form onSubmit={handleLogin} noValidate style={{ marginTop: 32 }}>
             <div className="form-field">
               <label>邮箱</label>
               <input
@@ -87,8 +111,8 @@ export default function LoginPage() {
             {error && (
               <p style={{ color: "#ef4444", fontSize: 13, margin: "8px 0" }}>{error}</p>
             )}
-            <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 24 }}>
-              登录
+            <button type="submit" className="btn-primary" style={{ width: "100%", marginTop: 24 }} disabled={submitting} aria-busy={submitting}>
+              {submitting ? "登录中..." : "登录"}
             </button>
           </form>
 

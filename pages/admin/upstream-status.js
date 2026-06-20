@@ -8,18 +8,26 @@ function statusText(item) {
   return "异常";
 }
 
+function itemMessage(item) {
+  if (typeof item?.message === "string" && item.message.trim()) return item.message;
+  if (typeof item?.suggestion === "string" && item.suggestion.trim()) return item.suggestion;
+  if (typeof item?.error === "string" && item.error.trim()) return item.error;
+  if (item?.upstream && typeof item.upstream === "string") return item.upstream;
+  if (item?.upstream && typeof item.upstream === "object") return item.upstream.label || item.upstream.name || "暂无说明";
+  return "暂无说明";
+}
+
 export default function UpstreamStatusPage() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function load(nextSecret = secret) {
+  async function load() {
     setLoading(true);
     setError("");
     try {
       const response = await fetch("/api/admin/channel-monitor/summary", {
-        headers: nextSecret ? { "x-admin-secret": nextSecret } : {},
+        credentials: "include",
       });
       const json = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(json.error || "上游状态读取失败");
@@ -31,9 +39,7 @@ export default function UpstreamStatusPage() {
   }
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("flowapi_admin_secret") || "";
-    queueMicrotask(() => load(stored));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    queueMicrotask(() => load());
   }, []);
 
   const upstreams = data?.upstreams || data?.channels || [];
@@ -47,11 +53,10 @@ export default function UpstreamStatusPage() {
             <div>
               <span>UPSTREAM STATUS</span>
               <h1>上游状态</h1>
-              <p>这里看 FlowAPI 当前能不能连到 New API、sub2api、OpenRouter 或备用聚合路由。红色异常会直接影响用户调用成功率。</p>
+              <p>这里看 FlowAPI 当前能不能连到 Sub2API、自有商业中转站、UniAPI 或 OpenRouter 备用路由。红色异常会直接影响用户调用成功率。</p>
             </div>
             <div>
-              <input value={secret} onChange={(event) => setSecret(event.target.value)} onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)} type="password" placeholder="管理密钥" />
-              <button type="button" disabled={loading} onClick={() => { sessionStorage.setItem("flowapi_admin_secret", secret); load(secret); }}>{loading ? "检查中..." : "刷新状态"}</button>
+              <button type="button" disabled={loading} onClick={() => { load(); }}>{loading ? "检查中..." : "刷新状态"}</button>
             </div>
           </header>
 
@@ -81,7 +86,7 @@ export default function UpstreamStatusPage() {
                   <div className={`dot ${state}`} />
                   <div>
                     <strong>{item.upstream || item.name || item.label || `上游 ${index + 1}`}</strong>
-                    <p>{item.message || item.suggestion || item.error || "暂无说明"}</p>
+                    <p>{itemMessage(item)}</p>
                   </div>
                   <span>{state}</span>
                   <code>{item.statusCode || item.latencyMs || item.latency || "-"}</code>

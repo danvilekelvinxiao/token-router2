@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AnnouncementHistoryDrawer from "@/components/announcements/announcement-history-drawer";
 
@@ -43,18 +43,33 @@ export default function DashboardAnnouncementPopup({ open, data, onClose, onConf
   const [historyOpen, setHistoryOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [expandedId, setExpandedId] = useState("");
+  const [realData, setRealData] = useState(data);
 
   const tags = useMemo(() => {
-    const list = data?.qqGroup?.tags;
+    const list = realData?.qqGroup?.tags;
     return Array.isArray(list) ? list.slice(0, 3) : [];
-  }, [data?.qqGroup?.tags]);
+  }, [realData?.qqGroup?.tags]);
 
-  if (!open || !data) return null;
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetch("/api/announcements/dashboard-popup")
+      .then((res) => res.json())
+      .then((json) => {
+        if (!cancelled && json?.success) setRealData(json);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  if (!open || !realData) return null;
 
   async function copyQqNumber() {
-    if (!data?.qqGroup?.number) return;
+    if (!realData?.qqGroup?.number) return;
     try {
-      await navigator.clipboard.writeText(data.qqGroup.number);
+      await navigator.clipboard.writeText(realData.qqGroup.number);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1600);
     } catch {
@@ -72,7 +87,7 @@ export default function DashboardAnnouncementPopup({ open, data, onClose, onConf
             <p>最新福利、模型变更和使用提醒都会在这里同步。</p>
           </header>
           <div className="announcement-list">
-            {data.announcements.map((item) => {
+            {realData.announcements.map((item) => {
               const expanded = expandedId === item.id;
               return (
                 <article key={item.id}>
@@ -91,11 +106,11 @@ export default function DashboardAnnouncementPopup({ open, data, onClose, onConf
             })}
           </div>
 
-          {data?.qqGroup?.enabled && data?.qqGroup?.number ? (
+          {realData?.qqGroup?.enabled && realData?.qqGroup?.number ? (
             <section className="announcement-qq">
-              <strong>{data.qqGroup.title || "FlowAPI AI玩家交流群"}</strong>
-              <p>QQ群：{data.qqGroup.number}</p>
-              <p>{data.qqGroup.description || "群里会同步最新福利和接入帮助。"}</p>
+              <strong>{realData.qqGroup.title || "FlowAPI AI玩家交流群"}</strong>
+              <p>QQ群：{realData.qqGroup.number}</p>
+              <p>{realData.qqGroup.description || "群里会同步最新福利和接入帮助。"}</p>
               <div className="announcement-tags">
                 {tags.map((tag) => <span key={tag}>{tag}</span>)}
               </div>

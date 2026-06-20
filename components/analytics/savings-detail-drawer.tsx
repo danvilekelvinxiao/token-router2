@@ -61,13 +61,13 @@ export default function SavingsDetailDrawer({
 
         {loading ? (
           <div className="savings-empty-block">
-            <strong>节省数据同步中</strong>
-            <span>正在读取真实调用记录和模型价格配置。</span>
+            <strong>—</strong>
+            <span>—</span>
           </div>
         ) : !hasData ? (
           <div className="savings-empty-block">
-            <strong>{data?.message || "暂无节省明细"}</strong>
-            <span>完成真实调用，并在后台配置官方价格后，这里会展示 FlowAPI 为你节省的成本。</span>
+            <strong>—</strong>
+            <span>—</span>
           </div>
         ) : (
           <>

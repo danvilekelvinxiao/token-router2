@@ -52,6 +52,19 @@ ALIPAY_PRIVATE_KEY=
 ALIPAY_PUBLIC_KEY=
 ALIPAY_NOTIFY_URL=
 ALIPAY_GATEWAY=https://openapi.alipay.com/gateway.do
+
+# XPay 收款码支付（个人收款码 / 人工确认）
+XPAY_ENABLED=false
+XPAY_PROVIDER_NAME=XPay
+XPAY_QR_IMAGE=
+XPAY_QR_CONTENT=
+XPAY_PAYMENT_NOTE_PREFIX=XPAY
+XPAY_MANUAL_CONFIRM=true
+
+说明：
+- `XPAY_QR_CONTENT` 优先填你的收款码内容，系统会自动生成二维码。
+- `XPAY_QR_IMAGE` 可直接填现成收款码图片地址。
+- 这条链路是“扫码转账 + 人工确认到账”，不是独立网关 SDK。
 ```
 
 默认回调地址：
@@ -110,3 +123,29 @@ print(response.choices[0].message.content)
 - 给每个客户增加套餐、费率和余额预警
 - 按客户做限速、黑名单和异常调用风控
 - 增加 Cursor、Dify、Cherry Studio、Coze 的一键接入教程
+
+## 敏感词前置过滤
+
+如果你要在请求进入 FlowAPI / New API 之前先做本地敏感词拦截，使用 `services/sensitive-proxy`。
+
+推荐链路：
+
+```text
+客户端 -> sensitive-proxy -> FlowAPI / New API -> 上游模型
+```
+
+接入方式：
+
+1. 启动 `services/sensitive-proxy`，把 `UPSTREAM_BASE_URL` 指向当前中转站。
+2. 让外部请求先进入 `sensitive-proxy`，再由它转发到 `/v1/chat/completions`、`/v1/responses`、`/v1/completions`。
+3. 生产环境启用真实敏感词库，关闭示例词库和原始 prompt 日志。
+
+部署细节见：[`services/sensitive-proxy/README.md`](./services/sensitive-proxy/README.md)。
+
+生产入口建议直接把客户端 Base URL 指向 `SENSITIVE_PROXY_BASE_URL`，而不是原始的 FlowAPI / New API 地址。
+
+如果要直接部署前置代理，可运行：
+
+```bash
+bash scripts/deploy-sensitive-proxy.sh
+```

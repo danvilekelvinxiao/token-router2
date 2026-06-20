@@ -1,5 +1,5 @@
 import { getContent } from "@/lib/content-cms";
-import { getDashboard } from "@/lib/customer-store";
+import { getDashboard, listCustomerCalls } from "@/lib/customer-store";
 import { isLocalDemoRequest, buildLocalDemoDashboard } from "@/lib/local-demo-dashboard";
 import { findModelPriceConfig } from "@/lib/analytics/savings";
 import { requireCustomerSession } from "@/lib/session";
@@ -30,7 +30,9 @@ export default async function handler(req, res) {
     const baseCustomer = await getDashboard(session.customerId);
     if (!baseCustomer) return res.status(404).json({ error: "用户不存在" });
     const customer = isLocalDemoRequest(req) ? buildLocalDemoDashboard(baseCustomer) : baseCustomer;
-    const calls = Array.isArray(customer.calls) ? customer.calls : [];
+    const calls = isLocalDemoRequest(req)
+      ? (Array.isArray(customer.calls) ? customer.calls : [])
+      : await listCustomerCalls(session.customerId);
     const result = buildModelMarket({
       calls,
       modelConfigs,

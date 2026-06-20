@@ -14,6 +14,7 @@ import ModelLeaderboard from "@/components/dashboard/model-leaderboard";
 import ModelConsumptionChartCard from "@/components/dashboard/model-consumption-chart-card";
 import TokenMarketPanel from "@/components/dashboard/token-market-panel";
 import ActivityHeatmapCard from "@/components/dashboard/activity-heatmap-card";
+import ModelUsageVisualization from "@/components/dashboard/model-usage-visualization";
 import SavingsCard from "@/components/analytics/savings-card";
 import SavingsDetailDrawer from "@/components/analytics/savings-detail-drawer";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
@@ -1465,7 +1466,7 @@ function buildSimpleMetricDetail({ title, description, badge = "数据面板", r
         title: chartTitle,
         content: (
           <div className="dash3-simple-detail-chart">
-            <MiniMetricChart data={trend} type="area" color={chartColor} valueFormatter={chartFormatter} height={96} emptyText="" />
+            <MiniMetricChart data={trend} type="line" color={chartColor} valueFormatter={chartFormatter} height={96} emptyText="" />
           </div>
         ),
       },
@@ -2037,7 +2038,7 @@ function buildMetricDetail(metricKey, { stats, trendData, modelUsage, recentRows
       rows: [
         { label: "总消耗金额", value: `¥${Number(stats.totalCost ?? stats.monthCost ?? 0).toFixed(2)}`, note: "累计 API 调用消耗金额" },
         { label: "累计 Token", value: `${formatCompactToken(modelUsage.reduce((total, item) => total + Number(item.tokens || 0), 0))} Token` },
-        { label: "主要消耗模型", value: modelUsage[0]?.model || "暂无" },
+        { label: "主要消耗模型", value: modelUsage[0]?.model || "—" },
         { label: "最近更新时间", value: updatedAt },
       ],
       extraTitle: "模型消耗明细",
@@ -2093,8 +2094,8 @@ function buildMetricDetail(metricKey, { stats, trendData, modelUsage, recentRows
         { label: "今日消耗金额", value: `¥${stats.todayCost.toFixed(2)}` },
         { label: "今日 Token 数", value: `${formatCompactToken(stats.todayTokens)} Token` },
         { label: "今日请求次数", value: `${stats.todayRequests} 次` },
-        { label: "今日最常用模型", value: modelUsage[0]?.model || "暂无" },
-        { label: "今日最耗钱模型", value: modelUsage[0]?.model || "暂无" },
+        { label: "今日最常用模型", value: modelUsage[0]?.model || "—" },
+        { label: "今日最耗钱模型", value: modelUsage[0]?.model || "—" },
       ],
       extraTitle: "按小时 / 日期消耗趋势",
       extraRows: commonTrend,
@@ -2144,7 +2145,7 @@ function buildMetricDetail(metricKey, { stats, trendData, modelUsage, recentRows
       rows: [
         { label: "本月 Token", value: `${formatCompactToken(stats.monthTokens)} Token` },
         { label: "今日 Token", value: `${formatCompactToken(stats.todayTokens)} Token` },
-        { label: "主要消耗模型", value: modelUsage[0]?.model || "暂无" },
+        { label: "主要消耗模型", value: modelUsage[0]?.model || "—" },
         { label: "最近更新时间", value: updatedAt },
       ],
       extraTitle: "Token 消耗趋势",
@@ -2347,7 +2348,7 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
       rows: [
         { label: "本日消耗", value: `￥${overview.todaySpend.toFixed(2)}` },
         { label: "本日 Token", value: `${formatCompactToken(overview.todayTokens)} Token` },
-        { label: "最近调用", value: overview.lastCall?.model || "0" },
+        { label: "最近调用", value: overview.lastCall?.model || "—" },
         { label: "最近更新时间", value: updatedAt },
       ],
       chartTitle: "最近 7 天 Token 消耗",
@@ -2375,10 +2376,10 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
       title: "最近调用详情",
       description: "查看最近一次 API 调用的模型、Token 和金额。",
       rows: [
-        { label: "模型", value: overview.lastCall?.model || "0" },
-        { label: "消耗 Token", value: overview.lastCall ? `${formatCompactToken(overview.lastCall.tokens)} Token` : "0 Token" },
-        { label: "消耗金额", value: overview.lastCall ? `￥${overview.lastCall.amount.toFixed(4)}` : "￥0.00" },
-        { label: "调用时间", value: overview.lastCall?.time || "0" },
+        { label: "模型", value: overview.lastCall?.model || "—" },
+        { label: "消耗 Token", value: overview.lastCall ? `${formatCompactToken(overview.lastCall.tokens)} Token` : "—" },
+        { label: "消耗金额", value: overview.lastCall ? `￥${overview.lastCall.amount.toFixed(4)}` : "—" },
+        { label: "调用时间", value: overview.lastCall?.time || "—" },
       ],
       chartTitle: "最近 7 天 Token 消耗",
       chartData: tokenChart,
@@ -2440,7 +2441,7 @@ function DashboardExchangeCard({
         emptyText=""
       />
       <span className="dash3-detail-corner-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" focusable="false">
+        <svg viewBox="0 0 24 24" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M7 17 17 7M9 7h8v8" />
         </svg>
       </span>
@@ -2451,12 +2452,12 @@ function DashboardExchangeCard({
 function TotalAssetOverviewSection({ data, modelConsumptionChart, onOpenDetail, onOpenModel, titleText = "AI Token 资产总览", subtitleText = "查看你在 FlowAPI 的累计花费、Token 消耗、节省金额和主要使用模型。" }) {
   const hasCalls = data.totalRequests > 0;
   const commonRows = [
-    { label: "总花费", value: hasCalls ? `￥${data.totalSpendCny.toFixed(2)}` : "￥0.00" },
-    { label: "官方价花费", value: data.officialCostCny !== null ? `￥${data.officialCostCny.toFixed(2)}` : "￥0.00" },
-    { label: "FlowAPI 实际花费", value: hasCalls ? `￥${data.actualCostCny.toFixed(2)}` : "￥0.00" },
-    { label: "已节省", value: data.savedAmountCny > 0 ? `￥${data.savedAmountCny.toFixed(2)}` : "￥0.00" },
-    { label: "使用 Token", value: hasCalls ? `${formatCompactToken(data.totalTokens)} Token` : "0 Token" },
-    { label: "总请求数", value: hasCalls ? `${data.totalRequests} 次` : "0 次" },
+    { label: "总花费", value: hasCalls ? `￥${data.totalSpendCny.toFixed(2)}` : "—" },
+    { label: "官方价花费", value: data.officialCostCny !== null ? `￥${data.officialCostCny.toFixed(2)}` : "—" },
+    { label: "FlowAPI 实际花费", value: hasCalls ? `￥${data.actualCostCny.toFixed(2)}` : "—" },
+    { label: "已节省", value: data.savedAmountCny > 0 ? `￥${data.savedAmountCny.toFixed(2)}` : "—" },
+    { label: "使用 Token", value: hasCalls ? `${formatCompactToken(data.totalTokens)} Token` : "—" },
+    { label: "总请求数", value: hasCalls ? `${data.totalRequests} 次` : "—" },
   ];
   const recentRows = data.recentRows.slice(0, 8).map((row) => ({
     time: row.time,
@@ -2484,7 +2485,7 @@ function TotalAssetOverviewSection({ data, modelConsumptionChart, onOpenDetail, 
       <div className="dash3-exchange-grid dash3-exchange-grid-top">
         <DashboardExchangeCard
           label="累计花费"
-          value={hasCalls ? <MetricValueInline prefix="￥" value={<FlashValue value={data.totalSpendCny.toFixed(2)} tick={data.tick} />} /> : "￥0.00"}
+          value={hasCalls ? <MetricValueInline prefix="￥" value={<FlashValue value={data.totalSpendCny.toFixed(2)} tick={data.tick} />} /> : "—"}
           detail="累计 API 调用消耗金额"
           chartData={data.actualTrend}
           chartColor="purple"
@@ -2493,7 +2494,7 @@ function TotalAssetOverviewSection({ data, modelConsumptionChart, onOpenDetail, 
         />
         <DashboardExchangeCard
           label="累计 Token"
-          value={hasCalls ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.totalTokens)} tick={data.tick} />} unit="Token" /> : "0 Token"}
+          value={hasCalls ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.totalTokens)} tick={data.tick} />} unit="Token" /> : "—"}
           detail="累计输入 + 输出 Token"
           chartData={data.tokenTrend}
           chartColor="cyan"
@@ -2503,7 +2504,7 @@ function TotalAssetOverviewSection({ data, modelConsumptionChart, onOpenDetail, 
         />
         <DashboardExchangeCard
           label="累计节省"
-          value={data.savedAmountCny > 0 ? <MetricValueInline prefix="￥" value={<FlashValue value={data.savedAmountCny.toFixed(2)} tick={data.tick} />} /> : "￥0.00"}
+          value={data.savedAmountCny > 0 ? <MetricValueInline prefix="￥" value={<FlashValue value={data.savedAmountCny.toFixed(2)} tick={data.tick} />} /> : "—"}
           detail="相比官方价格，FlowAPI 已帮你节省的估算成本"
           chartData={data.actualTrend}
           chartColor="green"
@@ -2512,7 +2513,7 @@ function TotalAssetOverviewSection({ data, modelConsumptionChart, onOpenDetail, 
         />
         <DashboardExchangeCard
           label="总请求数"
-          value={hasCalls ? <MetricValueInline value={<FlashValue value={data.totalRequests} tick={data.tick} />} unit="次" /> : "0 次"}
+          value={hasCalls ? <MetricValueInline value={<FlashValue value={data.totalRequests} tick={data.tick} />} unit="次" /> : "—"}
           detail="累计模型调用次数"
           chartData={data.requestTrend}
           chartType="bar"
@@ -2530,8 +2531,8 @@ function TotalAssetOverviewSection({ data, modelConsumptionChart, onOpenDetail, 
               <ModelLogo model={data.mostUsedModel.model} provider={data.mostUsedModel.provider} size={34} />
               <span>{data.mostUsedModel.model}</span>
             </span>
-          ) : "0"}
-          detail={data.mostUsedModel ? `${data.mostUsedModel.provider || getModelProviderLabel(data.mostUsedModel.model)} · ${data.mostUsedModel.requests} 次调用` : "0 次"}
+          ) : "—"}
+          detail={data.mostUsedModel ? `${data.mostUsedModel.provider || getModelProviderLabel(data.mostUsedModel.model)} · ${data.mostUsedModel.requests} 次调用` : "—"}
           chartData={data.mostUsedTrend}
           chartColor="purple"
           empty={!data.mostUsedModel}
@@ -2544,8 +2545,8 @@ function TotalAssetOverviewSection({ data, modelConsumptionChart, onOpenDetail, 
               <ModelLogo model={data.mostExpensiveModel.model} provider={data.mostExpensiveModel.provider} size={34} />
               <span>{data.mostExpensiveModel.model}</span>
             </span>
-          ) : "0"}
-          detail={data.mostExpensiveModel ? `${data.mostExpensiveModel.provider || getModelProviderLabel(data.mostExpensiveModel.model)} · ￥${data.mostExpensiveModel.spend.toFixed(4)} 累计消耗` : "￥0.00"}
+          ) : "—"}
+          detail={data.mostExpensiveModel ? `${data.mostExpensiveModel.provider || getModelProviderLabel(data.mostExpensiveModel.model)} · ￥${data.mostExpensiveModel.spend.toFixed(4)} 累计消耗` : "—"}
           chartData={data.mostExpensiveTrend}
           chartColor="yellow"
           empty={!data.mostExpensiveModel}
@@ -2563,10 +2564,10 @@ function WeekUsageSection({ data, onOpenDetail, onOpenSavings, titleText = "本�
     title,
     description: "查看本周 FlowAPI 实际扣费、Token 使用、节省金额和平均单次成本。",
     rows: [
-      { label: "本周花费", value: hasWeek ? `￥${data.weekSpendCny.toFixed(2)}` : "￥0.00" },
-      { label: "本周 Token", value: hasWeek ? `${formatCompactToken(data.weekTokens)} Token` : "0 Token" },
-      { label: "本周已省", value: data.weekSavedCny > 0 ? `￥${data.weekSavedCny.toFixed(2)}` : "￥0.00" },
-      { label: "本周平均单次成本", value: data.weekAvgCostPerRequestCny !== null ? `￥${data.weekAvgCostPerRequestCny.toFixed(4)} / 次` : "￥0.00" },
+      { label: "本周花费", value: hasWeek ? `￥${data.weekSpendCny.toFixed(2)}` : "—" },
+      { label: "本周 Token", value: hasWeek ? `${formatCompactToken(data.weekTokens)} Token` : "—" },
+      { label: "本周已省", value: data.weekSavedCny > 0 ? `￥${data.weekSavedCny.toFixed(2)}` : "—" },
+      { label: "本周平均单次成本", value: data.weekAvgCostPerRequestCny !== null ? `￥${data.weekAvgCostPerRequestCny.toFixed(4)} / 次` : "—" },
     ],
     trend: chartData,
     chartFormatter,
@@ -2576,10 +2577,10 @@ function WeekUsageSection({ data, onOpenDetail, onOpenSavings, titleText = "本�
     <section className="dash3-section">
       <SectionTitle title={titleText} subtitle={subtitleText} />
       <div className="dash3-exchange-grid dash3-exchange-grid-four">
-        <DashboardExchangeCard label="本周花费余额" value={hasWeek ? <MetricValueInline prefix="￥" value={<FlashValue value={data.weekSpendCny.toFixed(2)} tick={data.tick} />} /> : "￥0.00"} detail="本周 FlowAPI 实际扣费" chartData={data.weekSpendTrend} chartColor="yellow" empty={!hasWeek} onClick={() => open("本周花费详情", data.weekSpendTrend, moneyFormatter, "yellow")} />
-        <DashboardExchangeCard label="本周使用 Token" value={hasWeek ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.weekTokens)} tick={data.tick} />} unit="Token" /> : "0 Token"} detail="本周输入 + 输出 Token" chartData={data.weekTokenTrend} chartColor="cyan" chartFormatter={tokenFormatter} empty={!hasWeek} onClick={() => open("本周 Token 详情", data.weekTokenTrend, tokenFormatter, "cyan")} />
-        <DashboardExchangeCard label="本周已省" value={data.weekSavedCny > 0 ? <MetricValueInline prefix="￥" value={<FlashValue value={data.weekSavedCny.toFixed(2)} tick={data.tick} />} /> : "￥0.00"} detail="￥0.00" chartData={data.weekSavingTrend} chartColor="green" empty={data.weekSavedCny <= 0} onClick={onOpenSavings} />
-        <DashboardExchangeCard label="本周平均单次成本" value={data.weekAvgCostPerRequestCny !== null ? <MetricValueInline prefix="￥" value={<FlashValue value={data.weekAvgCostPerRequestCny.toFixed(4)} tick={data.tick} />} unit="/ 次" /> : "￥0.00"} detail="本周每次请求平均扣费" chartData={data.weekAvgCostTrend} chartColor="orange" empty={data.weekAvgCostPerRequestCny === null} onClick={() => open("本周平均单次成本详情", data.weekAvgCostTrend, moneyFormatter, "orange")} />
+        <DashboardExchangeCard label="本周花费余额" value={hasWeek ? <MetricValueInline prefix="￥" value={<FlashValue value={data.weekSpendCny.toFixed(2)} tick={data.tick} />} /> : "—"} detail="本周 FlowAPI 实际扣费" chartData={data.weekSpendTrend} chartColor="yellow" empty={!hasWeek} onClick={() => open("本周花费详情", data.weekSpendTrend, moneyFormatter, "yellow")} />
+        <DashboardExchangeCard label="本周使用 Token" value={hasWeek ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.weekTokens)} tick={data.tick} />} unit="Token" /> : "—"} detail="本周输入 + 输出 Token" chartData={data.weekTokenTrend} chartColor="cyan" chartFormatter={tokenFormatter} empty={!hasWeek} onClick={() => open("本周 Token 详情", data.weekTokenTrend, tokenFormatter, "cyan")} />
+        <DashboardExchangeCard label="本周已省" value={data.weekSavedCny > 0 ? <MetricValueInline prefix="￥" value={<FlashValue value={data.weekSavedCny.toFixed(2)} tick={data.tick} />} /> : "—"} detail="—" chartData={data.weekSavingTrend} chartColor="green" empty={data.weekSavedCny <= 0} onClick={onOpenSavings} />
+        <DashboardExchangeCard label="本周平均单次成本" value={data.weekAvgCostPerRequestCny !== null ? <MetricValueInline prefix="￥" value={<FlashValue value={data.weekAvgCostPerRequestCny.toFixed(4)} tick={data.tick} />} unit="/ 次" /> : "—"} detail="本周每次请求平均扣费" chartData={data.weekAvgCostTrend} chartColor="orange" empty={data.weekAvgCostPerRequestCny === null} onClick={() => open("本周平均单次成本详情", data.weekAvgCostTrend, moneyFormatter, "orange")} />
       </div>
     </section>
   );
@@ -2592,11 +2593,11 @@ function TodayAccountStatusSection({ data, onOpenDetail, onOpenSavings, onOpenLe
     title,
     description: "查看本日 Token 消耗、扣费金额、节省金额和最近调用。",
     rows: [
-      { label: "本日 Token", value: hasToday ? `${formatCompactToken(data.todayTokens)} Token` : "0 Token" },
-      { label: "本日花费", value: hasToday ? `￥${data.todaySpendCny.toFixed(2)}` : "￥0.00" },
-      { label: "本日已省", value: data.todaySavedCny > 0 ? `￥${data.todaySavedCny.toFixed(2)}` : "￥0.00" },
-      { label: "本日请求次数", value: hasToday ? `${data.todayRequests} 次` : "0 次" },
-      { label: "本日最常用模型", value: data.todayTopModel || "0" },
+      { label: "本日 Token", value: hasToday ? `${formatCompactToken(data.todayTokens)} Token` : "—" },
+      { label: "本日花费", value: hasToday ? `￥${data.todaySpendCny.toFixed(2)}` : "—" },
+      { label: "本日已省", value: data.todaySavedCny > 0 ? `￥${data.todaySavedCny.toFixed(2)}` : "—" },
+      { label: "本日请求次数", value: hasToday ? `${data.todayRequests} 次` : "—" },
+      { label: "本日最常用模型", value: data.todayTopModel || "—" },
     ],
     trend: chartData,
     chartFormatter,
@@ -2606,17 +2607,17 @@ function TodayAccountStatusSection({ data, onOpenDetail, onOpenSavings, onOpenLe
     <section className="dash3-section">
       <SectionTitle title={titleText} subtitle={subtitleText} />
       <div className="dash3-exchange-grid dash3-exchange-grid-six">
-        <DashboardExchangeCard label="本日消耗 Token" value={hasToday ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.todayTokens)} tick={data.tick} />} unit="Token" /> : "0 Token"} detail="本日输入 + 输出 Token" chartData={data.todayTokenTrend} chartType="bar" chartColor="cyan" chartFormatter={tokenFormatter} empty={!hasToday} onClick={() => open("本日 Token 详情", data.todayTokenTrend, tokenFormatter, "cyan")} />
-        <DashboardExchangeCard label="本日花费" value={hasToday ? <MetricValueInline prefix="￥" value={<FlashValue value={data.todaySpendCny.toFixed(2)} tick={data.tick} />} /> : "￥0.00"} detail="本日 FlowAPI 实际扣费" chartData={data.todaySpendTrend} chartType="step" chartColor="yellow" empty={!hasToday} onClick={() => open("本日花费详情", data.todaySpendTrend, moneyFormatter, "yellow")} />
-        <DashboardExchangeCard label="本日已省" value={data.todaySavedCny > 0 ? <MetricValueInline prefix="￥" value={<FlashValue value={data.todaySavedCny.toFixed(2)} tick={data.tick} />} /> : "￥0.00"} detail={data.todaySavedCny > 0 ? `官方价 ￥${data.todayOfficialCny.toFixed(2)} / 实际价 ￥${data.todayActualCny.toFixed(2)}` : "￥0.00"} chartData={data.todaySavingTrend} chartColor="green" empty={data.todaySavedCny <= 0} onClick={onOpenSavings} />
-        <DashboardExchangeCard label="本日请求次数" value={hasToday ? <MetricValueInline value={data.todayRequests} unit="次" /> : "0 次"} detail="本日成功与失败请求总数" chartData={data.recentCallTrend} chartType="bar" chartColor="purple" chartFormatter={countFormatter} empty={!hasToday} onClick={() => open("本日请求次数详情", data.recentCallTrend, countFormatter, "purple")} />
-        <DashboardExchangeCard label="本日最常用模型" value={data.todayTopModel || "0"} detail="按本日真实调用次数统计" chartData={data.todayTopModelTrend || []} chartType="bar" chartColor="green" chartFormatter={countFormatter} empty={!data.todayTopModel} onClick={() => open("本日最常用模型详情", data.todayTopModelTrend || [], countFormatter, "green")} />
+        <DashboardExchangeCard label="本日消耗 Token" value={hasToday ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.todayTokens)} tick={data.tick} />} unit="Token" /> : "—"} detail="本日输入 + 输出 Token" chartData={data.todayTokenTrend} chartType="bar" chartColor="cyan" chartFormatter={tokenFormatter} empty={!hasToday} onClick={() => open("本日 Token 详情", data.todayTokenTrend, tokenFormatter, "cyan")} />
+        <DashboardExchangeCard label="本日花费" value={hasToday ? <MetricValueInline prefix="￥" value={<FlashValue value={data.todaySpendCny.toFixed(2)} tick={data.tick} />} /> : "—"} detail="本日 FlowAPI 实际扣费" chartData={data.todaySpendTrend} chartType="step" chartColor="yellow" empty={!hasToday} onClick={() => open("本日花费详情", data.todaySpendTrend, moneyFormatter, "yellow")} />
+        <DashboardExchangeCard label="本日已省" value={data.todaySavedCny > 0 ? <MetricValueInline prefix="￥" value={<FlashValue value={data.todaySavedCny.toFixed(2)} tick={data.tick} />} /> : "—"} detail={data.todaySavedCny > 0 ? `官方价 ￥${data.todayOfficialCny.toFixed(2)} / 实际价 ￥${data.todayActualCny.toFixed(2)}` : "—"} chartData={data.todaySavingTrend} chartColor="green" empty={data.todaySavedCny <= 0} onClick={onOpenSavings} />
+        <DashboardExchangeCard label="本日请求次数" value={hasToday ? <MetricValueInline value={data.todayRequests} unit="次" /> : "—"} detail="本日成功与失败请求总数" chartData={data.recentCallTrend} chartType="bar" chartColor="purple" chartFormatter={countFormatter} empty={!hasToday} onClick={() => open("本日请求次数详情", data.recentCallTrend, countFormatter, "purple")} />
+        <DashboardExchangeCard label="本日最常用模型" value={data.todayTopModel || "—"} detail="按本日真实调用次数统计" chartData={data.todayTopModelTrend || []} chartType="bar" chartColor="green" chartFormatter={countFormatter} empty={!data.todayTopModel} onClick={() => open("本日最常用模型详情", data.todayTopModelTrend || [], countFormatter, "green")} />
         <DashboardExchangeCard label="最近调用" value={recent ? (
           <span className="dash3-model-value-inline">
             <ModelLogo model={recent.model} provider={recent.provider} size={34} />
             <span>{recent.model}</span>
           </span>
-        ) : "0"} detail={recent ? `${formatCompactToken(recent.total)} Token · ${formatSmallCny(recent.actualCostCny || recent.amount)} · ${recent.status}` : "0 Token"} chartData={data.recentCallTrend} chartType="bar" chartColor="cyan" chartFormatter={countFormatter} empty={!recent} onClick={() => recent ? onOpenLedger?.() : open("最近调用详情", [], countFormatter, "cyan")} />
+        ) : "—"} detail={recent ? `${formatCompactToken(recent.total)} Token · ${formatSmallCny(recent.actualCostCny || recent.amount)} · ${recent.status}` : "—"} chartData={data.recentCallTrend} chartType="bar" chartColor="cyan" chartFormatter={countFormatter} empty={!recent} onClick={() => recent ? onOpenLedger?.() : open("最近调用详情", [], countFormatter, "cyan")} />
       </div>
     </section>
   );
@@ -2653,16 +2654,16 @@ function AssetOverviewSection({ overview, trendData, calls, tick, onOpenAsset, s
             <span>赠送额度：<b>¥{Number(overview.giftBalance || 0).toFixed(2)}</b></span>
             <span>今日有效，优先使用</span>
           </p>
-          <p>约可调用 <b>{hasCallableEstimate ? formatTokens(overview.callableTokens) : "0 Token"}</b></p>
+          <p>约可调用 <b>{hasCallableEstimate ? formatTokens(overview.callableTokens) : "—"}</b></p>
           <MiniMetricChart
             data={balanceMini}
-            type="area"
+            type="line"
             color="purple"
             valueFormatter={moneyFormatter}
             emptyText=""
             height={66}
           />
-          <span className="dash3-asset-card-hint dash3-detail-corner-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M7 17 17 7M9 7h8v8" /></svg></span>
+          <span className="dash3-asset-card-hint dash3-detail-corner-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg></span>
         </article>
         <article
           className="dash3-asset-card"
@@ -2672,8 +2673,8 @@ function AssetOverviewSection({ overview, trendData, calls, tick, onOpenAsset, s
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenAsset("today"); } }}
         >
           <span>今日消耗</span>
-          <strong className={!hasTodayUsage ? "dash3-asset-empty-value" : ""}>{hasTodayUsage ? <MetricValueInline prefix="￥" value={<FlashValue value={overview.todaySpend.toFixed(2)} tick={tick} />} /> : "￥0.00"}</strong>
-          <p><b>{hasTodayUsage ? formatTokens(overview.todayTokens) : "0 Token"}</b></p>
+          <strong className={!hasTodayUsage ? "dash3-asset-empty-value" : ""}>{hasTodayUsage ? <MetricValueInline prefix="￥" value={<FlashValue value={overview.todaySpend.toFixed(2)} tick={tick} />} /> : "—"}</strong>
+          <p><b>{hasTodayUsage ? formatTokens(overview.todayTokens) : "—"}</b></p>
           <MiniMetricChart
             data={hasMiniSeriesData(todayMini) ? todayMini : []}
             type="step"
@@ -2683,7 +2684,7 @@ function AssetOverviewSection({ overview, trendData, calls, tick, onOpenAsset, s
             emptyText=""
             height={68}
           />
-          <span className="dash3-asset-card-hint dash3-detail-corner-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M7 17 17 7M9 7h8v8" /></svg></span>
+          <span className="dash3-asset-card-hint dash3-detail-corner-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg></span>
         </article>
         <article
           className="dash3-asset-card"
@@ -2693,18 +2694,18 @@ function AssetOverviewSection({ overview, trendData, calls, tick, onOpenAsset, s
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenAsset("week"); } }}
         >
           <span>本周消耗</span>
-          <strong className={!hasWeekUsage ? "dash3-asset-empty-value" : ""}>{hasWeekUsage ? <MetricValueInline prefix="￥" value={<FlashValue value={overview.weekSpend.toFixed(2)} tick={tick} />} /> : "￥0.00"}</strong>
-          <p><b>{hasWeekUsage ? formatTokens(overview.weekTokens) : "0 Token"}</b></p>
+          <strong className={!hasWeekUsage ? "dash3-asset-empty-value" : ""}>{hasWeekUsage ? <MetricValueInline prefix="￥" value={<FlashValue value={overview.weekSpend.toFixed(2)} tick={tick} />} /> : "—"}</strong>
+          <p><b>{hasWeekUsage ? formatTokens(overview.weekTokens) : "—"}</b></p>
           <MiniMetricChart
             data={hasMiniSeriesData(weekMini) ? weekMini : []}
-            type="area"
+            type="line"
             color="orange"
             valueFormatter={moneyFormatter}
             secondaryFormatter={tokenFormatter}
             emptyText=""
             height={68}
           />
-          <span className="dash3-asset-card-hint dash3-detail-corner-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M7 17 17 7M9 7h8v8" /></svg></span>
+          <span className="dash3-asset-card-hint dash3-detail-corner-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg></span>
         </article>
         <article
           className="dash3-asset-card dash3-live-call"
@@ -2714,7 +2715,7 @@ function AssetOverviewSection({ overview, trendData, calls, tick, onOpenAsset, s
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenAsset("lastCall"); } }}
         >
           <span>最近调用</span>
-          <strong className="dash3-recent-call-value">{overview.lastCall?.model || "0"}</strong>
+          <strong className="dash3-recent-call-value">{overview.lastCall?.model || "—"}</strong>
           {overview.lastCall ? (
             <>
               <p>
@@ -2727,7 +2728,7 @@ function AssetOverviewSection({ overview, trendData, calls, tick, onOpenAsset, s
               </div>
             </>
           ) : (
-            <p><b>0 Token</b></p>
+            <p><b>—</b></p>
           )}
           <MiniMetricChart
             data={hasMiniSeriesData(callMini) ? callMini : []}
@@ -2737,7 +2738,7 @@ function AssetOverviewSection({ overview, trendData, calls, tick, onOpenAsset, s
             emptyText=""
             height={64}
           />
-          <span className="dash3-asset-card-hint dash3-detail-corner-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M7 17 17 7M9 7h8v8" /></svg></span>
+          <span className="dash3-asset-card-hint dash3-detail-corner-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 17 17 7M9 7h8v8" /></svg></span>
         </article>
         <SavingsCard
           title="为你节省"
@@ -2776,8 +2777,8 @@ function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
   if (!data.length) {
     return (
       <div className="dash3-empty-chart">
-        <strong>0</strong>
-        <span>0 Token</span>
+        <strong>—</strong>
+                  <span>—</span>
       </div>
     );
   }
@@ -2973,7 +2974,7 @@ function ModelDistributionBars({ ranking, metric, onTooltip, onOpenModel, theme 
     return (
       <div className="dash3-empty-list">
         <strong>0</strong>
-        <span>0 Token</span>
+        <span>—</span>
       </div>
     );
   }
@@ -3066,7 +3067,7 @@ function TokenSpendFlowSection({ flow, ranking, metric, setMetric, onTooltip, th
             {ranking.length === 0 ? (
               <div className="dash3-empty-list">
                 <strong>0</strong>
-                <span>0 次</span>
+                <span>—</span>
               </div>
             ) : (
               <div className="dash3-model-ranking-list">
@@ -3180,31 +3181,31 @@ function CostStabilitySection({ stats, trendData, modelUsage, recentRows, onOpen
       />
       {!hasCacheData ? (
         <div className="dash3-cache-empty-note">
-          <strong>0%</strong>
-          <span>0 次</span>
+          <strong>—</strong>
+          <span>—</span>
         </div>
       ) : null}
       <div className="dash3-stability-grid">
-        <CoreMetricCard label="缓存命中率" value={hasCacheData ? <MetricValueInline value={Number(cacheStats.hitRate || 0).toFixed(1)} unit="%" /> : "0%"} detail={hasCacheData ? "命中越高，通常更快且更省钱" : "0%"} chartData={cacheMini} chartType="area" chartColor="green" chartFormatter={percentFormatter} chartEmptyText="" onClick={() => onOpenMetric("cache")} />
-        <CoreMetricCard label="缓存命中次数" value={hasCacheData ? <MetricValueInline value={Number(cacheStats.hitCount || 0).toLocaleString("zh-CN")} unit="次" /> : "0 次"} detail={hasCacheData ? "本周期命中的请求" : "0 次"} chartData={cacheMini} chartType="bar" chartColor="cyan" chartFormatter={countFormatter} chartEmptyText="" onClick={() => onOpenMetric("cache")} />
-        <CoreMetricCard label="缓存节省 Token" value={hasCacheData ? <MetricValueInline value={formatCompactToken(Number(cacheStats.savedTokens || 0))} unit="Token" /> : "0 Token"} detail={hasCacheData ? "估算少消耗的 Token" : "0 Token"} chartData={cacheMini} chartColor="green" chartFormatter={percentFormatter} chartEmptyText="" onClick={() => onOpenMetric("cache")} />
-        <CoreMetricCard label="缓存节省金额" value={hasCacheData ? <MetricValueInline prefix="￥" value={Number(cacheStats.savedCostCny || 0).toFixed(2)} /> : "￥0.00"} detail={hasCacheData ? "缓存带来的成本优势" : "￥0.00"} chartData={cacheMini} chartColor="green" chartFormatter={percentFormatter} chartEmptyText="" onClick={() => onOpenMetric("cache")} />
-        <CoreMetricCard label="平均响应时间" value={hasLatencyData ? <MetricValueInline value={Number(stats.avgLatency || 0).toFixed(2)} unit="s" /> : "0s"} detail={hasLatencyData ? "最近调用平均响应速度" : "0s"} chartData={hasMiniSeriesData(latencyMini) ? latencyMini : []} chartType="bar" chartColor="cyan" chartFormatter={countFormatter} chartEmptyText="" onClick={() => onOpenMetric("latency")} />
-        <CoreMetricCard label="请求成功率" value={hasSuccessData ? <MetricValueInline value={Number(stats.successRate || 0).toFixed(1)} unit="%" /> : "0%"} detail={hasSuccessData ? `${recentRows.length || 0} 条最近流水参与展示` : "0%"} chartData={hasMiniSeriesData(successMini) ? successMini : []} chartColor="purple" chartFormatter={percentFormatter} chartEmptyText="" onClick={() => onOpenMetric("requests")} />
+        <CoreMetricCard label="缓存命中率" value={hasCacheData ? <MetricValueInline value={Number(cacheStats.hitRate || 0).toFixed(1)} unit="%" /> : "—"} detail={hasCacheData ? "命中越高，通常更快且更省钱" : "—"} chartData={cacheMini} chartType="area" chartColor="green" chartFormatter={percentFormatter} chartEmptyText="" onClick={() => onOpenMetric("cache")} />
+        <CoreMetricCard label="缓存命中次数" value={hasCacheData ? <MetricValueInline value={Number(cacheStats.hitCount || 0).toLocaleString("zh-CN")} unit="次" /> : "—"} detail={hasCacheData ? "本周期命中的请求" : "—"} chartData={cacheMini} chartType="bar" chartColor="cyan" chartFormatter={countFormatter} chartEmptyText="" onClick={() => onOpenMetric("cache")} />
+        <CoreMetricCard label="缓存节省 Token" value={hasCacheData ? <MetricValueInline value={formatCompactToken(Number(cacheStats.savedTokens || 0))} unit="Token" /> : "—"} detail={hasCacheData ? "估算少消耗的 Token" : "—"} chartData={cacheMini} chartColor="green" chartFormatter={percentFormatter} chartEmptyText="" onClick={() => onOpenMetric("cache")} />
+        <CoreMetricCard label="缓存节省金额" value={hasCacheData ? <MetricValueInline prefix="￥" value={Number(cacheStats.savedCostCny || 0).toFixed(2)} /> : "—"} detail={hasCacheData ? "缓存带来的成本优势" : "—"} chartData={cacheMini} chartColor="green" chartFormatter={percentFormatter} chartEmptyText="" onClick={() => onOpenMetric("cache")} />
+        <CoreMetricCard label="平均响应时间" value={hasLatencyData ? <MetricValueInline value={Number(stats.avgLatency || 0).toFixed(2)} unit="s" /> : "—"} detail={hasLatencyData ? "最近调用平均响应速度" : "—"} chartData={hasMiniSeriesData(latencyMini) ? latencyMini : []} chartType="bar" chartColor="cyan" chartFormatter={countFormatter} chartEmptyText="" onClick={() => onOpenMetric("latency")} />
+        <CoreMetricCard label="请求成功率" value={hasSuccessData ? <MetricValueInline value={Number(stats.successRate || 0).toFixed(1)} unit="%" /> : "—"} detail={hasSuccessData ? `${recentRows.length || 0} 条最近流水参与展示` : "—"} chartData={hasMiniSeriesData(successMini) ? successMini : []} chartColor="purple" chartFormatter={percentFormatter} chartEmptyText="" onClick={() => onOpenMetric("requests")} />
       </div>
       <button type="button" className="dash3-high-cost-alert" onClick={() => highCostModel ? onOpenModel?.(highCostModel) : null}>
         <div>
           <span>高成本模型提醒</span>
-          <strong>{highCostModel ? highCostModel.model : "0"}</strong>
+          <strong>{highCostModel ? highCostModel.model : "—"}</strong>
           <p>
             {highCostModel
               ? alternative
                 ? `${highCostModel.model} 是当前成本大头，可对比 ${alternative.model}。按当前请求量估算，理论可节省约 ¥${potentialSave.toFixed(2)}。`
                 : "完成更多模型调用后，FlowAPI 会给出可替换的低成本模型建议。"
-              : "0"}
+              : "暂无高成本模型数据"}
           </p>
         </div>
-        <em>{highCostModel ? "↗" : "0%"}</em>
+        <em>{highCostModel ? "↗" : "—"}</em>
       </button>
     </section>
   );
@@ -3236,23 +3237,23 @@ function TokenForecastDecisionSection({ data, summary, metric, setMetric, onTool
         <div className="dash3-forecast-metrics">
           <article>
             <span>未来 7 天预计消耗</span>
-            <strong className="prediction-stat-value">{hasPredictionData ? <MetricValueInline value={<FlashValue value={formatCompactToken(summary.weekTokens)} tick={tick} />} unit="Token" /> : "0 Token"}</strong>
-            <p>{hasPredictionData ? "按最近调用节奏推算" : "0 Token"}</p>
+            <strong className="prediction-stat-value">{hasPredictionData ? <MetricValueInline value={<FlashValue value={formatCompactToken(summary.weekTokens)} tick={tick} />} unit="Token" /> : "—"}</strong>
+            <p>{hasPredictionData ? "按最近调用节奏推算" : "暂无预测数据"}</p>
           </article>
           <article>
             <span>预计需要额度</span>
-            <strong className="prediction-stat-value">{hasPredictionData ? <MetricValueInline prefix="￥" value={<FlashValue value={summary.weekCost.toFixed(2)} tick={tick} />} /> : "￥0.00"}</strong>
-            <p>{hasPredictionData ? "未来 7 天预估扣费" : "￥0.00"}</p>
+            <strong className="prediction-stat-value">{hasPredictionData ? <MetricValueInline prefix="￥" value={<FlashValue value={summary.weekCost.toFixed(2)} tick={tick} />} /> : "—"}</strong>
+            <p>{hasPredictionData ? "未来 7 天预估扣费" : "暂无预测数据"}</p>
           </article>
           <article>
             <span>当前余额可覆盖</span>
-            <strong className="prediction-stat-value">{hasPredictionData ? <MetricValueInline prefix="约" value={<FlashValue value={summary.coverDays} tick={tick} />} unit="天" /> : "0 天"}</strong>
-            <p>{hasPredictionData ? "基于当前余额估算" : "0 天"}</p>
+            <strong className="prediction-stat-value">{hasPredictionData ? <MetricValueInline prefix="约" value={<FlashValue value={summary.coverDays} tick={tick} />} unit="天" /> : "—"}</strong>
+            <p>{hasPredictionData ? "基于当前余额估算" : "暂无预测数据"}</p>
           </article>
           <article>
             <span>建议充值</span>
-            <strong className="prediction-stat-value">{hasPredictionData ? <MetricValueInline prefix="￥" value={<FlashValue value={summary.suggestRecharge.toFixed(0)} tick={tick} />} /> : "￥0.00"}</strong>
-            <p>{hasPredictionData ? "避免后续调用中断" : "￥0.00"}</p>
+            <strong className="prediction-stat-value">{hasPredictionData ? <MetricValueInline prefix="￥" value={<FlashValue value={summary.suggestRecharge.toFixed(0)} tick={tick} />} /> : "—"}</strong>
+            <p>{hasPredictionData ? "避免后续调用中断" : "暂无预测数据"}</p>
           </article>
         </div>
         <div className="dash3-prediction-chart-wrap">
@@ -3264,13 +3265,13 @@ function TokenForecastDecisionSection({ data, summary, metric, setMetric, onTool
             <DualLineChart data={data} unit={data.unit} height={300} width={960} onTooltip={onTooltip} theme={theme} />
           ) : (
             <div className="dash3-empty-chart">
-              <strong>0 Token</strong>
-              <span>￥0.00</span>
+              <strong>—</strong>
+              <span>—</span>
             </div>
           )}
         </div>
         <p className="dash3-advice">
-          {hasPredictionData ? summary.message : "0%"}
+          {hasPredictionData ? summary.message : "暂无足够数据生成预测"}
           {hasPredictionData && summary.suggestRecharge > 0 ? ` 建议提前充值 ¥${summary.suggestRecharge.toFixed(0)} 避免调用中断。` : ""}
         </p>
       </div>
@@ -3446,8 +3447,8 @@ function RecentCallLedger({ rows }) {
           </div>
         ) : (
           <div className="dash3-empty-table">
-            <strong>0 次</strong>
-            <span>0 Token</span>
+            <strong>—</strong>
+            <span>—</span>
             <Link href="/help" className="dash3-text-btn" style={{ marginTop: 12, display: "inline-block" }}>查看接入教程</Link>
           </div>
         )}
@@ -3514,8 +3515,8 @@ function ModelCostRanking({ models, onTooltip, theme }) {
                 y: event.clientY - 10,
                 content: (
                   <div>
-                    <strong>{model.model}</strong>
-                    <p style={{ margin: "6px 0 0", color: theme === "light" ? "#6b7280" : "#9ca3af" }}>{model.note}</p>
+                    <strong>{model.model || "—"}</strong>
+                  <p style={{ margin: "6px 0 0", color: theme === "light" ? "#6b7280" : "#9ca3af" }}>{model.note || "—"}</p>
                   </div>
                 ),
               });
@@ -3534,10 +3535,10 @@ function ModelCostRanking({ models, onTooltip, theme }) {
             </div>
             <div className="dash3-cost-main">
               <strong>¥{model.amount.toFixed(2)}</strong>
-              <span>{model.tokens.toLocaleString()} Token</span>
+              <span>{model.tokens > 0 ? `${model.tokens.toLocaleString()} Token` : "—"}</span>
             </div>
             <div className="dash3-cost-share">
-              <span>{model.share}%</span>
+              <span>{model.share > 0 ? `${model.share}%` : "—"}</span>
               <b><i style={{ width: `${model.share}%` }} /></b>
             </div>
             <div className="dash3-cost-avg">
@@ -3545,7 +3546,7 @@ function ModelCostRanking({ models, onTooltip, theme }) {
               <strong>¥{model.avgCost.toFixed(3)}</strong>
             </div>
             <div className={model.direction === "up" ? "dash3-trend-up" : model.direction === "down" ? "dash3-trend-down" : "dash3-trend-flat"}>
-              {model.trend} <TrendIcon direction={model.direction} />
+              {model.trend || "—"} <TrendIcon direction={model.direction} />
             </div>
             <MiniTrendLine values={model.spark} color={model.direction === "down" ? "var(--dash-green)" : "var(--dash-yellow)"} onTooltip={onTooltip} tooltipLabel={`${model.model} 平均成本`} theme={theme} />
           </Link>
@@ -3567,13 +3568,13 @@ function AverageRequestCost({ data, onTooltip, theme }) {
       <div className="dash3-average-layout">
         <div className="dash3-average-hero">
           <span>平均每次请求</span>
-          <strong>¥{data.avgCost.toFixed(3)}</strong>
+          <strong>{data.avgCost > 0 ? `¥${data.avgCost.toFixed(3)}` : "—"}</strong>
           <MiniTrendLine values={data.trend} width={210} height={58} color="var(--dash-accent)" onTooltip={onTooltip} tooltipLabel="最近 7 天平均请求成本" theme={theme} />
         </div>
         <div className="dash3-average-grid">
-          <div><span>平均输入 Token</span><strong>{data.avgInputTokens.toLocaleString()}</strong></div>
-          <div><span>平均输出 Token</span><strong>{data.avgOutputTokens.toLocaleString()}</strong></div>
-          <div><span>平均总 Token</span><strong>{data.avgTotalTokens.toLocaleString()}</strong></div>
+          <div><span>平均输入 Token</span><strong>{data.avgInputTokens > 0 ? data.avgInputTokens.toLocaleString() : "—"}</strong></div>
+          <div><span>平均输出 Token</span><strong>{data.avgOutputTokens > 0 ? data.avgOutputTokens.toLocaleString() : "—"}</strong></div>
+          <div><span>平均总 Token</span><strong>{data.avgTotalTokens > 0 ? data.avgTotalTokens.toLocaleString() : "—"}</strong></div>
         </div>
       </div>
     </section>
@@ -3629,8 +3630,8 @@ function BalanceAlertPanel({ data }) {
       <div className="dash3-alert-panel">
         <div className={`dash3-alert-status ${data.status}`}>
           <span>当前状态</span>
-          <strong>{data.statusText}</strong>
-          <p>{data.summary}</p>
+          <strong>{data.statusText || "—"}</strong>
+          <p>{data.summary || "—"}</p>
           <Link href="/recharge">去充值</Link>
         </div>
         <div className="dash3-alert-settings">
@@ -3925,8 +3926,7 @@ export default function DashboardPage() {
   }, [customer?.id]);
 
   /* Load market model ranks */
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
+    useEffect(() => {
     let cancelled = false;
 
     loadMarketRanks().catch(() => {
@@ -4147,8 +4147,7 @@ export default function DashboardPage() {
   };
   const weekRequestCount = dashboardAssetCharts.recentCalls.reduce((sum, item) => sum + Number(item.value || 0), 0);
   const modelUsage = buildModelUsage(modelSpend.ranking);
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
-  const heatmapCalendar = useMemo(() => generateMonthCalendar(usage.calls, heatmapYear, heatmapMonth), [usage.calls, heatmapYear, heatmapMonth]);
+    const heatmapCalendar = useMemo(() => generateMonthCalendar(usage.calls, heatmapYear, heatmapMonth), [usage.calls, heatmapYear, heatmapMonth]);
   const localDemoRankItems = modelSpend.ranking.map((item, index) => ({
     rank: index + 1,
     model: item.model,
@@ -5716,6 +5715,12 @@ export default function DashboardPage() {
               subtitleText={t("dashboard.totalOverviewSubtitle", "查看你在 FlowAPI 的累计花费、Token 消耗、节省金额和主要使用模型。")}
             />
 
+            <ModelUsageVisualization
+              scope="workspace"
+              title="模型使用可视化看板"
+              subtitle="Model Usage Dashboard"
+            />
+
             <AssetOverviewSection
               overview={usage.overview}
               trendData={trendData}
@@ -5836,8 +5841,8 @@ export default function DashboardPage() {
                 updatedAt={effectiveFlowApiRanks?.updatedAt}
                 items={(effectiveFlowApiRanks?.models || []).slice(0, 10)}
                 loading={localDemoMode ? false : flowApiRanksLoading}
-                emptyText="0"
-                emptyDescription="0 次"
+                emptyText="—"
+                emptyDescription="—"
                 period={flowApiRanksPeriod}
                 onPeriodChange={setFlowApiRanksPeriod}
                 showTooltip
@@ -5850,8 +5855,8 @@ export default function DashboardPage() {
                 updatedAt={null}
                 items={(effectiveMarketRanks?.models || []).slice(0, 10)}
                 loading={localDemoMode ? false : marketRanksLoading}
-                emptyText={marketSyncStatus === "failed" ? "全球模型同步失败" : "0"}
-                emptyDescription="0"
+                emptyText={marketSyncStatus === "failed" ? "全球模型同步失败" : "—"}
+                emptyDescription="—"
               />
             </div>
           </section>

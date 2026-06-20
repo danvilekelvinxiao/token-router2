@@ -30,9 +30,7 @@ type AssetProgressBarProps = {
 
 function renderValue(value?: number | null, unit?: AssetProgressBarProps["unit"]) {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) {
-    if (unit === "CNY") return "￥0.00";
-    if (unit === "day") return "0 天";
-    return "0 Token";
+    return "—";
   }
   if (unit === "CNY") return formatWalletCny(value);
   if (unit === "day") return `${Math.max(0, Math.round(Number(value)))} 天`;
@@ -57,7 +55,7 @@ function renderHeadline({
     if (tokenPart && dayPart) return `${tokenPart} · ${dayPart}`;
     if (tokenPart) return `剩余 ${tokenPart}`;
     if (dayPart) return dayPart;
-    return title.includes("暂无") ? "0 Token" : "0";
+    return "—";
   }
   if (Number.isFinite(Number(currentValue)) && Number.isFinite(Number(totalValue))) {
     return `剩余 ${renderValue(currentValue, unit)} / 总 ${renderValue(totalValue, unit)}`;
@@ -65,7 +63,7 @@ function renderHeadline({
   if (Number.isFinite(Number(currentValue))) {
     return `剩余 ${renderValue(currentValue, unit)}`;
   }
-  return "0 Token";
+  return "—";
 }
 
 export default function AssetProgressBar({

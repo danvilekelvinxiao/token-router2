@@ -1,3 +1,5 @@
+import { resolveNewApiBaseUrl, resolveNewApiAdminToken, resolveNewApiRuntimeToken } from "./runtime";
+
 /**
  * New API client — wraps the upstream New API admin endpoints.
  * All functions are server-only. Never import this in browser code.
@@ -13,10 +15,8 @@
  * tokens while the local ledger remains the only customer billing authority.
  */
 
-const NEW_API_BASE_URL =
-  process.env.NEW_API_BASE_URL || "http://localhost:3001";
-const NEW_API_ADMIN_TOKEN =
-  process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || "";
+const NEW_API_BASE_URL = resolveNewApiBaseUrl();
+const NEW_API_ADMIN_TOKEN = resolveNewApiAdminToken();
 const NEW_API_DEFAULT_GROUP =
   process.env.NEW_API_DEFAULT_GROUP || "default";
 const NEW_API_DEFAULT_QUOTA = Number(
@@ -38,8 +38,8 @@ function adminHeaders(): Record<string, string> {
 async function apiFetch(
   path: string,
   options: RequestInit = {},
-): Promise<{ ok: boolean; data: any }> {
-  if (!NEW_API_ADMIN_TOKEN) return { ok: false, data: null };
+): Promise<{ ok: boolean; status: number; data: any }> {
+  if (!NEW_API_ADMIN_TOKEN) return { ok: false, status: 0, data: null };
   try {
     const url = `${NEW_API_BASE_URL}${path}`;
     const res = await fetch(url, {
@@ -48,11 +48,11 @@ async function apiFetch(
     });
     const body = await res.json().catch(() => null);
     if (!res.ok || (body && body.success === false)) {
-      return { ok: false, data: body };
+      return { ok: false, status: res.status, data: body };
     }
-    return { ok: true, data: body?.data ?? body };
+    return { ok: true, status: res.status, data: body?.data ?? body };
   } catch {
-    return { ok: false, data: null };
+    return { ok: false, status: 0, data: null };
   }
 }
 
@@ -86,7 +86,7 @@ export async function createNewApiToken(params: {
   models?: string[];
 }): Promise<NewApiToken> {
   if (!NEW_API_ADMIN_TOKEN) {
-    throw new Error("NEW_API_ADMIN_TOKEN 或 NEW_API_KEY 未配置，无法创建真实 New API API Key");
+    throw new Error("NEW_API_ADMIN_TOKEN / NEW_API_KEY 未配置，无法创建真实 New API API Key");
   }
 
   const nameLimit = Number(process.env.NEW_API_TOKEN_NAME_MAX_LENGTH || 30);
@@ -315,7 +315,10 @@ export async function rechargeNewApiUserQuota(params: {
   tokenId: string;
   quota: number;
 }): Promise<{ success: boolean }> {
-  if (!NEW_API_ADMIN_TOKEN) return { success: true };
+  if (!NEW_API_ADMIN_TOKEN) {
+    if (process.env.NODE_ENV !== "production") return { success: true };
+    return { success: false };
+  }
 
   const { ok } = await apiFetch("/api/token/", {
     method: "PUT",
@@ -333,44 +336,114 @@ export async function rechargeNewApiUserQuota(params: {
 
 export interface NewApiHealth {
   ok: boolean;
+  status?: "ok" | "warn" | "error";
   version?: string;
   uptime?: number;
   error?: string;
+  warning?: string;
+  runtimeOk?: boolean;
+  runtimeError?: string;
+  adminOk?: boolean;
+  adminError?: string;
 }
 
 export async function checkNewApiHealth(): Promise<NewApiHealth> {
-  if (!NEW_API_ADMIN_TOKEN) {
-    return { ok: false, error: "NEW_API_ADMIN_TOKEN 未配置" };
-  }
-
-  if (_adminValid !== null) {
-    return _adminValid
-      ? { ok: true }
-      : { ok: false, error: "管理员 Token 验证失败" };
-  }
-
   try {
-    const url = `${NEW_API_BASE_URL}/api/status`;
-    const res = await fetch(url);
-    const data = await res.json();
+    if (!NEW_API_BASE_URL) {
+      return { ok: false, status: "error", error: "NEW_API_BASE_URL 未配置" };
+    }
+    const runtimeToken = resolveNewApiRuntimeToken();
+    if (process.env.NODE_ENV === "production" && !runtimeToken) {
+      return { ok: false, status: "error", error: "生产环境缺少 NEW_API_KEY / NEW_API_KEY_ALL_MODELS" };
+    }
+    const modelUrl = `${NEW_API_BASE_URL}/v1/models`;
+    const probeModel = async (token: string) => {
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+      const res = await fetch(modelUrl, { headers });
+      const data = await res.json().catch(() => ({}));
+      const modelCount = Array.isArray(data?.data) ? data.data.length : Array.isArray(data?.models) ? data.models.length : 0;
+      return {
+        reachable: true,
+        ok: res.ok && modelCount >= 0,
+        status: res.status,
+        data,
+        modelCount,
+      };
+    };
 
-    if (!data?.success) {
-      _adminValid = false;
-      return { ok: false, error: "New API 服务异常" };
+    const runtimeProbe = await probeModel(runtimeToken);
+    const runtimeReachable = Boolean(runtimeProbe.reachable);
+    const runtimeOk = Boolean(runtimeProbe.ok && (Array.isArray(runtimeProbe.data?.data) || Array.isArray(runtimeProbe.data?.models)));
+    let adminOk = false;
+    let adminError = "";
+    let warning = "";
+    let version = runtimeProbe.data?.data?.version || runtimeProbe.data?.version || null;
+    let uptime = runtimeProbe.data?.data?.start_time || runtimeProbe.data?.start_time || null;
+
+    if (!runtimeOk && NEW_API_ADMIN_TOKEN && NEW_API_ADMIN_TOKEN !== runtimeToken) {
+      const adminModelProbe = await probeModel(NEW_API_ADMIN_TOKEN);
+      if (adminModelProbe.ok && (Array.isArray(adminModelProbe.data?.data) || Array.isArray(adminModelProbe.data?.models))) {
+        version = adminModelProbe.data?.data?.version || adminModelProbe.data?.version || version;
+        uptime = adminModelProbe.data?.data?.start_time || adminModelProbe.data?.start_time || uptime;
+      }
+      if (adminModelProbe.reachable) {
+      warning = `模型接口已连通但运行时 Key 返回 ${runtimeProbe.status}，已切换为管理员 Key 验证`;
+      }
     }
 
-    const verify = await apiFetch("/api/token/");
-    _adminValid = verify.ok;
+    if (NEW_API_ADMIN_TOKEN) {
+      const verify = await apiFetch("/api/token/");
+      const adminEndpointMissing = verify.status === 404;
+      if (adminEndpointMissing && runtimeOk) {
+        adminOk = true;
+        adminError = "";
+        warning = warning || "当前上游为 sub2api 模式，已跳过 New API 管理接口验证";
+      } else {
+        adminOk = verify.ok;
+        adminError = adminOk ? "" : "管理员 Token 验证失败";
+        if (!adminOk && !warning) {
+          warning = "管理员 Token 验证失败，但模型接口可能仍可用";
+        }
+      }
+      _adminValid = adminOk;
+    } else {
+      _adminValid = null;
+    }
 
+    if (runtimeReachable || adminOk) {
+      return {
+        ok: true,
+        status: warning ? "warn" : "ok",
+        version,
+        uptime,
+        warning: warning || undefined,
+        runtimeOk,
+        runtimeError: runtimeOk ? undefined : `New API 模型接口返回 ${runtimeProbe.status}，但服务端口已连通`,
+        adminOk,
+        adminError,
+        error: adminError || undefined,
+      };
+    }
+
+    _adminValid = false;
     return {
-      ok: true,
-      version: data.data?.version || data.version,
-      uptime: data.data?.start_time,
-      error: verify.ok ? undefined : "管理员 Token 验证失败",
+      ok: false,
+      status: "error",
+      version,
+      uptime,
+      runtimeOk,
+      runtimeError: `New API 模型接口返回 ${runtimeProbe.status}`,
+      adminOk,
+      adminError,
+      warning: warning || undefined,
+      error: adminError || `New API 模型接口返回 ${runtimeProbe.status}`,
     };
   } catch (e: any) {
     _adminValid = false;
-    return { ok: false, error: e.message };
+    return { ok: false, status: "error", error: e.message };
   }
 }
 

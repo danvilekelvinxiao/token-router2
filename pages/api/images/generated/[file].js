@@ -30,7 +30,7 @@ export default async function handler(req, res) {
   try {
     const buffer = await fs.readFile(filePath);
     res.setHeader("Content-Type", mime);
-    res.setHeader("Cache-Control", "private, max-age=86400");
+    res.setHeader("Cache-Control", "private, max-age=300, must-revalidate");
     if (req.method === "HEAD") return res.status(200).end();
     return res.status(200).send(buffer);
   } catch {

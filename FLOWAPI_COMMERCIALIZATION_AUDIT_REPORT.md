@@ -459,3 +459,51 @@ P3：长期战略能力
 - 未进行真实支付。
 - 未使用真实客户 key 调用付费模型。
 - 设计师子 agent 因外部模型额度不足失败，UI 评审由主审计补齐。
+
+## 10. 当前 UI 与验收补充（2026-06-14）
+
+### 10.1 Figma 页面级搭建清单已落地
+
+已新增并整理：
+- `FIGMA_PAGE_BREAKDOWN.md`
+- `FIGMA_UI_SPEC.md`
+- `FIGMA_TOKENS.md`
+
+结论：Figma 不再停留在抽象设计说明，而是可以直接按页面施工。
+
+### 10.2 模型使用看板与个人资料空态已收口
+
+已验证：
+- `components/dashboard/model-usage-visualization.tsx` 中的空状态不再使用会误导成真值的“空标签”。
+- `pages/profile.js` 中的 `null人`、`¥null` 已清除。
+- `pages/dashboard.js` 中若干 0 值面板已收紧为中性符号，但真实业务 0 仍保留。
+
+结论：空态误导问题已经明显下降，不再属于阻断商业化的主要风险。
+
+### 10.3 当前上线判断
+
+当前状态：可以继续灰度，不建议直接扩张到公域大流量。
+
+新的主要缺口：
+1. 账本边界和 New API 管理代理边界仍需要最终封口。
+2. 需要真实浏览器层面的全站商业化复验，不只是文件级和文本级检查。
+3. 仍需要一份最终“灰度可售”决策文档，明确哪些功能先上、哪些功能后上。
+
+## 11. 2026-06-18 追加真实调用证据
+
+本次又补了两笔真实消费调用：
+
+- `claude-sonnet-4.6`
+  - `request_id`: `chat_mqihzyaf_fc4b82ed`
+  - `total_tokens`: 1451
+  - `user_charge`: `0.018006`
+  - `wallet_deduct_amount`: `0.090030`
+  - `route_attempts.upstream_channel`: `sub2api`
+- `gpt-5.5`
+  - `request_id`: `chat_mqihtnmj_f0fa3c54`
+  - `total_tokens`: 140
+  - `user_charge`: `0.003917`
+  - `wallet_deduct_amount`: `0.019585`
+  - `route_attempts.upstream_channel`: `sub2api`
+
+结论：FlowAPI 的真实计费、账本落库、路由尝试记录仍然是通的；Sub2API 已回到首路由，新 API 独立接通证据仍需继续补齐。

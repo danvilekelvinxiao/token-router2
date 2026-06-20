@@ -1,0 +1,6 @@
+Task: call multiple agents to review, test, optimize, deploy, and verify the commercial commercialization loop until sub2api and new-api can charge real tokens and the flow is production-ready.
+Desired outcome: multi-role review loop, fixes applied, real charge and token issuance verified, page/UI cleanup complete, deployment-ready evidence collected.
+Known facts: local Next.js app is running on 127.0.0.1:3002; /profile no longer shows model usage visualization; dashboard announcement popup now fetches /api/announcements/dashboard-popup; /admin/commercial-health uses sub2api fallback health logic; api-management has been simplified to hide manual route selection.
+Constraints: preserve code-backed functionality while hiding unnecessary UI; do not mark goal complete without real charge/token evidence; use actual repo state as source of truth.
+Unknowns: whether the recent edits compile cleanly; whether real billing/token mutation is verifiable with current credentials; whether production deployment pipeline is healthy.
+Likely touchpoints: pages/profile.js, components/announcements/dashboard-announcement-popup.tsx, pages/api-management.js, styles/globals.css, pages/admin/*, lib/commercial-health.js, pages/api/v1/chat/completions.js, pages/api/v1/models.js, lib/customer-store.js.

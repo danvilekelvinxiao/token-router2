@@ -13,10 +13,22 @@ type WalletSummaryData = {
     remainingQuotaCny?: number;
     progressPercent?: number;
   };
+  userWallet?: {
+    cnyRechargeTotal?: number;
+    cnyPaidTotal?: number;
+    cnyRefundTotal?: number;
+  };
   token?: {
     totalTokens?: number | null;
     usedTokens?: number | null;
     remainingTokens?: number | null;
+  };
+  tokenWallet?: {
+    usdTokenBalance?: number;
+    usdTokenTotalObtained?: number;
+    usdTokenTotalUsed?: number;
+    usdTokenBonusTotal?: number;
+    usdTokenReferralTotal?: number;
   };
   plan?: {
     planName?: string;
@@ -55,6 +67,8 @@ export default function WalletDetailDrawer({ open, onClose, data, loading = fals
   if (!open) return null;
 
   const wallet = data?.wallet || {};
+  const userWallet = data?.userWallet || {};
+  const tokenWallet = data?.tokenWallet || {};
   const plan = data?.plan || null;
   const logs = data?.balanceLogs || [];
   const recentRecharges = data?.recentRecharges || [];
@@ -90,6 +104,22 @@ export default function WalletDetailDrawer({ open, onClose, data, loading = fals
               <div><span>已用额度</span><strong><LiveNumber value={Number(wallet.usedQuotaCny || 0)} prefix="¥" decimals={2} /></strong></div>
               <div><span>使用进度</span><strong><LiveNumber value={Number(wallet.progressPercent || 0)} suffix="%" decimals={1} /></strong></div>
             </div>
+
+            <section className="wallet-detail-section">
+              <h3>人民币充值账本</h3>
+              <Row label="人民币充值总额" value={formatWalletCny(userWallet.cnyRechargeTotal)} />
+              <Row label="人民币实付总额" value={formatWalletCny(userWallet.cnyPaidTotal)} />
+              <Row label="人民币退款总额" value={formatWalletCny(userWallet.cnyRefundTotal)} />
+            </section>
+
+            <section className="wallet-detail-section">
+              <h3>USD Token 消费钱包</h3>
+              <Row label="Token 钱包余额" value={formatWalletTokens(tokenWallet.usdTokenBalance)} />
+              <Row label="Token 总获得" value={formatWalletTokens(tokenWallet.usdTokenTotalObtained)} />
+              <Row label="Token 总消耗" value={formatWalletTokens(tokenWallet.usdTokenTotalUsed)} />
+              <Row label="Token 奖励累计" value={formatWalletTokens(tokenWallet.usdTokenBonusTotal)} />
+              <Row label="邀请奖励累计" value={formatWalletTokens(tokenWallet.usdTokenReferralTotal)} />
+            </section>
 
             <section className="wallet-detail-section">
               <h3>套餐周期</h3>

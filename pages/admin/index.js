@@ -10,26 +10,25 @@ function StatusDot({ status }) {
 }
 
 export default function AdminOverview() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [stats, setStats] = useState([
     { label: "今日调用", value: "-" },
     { label: "今日 Token", value: "-" },
     { label: "今日收入", value: "-" },
-    { label: "活跃用户", value: "-" },
+    { label: "商业评分", value: "-" },
   ]);
   const [channelStatus, setChannelStatus] = useState([]);
+  const [commercialHealth, setCommercialHealth] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
-    fetchOverview(s);
+    fetchOverview();
   }, []);
 
-  async function fetchOverview(sec) {
+  async function fetchOverview() {
     setLoading(true);
     try {
       const [chRes] = await Promise.all([
-        fetch("/api/admin/channels", { headers: { "x-admin-secret": sec } }),
+        fetch("/api/admin/channels", { credentials: "include" }),
       ]);
       if (chRes.ok) {
         const chData = await chRes.json();
@@ -43,7 +42,7 @@ export default function AdminOverview() {
       }
 
       try {
-        const logRes = await fetch(`/api/admin/logs?limit=0`, { headers: { "x-admin-secret": sec } });
+        const logRes = await fetch(`/api/admin/logs?limit=0`, { credentials: "include" });
         if (logRes.ok) {
           const logData = await logRes.json();
           setStats([
@@ -56,13 +55,30 @@ export default function AdminOverview() {
       } catch {}
 
       try {
-        const userRes = await fetch("/api/admin/users", { headers: { "x-admin-secret": sec } });
+        const userRes = await fetch("/api/admin/users", { credentials: "include" });
         if (userRes.ok) {
           const userData = await userRes.json();
           const users = userData.customers || [];
           setStats((prev) => {
             const n = [...prev];
-            n[3] = { label: "用户总数", value: String(users.length) };
+            n[3] = { label: "商业评分", value: n[3]?.value || "—", note: `用户总数 ${users.length}` };
+            return n;
+          });
+        }
+      } catch {}
+
+      try {
+        const healthRes = await fetch("/api/admin/commercial-health", { credentials: "include" });
+        if (healthRes.ok) {
+          const healthData = await healthRes.json();
+          setCommercialHealth(healthData);
+          setStats((prev) => {
+            const n = [...prev];
+            n[3] = {
+              label: "商业评分",
+              value: `${healthData.score ?? 0}`,
+              note: `正常 ${healthData.summary?.ok ?? 0} / 待确认 ${healthData.summary?.warn ?? 0} / 异常 ${healthData.summary?.fail ?? 0}`,
+            };
             return n;
           });
         }
@@ -72,14 +88,12 @@ export default function AdminOverview() {
   }
 
   const quickEntries = [
-    { label: "新增渠道", href: "/admin/channels", color: "#6366f1" },
-    { label: "毛利审计", href: "/admin/profit", color: "#16a34a" },
-    { label: "查看用户", href: "/admin/users", color: "#8b5cf6" },
-    { label: "调用日志", href: "/admin/logs", color: "#059669" },
-    { label: "安全风控", href: "/admin/security", color: "#f59e0b" },
-    { label: "计费规则", href: "/admin/billing-rules", color: "#3b82f6" },
-    { label: "系统设置", href: "/admin/settings", color: "#ef4444" },
+    { label: "商业闭环检查", href: "/admin/commercial-health", color: "#6366f1" },
   ];
+
+  const topIssues = (commercialHealth?.checks || [])
+    .filter((item) => item.level !== "ok")
+    .slice(0, 3);
 
   return (
     <>
@@ -89,11 +103,10 @@ export default function AdminOverview() {
           <header style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
             <div>
               <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0, letterSpacing: "-0.02em" }}>管理概览</h1>
-              <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>FlowAPI 平台运行状态与关键指标</p>
+              <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>FlowAPI 平台运行状态、商业评分和下一步动作</p>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={() => { const s = secret.trim(); if (s) { sessionStorage.setItem("flowapi_admin_secret", s); fetchOverview(s); } }} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
+              <button onClick={() => fetchOverview()} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
             </div>
           </header>
 
@@ -101,11 +114,39 @@ export default function AdminOverview() {
             <div style={{ textAlign: "center", padding: 40, color: "var(--dash-sub)" }}>加载中...</div>
           ) : (
             <>
+              {commercialHealth ? (
+                <div style={{ marginBottom: 16, border: "1px solid var(--dash-border)", borderRadius: 14, padding: 18, background: "linear-gradient(180deg, rgba(99,102,241,0.08), rgba(139,92,246,0.04))" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "flex-start" }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: "0.08em", color: "var(--dash-accent)", marginBottom: 8 }}>老板当前判断</div>
+                      <div style={{ fontSize: 22, fontWeight: 950, letterSpacing: "-0.02em" }}>
+                        {Number(commercialHealth.score || 0) >= 85 ? "可以公开放量" : Number(commercialHealth.score || 0) >= 65 ? "适合灰度收费" : "仍需收敛后再放量"}
+                      </div>
+                      <div style={{ marginTop: 6, color: "var(--dash-sub)", fontSize: 13, lineHeight: 1.7 }}>
+                        当前商业评分 {commercialHealth.score ?? 0}，正常 {commercialHealth.summary?.ok ?? 0} 项，待确认 {commercialHealth.summary?.warn ?? 0} 项，异常 {commercialHealth.summary?.fail ?? 0} 项。
+                      </div>
+                    </div>
+                    <div style={{ minWidth: 240, padding: "12px 14px", borderRadius: 12, background: "var(--dash-card-bg)", border: "1px solid var(--dash-border)" }}>
+                      <div style={{ fontSize: 11, fontWeight: 900, color: "var(--dash-sub)", marginBottom: 6 }}>下一步优先处理</div>
+                      <div style={{ fontSize: 14, fontWeight: 800, lineHeight: 1.6 }}>
+                        {topIssues.length ? topIssues[0].label : "当前没有红黄项，继续做真实用户验证"}
+                      </div>
+                      {topIssues.length ? (
+                        <div style={{ fontSize: 12, color: "var(--dash-sub)", marginTop: 6, lineHeight: 1.6 }}>
+                          {topIssues[0].detail}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
                 {stats.map((s) => (
-                  <div key={s.label} style={{ background: "var(--dash-card-bg)", border: "1px solid var(--dash-border)", borderRadius: 10, padding: "18px 20px" }}>
+                  <div key={s.label} style={{ background: "var(--dash-card-bg)", border: "1px solid var(--dash-border)", borderRadius: 10, padding: "18px 20px", display: "grid", gap: 8 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: "var(--dash-sub)", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 8 }}>{s.label}</div>
                     <div style={{ fontSize: 26, fontWeight: 900, letterSpacing: "-0.02em", fontFamily: "'SF Mono', monospace" }}>{s.value}</div>
+                    {s.note ? <div style={{ fontSize: 12, color: "var(--dash-sub)", lineHeight: 1.5 }}>{s.note}</div> : null}
                   </div>
                 ))}
               </div>
@@ -149,10 +190,29 @@ export default function AdminOverview() {
                         <span style={{ width: 8, height: 8, borderRadius: "50%", background: e.color, flex: "none" }} />
                         {e.label}
                       </Link>
-                    ))}
+                      ))}
                   </div>
                 </div>
               </div>
+
+              {topIssues.length ? (
+                <div style={{ marginTop: 16, display: "grid", gap: 10, background: "var(--dash-card-bg)", border: "1px solid var(--dash-border)", borderRadius: 10, padding: "18px 20px" }}>
+                  <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0 }}>需要先处理的事项</h2>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {topIssues.map((item) => (
+                      <div key={item.label} style={{ display: "flex", justifyContent: "space-between", gap: 14, padding: "12px 0", borderTop: "1px solid var(--dash-border)" }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 800 }}>{item.label}</div>
+                          <div style={{ marginTop: 4, color: "var(--dash-sub)", fontSize: 12, lineHeight: 1.6 }}>{item.detail}</div>
+                        </div>
+                        <div style={{ alignSelf: "center", fontSize: 12, fontWeight: 900, color: item.level === "fail" ? "#ef4444" : "#f59e0b" }}>
+                          {item.level === "fail" ? "异常" : "待确认"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </>
           )}
         </div>

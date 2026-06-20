@@ -51,7 +51,6 @@ function friendlyAdminError(message = "") {
 }
 
 export default function AdminUsers() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
@@ -64,15 +63,14 @@ export default function AdminUsers() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
-    fetchUsers(s);
+    fetchUsers();
   }, []);
 
-  async function fetchUsers(sec) {
+  async function fetchUsers() {
     setLoading(true);
     let list = [];
     try {
-      const res = await fetch("/api/admin/users", { headers: { "x-admin-secret": sec } });
+      const res = await fetch("/api/admin/users", { credentials: "include" });
       const data = await res.json();
       if (res.ok) {
         list = data.customers || [];
@@ -84,9 +82,8 @@ export default function AdminUsers() {
   }
 
   async function apiPost(body) {
-    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     const res = await fetch("/api/admin/users", {
-      method: "POST", headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(body),
+      method: "POST", headers: { "content-type": "application/json" }, credentials: "include", body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(friendlyAdminError(data.error || "请求失败"));
@@ -104,7 +101,7 @@ export default function AdminUsers() {
     setSaving(true);
     try {
       await apiPost({ action: "updateCustomer", data: { id: selectedUser.id, updates: editForm } });
-      await fetchUsers(secret);
+      await fetchUsers();
       setEditMode(false);
       setSelectedUser(null);
     } catch (e) { setMsgTone("error"); setMsg(e.message); }
@@ -116,7 +113,7 @@ export default function AdminUsers() {
     if (!isBlocked && !confirm(`确认封禁用户 ${user.name || user.email}？`)) return;
     try {
       await apiPost({ action: isBlocked ? "unblockUser" : "blockUser", data: { id: user.id } });
-      await fetchUsers(secret);
+      await fetchUsers();
       if (selectedUser?.id === user.id) setSelectedUser(null);
     } catch (e) { setMsgTone("error"); setMsg(e.message); }
   }
@@ -130,7 +127,7 @@ export default function AdminUsers() {
     if (!confirm(`确认软删除用户 ${label}？\n\n删除后该用户将无法登录，名下 API Key 会自动禁用，账单和日志会保留用于审计。`)) return;
     try {
       await apiPost({ action: "deleteCustomer", data: { id: user.id } });
-      await fetchUsers(secret);
+      await fetchUsers();
       if (selectedUser?.id === user.id) {
         setSelectedUser(null);
         setEditMode(false);
@@ -153,7 +150,7 @@ export default function AdminUsers() {
     setSaving(true);
     try {
       await apiPost({ action: "updateKeyLimit", data: { keyId: keyLimitEdit.id, limit: buildLimitPayload(keyLimitForm) } });
-      const refreshed = await fetchUsers(secret);
+      const refreshed = await fetchUsers();
       setSelectedUser(refreshed.find((user) => user.id === selectedUser?.id) || selectedUser);
       setKeyLimitEdit(null);
       setMsgTone("success");
@@ -166,11 +163,8 @@ export default function AdminUsers() {
   }
 
   function handleSecretSave() {
-    const s = secret.trim();
-    if (!s) { setMsgTone("error"); return setMsg("请输入管理密钥"); }
-    sessionStorage.setItem("flowapi_admin_secret", s);
     setMsg("");
-    fetchUsers(s);
+    fetchUsers();
   }
 
   const formatTokens = (n) => {
@@ -198,10 +192,7 @@ export default function AdminUsers() {
               <h1 style={{ fontSize: 24, fontWeight: 900, margin: 0 }}>用户与 Token 权限</h1>
               <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>管理用户账号、余额、API Key权限和调用限制</p>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={handleSecretSave} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>验证</button>
-            </div>
+            <div style={{ display: "flex", gap: 8 }} />
           </header>
 
           {msg && <div style={{ padding: "10px 16px", borderRadius: 8, background: msgTone === "success" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.1)", color: msgTone === "success" ? "#16a34a" : "#ef4444", fontSize: 13, marginBottom: 14, fontWeight: 600 }}>{msg}</div>}

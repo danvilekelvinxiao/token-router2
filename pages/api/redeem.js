@@ -4,6 +4,7 @@ import { assertCustomerOwner } from "@/lib/session";
 import { seedMockData } from "@/lib/redeem-codes";
 import { upsertUserMembership } from "@/lib/membership/store";
 import { grantUserPackage } from "@/lib/packages/store";
+import { resolveNewApiBaseUrl, resolveNewApiAdminToken } from "@/lib/new-api/runtime";
 
 // Only seed mock data in development mode, never in production
 const ALLOW_MOCK_REDEEM_CODES = process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_REDEEM_MOCK !== "false";
@@ -88,15 +89,19 @@ export default async function handler(req, res) {
     const apiKeys = updatedCustomer?.apiKeys || [];
     const primaryKey = apiKeys[0];
     if (primaryKey?.newApiId) {
-      await fetch(`http://localhost:3001/api/token/${primaryKey.newApiId}/quota`, {
+      const newApiBase = resolveNewApiBaseUrl();
+      const adminToken = resolveNewApiAdminToken() || process.env.NEW_API_KEY || "";
+      if (newApiBase && adminToken) {
+        await fetch(`${newApiBase.replace(/\/+$/, "")}/api/token/${primaryKey.newApiId}/quota`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "New-Api-User": "1",
-          Authorization: `Bearer ${process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || ""}`,
+          Authorization: `Bearer ${adminToken}`,
         },
         body: JSON.stringify({ quota: Math.round((Number(updatedCustomer.balance || 0)) * 10000) }),
-      }).catch(() => {});
+        }).catch(() => {});
+      }
     }
   } catch {
     // Non-critical: sync can be retried

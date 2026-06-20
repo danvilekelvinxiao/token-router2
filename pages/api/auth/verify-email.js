@@ -26,28 +26,16 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "验证码无效或已过期" });
   }
 
-  // Terms acceptance metadata — stored for future DB integration
-  const termsMeta = acceptedTerms ? {
-    acceptedTerms: true,
-    acceptedTermsAt: acceptedTermsAt || new Date().toISOString(),
-    termsVersion: termsVersion || "2026-01-01",
-    acceptedPrivacy: !!acceptedPrivacy,
-    privacyVersion: privacyVersion || "2026-01-01",
-  } : null;
-
   const result = await completeEmailRegistration({ email, password, inviteCode: invitationCode });
   if (result.error) {
     return res.status(400).json({ error: result.error });
   }
-
-  // Log registration with terms acceptance info
-  const termsLog = termsMeta ? ` 协议版本: ${termsMeta.termsVersion}, 隐私政策版本: ${termsMeta.privacyVersion}` : "";
   await logActivity({
     customerId: result.customer?.id,
     email,
     action: "register",
     category: "auth",
-    detail: invitationCode ? `注册成功，邀请码: ${invitationCode}${termsLog}` : `注册成功${termsLog}`,
+    detail: invitationCode ? `注册成功，邀请码: ${invitationCode}` : "注册成功",
     ip: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || "",
     userAgent: req.headers["user-agent"] || "",
   });
