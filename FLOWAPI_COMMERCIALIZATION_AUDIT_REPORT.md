@@ -118,6 +118,22 @@ P2：建立 FlowAPI 品牌组件规范。
 
 最满意：注册赠送、充值、生成图片、模型名字比较直观。
 
+## 2026-06-21 当前验证快照
+
+本次补充验证结果：
+
+- `npm run build` 通过。
+- `npm run lint` 通过。
+- `pages/models.js`、`pages/api-management.js`、`lib/public-model-provider.js` 已接入公开模型口径，内部 `flowapi-*` 仍保留在内部 ID 路径，不再作为用户侧主展示。
+- API Key 创建流程未发现 `选择渠道`、`groupId`、`providerId`、`routeId` 等用户输入项。
+- Git 备份分支已推送到 GitHub：`backup/codex-20260621-flowapi`。
+
+当前阻塞项：
+
+- 远端正式服务器 SSH 直连超时，无法完成线上部署验收。
+- `omx team` 在当前环境不可用，`tmux` 未安装，无法按 Team 运行时启动真实 worker panes。
+- 当前工作树仍存在大量带 ` 2` 后缀的未跟踪重复文件，尚未做物理清理，避免误删用户可能保留的资料。
+
 最担心：API Key、Base URL、Model ID、CC-Switch 对完全小白仍然抽象。
 
 P0：创建 API Key 后给“一键复制配置”和“测试是否成功”。
