@@ -1115,7 +1115,7 @@ export default function ImagesPage() {
                   <Link href="/images/history">查看图片历史</Link>
                   <Link href="/dashboard/logs">查看使用日志</Link>
                   <Link href="/recharge">去充值额度</Link>
-                  <Link href="/help/images">查看使用指南</Link>
+                  <Link href="/help#manual-config">查看使用指南</Link>
                 </div>
               </section>
             </aside>

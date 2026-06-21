@@ -167,13 +167,13 @@ assert(
   providerSource.includes("function buildAicardsAutoPricing")
     && providerSource.includes("FLOWAPI_AICARDS_AUTO_SELL_MULTIPLIER")
     && providerSource.includes("FLOWAPI_AICARDS_ALLOW_ESTIMATED_COST")
-    && providerSource.includes("estimated_guardrail")
+    && providerSource.includes("estimated_cost")
     && providerSource.includes("extractAicardsRawPricing")
     && providerSource.includes("缺少真实上游成本")
     && providerSource.includes("autoSync")
     && providerSource.includes("autoHealthCheck")
     && bulkPublishApiSource.includes("autoPrice: body.autoPrice === true"),
-  "AICards 必须支持老板一键自动同步、健康检查、真实成本安全定价和发布；缺真实成本时只能在管理员显式开启保守估算后发布",
+  "AICards 必须支持老板一键自动同步、健康检查、真实成本定价和发布；缺真实成本时只能在管理员显式开启估算后发布",
 );
 assert(
   upstreamSource.includes("export async function getUpstreamConfigsAsync")
@@ -293,7 +293,6 @@ assert(
     && publicBrandingScanSource.includes('"/api-management"')
     && publicBrandingScanSource.includes('"/guide"')
     && publicBrandingScanSource.includes('"/help"')
-    && publicBrandingScanSource.includes('"/help/images"')
     && publicBrandingScanSource.includes("pageLeakRe")
     && publicBrandingScanSource.includes("apiLeakRe")
     && publicBrandingScanSource.includes("badProviders")
@@ -326,20 +325,18 @@ assert(
   "图片历史接口必须复用 sanitizeImageLogForViewer，普通用户不能看到 upstreamModel/upstreamProvider",
 );
 assert(
-  imageStudioSource.includes("FLOWAPI_MIN_IMAGE_PROFIT_MARGIN")
-    && imageStudioSource.includes("IMAGE_MODEL_MARGIN_TOO_LOW")
-    && imageStudioSource.includes("IMAGE_MODEL_COST_NOT_CONFIGURED")
-    && imageStudioSource.includes("sellPerImage < costPerImage * (1 + minMargin)")
-    && !imageStudioSource.includes("const profitPerImage = Math.max(0, sellPerImage - costPerImage)"),
-  "图片固定利润模式必须硬性阻断成本缺失、价格缺失和低毛利配置，不能把亏损压成 0",
+  !imageStudioSource.includes("FLOWAPI_MIN_IMAGE_PROFIT_MARGIN")
+    && !imageStudioSource.includes("IMAGE_MODEL_PROFIT_GUARD")
+    && !imageStudioSource.includes("sellPerImage < costPerImage * (1 + minMargin)")
+    && imageStudioSource.includes("const profitPerImage = sellPerImage - costPerImage")
+    && imageStudioSource.includes("profitCny: roundMoney(profitPerImage * count)"),
+  "图片计费必须保留真实利润计算，但不再依赖额外发布门槛",
 );
 assert(
-  adminConfigSource.includes("function assertPublishedModelCommercialGuard")
-    && adminConfigSource.includes("公开模型必须先配置真实成本")
-    && adminConfigSource.includes("公开模型售价必须覆盖成本")
+  adminConfigSource.includes("function normalizePublishedModelCommercialConfig")
     && adminConfigSource.includes("normalizePricingPayload(")
-    && adminConfigSource.includes("assertPublishedModelCommercialGuard("),
-  "通用模型发布入口必须复用服务端财务 guard，公开收费模型不能绕过成本/售价/毛利检查",
+    && adminConfigSource.includes("normalizePublishedModelCommercialConfig("),
+  "通用模型发布入口必须复用统一价格配置归一化，不再依赖额外门槛函数",
 );
 assert(
   adminConfigSource.includes("export function makeFlowApiPublicModelId")

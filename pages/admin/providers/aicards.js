@@ -13,7 +13,6 @@ const emptyReview = {
   outputCostPerMillion: "",
   sellInputPricePerMillion: "",
   sellOutputPricePerMillion: "",
-  minProfitMargin: 0.2,
   priority: 90,
   enable: false,
   publish: false,
@@ -25,20 +24,16 @@ function money(value) {
 }
 
 function makeReviewDraft(model = {}) {
-  const inputCost = Number(model.inputCostPerMillion || 0);
-  const outputCost = Number(model.outputCostPerMillion || 0);
-  const minProfitMargin = Number(model.minProfitMargin || 0.2);
   return {
     ...emptyReview,
     id: model.id || "",
     actualModelId: model.actualModelId || "",
     publicModelId: model.publicModelId || "",
     displayName: model.displayName || model.rawModelName || "",
-    inputCostPerMillion: inputCost || "",
-    outputCostPerMillion: outputCost || "",
-    sellInputPricePerMillion: Number(model.sellInputPricePerMillion || 0) || (inputCost ? Number((inputCost * (1 + minProfitMargin)).toFixed(4)) : ""),
-    sellOutputPricePerMillion: Number(model.sellOutputPricePerMillion || 0) || (outputCost ? Number((outputCost * (1 + minProfitMargin)).toFixed(4)) : ""),
-    minProfitMargin,
+    inputCostPerMillion: Number(model.inputCostPerMillion || 0) || "",
+    outputCostPerMillion: Number(model.outputCostPerMillion || 0) || "",
+    sellInputPricePerMillion: Number(model.sellInputPricePerMillion || 0) || "",
+    sellOutputPricePerMillion: Number(model.sellOutputPricePerMillion || 0) || "",
     priority: Number(model.priority || 90),
     enable: Boolean(model.channelEnabled),
     publish: Boolean(model.isPublic),
@@ -52,22 +47,6 @@ function getModelStage(model = {}) {
   if (!model.inputCostPerMillion || !model.outputCostPerMillion || !model.sellInputPricePerMillion || !model.sellOutputPricePerMillion) return "待定价";
   if (Number(model.channelSuccessRate || 0) <= 0) return "待检测";
   return "可发布";
-}
-
-function marginPercent(value) {
-  return `${Math.round(Number(value || 0) * 100)}%`;
-}
-
-function calcProfit(cost, sell) {
-  const costValue = Number(cost || 0);
-  const sellValue = Number(sell || 0);
-  if (!costValue || !sellValue) return null;
-  const profit = sellValue - costValue;
-  return {
-    profit,
-    margin: sellValue > 0 ? profit / sellValue : 0,
-    safe: sellValue >= costValue * (1 + Number(emptyReview.minProfitMargin || 0.2)),
-  };
 }
 
 function getSessionAdminSecret() {
@@ -212,9 +191,6 @@ export default function AdminAicardsProviderPage() {
     return models.filter((model) => getModelStage(model) === statusFilter);
   }, [models, statusFilter]);
 
-  const inputProfit = calcProfit(review.inputCostPerMillion, review.sellInputPricePerMillion);
-  const outputProfit = calcProfit(review.outputCostPerMillion, review.sellOutputPricePerMillion);
-
   async function saveReview(event) {
     event.preventDefault();
     setBusy("review");
@@ -259,7 +235,7 @@ export default function AdminAicardsProviderPage() {
 
           <section style={panelStyle}>
             <div style={stepsStyle}>
-              {["1 同步候选", "2 自动检测", "3 安全定价", "4 毛利保护", "5 发布前台"].map((step) => (
+              {["1 同步候选", "2 自动检测", "3 安全定价", "4 发布前台"].map((step) => (
                 <span key={step}>{step}</span>
               ))}
             </div>
@@ -387,7 +363,7 @@ export default function AdminAicardsProviderPage() {
 
             <form onSubmit={saveReview} style={panelStyle}>
               <h2 style={sectionTitle}>审核发布</h2>
-              <p style={sectionSub}>启用前必须成本、售价、毛利、健康检查全部达标。</p>
+              <p style={sectionSub}>启用前只需完成成本、售价和健康检查配置。</p>
               <Field label="用户看到的模型名" value={review.displayName} onChange={(v) => setReview({ ...review, displayName: v })} />
               <Field label="FlowAPI Model ID" value={review.publicModelId} onChange={(v) => setReview({ ...review, publicModelId: v })} />
               <Field label="内部线路模型 ID（仅后台）" value={review.actualModelId} onChange={(v) => setReview({ ...review, actualModelId: v })} />
@@ -398,14 +374,12 @@ export default function AdminAicardsProviderPage() {
                 <Field label="输出售价/1M" value={review.sellOutputPricePerMillion} onChange={(v) => setReview({ ...review, sellOutputPricePerMillion: v })} type="number" />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <Field label={`最低毛利率（当前 ${marginPercent(review.minProfitMargin)}）`} value={review.minProfitMargin} onChange={(v) => setReview({ ...review, minProfitMargin: v })} type="number" />
                 <Field label="备用优先级" value={review.priority} onChange={(v) => setReview({ ...review, priority: v })} type="number" />
-              </div>
-              <div style={profitBoxStyle}>
-                <strong>毛利预览</strong>
-                <span>输入：{inputProfit ? `每 1M 赚 ¥${inputProfit.profit.toFixed(3)}，毛利率 ${marginPercent(inputProfit.margin)}` : "填完成本和售价后自动计算"}</span>
-                <span>输出：{outputProfit ? `每 1M 赚 ¥${outputProfit.profit.toFixed(3)}，毛利率 ${marginPercent(outputProfit.margin)}` : "填完成本和售价后自动计算"}</span>
-                <em>低于最低毛利率时，后端会拒绝启用或发布，避免亏钱兜底。</em>
+                <div style={profitBoxStyle}>
+                  <strong>价格状态</strong>
+                  <span>输入、输出售价已保存到路线配置。</span>
+                  <em>后台只保留价格与健康检查，不再做额外价格门禁。</em>
+                </div>
               </div>
               <label style={checkStyle}>
                 <input type="checkbox" checked={review.enable} onChange={(event) => setReview({ ...review, enable: event.target.checked })} />

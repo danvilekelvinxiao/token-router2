@@ -106,7 +106,7 @@ export default function AdminRoutesPage() {
             <div>
               <h1 style={{ margin: 0, fontSize: 26, fontWeight: 950 }}>智能路由渠道</h1>
               <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13 }}>
-                每个 FlowAPI 模型背后的上游候选、首字速度、成功率、成本和利润保护都在这里看。
+                每个 FlowAPI 模型背后的上游候选、首字速度、成功率和成本都在这里看。
               </p>
             </div>
             <button onClick={() => load(selectedModel)} style={primaryButton}>刷新</button>
@@ -123,7 +123,6 @@ export default function AdminRoutesPage() {
                 ["P95 首字", `${performance?.p95FirstTokenMs || 0}ms`],
                 ["平均总耗时", `${performance?.avgLatencyMs || 0}ms`],
                 ["缓存命中率", `${Math.round(Number(performance?.cacheHitRate || 0) * 100)}%`],
-                ["利润保护", `${performance?.profitProtectionHits || 0} 次`],
                 ["路由切换", `${performance?.routeSwitchCount || 0} 次`],
                 ["上游失败率", `${Math.round(Number(performance?.upstreamFailureRate || 0) * 100)}%`],
                 ["上游 429", `${performance?.upstream429Count || 0} 次`],
@@ -173,7 +172,7 @@ export default function AdminRoutesPage() {
                       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
                         <thead>
                           <tr>
-                            {["渠道", "成本/1M", "首字", "总耗时", "成功率", "质量分", "评分", "利润保护", "操作"].map((item) => (
+                            {["渠道", "成本/1M", "首字", "总耗时", "成功率", "质量分", "评分", "操作"].map((item) => (
                               <th key={item} style={thStyle}>{item}</th>
                             ))}
                           </tr>
@@ -203,12 +202,6 @@ export default function AdminRoutesPage() {
                                 />
                               </td>
                               <td style={tdStyle}><strong>{Number(candidate.score || 0).toFixed(1)}</strong></td>
-                              <td style={tdStyle}>
-                                <span style={{ ...pillStyle, color: candidate.profitProtected ? "#ef4444" : "#22c55e", background: candidate.profitProtected ? "rgba(239,68,68,.1)" : "rgba(34,197,94,.1)" }}>
-                                  {candidate.profitProtected ? "已拦截" : "安全"}
-                                </span>
-                                <span style={mutedBlock}>{candidate.profitProtectionHits || 0} 次</span>
-                              </td>
                               <td style={tdStyle}>
                                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                                   <button

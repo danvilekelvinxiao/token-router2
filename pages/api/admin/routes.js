@@ -105,7 +105,6 @@ async function performanceStats(matrix = []) {
     routeSwitchCount: 0,
     upstreamFailureRate: 0,
     upstream429Count: 0,
-    profitProtectionHits: matrix.reduce((sum, route) => sum + (route.candidates || []).reduce((inner, item) => inner + Number(item.profitProtectionHits || 0), 0), 0),
     fastestByModel: [],
     cheapestByModel: [],
     stableByModel: [],

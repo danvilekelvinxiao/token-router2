@@ -15,7 +15,6 @@ const pagePaths = [
   "/api-management",
   "/guide",
   "/help",
-  "/help/images",
   "/console/api-access",
   "/api-management",
   "/images",

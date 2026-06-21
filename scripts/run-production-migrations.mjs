@@ -158,7 +158,6 @@ try {
       avg_latency_ms INTEGER NOT NULL DEFAULT 0,
       avg_first_token_ms INTEGER NOT NULL DEFAULT 0,
       p95_latency_ms INTEGER NOT NULL DEFAULT 0,
-      profit_protection_hits INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	    );
@@ -168,6 +167,7 @@ try {
 	    ALTER TABLE upstream_channels ADD COLUMN IF NOT EXISTS channel_type TEXT DEFAULT 'OpenAI Compatible';
 	    ALTER TABLE upstream_channels ADD COLUMN IF NOT EXISTS is_user_visible BOOLEAN NOT NULL DEFAULT false;
 	    ALTER TABLE upstream_channels ADD COLUMN IF NOT EXISTS requires_admin_review BOOLEAN NOT NULL DEFAULT false;
+	    ALTER TABLE upstream_channels DROP COLUMN IF EXISTS profit_protection_hits;
 	  `);
 	  await exec(`
 	    CREATE TABLE IF NOT EXISTS upstream_models (
@@ -213,7 +213,6 @@ try {
 	      category TEXT NOT NULL DEFAULT 'general',
 	      sell_input_price_per_million NUMERIC(14, 6) NOT NULL DEFAULT 0,
 	      sell_output_price_per_million NUMERIC(14, 6) NOT NULL DEFAULT 0,
-	      min_profit_margin NUMERIC(8, 4) NOT NULL DEFAULT 0.2,
 	      is_public BOOLEAN NOT NULL DEFAULT false,
 	      is_available BOOLEAN NOT NULL DEFAULT false,
 	      requires_admin_review BOOLEAN NOT NULL DEFAULT true,

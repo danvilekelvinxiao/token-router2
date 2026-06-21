@@ -1,5 +1,6 @@
 import { listCallRecords } from "@/lib/customer-store";
 import { requireAdmin } from "@/lib/admin-auth";
+import { getRelayRequestAuditByRequestId, relayAuditToPublicPayload } from "@/lib/relay-audit-store";
 
 export default async function handler(req, res) {
   if (!(await requireAdmin(req, res))) return;
@@ -13,8 +14,14 @@ export default async function handler(req, res) {
       limit: Number(req.query?.limit || 200),
       offset: Number(req.query?.offset || 0),
     };
+    const requestId = String(req.query?.requestId || "").trim();
     const result = await listCallRecords(filters);
-    return res.status(200).json(result);
+    if (!requestId) return res.status(200).json(result);
+    const audit = await getRelayRequestAuditByRequestId(requestId).catch(() => null);
+    return res.status(200).json({
+      ...result,
+      audit: audit ? relayAuditToPublicPayload(audit) : null,
+    });
   }
 
   res.setHeader("Allow", "GET");

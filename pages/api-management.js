@@ -722,7 +722,7 @@ export default function ApiManagementPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "同步失败");
       const rows = [
-        { label: "API Key", value: data.key?.maskedKey || maskToken(key.token) },
+        { label: "API Key", value: data.key?.token || key.token },
         { label: "绑定模型", value: key.modelDisplayName || key.publicModelId || "未绑定模型" },
         { label: "线路", value: `${groupMap.get(key.modelGroup)?.displayName || key.modelGroup || "默认"} · ${Number(key.priceMultiplier || groupMap.get(key.modelGroup)?.billingMultiplier || 1)}x` },
         { label: "Base URL", value: API_BASE_URL },
@@ -942,7 +942,7 @@ export default function ApiManagementPage() {
               <div className="api-modal-body api-create-success-body">
                 <div className="api-key-success-panel">
                   <span>创建成功</span>
-                  <strong>{maskToken(createdKey.token)}</strong>
+                  <strong>{createdKey.token}</strong>
                   <p>完整 API Key 只在复制时使用，请妥善保存，不要公开发到群聊、论坛或截图中。</p>
                   <div>
                     <button type="button" className="api-action primary flowapi-primary-action" onClick={() => copyText(createdKey.token, "API Key 已复制")}>复制 API Key</button>
@@ -1101,12 +1101,19 @@ export default function ApiManagementPage() {
             </header>
             <div className="api-modal-body">
               <p className="api-key-limit-note">{ccSwitchFallback.message}</p>
-              <DetailRows rows={[
-                { label: "类型", value: "FlowAPI 兼容" },
-                { label: "Base URL", value: API_BASE_URL },
-                { label: "默认模型", value: ccSwitchFallback.modelId || ccSwitchFallback.key?.publicModelId || DEFAULT_MODEL_ID },
-                { label: "API Key", value: ccSwitchFallback.canImport ? "已写入 deeplink，不在本地保存" : "完整 Key 不可取回" },
-              ]} />
+              <DetailRows
+                rows={[
+                  { label: "类型", value: "FlowAPI 兼容" },
+                  { label: "Base URL", value: API_BASE_URL },
+                  { label: "默认模型", value: ccSwitchFallback.modelId || ccSwitchFallback.key?.publicModelId || DEFAULT_MODEL_ID },
+                  { label: "API Key", value: ccSwitchFallback.key?.token || "请先创建 API Key" },
+                ]}
+              />
+              {ccSwitchFallback.key?.token ? (
+                <div className="api-key-limit-note" style={{ marginTop: 12 }}>
+                  <button type="button" className="api-action" onClick={() => copyText("API Key", ccSwitchFallback.key.token)}>复制完整 API Key</button>
+                </div>
+              ) : null}
               {ccSwitchFallback.manualConfig ? (
                 <pre className="api-management-code-preview"><code>{ccSwitchFallback.manualConfig.config}</code></pre>
               ) : null}
@@ -1116,11 +1123,11 @@ export default function ApiManagementPage() {
               {ccSwitchFallback.url ? <button type="button" className="api-action primary flowapi-primary-action" onClick={() => window.open(ccSwitchFallback.url, "_blank", "noopener,noreferrer")}>重试打开</button> : null}
               <a className="api-action flowapi-action-button" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noreferrer">下载 CC-Switch 自动配置</a>
               {ccSwitchFallback.manualConfig ? <button type="button" className="api-action" onClick={() => copyText(ccSwitchFallback.manualConfig.config, "备用配置已复制")}>复制备用配置</button> : null}
-              <a className="api-action" href="/help/images#cc-switch" target="_blank" rel="noreferrer">查看手动教程</a>
+              <a className="api-action" href="/help#manual-config" target="_blank" rel="noreferrer">查看手动教程</a>
             </footer>
+            </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
 
       <CardDetailModal
         open={Boolean(detail)}
