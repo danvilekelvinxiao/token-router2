@@ -171,15 +171,6 @@ export default async function handler(req, res) {
           },
         });
       }
-      if (error?.type === "model_profit_guard") {
-        return res.status(400).json({
-          error: {
-            message: error.message || "该模型价格尚未通过毛利审核，请先选择其他模型。",
-            type: error.code || "model_profit_guard",
-          },
-          suggestion: "请先选择已通过价格审核的模型，或联系 FlowAPI 客服开通该模型。",
-        });
-      }
       if (error?.code === "INVALID_NEW_API_TOKEN_FORMAT") {
         return res.status(502).json({
           code: "API_KEY_CREATE_FAILED",

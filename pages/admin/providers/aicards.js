@@ -13,7 +13,6 @@ const emptyReview = {
   outputCostPerMillion: "",
   sellInputPricePerMillion: "",
   sellOutputPricePerMillion: "",
-  minProfitMargin: 0.2,
   priority: 90,
   enable: false,
   publish: false,
@@ -27,7 +26,6 @@ function money(value) {
 function makeReviewDraft(model = {}) {
   const inputCost = Number(model.inputCostPerMillion || 0);
   const outputCost = Number(model.outputCostPerMillion || 0);
-  const minProfitMargin = Number(model.minProfitMargin || 0.2);
   return {
     ...emptyReview,
     id: model.id || "",
@@ -36,9 +34,8 @@ function makeReviewDraft(model = {}) {
     displayName: model.displayName || model.rawModelName || "",
     inputCostPerMillion: inputCost || "",
     outputCostPerMillion: outputCost || "",
-    sellInputPricePerMillion: Number(model.sellInputPricePerMillion || 0) || (inputCost ? Number((inputCost * (1 + minProfitMargin)).toFixed(4)) : ""),
-    sellOutputPricePerMillion: Number(model.sellOutputPricePerMillion || 0) || (outputCost ? Number((outputCost * (1 + minProfitMargin)).toFixed(4)) : ""),
-    minProfitMargin,
+    sellInputPricePerMillion: Number(model.sellInputPricePerMillion || 0) || (inputCost ? Number((inputCost * 1.2).toFixed(4)) : ""),
+    sellOutputPricePerMillion: Number(model.sellOutputPricePerMillion || 0) || (outputCost ? Number((outputCost * 1.2).toFixed(4)) : ""),
     priority: Number(model.priority || 90),
     enable: Boolean(model.channelEnabled),
     publish: Boolean(model.isPublic),
@@ -66,7 +63,6 @@ function calcProfit(cost, sell) {
   return {
     profit,
     margin: sellValue > 0 ? profit / sellValue : 0,
-    safe: sellValue >= costValue * (1 + Number(emptyReview.minProfitMargin || 0.2)),
   };
 }
 
@@ -259,7 +255,7 @@ export default function AdminAicardsProviderPage() {
 
           <section style={panelStyle}>
             <div style={stepsStyle}>
-              {["1 同步候选", "2 自动检测", "3 安全定价", "4 毛利保护", "5 发布前台"].map((step) => (
+              {["1 同步候选", "2 自动检测", "3 定价确认", "4 发布前台"].map((step) => (
                 <span key={step}>{step}</span>
               ))}
             </div>
@@ -387,7 +383,7 @@ export default function AdminAicardsProviderPage() {
 
             <form onSubmit={saveReview} style={panelStyle}>
               <h2 style={sectionTitle}>审核发布</h2>
-              <p style={sectionSub}>启用前必须成本、售价、毛利、健康检查全部达标。</p>
+              <p style={sectionSub}>启用前必须成本、售价、健康检查全部达标。</p>
               <Field label="用户看到的模型名" value={review.displayName} onChange={(v) => setReview({ ...review, displayName: v })} />
               <Field label="FlowAPI Model ID" value={review.publicModelId} onChange={(v) => setReview({ ...review, publicModelId: v })} />
               <Field label="内部线路模型 ID（仅后台）" value={review.actualModelId} onChange={(v) => setReview({ ...review, actualModelId: v })} />
@@ -398,14 +394,13 @@ export default function AdminAicardsProviderPage() {
                 <Field label="输出售价/1M" value={review.sellOutputPricePerMillion} onChange={(v) => setReview({ ...review, sellOutputPricePerMillion: v })} type="number" />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <Field label={`最低毛利率（当前 ${marginPercent(review.minProfitMargin)}）`} value={review.minProfitMargin} onChange={(v) => setReview({ ...review, minProfitMargin: v })} type="number" />
                 <Field label="备用优先级" value={review.priority} onChange={(v) => setReview({ ...review, priority: v })} type="number" />
               </div>
               <div style={profitBoxStyle}>
-                <strong>毛利预览</strong>
-                <span>输入：{inputProfit ? `每 1M 赚 ¥${inputProfit.profit.toFixed(3)}，毛利率 ${marginPercent(inputProfit.margin)}` : "填完成本和售价后自动计算"}</span>
-                <span>输出：{outputProfit ? `每 1M 赚 ¥${outputProfit.profit.toFixed(3)}，毛利率 ${marginPercent(outputProfit.margin)}` : "填完成本和售价后自动计算"}</span>
-                <em>低于最低毛利率时，后端会拒绝启用或发布，避免亏钱兜底。</em>
+                <strong>定价预览</strong>
+                <span>输入：{inputProfit ? `每 1M 收益 ¥${inputProfit.profit.toFixed(3)}，收益率 ${marginPercent(inputProfit.margin)}` : "填完成本和售价后自动计算"}</span>
+                <span>输出：{outputProfit ? `每 1M 收益 ¥${outputProfit.profit.toFixed(3)}，收益率 ${marginPercent(outputProfit.margin)}` : "填完成本和售价后自动计算"}</span>
+                <em>这里仅用于展示定价结果。</em>
               </div>
               <label style={checkStyle}>
                 <input type="checkbox" checked={review.enable} onChange={(event) => setReview({ ...review, enable: event.target.checked })} />

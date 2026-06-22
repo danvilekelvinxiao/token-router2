@@ -31,11 +31,7 @@ function getStatus(key) {
 }
 
 function maskToken(token = "") {
-  if (!token || token.length <= 10) return "sk-******";
-  const prefix = token.startsWith("sk-") ? "sk-" : "";
-  const body = token.startsWith("sk-") ? token.slice(3) : token;
-  if (body.length <= 8) return `${prefix}******`;
-  return `${prefix}${body.slice(0, 4)}************${body.slice(-4)}`;
+  return String(token || "");
 }
 
 function computeExpiry(value, customDate = "") {

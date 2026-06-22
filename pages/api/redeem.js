@@ -5,6 +5,8 @@ import { seedMockData } from "@/lib/redeem-codes";
 import { upsertUserMembership } from "@/lib/membership/store";
 import { grantUserPackage } from "@/lib/packages/store";
 
+const NEW_API_ADMIN_USER_ID = process.env.NEW_API_ADMIN_USER_ID || "1";
+
 // Only seed mock data in development mode, never in production
 const ALLOW_MOCK_REDEEM_CODES = process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_REDEEM_MOCK !== "false";
 if (ALLOW_MOCK_REDEEM_CODES) seedMockData();
@@ -92,7 +94,7 @@ export default async function handler(req, res) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "New-Api-User": "1",
+          "New-Api-User": NEW_API_ADMIN_USER_ID,
           Authorization: `Bearer ${process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || ""}`,
         },
         body: JSON.stringify({ quota: Math.round((Number(updatedCustomer.balance || 0)) * 10000) }),

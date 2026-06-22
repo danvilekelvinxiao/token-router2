@@ -4,6 +4,7 @@ const NEW_API_BASE = process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080";
 const NEW_API_ADMIN_TOKEN = process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || "";
 const UNIAPI_API_KEY = process.env.UNIAPI_API_KEY || "";
 const UNIAPI_BASE_URL = "https://api.uniapi.io";
+const NEW_API_ADMIN_USER_ID = process.env.NEW_API_ADMIN_USER_ID || "1";
 
 const DEFAULT_UNIAPI_MODELS = [
   "gpt-5.5",
@@ -54,7 +55,7 @@ export default async function handler(req, res) {
       method: "POST",
       headers: {
         Authorization: `Bearer ${NEW_API_ADMIN_TOKEN}`,
-        "New-Api-User": "1",
+        "New-Api-User": NEW_API_ADMIN_USER_ID,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

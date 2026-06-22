@@ -17,6 +17,8 @@ const NEW_API_BASE_URL =
   process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080";
 const NEW_API_ADMIN_TOKEN =
   process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || "";
+const NEW_API_ADMIN_USER_ID =
+  process.env.NEW_API_ADMIN_USER_ID || "1";
 const NEW_API_DEFAULT_GROUP =
   process.env.NEW_API_DEFAULT_GROUP || "default";
 const NEW_API_DEFAULT_QUOTA = Number(
@@ -30,7 +32,7 @@ let _adminValid: boolean | null = null;
 function adminHeaders(): Record<string, string> {
   return {
     Authorization: `Bearer ${NEW_API_ADMIN_TOKEN}`,
-    "New-Api-User": "1",
+    "New-Api-User": NEW_API_ADMIN_USER_ID,
     "Content-Type": "application/json",
   };
 }
@@ -54,20 +56,36 @@ async function apiFetch(
   options: RequestInit = {},
 ): Promise<{ ok: boolean; data: any }> {
   if (!NEW_API_ADMIN_TOKEN) return { ok: false, data: null };
-  try {
-    const url = `${NEW_API_BASE_URL}${path}`;
-    const res = await fetch(url, {
-      ...options,
-      headers: { ...adminHeaders(), ...((options.headers as Record<string, string>) || {}) },
-    });
-    const body = await res.json().catch(() => null);
-    if (!res.ok || (body && body.success === false)) {
-      return { ok: false, data: body };
+  const retryAttempts = Math.max(1, Number(process.env.NEW_API_ADMIN_RETRY_ATTEMPTS || 3));
+  const retryDelayMs = Math.max(100, Number(process.env.NEW_API_ADMIN_RETRY_DELAY_MS || 300));
+  const url = `${NEW_API_BASE_URL}${path}`;
+
+  for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
+    try {
+      const res = await fetch(url, {
+        ...options,
+        headers: { ...adminHeaders(), ...((options.headers as Record<string, string>) || {}) },
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok || (body && body.success === false)) {
+        const retryable = res.status === 429 || res.status >= 500;
+        if (retryable && attempt < retryAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
+          continue;
+        }
+        return { ok: false, data: body };
+      }
+      return { ok: true, data: body?.data ?? body };
+    } catch {
+      if (attempt < retryAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
+        continue;
+      }
+      return { ok: false, data: null };
     }
-    return { ok: true, data: body?.data ?? body };
-  } catch {
-    return { ok: false, data: null };
   }
+
+  return { ok: false, data: null };
 }
 
 // ---------------------------------------------------------------------------

@@ -42,11 +42,13 @@ const runtimeKeyCandidates = [
 ];
 const relayKey = runtimeKeyCandidates.find((value) => String(value || "").trim()) || "";
 const adminToken = process.env.NEW_API_ADMIN_TOKEN || "";
+const adminUserId = process.env.NEW_API_ADMIN_USER_ID || "1";
 
 console.log("=== 环境变量 ===");
 console.log("NEW_API_BASE_URL:", base || "(未设置)");
 console.log("NEW_API_RUNTIME_KEY:", relayKey ? `${relayKey.slice(0, 12)}...` : "(未设置)");
 console.log("NEW_API_ADMIN_TOKEN:", adminToken ? `${adminToken.slice(0, 12)}...` : "(未设置)");
+console.log("NEW_API_ADMIN_USER_ID:", adminUserId);
 console.log("NEW_API_DEFAULT_GROUP:", process.env.NEW_API_DEFAULT_GROUP || "default");
 console.log("NEW_API_DEFAULT_QUOTA:", process.env.NEW_API_DEFAULT_QUOTA || "500000");
 
@@ -79,7 +81,7 @@ async function checkAdmin() {
   const res = await fetch(`${base}/api/token/`, {
     headers: {
       Authorization: `Bearer ${adminToken}`,
-      "New-Api-User": "1",
+      "New-Api-User": adminUserId,
     },
   });
   const data = await res.json().catch(() => ({}));

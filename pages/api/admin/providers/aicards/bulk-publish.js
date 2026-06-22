@@ -29,7 +29,6 @@ export default async function handler(req, res) {
       autoHealthCheck: body.autoHealthCheck === true,
       perModelHealthCheck: body.perModelHealthCheck !== false,
       includeImages: body.includeImages === true,
-      minProfitMargin: body.minProfitMargin,
       sellMultiplier: body.sellMultiplier,
       adminId: admin.customer?.id || admin.customer?.email || admin.session?.customerId || "admin",
     });
@@ -37,7 +36,7 @@ export default async function handler(req, res) {
       ...result,
       message: result.ok
         ? `已发布 ${result.publishedCount} 个 FlowAPI 模型，跳过 ${result.skippedCount} 个未达标候选。`
-        : "没有候选满足发布条件，请先完成健康检查、成本、售价和毛利配置。",
+        : "没有候选满足发布条件，请先完成健康检查、成本和售价配置。",
     });
   } catch (error) {
     return res.status(error.status || 400).json({

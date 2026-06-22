@@ -19,10 +19,7 @@ const CC_SWITCH_RELEASE_URL = "https://github.com/farion1231/cc-switch/releases/
 const CC_SWITCH_WINDOWS_URL = "https://github.com/farion1231/cc-switch/releases/download/v3.15.0/CC-Switch-v3.15.0-Windows.msi";
 
 function maskToken(token = "") {
-  if (!token || token.length <= 14) return "sk-******";
-  const prefix = token.startsWith("sk-") ? "sk-" : "";
-  const body = token.startsWith("sk-") ? token.slice(3) : token;
-  return `${prefix}${body.slice(0, 4)}************${body.slice(-4)}`;
+  return String(token || "");
 }
 
 function formatDate(value) {
@@ -722,7 +719,7 @@ export default function ApiManagementPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "同步失败");
       const rows = [
-        { label: "API Key", value: data.key?.maskedKey || maskToken(key.token) },
+        { label: "API Key", value: data.key?.token || data.key?.maskedKey || maskToken(key.token) },
         { label: "绑定模型", value: key.modelDisplayName || key.publicModelId || "未绑定模型" },
         { label: "线路", value: `${groupMap.get(key.modelGroup)?.displayName || key.modelGroup || "默认"} · ${Number(key.priceMultiplier || groupMap.get(key.modelGroup)?.billingMultiplier || 1)}x` },
         { label: "Base URL", value: API_BASE_URL },

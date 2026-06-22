@@ -155,7 +155,7 @@ export default function AdminBillingRules() {
                   <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}>
                     <thead>
                       <tr style={{ background: "var(--dash-card-hover)" }}>
-                        <th style={thS}>模型</th><th style={thS}>输入售价</th><th style={thS}>输出售价</th><th style={thS}>输入成本</th><th style={thS}>输出成本</th><th style={thS}>倍率</th><th style={thS}>毛利</th><th style={thS}>操作</th>
+                        <th style={thS}>模型</th><th style={thS}>输入售价</th><th style={thS}>输出售价</th><th style={thS}>输入成本</th><th style={thS}>输出成本</th><th style={thS}>倍率</th><th style={thS}>收益</th><th style={thS}>操作</th>
                       </tr>
                     </thead>
                     <tbody>

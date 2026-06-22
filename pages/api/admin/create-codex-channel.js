@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 const NEW_API_BASE = process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080";
 const NEW_API_ADMIN_TOKEN = process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || "";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const NEW_API_ADMIN_USER_ID = process.env.NEW_API_ADMIN_USER_ID || "1";
 
 function isUsableOpenAiKey(key) {
   const value = String(key || "").trim();
@@ -47,7 +48,7 @@ export default async function handler(req, res) {
       method: "POST",
       headers: {
         Authorization: `Bearer ${NEW_API_ADMIN_TOKEN}`,
-        "New-Api-User": "1",
+        "New-Api-User": NEW_API_ADMIN_USER_ID,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

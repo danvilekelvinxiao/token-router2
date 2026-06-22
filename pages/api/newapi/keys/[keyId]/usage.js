@@ -6,8 +6,7 @@ import { getDashboard } from "@/lib/customer-store";
 import { requireCustomerSession } from "@/lib/session";
 
 function maskToken(token = "") {
-  if (token.length <= 14) return token;
-  return `${token.slice(0, 8)}${"*".repeat(token.length - 14)}${token.slice(-6)}`;
+  return String(token || "");
 }
 
 function normalizeCall(call = {}) {
@@ -102,6 +101,7 @@ export default async function handler(req, res) {
         key: {
           id: key.id,
           name: key.label || "默认 API Key",
+          token: key.token || "",
           maskedKey: maskToken(key.token),
           status: key.disabledAt ? "disabled" : (key.expiresAt && new Date(key.expiresAt) < new Date() ? "expired" : "active"),
           group: key.modelGroup || "default",
@@ -140,6 +140,7 @@ export default async function handler(req, res) {
       key: {
         id: key.id,
         name: key.label || "默认 API Key",
+        token: key.token || "",
         maskedKey: maskToken(key.token),
         status: key.disabledAt ? "disabled" : (key.expiresAt && new Date(key.expiresAt) < new Date() ? "expired" : "active"),
         group: key.modelGroup || "default",
