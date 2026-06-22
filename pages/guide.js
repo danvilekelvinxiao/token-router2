@@ -60,9 +60,8 @@ function makeCcSwitchConfig(keys, apiBaseUrl) {
     name: "FlowAPI", app: "codex", endpoint: apiBaseUrl,
     keys: keys.map((key) => ({
       name: key.label,
-      api_key: key.token,
       apiKey: key.token,
-      OPENAI_API_KEY: key.token,
+      api_key: key.token,
       model: key.publicModelId || defaultModel,
     })),
   }, null, 2);

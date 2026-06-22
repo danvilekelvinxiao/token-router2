@@ -394,13 +394,6 @@ function buildSanitizedSsePlaceholder({ publicModelId = "", requestId = "" } = {
   };
 }
 
-function assertCandidateMargin(candidate = {}, { modelId = "", usage = {}, modelProduct = null, multiplier = 1 } = {}) {
-  const snapshot = candidate.name === "team-token-pool"
-    ? buildBillingSnapshot(modelId, usage, modelProduct, multiplier)
-    : buildBillingSnapshotForCandidate(modelId, usage, modelProduct, multiplier, candidate);
-  return { ok: true, snapshot };
-}
-
 function mapModelForUpstream(upstreamName = "", modelId = "") {
   const normalizedUpstream = String(upstreamName || "").toLowerCase();
   const id = String(modelId || "").trim();
@@ -1169,15 +1162,6 @@ export default async function handler(req, res) {
     for (const candidate of orderedUpstreams) {
       routeAttemptCount += 1;
       if (candidate.upstreamUrl) await assertSafeUpstreamUrl(candidate.upstreamUrl);
-      const marginCheck = assertCandidateMargin(candidate, {
-        modelId: selected.modelId,
-        usage: {
-          prompt_tokens: promptTokens,
-          completion_tokens: estimatedCompletionTokens,
-        },
-        modelProduct,
-        multiplier: billingMultiplier,
-      });
       const authorizationToken = String(candidate.apiKey || "").trim()
         || (candidate.name === "new-api" ? getNewApiAuthorizationToken({ modelProduct }) : "");
       if (!authorizationToken) {
