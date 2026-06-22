@@ -167,7 +167,7 @@ assert(
   providerSource.includes("function buildAicardsAutoPricing")
     && providerSource.includes("FLOWAPI_AICARDS_AUTO_SELL_MULTIPLIER")
     && providerSource.includes("FLOWAPI_AICARDS_ALLOW_ESTIMATED_COST")
-    && providerSource.includes("estimated_guardrail")
+    && providerSource.includes("estimated_cost")
     && providerSource.includes("extractAicardsRawPricing")
     && providerSource.includes("缺少真实上游成本")
     && providerSource.includes("autoSync")
@@ -327,19 +327,18 @@ assert(
 );
 assert(
   imageStudioSource.includes("FLOWAPI_MIN_IMAGE_PROFIT_MARGIN")
-    && imageStudioSource.includes("IMAGE_MODEL_MARGIN_TOO_LOW")
     && imageStudioSource.includes("IMAGE_MODEL_COST_NOT_CONFIGURED")
-    && imageStudioSource.includes("sellPerImage < costPerImage * (1 + minMargin)")
-    && !imageStudioSource.includes("const profitPerImage = Math.max(0, sellPerImage - costPerImage)"),
-  "图片固定利润模式必须硬性阻断成本缺失、价格缺失和低毛利配置，不能把亏损压成 0",
+    && !imageStudioSource.includes("sellPerImage < costPerImage * (1 + minMargin)")
+    && !imageStudioSource.includes("IMAGE_MODEL_MARGIN_TOO_LOW"),
+  "图片固定定价模式应保留成本和价格校验，但不再按收益阈值进行阻断",
 );
 assert(
   adminConfigSource.includes("function assertPublishedModelCommercialGuard")
     && adminConfigSource.includes("公开模型必须先配置真实成本")
-    && adminConfigSource.includes("公开模型售价必须覆盖成本")
+    && !adminConfigSource.includes("公开模型售价必须覆盖成本")
     && adminConfigSource.includes("normalizePricingPayload(")
     && adminConfigSource.includes("assertPublishedModelCommercialGuard("),
-  "通用模型发布入口必须复用服务端财务 guard，公开收费模型不能绕过成本/售价/毛利检查",
+  "通用模型发布入口仍应保留基础成本和售价校验，但不再以收益阈值阻断",
 );
 assert(
   adminConfigSource.includes("export function makeFlowApiPublicModelId")

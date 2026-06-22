@@ -940,9 +940,9 @@ export default function ApiManagementPage() {
 
             {createdKey ? (
               <div className="api-modal-body api-create-success-body">
-                <div className="api-key-success-panel">
+              <div className="api-key-success-panel">
                   <span>创建成功</span>
-                  <strong>{maskToken(createdKey.token)}</strong>
+                  <strong>{createdKey.token}</strong>
                   <p>完整 API Key 只在复制时使用，请妥善保存，不要公开发到群聊、论坛或截图中。</p>
                   <div>
                     <button type="button" className="api-action primary flowapi-primary-action" onClick={() => copyText(createdKey.token, "API Key 已复制")}>复制 API Key</button>
@@ -1105,7 +1105,7 @@ export default function ApiManagementPage() {
                 { label: "类型", value: "FlowAPI 兼容" },
                 { label: "Base URL", value: API_BASE_URL },
                 { label: "默认模型", value: ccSwitchFallback.modelId || ccSwitchFallback.key?.publicModelId || DEFAULT_MODEL_ID },
-                { label: "API Key", value: ccSwitchFallback.canImport ? "已写入 deeplink，不在本地保存" : "完整 Key 不可取回" },
+                { label: "API Key", value: ccSwitchFallback.key?.token || "完整 Key 不可取回" },
               ]} />
               {ccSwitchFallback.manualConfig ? (
                 <pre className="api-management-code-preview"><code>{ccSwitchFallback.manualConfig.config}</code></pre>
@@ -1116,7 +1116,7 @@ export default function ApiManagementPage() {
               {ccSwitchFallback.url ? <button type="button" className="api-action primary flowapi-primary-action" onClick={() => window.open(ccSwitchFallback.url, "_blank", "noopener,noreferrer")}>重试打开</button> : null}
               <a className="api-action flowapi-action-button" href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noreferrer">下载 CC-Switch 自动配置</a>
               {ccSwitchFallback.manualConfig ? <button type="button" className="api-action" onClick={() => copyText(ccSwitchFallback.manualConfig.config, "备用配置已复制")}>复制备用配置</button> : null}
-              <a className="api-action" href="/help/images#cc-switch" target="_blank" rel="noreferrer">查看手动教程</a>
+              <a className="api-action" href="/help" target="_blank" rel="noreferrer">查看接入说明</a>
             </footer>
           </div>
         </div>
