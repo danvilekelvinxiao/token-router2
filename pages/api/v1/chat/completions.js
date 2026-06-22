@@ -1156,7 +1156,7 @@ export default async function handler(req, res) {
     upstreamUrl: teamTokenUrl,
   }] : [];
   const orderedUpstreams = teamTokenUpstream.length ? teamTokenUpstream : orderUpstreamsForFlowApiKey(routeDecision, upstreams);
-  const retry429 = process.env.FLOWAPI_RETRY_UPSTREAM_429 !== "false";
+  const retry429 = process.env.FLOWAPI_RETRY_UPSTREAM_429 === "true";
 
     for (const candidate of orderedUpstreams) {
       routeAttemptCount += 1;
