@@ -65,7 +65,7 @@ const adminMenuGroups = [
     label: "数据与日志",
     helper: "调用、团队、导出",
     items: [
-      { key: "profit", label: "毛利审计", href: "/admin/profit", icon: IconBilling },
+      { key: "profit", label: "收益审计", href: "/admin/profit", icon: IconBilling },
       { key: "logs", label: "调用日志", href: "/admin/logs", icon: IconLogs },
       { key: "teamReports", label: "团队报表", href: "/admin/team-reports", icon: IconLogs },
       { key: "teamUsageLogs", label: "团队日志", href: "/admin/team-usage-logs", icon: IconLogs },

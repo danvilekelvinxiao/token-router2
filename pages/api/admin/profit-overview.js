@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   } catch (error) {
     console.error("[admin/profit-overview]", error);
     return res.status(500).json({
-      error: "毛利数据读取失败",
+      error: "收益数据读取失败",
       suggestion: "请先确认 calls 表已完成迁移，并检查最近调用日志是否正常写入。",
     });
   }

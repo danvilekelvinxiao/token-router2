@@ -23,7 +23,7 @@ function buildBossVerdict(summary = {}) {
     return {
       tone: "warn",
       title: "成本待确认",
-      text: `有 ${missing} 个成功扣费请求没有上游成本，当前毛利只能参考，不能作为定价依据。`,
+      text: `有 ${missing} 个成功扣费请求没有上游成本，当前收益只能参考，不能作为定价依据。`,
       action: "先到模型价格配置补齐成本价，再判断是否要涨价或切换渠道。",
     };
   }
@@ -38,14 +38,14 @@ function buildBossVerdict(summary = {}) {
   if (margin < 20 && Number(summary.revenueCny || 0) > 0) {
     return {
       tone: "warn",
-      title: "毛利偏低",
-      text: "当前毛利率低于 20%，抗波动能力不足，上游涨价或失败重试都会吃掉利润。",
-      action: "优先提高售价、限制低毛利模型免费试用，或把主路由切到更便宜渠道。",
+      title: "收益偏低",
+      text: "当前收益率低于 20%，抗波动能力不足，上游涨价或失败重试都会吃掉利润。",
+      action: "优先提高售价、限制低收益模型免费试用，或把主路由切到更便宜渠道。",
     };
   }
   return {
     tone: "good",
-    title: "毛利健康",
+    title: "收益健康",
     text: "当前售价和成本差价处于可控区间，可以继续观察真实调用量。",
     action: "保持成本监控，等调用量稳定后再做阶梯套餐和团队包。",
   };
@@ -79,13 +79,13 @@ export default function AdminProfitPage() {
       const json = await res.json().catch(() => null);
       if (!res.ok) {
         setData(null);
-        setMessage(json?.error || "毛利数据读取失败");
+        setMessage(json?.error || "收益数据读取失败");
         return;
       }
       setData(json);
     } catch {
       setData(null);
-      setMessage("无法连接毛利审计接口");
+      setMessage("无法连接收益审计接口");
     } finally {
       setLoading(false);
     }
@@ -110,14 +110,14 @@ export default function AdminProfitPage() {
 
   return (
     <>
-      <Head><title>毛利审计 - FlowAPI 管理后台</title></Head>
+      <Head><title>收益审计 - FlowAPI 管理后台</title></Head>
       <AdminLayout currentPath="/admin/profit">
         <main style={{ color: "var(--dash-text)" }}>
           <header style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "flex-start", marginBottom: 24 }}>
             <div>
-              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, letterSpacing: 0 }}>毛利审计</h1>
+              <h1 style={{ margin: 0, fontSize: 26, fontWeight: 900, letterSpacing: 0 }}>收益审计</h1>
               <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13, lineHeight: 1.6 }}>
-                看真实销售额、上游成本、毛利和亏损请求，确认中转站差价是否健康。
+                看真实销售额、上游成本和亏损请求，确认中转站差价是否健康。
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -135,7 +135,7 @@ export default function AdminProfitPage() {
           </header>
 
           {loading ? (
-            <div style={{ padding: 36, textAlign: "center", color: "var(--dash-sub)" }}>正在读取毛利数据...</div>
+            <div style={{ padding: 36, textAlign: "center", color: "var(--dash-sub)" }}>正在读取收益数据...</div>
           ) : message ? (
             <div style={{ padding: 18, borderRadius: 12, border: "1px solid rgba(239,68,68,0.24)", background: "rgba(239,68,68,0.08)", color: "#ef4444", fontWeight: 800 }}>{message}</div>
           ) : (
@@ -156,18 +156,18 @@ export default function AdminProfitPage() {
               <section style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, marginBottom: 16 }}>
                 <MetricCard label="销售额" value={money(summary.revenueCny)} hint={`今日 ${money(today.revenueCny)}`} />
                 <MetricCard label="上游成本" value={money(summary.upstreamCostCny)} hint={`今日 ${money(today.upstreamCostCny)}`} />
-                <MetricCard label="毛利" value={money(summary.profitCny)} hint={`今日 ${money(today.profitCny)}`} tone={Number(summary.profitCny || 0) >= 0 ? "good" : "bad"} />
-                <MetricCard label="毛利率" value={marginText(summary.profitMargin)} hint={`${numberText(summary.lossRequests)} 个亏损请求 · 成本覆盖 ${marginText(summary.costCoverageRate ?? 100)}`} tone={marginTone} />
+                <MetricCard label="收益" value={money(summary.profitCny)} hint={`今日 ${money(today.profitCny)}`} tone={Number(summary.profitCny || 0) >= 0 ? "good" : "bad"} />
+                <MetricCard label="收益率" value={marginText(summary.profitMargin)} hint={`${numberText(summary.lossRequests)} 个亏损请求 · 成本覆盖 ${marginText(summary.costCoverageRate ?? 100)}`} tone={marginTone} />
               </section>
 
               <section style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 16 }}>
                 <article style={{ background: "var(--dash-card-bg)", border: "1px solid var(--dash-border)", borderRadius: 12, padding: "20px 22px" }}>
-                  <h2 style={{ margin: "0 0 14px", fontSize: 16, fontWeight: 900 }}>模型毛利排行</h2>
+                  <h2 style={{ margin: "0 0 14px", fontSize: 16, fontWeight: 900 }}>模型收益排行</h2>
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 620 }}>
                       <thead>
                         <tr>
-                          {["模型", "请求", "销售额", "成本", "毛利", "毛利率"].map((head) => (
+                          {["模型", "请求", "销售额", "成本", "收益", "收益率"].map((head) => (
                             <th key={head} style={{ textAlign: head === "模型" ? "left" : "right", padding: "0 0 10px", color: "var(--dash-sub)", fontSize: 11 }}>{head}</th>
                           ))}
                         </tr>
@@ -200,7 +200,7 @@ export default function AdminProfitPage() {
                     {(data?.losses || []).map((item) => (
                       <div key={item.id} style={{ border: "1px solid rgba(239,68,68,0.22)", background: "rgba(239,68,68,0.06)", borderRadius: 10, padding: 12 }}>
                         <strong style={{ display: "block", fontSize: 13, overflowWrap: "anywhere" }}>{item.model}</strong>
-                        <span style={{ display: "block", marginTop: 5, color: "var(--dash-sub)", fontSize: 12 }}>收入 {money(item.revenueCny)} / 成本 {money(item.upstreamCostCny)} / 毛利 {money(item.profitCny)}</span>
+                        <span style={{ display: "block", marginTop: 5, color: "var(--dash-sub)", fontSize: 12 }}>收入 {money(item.revenueCny)} / 成本 {money(item.upstreamCostCny)} / 收益 {money(item.profitCny)}</span>
                         <code style={{ display: "block", marginTop: 7, fontSize: 11, color: "var(--dash-sub)", overflowWrap: "anywhere" }}>{item.requestId || item.id}</code>
                       </div>
                     ))}

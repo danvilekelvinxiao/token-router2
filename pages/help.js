@@ -28,7 +28,7 @@ function CopyButton({ value, label }) {
 const tocSections = [
   { id: "deepseek-guide", label: "DeepSeek 接入教程" },
   { id: "chatgpt-guide", label: "ChatGPT 接入教程" },
-  { id: "manual-config", label: "手动配置 API 教程" },
+  { id: "manual-config", label: "API 接入说明" },
   { id: "preflight-check", label: "接入前检查" },
   { id: "failed-call-checklist", label: "调用失败排查" },
   { id: "error-codes", label: "常见 API 错误码" },
@@ -148,86 +148,19 @@ function ChatGPTGuideSection({ customer }) {
 
 /* ==================== Section: Manual Config ==================== */
 
-function ManualConfigSection({ customer }) {
-  const primaryKey = customer?.apiKeys?.[0];
-
-  const params = [
-    { title: "Base URL", value: API_BASE_URL, copyLabel: "复制" },
-    { title: "API Key", value: primaryKey?.token || "", copyLabel: "复制 API Key", isKey: true },
-    { title: "模型", value: DEFAULT_MODEL, copyLabel: "复制模型名" },
-  ];
-
+function ManualConfigSection() {
   return (
     <section id="manual-config" className="help-section">
-      <h2>手动配置 API 教程</h2>
+      <h2>API 接入说明</h2>
       <p className="help-section-desc">
-        如果自动配置失败，复制下面三个参数，手动填入 CC-Switch 即可完成接入。
+        接入说明已统一放到 API 管理页，这里只保留最短路径入口，避免重复配置。
       </p>
 
-      <div className="help-params">
-        {params.map((p) => (
-          <ParamsCard key={p.title} {...p} />
-        ))}
-      </div>
-
       <div className="help-model-plaza">
-        <Link href="/models" className="help-plaza-btn">进入大模型广场</Link>
-        <p>不知道选哪个模型？进入模型广场，查看不同模型的价格、速度和适合场景。</p>
+        <Link href="/api-management" className="help-plaza-btn">去 API 管理创建 Key</Link>
+        <Link href="/models" className="help-ghost-btn">进入大模型广场</Link>
       </div>
-
-      <div className="help-curl-divider">
-        <p className="help-curl-transition">
-          如果你想测试接口是否配置成功，可以复制下面的 CURL 示例进行测试。
-        </p>
-      </div>
-
-      <h3 className="help-sub-heading">CURL 命令参考</h3>
-      <p className="help-section-desc">不需要懂命令行，只需要知道替换哪些地方。</p>
-
-      <CurlReferenceContent />
     </section>
-  );
-}
-
-/* ==================== Curl Content ==================== */
-
-function CurlReferenceContent() {
-  const apiKeyPlaceholder = "你生成的 API Key";
-  const modelPlaceholder = "你想使用的模型";
-
-  const standardCurl = `curl ${API_BASE_URL}/chat/completions \\
-  -H "Authorization: Bearer sk-xxxx" \\
-  -H "Content-Type: application/json" \\
-  -d '{"model": "${DEFAULT_MODEL}",
-       "messages": [{"role":"user","content":"你好"}]}'`;
-
-  return (
-    <>
-      <div className="help-curl-grid">
-        <div className="help-curl-block">
-          <div className="help-curl-title">标准 CURL 示例</div>
-          <pre className="help-curl-pre">{standardCurl}</pre>
-        </div>
-        <div className="help-curl-block">
-          <div className="help-curl-title">你只需要替换红色部分</div>
-          <pre className="help-curl-pre">
-{`curl ${API_BASE_URL}/chat/completions \\
-  -H "Authorization: Bearer `}<span className="help-curl-red">{apiKeyPlaceholder}</span>{`" \\
-  -H "Content-Type: application/json" \\
-  -d '{"model": "`}<span className="help-curl-red">{modelPlaceholder}</span>{`",
-       "messages": [{"role":"user","content":"你好"}]}'`}
-          </pre>
-        </div>
-      </div>
-      <div className="help-curl-notes">
-        <p><strong>只需要改两个地方：</strong></p>
-        <ol>
-          <li>把“<span className="help-curl-red-inline">{apiKeyPlaceholder}</span>”换成你在 FlowAPI 创建的 <strong>API Key</strong></li>
-          <li>把“<span className="help-curl-red-inline">{modelPlaceholder}</span>”修改成模型名比如 <code>{DEFAULT_MODEL}</code></li>
-        </ol>
-        <p className="help-curl-fixed">Base URL 固定使用：<code>{API_BASE_URL}</code>，不需要修改。</p>
-      </div>
-    </>
   );
 }
 

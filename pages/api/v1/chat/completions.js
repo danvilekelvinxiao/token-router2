@@ -395,22 +395,6 @@ function buildSanitizedSsePlaceholder({ publicModelId = "", requestId = "" } = {
   };
 }
 
-function assertCandidateMargin(candidate = {}, { modelId = "", usage = {}, modelProduct = null, multiplier = 1 } = {}) {
-  if (candidate.name === "team-token-pool") return { ok: true, snapshot: buildBillingSnapshot(modelId, usage, modelProduct, multiplier) };
-  if (candidateRequiresExplicitCost(candidate) && estimateCandidateCostCny(candidate, usage) === null) {
-    return {
-      ok: false,
-      code: "CHANNEL_COST_MISSING",
-      snapshot: buildBillingSnapshot(modelId, usage, modelProduct, multiplier),
-    };
-  }
-  const snapshot = buildBillingSnapshotForCandidate(modelId, usage, modelProduct, multiplier, candidate);
-  if (shouldBlockForProfitProtection(snapshot)) {
-    return { ok: false, code: "CHANNEL_MARGIN_PROTECTED", snapshot };
-  }
-  return { ok: true, snapshot };
-}
-
 function mapModelForUpstream(upstreamName = "", modelId = "") {
   const normalizedUpstream = String(upstreamName || "").toLowerCase();
   const id = String(modelId || "").trim();
@@ -433,14 +417,6 @@ function estimateReserveCostForProduct(modelId, body = {}, promptTokens = 1, mod
   }, modelProduct);
   const minimum = Number(process.env.MIN_API_RESERVE_CNY || 0.001);
   return Number(Math.max(minimum, estimated * 1.25).toFixed(6));
-}
-
-function shouldBlockForProfitProtection(snapshot = {}) {
-  const configured = Number(process.env.FLOWAPI_MIN_TEXT_PROFIT_MARGIN ?? 0.2);
-  const minMargin = Number.isFinite(configured) ? Math.max(0, configured) : 0.2;
-  if (!Number.isFinite(snapshot.upstreamCostCny) || snapshot.upstreamCostCny <= 0) return true;
-  if (!Number.isFinite(snapshot.sellPriceCny) || snapshot.sellPriceCny <= 0) return true;
-  return snapshot.sellPriceCny < snapshot.upstreamCostCny * (1 + minMargin);
 }
 
 async function recordRouteAttempt(attempt = {}) {
@@ -839,16 +815,6 @@ export default async function handler(req, res) {
     completion_tokens: estimatedCompletionTokens,
   }, modelProduct, billingMultiplier);
   let routeDecision = { strategy: "not_started" };
-  if (shouldBlockForProfitProtection(estimatedBilling)) {
-    releaseConcurrency(concurrencyKey);
-    return sendApiError(
-      res,
-      503,
-      "MODEL_MARGIN_PROTECTED",
-      "该模型当前维护中，请稍后再试。",
-      "该模型正在维护。你可以先切换其他模型，或把 request_id 发给 FlowAPI 客服排查。"
-    );
-  }
   routeDecision = await selectUpstream({
     modelId: upstreamModelId,
     publicModelId,
@@ -860,17 +826,6 @@ export default async function handler(req, res) {
     },
     userChargeEstimate: estimatedBilling.sellPriceCny,
   });
-  if (routeDecision?.error === "profit_protected") {
-    releaseConcurrency(concurrencyKey);
-    return sendApiError(
-      res,
-      503,
-      "MODEL_UPSTREAM_COST_TOO_HIGH",
-      "该模型当前上游成本过高，暂时维护中，请稍后再试。",
-      "FlowAPI 已阻止亏损线路，本次没有请求上游，也不会扣费。请稍后再试或切换其他模型。",
-      { request_id: requestId }
-    );
-  }
   if (clientRequestId) {
     const idempotency = await beginApiRequestIdempotency(customerMatch.customer.id, requestId);
     if (idempotency.duplicate) {
@@ -1219,37 +1174,6 @@ export default async function handler(req, res) {
     for (const candidate of orderedUpstreams) {
       routeAttemptCount += 1;
       if (candidate.upstreamUrl) await assertSafeUpstreamUrl(candidate.upstreamUrl);
-      const marginCheck = assertCandidateMargin(candidate, {
-        modelId: selected.modelId,
-        usage: {
-          prompt_tokens: promptTokens,
-          completion_tokens: estimatedCompletionTokens,
-        },
-        modelProduct,
-        multiplier: billingMultiplier,
-      });
-      if (!marginCheck.ok) {
-        await recordRouteAttempt({
-          requestId,
-          customerId: customerMatch.customer.id,
-          apiKeyId: customerMatch.apiKey.id,
-          publicModelId,
-          actualModelId: candidate.actualModelId || upstreamModelId,
-          upstreamChannelId: candidate.id || "",
-          upstreamChannel: candidate.name || "",
-          upstreamProvider: candidate.label || "",
-          attemptIndex: routeAttemptCount,
-          attemptOrder: routeAttemptCount,
-          status: "skipped",
-          statusCode: 0,
-          ok: false,
-          latencyMs: 0,
-          errorCode: marginCheck.code || "CHANNEL_MARGIN_PROTECTED",
-          errorMessage: "候选渠道成本缺失或低于 FlowAPI 毛利保护线，已跳过。",
-        });
-        lastUpstreamError = new Error("候选渠道成本缺失或低于 FlowAPI 毛利保护线");
-        continue;
-      }
       const authorizationToken = String(candidate.apiKey || "").trim()
         || (candidate.name === "new-api" ? getNewApiAuthorizationToken({ modelProduct }) : "");
       if (!authorizationToken) {
