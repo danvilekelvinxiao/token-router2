@@ -10,7 +10,7 @@ import { userCanUseMemberModel } from "@/lib/membership/store";
 import { getContent } from "@/lib/content-cms";
 import { hasDatabase, query } from "@/lib/db";
 import { assertSafeUpstreamUrl, sanitizeSecretText } from "@/lib/safe-upstream-url";
-import { normalizeUpstreamIdentity, orderUpstreamCandidates } from "@/lib/upstream-route-utils.mjs";
+import { normalizeUpstreamIdentity, orderUpstreamCandidates, shouldRetryUpstreamStatus } from "@/lib/upstream-route-utils.mjs";
 import { buildResponseCacheKey, CACHE_TTLS, getCacheManager, shouldUseResponseCache } from "@/lib/cache-manager";
 import {
   buildRequestCacheKey,
@@ -1149,13 +1149,14 @@ export default async function handler(req, res) {
       ? `${String(teamToken.baseUrl || "").replace(/\/+$/, "")}${String(teamToken.apiPath || "/v1/chat/completions").startsWith("/") ? teamToken.apiPath : `/${teamToken.apiPath}`}`
       : "";
     if (teamTokenUrl) await assertSafeUpstreamUrl(teamTokenUrl);
-    const teamTokenUpstream = teamToken ? [{
-      name: "team-token-pool",
-      label: `团队 Token 池 / ${teamToken.name}`,
-      apiKey: teamToken.secret,
-      upstreamUrl: teamTokenUrl,
-    }] : [];
-    const orderedUpstreams = teamTokenUpstream.length ? teamTokenUpstream : orderUpstreamsForFlowApiKey(routeDecision, upstreams);
+  const teamTokenUpstream = teamToken ? [{
+    name: "team-token-pool",
+    label: `团队 Token 池 / ${teamToken.name}`,
+    apiKey: teamToken.secret,
+    upstreamUrl: teamTokenUrl,
+  }] : [];
+  const orderedUpstreams = teamTokenUpstream.length ? teamTokenUpstream : orderUpstreamsForFlowApiKey(routeDecision, upstreams);
+  const retry429 = process.env.FLOWAPI_RETRY_UPSTREAM_429 === "true";
 
     for (const candidate of orderedUpstreams) {
       routeAttemptCount += 1;
@@ -1237,7 +1238,7 @@ export default async function handler(req, res) {
         }
 
         lastUpstreamError = new Error(`${candidate.label} 返回 ${response.status}`);
-        const shouldTryNext = [401, 402, 403, 404, 408, 429, 500, 502, 503, 504].includes(response.status) || response.status >= 500;
+        const shouldTryNext = shouldRetryUpstreamStatus(response.status, { retry429 });
         if (shouldTryNext) continue;
 
         upstream = candidate;

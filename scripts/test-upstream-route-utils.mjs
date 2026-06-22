@@ -1,5 +1,5 @@
 import assert from "assert/strict";
-import { normalizeUpstreamIdentity, orderUpstreamCandidates } from "../lib/upstream-route-utils.mjs";
+import { normalizeUpstreamIdentity, orderUpstreamCandidates, shouldRetryUpstreamStatus } from "../lib/upstream-route-utils.mjs";
 
 const sameKeyA = {
   name: "new-api",
@@ -36,9 +36,19 @@ assert.equal(orderedAfter429.length, 2);
 assert.equal(orderedAfter429[0].name, "new-api");
 assert.equal(orderedAfter429[1].name, "openrouter");
 
+assert.equal(shouldRetryUpstreamStatus(429), false);
+assert.equal(shouldRetryUpstreamStatus(429, { retry429: true }), true);
+assert.equal(shouldRetryUpstreamStatus(503), true);
+assert.equal(shouldRetryUpstreamStatus(200), false);
+
 console.log(JSON.stringify({
   ok: true,
   orderedNames: ordered.map((item) => item.name),
   orderedAfter429Names: orderedAfter429.map((item) => item.name),
+  retryPolicy: {
+    default429: shouldRetryUpstreamStatus(429),
+    optIn429: shouldRetryUpstreamStatus(429, { retry429: true }),
+    retry503: shouldRetryUpstreamStatus(503),
+  },
   identities: ordered.map((item) => normalizeUpstreamIdentity(item)),
 }));
