@@ -70,6 +70,7 @@ async function recentFailures(publicModelId = "") {
   if (!hasDatabase()) return [];
   const result = await query(
     `SELECT request_id, public_model_id, actual_model_id, upstream_channel, upstream_provider,
+            upstream_channel_id,
             attempt_index, status_code, error_code, error_message, latency_ms, first_token_ms, created_at
      FROM route_attempts
      WHERE ok = false
@@ -82,6 +83,7 @@ async function recentFailures(publicModelId = "") {
     requestId: row.request_id,
     publicModelId: row.public_model_id,
     actualModelId: row.actual_model_id,
+    upstreamChannelId: row.upstream_channel_id,
     upstreamChannel: row.upstream_channel,
     upstreamProvider: row.upstream_provider,
     attemptIndex: Number(row.attempt_index || 0),
@@ -105,7 +107,6 @@ async function performanceStats(matrix = []) {
     routeSwitchCount: 0,
     upstreamFailureRate: 0,
     upstream429Count: 0,
-    profitProtectionHits: matrix.reduce((sum, route) => sum + (route.candidates || []).reduce((inner, item) => inner + Number(item.profitProtectionHits || 0), 0), 0),
     fastestByModel: [],
     cheapestByModel: [],
     stableByModel: [],

@@ -10,7 +10,7 @@ import { userCanUseMemberModel } from "@/lib/membership/store";
 import { getContent } from "@/lib/content-cms";
 import { hasDatabase, query } from "@/lib/db";
 import { assertSafeUpstreamUrl, sanitizeSecretText } from "@/lib/safe-upstream-url";
-import { validateTextModelProfitConfig } from "@/lib/model-profit-guard";
+import { normalizeUpstreamIdentity, orderUpstreamCandidates } from "@/lib/upstream-route-utils.mjs";
 import { buildResponseCacheKey, CACHE_TTLS, getCacheManager, shouldUseResponseCache } from "@/lib/cache-manager";
 import {
   buildRequestCacheKey,
@@ -456,6 +456,10 @@ async function recordRouteAttempt(attempt = {}) {
   return null;
 }
 
+function getAttemptIdentity(candidate = {}) {
+  return normalizeUpstreamIdentity(candidate);
+}
+
 async function updateRouteAttemptFirstToken({ requestId = "", attemptIndex = 0, firstTokenMs = 0 } = {}) {
   if (!hasDatabase() || !requestId || !attemptIndex || !firstTokenMs) return;
   try {
@@ -479,14 +483,7 @@ function getProxyReferer(req) {
 }
 
 function orderUpstreamsForFlowApiKey(routeDecision, upstreams) {
-  const defaultCandidates = upstreams.filter((upstream) => upstream.includeAsDefaultCandidate !== false);
-  const candidates = Array.isArray(routeDecision.fallbackChain)
-    ? routeDecision.fallbackChain
-    : defaultCandidates;
-  const routeOrdered = routeDecision.upstream
-    ? [routeDecision.upstream, ...candidates.filter((u) => u.name !== (routeDecision.upstream?.name))]
-    : candidates;
-  return routeOrdered;
+  return orderUpstreamCandidates(routeDecision, upstreams);
 }
 
 function normalizeEnvKey(value = "") {
@@ -668,17 +665,6 @@ export default async function handler(req, res) {
         "MODEL_NOT_AVAILABLE",
         "该模型暂未开放，请选择其他模型。",
         `${modelProduct.displayName} 当前状态为"${modelProduct.statusLabel || '即将开放'}"，暂未开放调用。请在模型广场选择状态为"可用"的模型。`
-      );
-    }
-    const pricingGuard = validateTextModelProfitConfig(modelProduct, { multiplier: billingMultiplier });
-    if (!pricingGuard.ok) {
-      releaseConcurrency(concurrencyKey);
-      return sendApiError(
-        res,
-        503,
-        pricingGuard.code || "MODEL_PRICING_NOT_READY",
-        pricingGuard.userMessage || "该模型价格尚未通过毛利审核，请先选择其他模型。",
-        "该模型正在进行价格和成本审核。你可以先切换其他模型，或把 request_id 发给 FlowAPI 客服排查。"
       );
     }
   }
@@ -1183,7 +1169,7 @@ export default async function handler(req, res) {
           apiKeyId: customerMatch.apiKey.id,
           publicModelId,
           actualModelId: upstreamModelId,
-          upstreamChannelId: candidate.id || "",
+          upstreamChannelId: getAttemptIdentity(candidate) || candidate.id || "",
           upstreamChannel: candidate.name || "",
           upstreamProvider: candidate.label || "",
           attemptIndex: routeAttemptCount,
@@ -1230,7 +1216,7 @@ export default async function handler(req, res) {
           apiKeyId: customerMatch.apiKey.id,
           publicModelId,
           actualModelId: upstreamModelId,
-          upstreamChannelId: candidate.id || "",
+          upstreamChannelId: getAttemptIdentity(candidate) || candidate.id || "",
           upstreamChannel: candidate.name || "",
           upstreamProvider: candidate.label || "",
           attemptIndex: routeAttemptCount,
@@ -1266,7 +1252,7 @@ export default async function handler(req, res) {
           apiKeyId: customerMatch.apiKey.id,
           publicModelId,
           actualModelId: upstreamModelId,
-          upstreamChannelId: candidate.id || "",
+          upstreamChannelId: getAttemptIdentity(candidate) || candidate.id || "",
           upstreamChannel: candidate.name || "",
           upstreamProvider: candidate.label || "",
           attemptIndex: routeAttemptCount,
