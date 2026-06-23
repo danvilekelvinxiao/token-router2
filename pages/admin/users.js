@@ -269,7 +269,7 @@ export default function AdminUsers() {
                           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
                             <div style={{ minWidth: 0 }}>
                               <b style={{ display: "block", fontSize: 12, overflowWrap: "anywhere" }}>{key.label || "API Key"}</b>
-                              <span style={{ display: "block", marginTop: 3, color: "var(--dash-sub)", fontSize: 11, overflowWrap: "anywhere" }}>{key.maskedKey || key.publicModelId || key.modelDisplayName || key.id}</span>
+                              <span style={{ display: "block", marginTop: 3, color: "var(--dash-sub)", fontSize: 11, overflowWrap: "anywhere" }}>{key.token || key.publicModelId || key.modelDisplayName || key.id}</span>
                             </div>
                             <button type="button" onClick={() => openKeyLimitEdit(key)} style={btnSmStyle}>改额度</button>
                           </div>

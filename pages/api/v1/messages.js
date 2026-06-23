@@ -5,6 +5,14 @@
  * billing, model routing, and logs stay on the same commercial ledger.
  */
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb",
+    },
+  },
+};
+
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -97,6 +105,15 @@ export default async function handler(req, res) {
       error: {
         type: "unsupported_feature",
         message: "FlowAPI /v1/messages 当前支持非流式调用。需要流式输出时请使用 /v1/chat/completions。",
+      },
+    });
+  }
+
+  if (!req.body?.model) {
+    return res.status(400).json({
+      error: {
+        type: "invalid_request_error",
+        message: "请显式提供 model 参数，FlowAPI 不会自动替换模型。",
       },
     });
   }

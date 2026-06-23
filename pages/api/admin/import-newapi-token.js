@@ -1,19 +1,5 @@
-import crypto from "crypto";
 import { hasDatabase, query } from "@/lib/db";
 import { requireAdmin } from "@/lib/admin-auth";
-
-function hashToken(token) {
-  return crypto
-    .createHmac("sha256", process.env.VERIFY_SECRET || "flowapi-verify-secret-2024")
-    .update(String(token).trim())
-    .digest("hex");
-}
-
-function tokenPreview(token) {
-  const t = String(token).trim();
-  if (t.length <= 16) return `${t.slice(0, 4)}***${t.slice(-4)}`;
-  return `${t.slice(0, 8)}***${t.slice(-6)}`;
-}
 
 function makeId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
@@ -75,11 +61,11 @@ export default async function handler(req, res) {
         "imported",
         "imported",
         now,
-        (publicModelId || "deepseek-chat").trim(),
-        (actualModelId || publicModelId || "deepseek-chat").trim(),
+        (publicModelId || "gpt-5.5").trim(),
+        (actualModelId || publicModelId || "gpt-5.5").trim(),
         (modelDisplayName || publicModelId || "导入的 Token").trim(),
         (modelGroup || "default").trim(),
-        models.length ? models.join(",") : "deepseek-chat",
+        models.length ? models.join(",") : "gpt-5.5",
         expiresAt ? new Date(expiresAt).toISOString() : null,
         now,
       ],
@@ -90,12 +76,11 @@ export default async function handler(req, res) {
       key: {
         id,
         name: name.trim(),
-        tokenPreview: tokenPreview(rawToken),
-        tokenHash: hashToken(rawToken),
+        token: rawToken,
         customerId: customerId.trim(),
-        publicModelId: (publicModelId || "deepseek-chat").trim(),
+        publicModelId: (publicModelId || "gpt-5.5").trim(),
         modelGroup: (modelGroup || "default").trim(),
-        allowedModels: models.length ? models : ["deepseek-chat"],
+        allowedModels: models.length ? models : ["gpt-5.5"],
         createdAt: now,
       },
     });

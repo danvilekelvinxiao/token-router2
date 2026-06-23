@@ -375,7 +375,7 @@ export default function BossWizardPage() {
               <div style={{ display: "grid", gap: 18 }}>
                 <div>
                   <h2 style={{ margin: 0, fontSize: 18, fontWeight: 950 }}>新增模型线路</h2>
-                  <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13 }}>把可用模型来源先接进后台，Key 会加密保存，前端不会展示完整 Key。</p>
+                  <p style={{ margin: "6px 0 0", color: "var(--dash-sub)", fontSize: 13 }}>把可用模型来源先接进后台，Key 会加密保存，前端直接展示完整 Key。</p>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                   <Field label="线路名称"><input style={inputStyle} value={upstream.name} onChange={(e) => setUpstream({ ...upstream, name: e.target.value })} placeholder="例如：新加坡低价兼容池" /></Field>
@@ -387,8 +387,8 @@ export default function BossWizardPage() {
                   <Field label="接口地址" hint="建议填写根地址，例如 https://example.com，不要以 /v1 结尾。">
                     <input style={inputStyle} value={upstream.baseUrl} onChange={(e) => setUpstream({ ...upstream, baseUrl: e.target.value })} placeholder="https://api.example.com" />
                   </Field>
-                  <Field label="线路密钥" hint="保存后只显示掩码，不能再次查看完整 Key。">
-                    <input style={inputStyle} value={upstream.apiKey} onChange={(e) => setUpstream({ ...upstream, apiKey: e.target.value })} placeholder="sk-..." type="password" />
+                  <Field label="线路密钥" hint="保存后直接显示完整 Key。">
+                    <input style={inputStyle} value={upstream.apiKey} onChange={(e) => setUpstream({ ...upstream, apiKey: e.target.value })} placeholder="sk-..." type="text" />
                   </Field>
                   <Field label="兼容协议">
                     <select style={inputStyle} value={upstream.protocol} onChange={(e) => setUpstream({ ...upstream, protocol: e.target.value })}>

@@ -165,7 +165,7 @@ function generateCurl(model, apiBaseUrl) {
   return `curl ${apiBaseUrl}/chat/completions \\
   -H "Authorization: Bearer 你的 API Key" \\
   -H "Content-Type: application/json" \\
-  -d '{"model":"${model?.requestModelId || model?.modelId || "gpt-5.4-mini"}","messages":[{"role":"user","content":"你好"}]}'`;
+  -d '{"model":"${model?.requestModelId || model?.modelId || "gpt-5.5"}","messages":[{"role":"user","content":"你好"}]}'`;
 }
 
 function generatePython(model, apiBaseUrl) {
@@ -178,7 +178,7 @@ response = requests.post(
         "Content-Type": "application/json",
     },
     json={
-        "model": "${model?.requestModelId || model?.modelId || "gpt-5.4-mini"}",
+        "model": "${model?.requestModelId || model?.modelId || "gpt-5.5"}",
         "messages": [{"role": "user", "content": "你好"}],
     },
 )
@@ -194,7 +194,7 @@ function generateJavaScript(model, apiBaseUrl) {
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
-    model: "${model?.requestModelId || model?.modelId || "gpt-5.4-mini"}",
+    model: "${model?.requestModelId || model?.modelId || "gpt-5.5"}",
     messages: [{ role: "user", content: "你好" }]
   })
 });

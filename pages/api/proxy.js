@@ -7,21 +7,49 @@ const ALLOWED_ENDPOINTS = [
   "embeddings",
 ];
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb",
+    },
+  },
+};
+
 function normalizeTarget(target) {
   if (!target) return "chat/completions";
   return String(target).replace(/^\/+/, "").trim();
 }
 
 function getUpstreamConfig() {
+  const sub2ApiBase = process.env.SUB2API_BASE_URL || process.env.SUB2API_INTERNAL_URL;
+  const sub2ApiKey = process.env.SUB2API_API_KEY || process.env.SUB2API_API_KEY_SECONDARY;
   const newApiBase = process.env.NEW_API_BASE_URL;
   const newApiKey = process.env.NEW_API_KEY;
+  const openAiBase = process.env.OPENAI_API_BASE_URL || process.env.OFFICIAL_OPENAI_API_BASE_URL;
+  const openAiKey = process.env.OPENAI_API_KEY || process.env.OFFICIAL_OPENAI_API_KEY;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
+
+  if (sub2ApiBase && sub2ApiKey) {
+    return {
+      name: "sub2api",
+      baseUrl: sub2ApiBase.replace(/\/+$/, ""),
+      apiKey: sub2ApiKey,
+    };
+  }
 
   if (newApiBase && newApiKey) {
     return {
       name: "new-api",
       baseUrl: newApiBase.replace(/\/+$/, ""),
       apiKey: newApiKey,
+    };
+  }
+
+  if (openAiBase && openAiKey) {
+    return {
+      name: "official-openai",
+      baseUrl: openAiBase.replace(/\/+$/, ""),
+      apiKey: openAiKey,
     };
   }
 

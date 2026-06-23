@@ -104,7 +104,7 @@ export default function DataExportCenter({ variant = "default" }) {
         <div>
           <span>{variant === "logs" ? "导出记录" : "数据导出中心"}</span>
           <h2>{variant === "logs" ? "导出记录" : "导出你的 FlowAPI 对账数据"}</h2>
-          <p>账单、使用记录和模型分析都按当前登录用户生成，API Key 默认脱敏。</p>
+          <p>账单、使用记录和模型分析都按当前登录用户生成，API Key 直接显示完整值。</p>
         </div>
         <label>
           <span>时间范围</span>

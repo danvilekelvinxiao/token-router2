@@ -3,7 +3,7 @@ import { estimateCnyCost, getActualModelId, getCatalogModel, getPublicModelReque
 import { getModelProductWithConfig } from "@/lib/model-products-server";
 import { smartSelectModel } from "@/lib/smart-router";
 import { beginApiRequestIdempotency, finalizeReservedCallByToken, findCustomerByToken, reserveBalanceByToken } from "@/lib/customer-store";
-import { acquireConcurrency, getClientIp, graylistKey, isGraylisted, rateLimit, releaseConcurrency, securityLog } from "@/lib/security";
+import { acquireConcurrency, getClientIp, isGraylisted, rateLimit, releaseConcurrency, securityLog } from "@/lib/security";
 import { getUpstreamConfigsAsync, getUpstreamSuggestion, sendApiError } from "@/lib/upstream";
 import { selectUpstream, STRATEGY } from "@/lib/smart-router";
 import { userCanUseMemberModel } from "@/lib/membership/store";
@@ -23,6 +23,14 @@ import {
 } from "@/lib/team-token-pool";
 import { enforceTeamMemberLimit, recordTeamMemberUsage } from "@/lib/team-management";
 import { Readable } from "stream";
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb",
+    },
+  },
+};
 
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -151,7 +159,7 @@ function normalizeChatRequestBody(body = {}, upstreamModelId) {
     delete normalized.stream_options;
   }
 
-  return normalized;
+  return compactRequestContextForUpstream(normalized);
 }
 
 function findContentModelForMemberAccess(modelId = "", product = null) {
@@ -175,6 +183,111 @@ function estimatePromptTokens(messages = []) {
     })
     .join("\n");
   return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function estimateTextTokens(value = "") {
+  return Math.max(0, Math.ceil(String(value || "").length / 4));
+}
+
+function compactText(value = "", maxChars = 4000) {
+  const text = String(value || "");
+  if (text.length <= maxChars) return text;
+  return text.slice(Math.max(0, text.length - Math.max(0, maxChars)));
+}
+
+function compactMessage(message = {}, maxChars = 4000) {
+  const content = message?.content;
+  if (typeof content === "string") return { ...message, content: compactText(content, maxChars) };
+  if (Array.isArray(content)) return { ...message, content: compactText(normalizeMessageContent(content), maxChars) };
+  if (content && typeof content === "object") return { ...message, content: compactText(normalizeMessageContent(content), maxChars) };
+  return message;
+}
+
+function compactMessagesToPromptBudget(messages = [], budgetTokens = 24000) {
+  const safeBudget = Math.max(1000, Math.floor(Number(budgetTokens || 24000)));
+  const systemBudget = Math.max(400, Math.floor(safeBudget * 0.18));
+  const conversationBudget = Math.max(600, safeBudget - systemBudget);
+  const systemMessages = [];
+  const conversationMessages = [];
+
+  for (const message of messages) {
+    if (message?.role === "system") systemMessages.push(message);
+    else conversationMessages.push(message);
+  }
+
+  const compactedSystems = [];
+  let systemUsed = 0;
+  for (const message of systemMessages) {
+    const remaining = systemBudget - systemUsed;
+    if (remaining <= 0) break;
+    const maxChars = Math.max(200, remaining * 4);
+    const compacted = compactMessage(message, maxChars);
+    systemUsed += estimatePromptTokens([compacted]);
+    compactedSystems.push(compacted);
+  }
+
+  const compactedConversation = [];
+  let conversationUsed = 0;
+  for (let index = conversationMessages.length - 1; index >= 0; index -= 1) {
+    const message = conversationMessages[index];
+    const messageTokens = estimatePromptTokens([message]);
+    const remaining = conversationBudget - conversationUsed;
+    if (remaining <= 0) break;
+    if (messageTokens <= remaining) {
+      compactedConversation.unshift(message);
+      conversationUsed += messageTokens;
+      continue;
+    }
+    const compacted = compactMessage(message, Math.max(200, remaining * 4));
+    compactedConversation.unshift(compacted);
+    conversationUsed += estimatePromptTokens([compacted]);
+    break;
+  }
+
+  if (!compactedConversation.some((message) => message.role === "user")) {
+    const lastUser = [...messages].reverse().find((message) => message.role === "user");
+    if (lastUser) compactedConversation.push(compactMessage(lastUser, 4000));
+  }
+
+  return [...compactedSystems, ...compactedConversation];
+}
+
+function compactToolValue(value, key = "") {
+  if (Array.isArray(value)) return value.slice(0, 64).map((item) => compactToolValue(item, key));
+  if (!value || typeof value !== "object") {
+    if (typeof value !== "string") return value;
+    const limit = /description|summary|example|prompt/i.test(key) ? 800 : 4000;
+    return compactText(value, limit);
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([entryKey, entryValue]) => [entryKey, compactToolValue(entryValue, entryKey)]),
+  );
+}
+
+function compactToolsForContext(tools = []) {
+  if (!Array.isArray(tools) || tools.length === 0) return tools;
+  const maxToolChars = Math.max(4000, Number(process.env.FLOWAPI_MAX_TOOL_SCHEMA_CHARS || 48000));
+  const compacted = tools.slice(0, Number(process.env.FLOWAPI_MAX_TOOLS || 64)).map((tool) => compactToolValue(tool));
+  while (compacted.length && JSON.stringify(compacted).length > maxToolChars) {
+    compacted.pop();
+  }
+  return compacted.length ? compacted : undefined;
+}
+
+function compactRequestContextForUpstream(normalized = {}) {
+  const maxPromptTokens = Math.max(1000, Number(process.env.FLOWAPI_MAX_PROMPT_TOKENS || 22000));
+  const compactedTools = compactToolsForContext(normalized.tools);
+  const toolTokens = compactedTools ? estimateTextTokens(JSON.stringify(compactedTools)) : 0;
+  const completionTokens = Math.max(1, Number(normalized.max_tokens || 16));
+  const messageBudget = Math.max(800, maxPromptTokens - toolTokens - completionTokens);
+  const compactedMessages = compactMessagesToPromptBudget(normalized.messages || [], messageBudget);
+  const result = {
+    ...normalized,
+    messages: compactedMessages,
+  };
+  if (compactedTools) result.tools = compactedTools;
+  else delete result.tools;
+  return result;
 }
 
 function normalizeClientRequestId(value = "") {
@@ -381,6 +494,64 @@ function sanitizeOpenAiResponseForClient(payload = {}, { publicModelId = "", req
   return sanitized;
 }
 
+const UPSTREAM_CONTEXT_ERROR_PATTERNS = [
+  "请求超出最大上下文",
+  "请压缩对话",
+  "maximum context",
+  "context length",
+  "context_length",
+  "context window",
+  "token limit",
+  "input too long",
+  "prompt too long",
+  "too many tokens",
+];
+
+function extractErrorText(value = "") {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => extractErrorText(item)).filter(Boolean).join(" ");
+  }
+  if (value && typeof value === "object") {
+    return [
+      value.message,
+      value.error,
+      value.detail,
+      value.error?.message,
+      value.error?.detail,
+      value.error?.type,
+    ].map((item) => extractErrorText(item)).filter(Boolean).join(" ");
+  }
+  return String(value || "");
+}
+
+function isUpstreamContextLimitError(payload = {}, rawText = "", status = 0) {
+  if ([400, 413, 422, 500].includes(Number(status || 0))) {
+    const text = `${extractErrorText(payload)} ${String(rawText || "")}`.toLowerCase();
+    return UPSTREAM_CONTEXT_ERROR_PATTERNS.some((pattern) => text.includes(pattern.toLowerCase()));
+  }
+  return false;
+}
+
+function sanitizeUpstreamErrorMessage(payload = {}, rawText = "", status = 0) {
+  if (isUpstreamContextLimitError(payload, rawText, status)) {
+    return "模型服务返回错误";
+  }
+  const text = extractErrorText(payload) || String(rawText || "");
+  return sanitizeSecretText(text).trim() || "模型服务返回错误";
+}
+
+async function readUpstreamJson(response) {
+  const rawText = await response.text();
+  if (!rawText) return { data: {}, rawText: "" };
+  try {
+    return { data: JSON.parse(rawText), rawText };
+  } catch {
+    return { data: { message: rawText }, rawText };
+  }
+}
+
 function sanitizeSseEventForClient(event = {}, context = {}) {
   if (!event || typeof event !== "object" || Array.isArray(event)) return event;
   return sanitizeOpenAiResponseForClient(event, context);
@@ -404,9 +575,23 @@ function mapModelForUpstream(upstreamName = "", modelId = "") {
     "deepseek-reasoner": "deepseek/deepseek-r1",
     "gpt-4o-mini": "openai/gpt-4o-mini",
     "flowapi-gpt4o-mini": "openai/gpt-4o-mini",
+    "gpt-5.5": "openai/gpt-5.5",
+    "gpt-5.4-pro": "openai/gpt-5.4-pro",
+    "gpt-5.4-mini": "openai/gpt-5.4-mini",
+    "gpt-5.4": "openai/gpt-5.4",
+    "gpt-5.3-codex": "openai/gpt-5.3-codex",
+    "gpt-5.3-chat": "openai/gpt-5.3-chat",
+    "gpt-5.2-codex": "openai/gpt-5.2-codex",
+    "gpt-5.2-chat": "openai/gpt-5.2-chat",
+    "gpt-5.2-pro": "openai/gpt-5.2-pro",
+    "gpt-5.1": "openai/gpt-5.1",
+    "gpt-5": "openai/gpt-5",
     "qwen3-32b": "qwen/qwen3-32b",
   };
-  return aliases[id.toLowerCase()] || id;
+  const lower = id.toLowerCase();
+  if (aliases[lower]) return aliases[lower];
+  if (/^gpt[-\d.]/.test(lower) || /^o[134](-|$)/.test(lower)) return `openai/${id}`;
+  return id;
 }
 
 function estimateReserveCostForProduct(modelId, body = {}, promptTokens = 1, modelProduct = null) {
@@ -420,7 +605,34 @@ function estimateReserveCostForProduct(modelId, body = {}, promptTokens = 1, mod
 }
 
 async function recordRouteAttempt(attempt = {}) {
-  if (!hasDatabase()) return null;
+  if (!hasDatabase()) {
+    const root = globalThis.__TOKEN_ROUTER_CUSTOMERS__ || (globalThis.__TOKEN_ROUTER_CUSTOMERS__ = {});
+    if (!Array.isArray(root.routeAttempts)) root.routeAttempts = [];
+    root.routeAttempts.unshift({
+      id: makeRequestId("route"),
+      call_id: attempt.callId || "",
+      request_id: attempt.requestId || "",
+      customer_id: attempt.customerId || "",
+      api_key_id: attempt.apiKeyId || "",
+      public_model_id: attempt.publicModelId || "",
+      actual_model_id: attempt.actualModelId || "",
+      upstream_channel_id: attempt.upstreamChannelId || "",
+      upstream_channel: attempt.upstreamChannel || "",
+      upstream_provider: attempt.upstreamProvider || "",
+      attempt_index: Number(attempt.attemptIndex || 0),
+      attempt_order: Number(attempt.attemptOrder || attempt.attemptIndex || 0),
+      status: attempt.status || (attempt.ok ? "success" : "failed"),
+      status_code: Number(attempt.statusCode || 0),
+      ok: Boolean(attempt.ok),
+      first_token_ms: Number(attempt.firstTokenMs || 0),
+      latency_ms: Number(attempt.latencyMs || 0),
+      error_code: attempt.errorCode || "",
+      error_message: String(attempt.errorMessage || "").slice(0, 500),
+      created_at: new Date().toISOString(),
+    });
+    root.routeAttempts = root.routeAttempts.slice(0, 500);
+    return null;
+  }
   try {
     await query(
       `INSERT INTO route_attempts (
@@ -534,7 +746,7 @@ export default async function handler(req, res) {
   }
 
   const ipLimit = rateLimit(`api:ip:${ip}`, {
-    limit: Number(process.env.API_IP_RPM || 120),
+    limit: Number(process.env.API_IP_RPM || 600),
     windowMs: 60 * 1000,
   });
   if (!ipLimit.ok) {
@@ -543,20 +755,13 @@ export default async function handler(req, res) {
   }
 
   if (!clientToken) {
-    const missingLimit = rateLimit(`api-missing-key:${ip}`, { limit: 20, windowMs: 10 * 60 * 1000 });
-    if (!missingLimit.ok) graylistKey(`api:${ip}`, 30 * 60 * 1000);
     return sendApiError(res, 401, "MISSING_API_KEY", "缺少 API Key", "请在请求头加入 Authorization: Bearer 你的 API Key，API Key 可在 FlowAPI 的 API 管理页面复制。");
   }
 
   const customerMatch = await findCustomerByToken(clientToken);
 
   if (!customerMatch) {
-    const invalidLimit = rateLimit(`api-invalid-key:${ip}`, { limit: 12, windowMs: 10 * 60 * 1000 });
     securityLog("invalid_api_key", { ip, tokenPrefix: clientToken.slice(0, 8) });
-    if (!invalidLimit.ok) {
-      graylistKey(`api:${ip}`, 30 * 60 * 1000);
-      return sendApiError(res, 429, "INVALID_API_KEY_LIMITED", "无效 API Key 尝试过多，请稍后再试", "请停止重试错误 API Key，回到 API 管理页面重新复制完整 API Key。");
-    }
     return sendApiError(res, 401, "INVALID_API_KEY", "Invalid FlowAPI API Key", "请确认该 API Key 是在 FlowAPI API 管理页创建。其他平台的 Key 不能直接调用 FlowAPI。", {
       error: {
         message: "Invalid FlowAPI API Key",
@@ -566,7 +771,7 @@ export default async function handler(req, res) {
   }
 
   const keyLimit = rateLimit(`api:key:${customerMatch.apiKey.id}`, {
-    limit: Number(process.env.API_KEY_RPM || 60),
+    limit: Number(process.env.API_KEY_RPM || 600),
     windowMs: 60 * 1000,
   });
   if (!keyLimit.ok) {
@@ -575,7 +780,7 @@ export default async function handler(req, res) {
   }
 
   const concurrencyKey = `api:key:${customerMatch.apiKey.id}`;
-  const maxConcurrency = Number(process.env.API_KEY_MAX_CONCURRENCY || 3);
+  const maxConcurrency = Number(process.env.API_KEY_MAX_CONCURRENCY || 10);
   if (!acquireConcurrency(concurrencyKey, maxConcurrency)) {
     securityLog("api_key_concurrency_limited", { ip, customerId: customerMatch.customer.id, keyId: customerMatch.apiKey.id });
     return sendApiError(res, 429, "API_KEY_CONCURRENCY_LIMITED", "该 API Key 并发请求过多，请稍后再试", "请减少同时发起的请求数量，或稍后重试。");
@@ -1156,14 +1361,14 @@ export default async function handler(req, res) {
     upstreamUrl: teamTokenUrl,
   }] : [];
   const orderedUpstreams = teamTokenUpstream.length ? teamTokenUpstream : orderUpstreamsForFlowApiKey(routeDecision, upstreams);
-  const retry429 = process.env.FLOWAPI_RETRY_UPSTREAM_429 === "true";
-
-    for (const candidate of orderedUpstreams) {
+  for (const candidate of orderedUpstreams) {
       routeAttemptCount += 1;
       if (candidate.upstreamUrl) await assertSafeUpstreamUrl(candidate.upstreamUrl);
       const authorizationToken = String(candidate.apiKey || "").trim()
         || (candidate.name === "new-api" ? getNewApiAuthorizationToken({ modelProduct }) : "");
       if (!authorizationToken) {
+        const failureText = await response.clone().text().catch(() => "");
+        const contextLimitHit = isUpstreamContextLimitError({}, failureText, response.status);
         await recordRouteAttempt({
           requestId,
           customerId: customerMatch.customer.id,
@@ -1201,7 +1406,7 @@ export default async function handler(req, res) {
 
       const attemptStart = Date.now();
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), Number(process.env.UPSTREAM_REQUEST_TIMEOUT_MS || 60_000));
+      const timeout = setTimeout(() => controller.abort(), Number(process.env.UPSTREAM_REQUEST_TIMEOUT_MS || 20_000));
       try {
         const response = await fetch(candidate.upstreamUrl, {
           method: "POST",
@@ -1226,8 +1431,8 @@ export default async function handler(req, res) {
           statusCode: response.status,
           ok: response.ok,
           latencyMs,
-          errorCode: response.ok ? "" : "UPSTREAM_STATUS",
-          errorMessage: response.ok ? "" : `${candidate.label} 返回 ${response.status}`,
+          errorCode: response.ok ? "" : (contextLimitHit ? "UPSTREAM_CONTEXT_LIMIT" : "UPSTREAM_STATUS"),
+          errorMessage: response.ok ? "" : (contextLimitHit ? "上下文超出上游限制" : `${candidate.label} 返回 ${response.status}`),
         });
 
         if (response.ok) {
@@ -1237,9 +1442,11 @@ export default async function handler(req, res) {
           break;
         }
 
-        lastUpstreamError = new Error(`${candidate.label} 返回 ${response.status}`);
-        const shouldTryNext = shouldRetryUpstreamStatus(response.status, { retry429 });
-        if (shouldTryNext) continue;
+        const shouldTryNext = contextLimitHit || shouldRetryUpstreamStatus(response.status, {
+          retry429: true,
+        });
+        lastUpstreamError = new Error(contextLimitHit ? "UPSTREAM_CONTEXT_LIMIT" : `${candidate.label} 返回 ${response.status}`);
+        if (shouldTryNext && routeAttemptCount < orderedUpstreams.length) continue;
 
         upstream = candidate;
         upstreamResponse = response;
@@ -1463,7 +1670,7 @@ export default async function handler(req, res) {
       return;
     }
 
-    const data = await upstreamResponse.json();
+    const { data, rawText } = await readUpstreamJson(upstreamResponse);
     const shouldBill = upstreamResponse.ok;
     const usage = shouldBill
       ? normalizeSuccessUsage(data, promptTokens)
@@ -1505,7 +1712,7 @@ export default async function handler(req, res) {
       routeAttempts: routeAttemptCount,
       isStream: false,
       errorCode: shouldBill ? "" : "UPSTREAM_ERROR",
-      errorMessage: shouldBill ? "" : sanitizeSecretText(typeof data.error === "string" ? data.error : data.error?.message || ""),
+      errorMessage: shouldBill ? "" : sanitizeUpstreamErrorMessage(data, rawText, upstreamResponse.status),
     }, reserve);
     settlementFinalized = true;
 
@@ -1553,7 +1760,7 @@ export default async function handler(req, res) {
           durationMs: upstreamLatencyMs,
           upstreamRequestId: upstreamResponse.headers.get("x-request-id") || data.id || "",
           errorCode: shouldBill ? "" : "UPSTREAM_ERROR",
-	          errorMessage: shouldBill ? "" : sanitizeSecretText(typeof data.error === "string" ? data.error : data.error?.message || ""),
+          errorMessage: shouldBill ? "" : sanitizeUpstreamErrorMessage(data, rawText, upstreamResponse.status),
           upstreamError: !shouldBill,
           finalStatus: shouldBill ? "success" : "failed",
         });
@@ -1592,10 +1799,13 @@ export default async function handler(req, res) {
     }
 
     if (!shouldBill) {
+      const genericError = sanitizeUpstreamErrorMessage(data, rawText, upstreamResponse.status);
       return res.status(upstreamResponse.status).json({
-        ...responsePayload,
         code: "UPSTREAM_ERROR",
-        error: "模型服务返回错误",
+        error: genericError,
+        message: genericError,
+        request_id: requestId,
+        model: publicModelId,
         suggestion: getUpstreamSuggestion(upstreamResponse.status),
         docsUrl: "/help#error-codes",
       });

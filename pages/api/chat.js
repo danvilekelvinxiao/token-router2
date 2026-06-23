@@ -1,18 +1,28 @@
 import { findCustomerByToken } from "@/lib/customer-store";
 import { sanitizeSecretText } from "@/lib/safe-upstream-url";
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb",
+    },
+  },
+};
+
 const MODEL_MAP = {
   DeepSeek: "deepseek-chat",
   "deepseek-chat": "deepseek-chat",
   "deepseek-reasoner": "deepseek-reasoner",
   Qwen: "qwen/qwen3-32b",
   "qwen/qwen3-32b": "qwen/qwen3-32b",
-  "GPT-4o": "gpt-5.4-mini",
+  "GPT-4o": "gpt-4o-mini",
+  "GPT-4o mini": "gpt-4o-mini",
+  "GPT4o mini": "gpt-4o-mini",
   "GPT5.5": "gpt-5.5",
   "GPT5.4 mini": "gpt-5.4-mini",
   "GPT5.4 Pro": "gpt-5.4-pro",
   "gpt-5.5": "gpt-5.5",
-  "gpt-5.5-pro": "gpt-5.5-pro",
+  "gpt-4o-mini": "gpt-4o-mini",
   "gpt-5.4-mini": "gpt-5.4-mini",
   "gpt-5.4-pro": "gpt-5.4-pro",
 };

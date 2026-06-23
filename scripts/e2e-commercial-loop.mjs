@@ -34,6 +34,8 @@ const TEST_PASSWORD = process.env.FLOWAPI_E2E_PASSWORD || process.env.E2E_PASSWO
 const RUN_PAID_CALL = process.env.FLOWAPI_E2E_RUN_PAID_CALL === "true" || process.env.E2E_RUN_PAID_CALL === "true";
 
 const results = [];
+let paidCallRequestId = "";
+let paidCallSucceeded = false;
 
 function push(name, passed, detail = "", meta = {}) {
   const status = meta.status || (passed ? "pass" : "fail");
@@ -58,6 +60,23 @@ async function request(path, options = {}) {
   let json = null;
   try { json = JSON.parse(text); } catch {}
   return { response, json, text };
+}
+
+async function loginAndGetCookie() {
+  const { response, json, text } = await request("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      email: ADMIN_LOGIN_EMAIL,
+      password: ADMIN_LOGIN_PASSWORD,
+    }),
+  });
+  if (!response.ok || !json?.customer?.sessionToken) {
+    throw new Error(`status=${response.status} ${json?.error || text.slice(0, 160)}`);
+  }
+  const setCookie = response.headers.get("set-cookie") || "";
+  const match = setCookie.match(/flowapi_session=[^;]+/);
+  if (!match) throw new Error("session cookie missing");
+  return match[0];
 }
 
 async function main() {
@@ -91,25 +110,8 @@ async function main() {
       push(name, response.ok && count >= 0, `status=${response.status}, count=${count}`);
     } catch (error) {
       push(name, false, error.message);
+    }
   }
-}
-
-async function loginAndGetCookie() {
-  const { response, json, text } = await request("/api/auth/login", {
-    method: "POST",
-    body: JSON.stringify({
-      email: ADMIN_LOGIN_EMAIL,
-      password: ADMIN_LOGIN_PASSWORD,
-    }),
-  });
-  if (!response.ok || !json?.customer?.sessionToken) {
-    throw new Error(`status=${response.status} ${json?.error || text.slice(0, 160)}`);
-  }
-  const setCookie = response.headers.get("set-cookie") || "";
-  const match = setCookie.match(/flowapi_session=[^;]+/);
-  if (!match) throw new Error("session cookie missing");
-  return match[0];
-}
 
   if (ADMIN_SECRET) {
     try {
@@ -187,7 +189,15 @@ async function loginAndGetCookie() {
             max_tokens: 20,
           }),
         });
-        push("真实扣费模型调用 /v1/chat/completions", response.ok && json?.choices, `status=${response.status}`);
+        paidCallRequestId = json?.token_router?.request_id || json?.request_id || "";
+        paidCallSucceeded = Boolean(response.ok && json?.choices);
+        push("真实扣费模型调用 /v1/chat/completions", paidCallSucceeded, `status=${response.status}${paidCallRequestId ? `, request_id=${paidCallRequestId}` : ""}`);
+        if (!paidCallRequestId) {
+          skip("消费流水落库验证", "响应未返回 request_id");
+          skip("使用日志落库验证", "响应未返回 request_id");
+        } else {
+          // Defer record checks until after login, where we have a stable session cookie.
+        }
       } catch (error) {
         push("真实扣费模型调用 /v1/chat/completions", false, error.message);
       }
@@ -220,6 +230,41 @@ async function loginAndGetCookie() {
       } catch (error) {
         push(name, false, error.message);
       }
+    }
+
+    if (RUN_PAID_CALL && paidCallRequestId) {
+      try {
+        const wallet = await request("/api/user/wallet-summary", {
+          headers: authHeaders,
+        });
+        const recent = Array.isArray(wallet.json?.recentConsumptions) ? wallet.json.recentConsumptions : [];
+        const matched = recent.find((item) => String(item.requestId || "").trim() === paidCallRequestId || String(item.id || "").trim() === paidCallRequestId);
+        push(
+          "消费流水落库验证",
+          Boolean(wallet.response.ok && matched && Number(matched.cost || matched.sellPriceCny || matched.userCharge || 0) > 0),
+          matched ? `status=${wallet.response.status}, cost=${matched.cost || matched.sellPriceCny || matched.userCharge || 0}, routeAttempts=${matched.routeAttempts || 0}` : `status=${wallet.response.status}, 未找到 request_id=${paidCallRequestId}`,
+        );
+      } catch (error) {
+        push("消费流水落库验证", false, error.message);
+      }
+
+      try {
+        const logs = await request("/api/usage-logs?limit=20", {
+          headers: authHeaders,
+        });
+        const items = Array.isArray(logs.json?.items) ? logs.json.items : [];
+        const matched = items.find((item) => String(item.requestId || "").trim() === paidCallRequestId || String(item.id || "").trim() === paidCallRequestId);
+        push(
+          "使用日志落库验证",
+          Boolean(logs.response.ok && matched && Number(matched.moneyCost || matched.cost || 0) > 0),
+          matched ? `status=${logs.response.status}, moneyCost=${matched.moneyCost || matched.cost || 0}` : `status=${logs.response.status}, 未找到 request_id=${paidCallRequestId}`,
+        );
+      } catch (error) {
+        push("使用日志落库验证", false, error.message);
+      }
+    } else if (RUN_PAID_CALL) {
+      skip("消费流水落库验证", "未拿到付费调用 request_id");
+      skip("使用日志落库验证", "未拿到付费调用 request_id");
     }
   } else {
     skip("登录态钱包摘要接口", "未获取到会话 cookie");

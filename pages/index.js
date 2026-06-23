@@ -204,7 +204,7 @@ export default function HomePage() {
                   <pre>{`curl ${apiBaseUrl}/chat/completions \\
   -H "Authorization: Bearer sk-xxxx" \\
   -H "Content-Type: application/json" \\
-  -d '{"model": "gpt-5.4-mini",
+  -d '{"model": "gpt-5.5",
        "messages": [{"role":"user","content":"你好"}]}'`}</pre>
                 </div>
               </div>

@@ -154,7 +154,7 @@ export default function AdminPassthroughPage() {
             <thead>
               <tr>
                 <th>名称</th>
-                <th>Token</th>
+                <th>完整 Token</th>
                 <th>备注</th>
                 <th>状态</th>
                 <th>最后使用</th>
@@ -199,7 +199,7 @@ export default function AdminPassthroughPage() {
           <table className="admin-table">
             <thead>
               <tr>
-                <th>Token</th>
+                <th>完整 Token</th>
                 <th>模型</th>
                 <th>状态</th>
                 <th>输入Token</th>

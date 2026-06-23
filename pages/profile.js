@@ -29,7 +29,7 @@ const ANNOUNCEMENTS = [
     tone: "success",
     pinned: false,
     title: "FlowAPI DeepSeek 稳定线路已上线",
-    content: "当前已支持 deepseek-chat、deepseek-reasoner、gpt-5.4-mini 和 gpt-5.4-pro。用户可在 API 管理页创建 API Key 后，通过 CC-Switch、Cherry Studio、Chatbox 等工具接入。",
+    content: "当前已支持 deepseek-chat、deepseek-reasoner、gpt-5.5、gpt-5.4-pro。用户可在 API 管理页创建 API Key 后，通过 CC-Switch、Cherry Studio、Chatbox 等工具接入。",
     publishedAt: "2026-05-21T16:00:00+08:00",
   },
   {

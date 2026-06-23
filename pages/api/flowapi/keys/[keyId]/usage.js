@@ -5,10 +5,6 @@
 import { getDashboard } from "@/lib/customer-store";
 import { requireCustomerSession } from "@/lib/session";
 
-function maskToken(token = "") {
-  return String(token || "");
-}
-
 function normalizeCall(call = {}) {
   const inputTokens = Number(call.promptTokens || call.inputTokens || 0);
   const outputTokens = Number(call.completionTokens || call.outputTokens || 0);
@@ -102,7 +98,6 @@ export default async function handler(req, res) {
           id: key.id,
           name: key.label || "默认 API Key",
           token: key.token || "",
-          maskedKey: maskToken(key.token),
           status: key.disabledAt ? "disabled" : (key.expiresAt && new Date(key.expiresAt) < new Date() ? "expired" : "active"),
           group: key.modelGroup || "default",
           createdAt: key.createdAt || new Date().toISOString(),
@@ -141,7 +136,6 @@ export default async function handler(req, res) {
         id: key.id,
         name: key.label || "默认 API Key",
         token: key.token || "",
-        maskedKey: maskToken(key.token),
         status: key.disabledAt ? "disabled" : (key.expiresAt && new Date(key.expiresAt) < new Date() ? "expired" : "active"),
         group: key.modelGroup || "default",
         createdAt: key.createdAt || new Date().toISOString(),

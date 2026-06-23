@@ -32,6 +32,8 @@ const globalModelRankSource = fs.readFileSync(path.join(repoRoot, "pages/api/mar
 const newApiAdminProxySource = fs.readFileSync(path.join(repoRoot, "lib/new-api/admin-proxy.js"), "utf8");
 const genericAdminProxySource = fs.readFileSync(path.join(repoRoot, "pages/api/admin/[...path].js"), "utf8");
 const bulkPublishApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/admin/providers/aicards/bulk-publish.js"), "utf8");
+const importNewApiTokenApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/admin/import-newapi-token.js"), "utf8");
+const importNewApiTokenPageSource = fs.readFileSync(path.join(repoRoot, "pages/admin/api-keys/import-newapi-token.js"), "utf8");
 const modelMarketAdminApiSource = fs.readFileSync(path.join(repoRoot, "pages/api/admin/model-market/index.js"), "utf8");
 const modelMarketAdminPageSource = fs.readFileSync(path.join(repoRoot, "pages/admin/model-market.js"), "utf8");
 const upstreamSource = fs.readFileSync(path.join(repoRoot, "lib/upstream.js"), "utf8");
@@ -243,15 +245,23 @@ assert(
 );
 assert(
   publicApiKeyDtoSource.includes("function publicApiKeyDto")
-    && publicApiKeyDtoSource.includes("maskedToken")
-    && publicApiKeyDtoSource.includes("token: maskedToken")
+    && publicApiKeyDtoSource.includes("const token = String(key.token || \"\")")
+    && publicApiKeyDtoSource.includes("token")
     && publicApiKeyDtoSource.includes("const publicAllowedModels")
     && publicApiKeyDtoSource.includes("allowedModels: publicAllowedModels")
     && publicApiKeyDtoSource.includes("modelProductId: publicModelId")
     && !publicApiKeyDtoSource.includes("key.modelProductId")
-    && !publicApiKeyDtoSource.includes("token: key.token")
     && !publicApiKeyDtoSource.includes("allowedModels: Array.isArray(key.allowedModels) ? key.allowedModels : []"),
-  "普通用户 API Key DTO 只能返回脱敏 Key 和公开模型 ID，不能把完整 token 或 allowedModels 里的真实上游模型 ID 透给前台",
+  "普通用户 API Key DTO 只能返回原文 token 和公开模型 ID，不能把 allowedModels 里的真实上游模型 ID 透给前台",
+);
+assert(
+  importNewApiTokenApiSource.includes("token: rawToken")
+    && !importNewApiTokenApiSource.includes("tokenPreview")
+    && !importNewApiTokenApiSource.includes("tokenHash")
+    && importNewApiTokenPageSource.includes("result.token")
+    && !importNewApiTokenPageSource.includes("result.tokenPreview")
+    && !importNewApiTokenPageSource.includes("result.tokenHash"),
+  "New API Token 导入页面必须直接展示完整 Token，不再返回预览或哈希字段",
 );
 assert(
   legacyOpenRouterTopModelsSource.trim() === 'export { default } from "@/pages/api/analytics/global-model-rank";'
@@ -326,11 +336,14 @@ assert(
   "图片历史接口必须复用 sanitizeImageLogForViewer，普通用户不能看到 upstreamModel/upstreamProvider",
 );
 assert(
-  imageStudioSource.includes("FLOWAPI_MIN_IMAGE_PROFIT_MARGIN")
-    && imageStudioSource.includes("IMAGE_MODEL_COST_NOT_CONFIGURED")
-    && !imageStudioSource.includes("sellPerImage < costPerImage * (1 + minMargin)")
-    && !imageStudioSource.includes("IMAGE_MODEL_MARGIN_TOO_LOW"),
-  "图片固定定价模式应保留成本和价格校验，但不再按收益阈值进行阻断",
+  providerSource.includes("function buildAicardsAutoPricing")
+    && providerSource.includes("sellMultiplier")
+    && providerSource.includes("estimated_cost")
+    && providerSource.includes("缺少真实上游成本")
+    && providerSource.includes("normalizePricePair({ inputCost, outputCost, inputSell, outputSell })")
+    && !providerSource.includes("FLOWAPI_MIN_IMAGE_PROFIT_MARGIN")
+    && !providerSource.includes("IMAGE_MODEL_MARGIN_TOO_LOW"),
+  "AICards 自动定价应保留成本和售价校验，但不再按收益阈值进行阻断",
 );
 assert(
   adminConfigSource.includes("function assertPublishedModelCommercialGuard")

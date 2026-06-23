@@ -13,6 +13,14 @@ import { MODEL_CATALOG, getCatalogModel, getPublicModelRequestId, normalizeModel
 
 const SUPPORTED_MODEL_IDS = new Set(MODEL_CATALOG.map((model) => model.modelId));
 
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "10mb",
+    },
+  },
+};
+
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -83,28 +91,11 @@ function inputToMessages(input, instructions) {
 function normalizeResponsesModel(model) {
   const rawModel = String(model || "").trim();
   const normalizedModel = normalizeModelLookup(rawModel);
-  if (SUPPORTED_MODEL_IDS.has(rawModel) || getCatalogModel(normalizedModel)) return getPublicModelRequestId(normalizedModel);
-
-  const name = rawModel.toLowerCase();
-
-  if (name.includes("reasoner") || name.includes("r1")) return "deepseek-reasoner";
-  if (name.includes("deepseek")) return "deepseek-chat";
-  if (name.includes("qwen") || name.includes("alibaba")) return "qwen/qwen3-32b";
-  if (name.includes("claude") || name.includes("anthropic")) return "anthropic/claude-3.5-haiku";
-  if (name.includes("flowapi-codex") || name.includes("codex")) return "flowapi-codex-plus";
-  if (name.includes("gpt5.5-pro") || name.includes("gpt55-pro")) return "flowapi-gpt55-pro";
-  if (name.includes("gpt-5.5-pro")) return "flowapi-gpt55-pro";
-  if (name.includes("gpt5.5") || name.includes("gpt55")) return "flowapi-gpt55";
-  if (name.includes("gpt-5.5")) return "flowapi-gpt55";
-  if (name.includes("gpt5.4-pro") || name.includes("gpt54-pro")) return "flowapi-gpt54-pro";
-  if (name.includes("gpt-5.4-pro")) return "flowapi-gpt54-pro";
-  if (name.includes("gpt5.4-mini") || name.includes("gpt54-mini") || name.includes("gpt54")) return "flowapi-gpt54";
-  if (name.includes("gpt-5.4")) return "flowapi-gpt54";
-  if (name.includes("gpt-5.3-codex")) return "flowapi-codex-plus";
-  if (name.includes("gpt-4o-mini")) return "flowapi-gpt54";
-  if (name.includes("gpt") || name.includes("openai")) return "flowapi-gpt54";
-
-  return "deepseek-chat";
+  if (!rawModel) return "";
+  if (SUPPORTED_MODEL_IDS.has(rawModel) || getCatalogModel(normalizedModel)) {
+    return getPublicModelRequestId(normalizedModel);
+  }
+  return normalizedModel || rawModel;
 }
 
 function responsesToChatCompletions(body = {}) {
@@ -176,6 +167,14 @@ export default async function handler(req, res) {
   }
 
   const chatBody = responsesToChatCompletions(req.body || {});
+  if (!chatBody.model) {
+    return res.status(400).json({
+      error: {
+        message: "请显式提供 model 参数，FlowAPI 不会自动替换模型。",
+        type: "invalid_request_error",
+      },
+    });
+  }
 
   try {
     const chatRes = await fetch(getInternalChatUrl(), {

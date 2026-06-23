@@ -37,6 +37,15 @@ function adminHeaders(): Record<string, string> {
   };
 }
 
+function parseRetryAfterMs(value: string | null): number {
+  if (!value) return 0;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(30_000, Math.round(seconds * 1_000));
+  const dateMs = Date.parse(value);
+  if (Number.isFinite(dateMs)) return Math.min(30_000, Math.max(0, dateMs - Date.now()));
+  return 0;
+}
+
 function getRuntimeToken() {
   const defaultGroup = String(process.env.NEW_API_DEFAULT_GROUP || "default")
     .trim()
@@ -56,8 +65,8 @@ async function apiFetch(
   options: RequestInit = {},
 ): Promise<{ ok: boolean; data: any }> {
   if (!NEW_API_ADMIN_TOKEN) return { ok: false, data: null };
-  const retryAttempts = Math.max(1, Number(process.env.NEW_API_ADMIN_RETRY_ATTEMPTS || 3));
-  const retryDelayMs = Math.max(100, Number(process.env.NEW_API_ADMIN_RETRY_DELAY_MS || 300));
+  const retryAttempts = Math.max(1, Number(process.env.NEW_API_ADMIN_RETRY_ATTEMPTS || 5));
+  const retryDelayMs = Math.max(100, Number(process.env.NEW_API_ADMIN_RETRY_DELAY_MS || 500));
   const url = `${NEW_API_BASE_URL}${path}`;
 
   for (let attempt = 1; attempt <= retryAttempts; attempt += 1) {
@@ -68,9 +77,11 @@ async function apiFetch(
       });
       const body = await res.json().catch(() => null);
       if (!res.ok || (body && body.success === false)) {
-        const retryable = res.status === 429 || res.status >= 500;
+        const retryable = res.status >= 500;
         if (retryable && attempt < retryAttempts) {
-          await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
+          const retryAfter = parseRetryAfterMs(res.headers.get("retry-after"));
+          const delay = retryAfter > 0 ? retryAfter : retryDelayMs * attempt;
+          await new Promise((resolve) => setTimeout(resolve, delay));
           continue;
         }
         return { ok: false, data: body };

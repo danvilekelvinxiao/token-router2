@@ -5,8 +5,8 @@ import ConsoleLayout from "@/components/ConsoleLayout";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
 
 const API_BASE_URL = getPublicApiBaseUrl();
-const DEFAULT_MODEL = "gpt-5.4-mini";
-const CHATGPT_MODEL = "gpt-5.4-mini";
+const DEFAULT_MODEL = "gpt-5.5";
+const CHATGPT_MODEL = "gpt-5.5";
 
 /* ==================== helpers ==================== */
 

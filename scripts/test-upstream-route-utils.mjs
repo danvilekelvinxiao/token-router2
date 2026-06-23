@@ -1,4 +1,5 @@
 import assert from "assert/strict";
+import { DEFAULT_ROUTE_POLICY } from "../lib/route-policy-constants.js";
 import { normalizeUpstreamIdentity, orderUpstreamCandidates, shouldRetryUpstreamStatus } from "../lib/upstream-route-utils.mjs";
 
 const sameKeyA = {
@@ -40,11 +41,14 @@ assert.equal(shouldRetryUpstreamStatus(429), false);
 assert.equal(shouldRetryUpstreamStatus(429, { retry429: true }), true);
 assert.equal(shouldRetryUpstreamStatus(503), true);
 assert.equal(shouldRetryUpstreamStatus(200), false);
+assert.deepEqual(DEFAULT_ROUTE_POLICY.fallbackOrder.slice(0, 4), ["sub2api", "newApi", "backup", "openai"]);
+assert.equal(DEFAULT_ROUTE_POLICY.tierLabels.openai, "OpenAI");
 
 console.log(JSON.stringify({
   ok: true,
   orderedNames: ordered.map((item) => item.name),
   orderedAfter429Names: orderedAfter429.map((item) => item.name),
+  routePolicyOrder: DEFAULT_ROUTE_POLICY.fallbackOrder,
   retryPolicy: {
     default429: shouldRetryUpstreamStatus(429),
     optIn429: shouldRetryUpstreamStatus(429, { retry429: true }),

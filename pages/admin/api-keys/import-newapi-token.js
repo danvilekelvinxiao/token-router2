@@ -3,7 +3,7 @@ import AdminLayout from "@/components/AdminLayout";
 
 export default function ImportNewApiTokenPage() {
   const [form, setForm] = useState({
-    token: "", name: "", customerId: "", publicModelId: "gpt-5.4-mini",
+    token: "", name: "", customerId: "", publicModelId: "gpt-5.5",
     actualModelId: "", modelDisplayName: "", modelGroup: "default",
     allowedModels: "", expiresAt: "",
   });
@@ -42,7 +42,7 @@ export default function ImportNewApiTokenPage() {
           token: form.token.trim(),
           name: form.name.trim(),
           customerId: form.customerId.trim(),
-          publicModelId: form.publicModelId.trim() || "gpt-5.4-mini",
+          publicModelId: form.publicModelId.trim() || "gpt-5.5",
           actualModelId: form.actualModelId.trim() || form.publicModelId.trim(),
           modelDisplayName: form.modelDisplayName.trim() || form.publicModelId.trim(),
           modelGroup: form.modelGroup.trim() || "default",
@@ -103,7 +103,7 @@ export default function ImportNewApiTokenPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
             <label className="admin-field-label">
               公开模型 ID
-              <input value={form.publicModelId} onChange={update("publicModelId")} placeholder="gpt-5.4-mini" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--page-input-border)", background: "var(--page-input-bg)", color: "var(--page-text)", width: "100%" }} />
+              <input value={form.publicModelId} onChange={update("publicModelId")} placeholder="gpt-5.5" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--page-input-border)", background: "var(--page-input-bg)", color: "var(--page-text)", width: "100%" }} />
             </label>
             <label className="admin-field-label">
               实际模型 ID
@@ -118,7 +118,7 @@ export default function ImportNewApiTokenPage() {
             </label>
             <label className="admin-field-label">
               允许模型（逗号分隔）
-              <input value={form.allowedModels} onChange={update("allowedModels")} placeholder="gpt-5.4-mini,gpt-5.4-pro" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--page-input-border)", background: "var(--page-input-bg)", color: "var(--page-text)", width: "100%" }} />
+              <input value={form.allowedModels} onChange={update("allowedModels")} placeholder="gpt-5.5" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--page-input-border)", background: "var(--page-input-bg)", color: "var(--page-text)", width: "100%" }} />
             </label>
             <label className="admin-field-label">
               过期时间
@@ -140,8 +140,7 @@ export default function ImportNewApiTokenPage() {
               <tbody>
                 <tr><td style={{ fontWeight: 700 }}>ID</td><td><code>{result.id}</code></td></tr>
                 <tr><td style={{ fontWeight: 700 }}>名称</td><td>{result.name}</td></tr>
-                <tr><td style={{ fontWeight: 700 }}>Token Preview</td><td><code>{result.tokenPreview}</code></td></tr>
-                <tr><td style={{ fontWeight: 700 }}>Token Hash</td><td><code style={{ fontSize: 11 }}>{result.tokenHash}</code></td></tr>
+                <tr><td style={{ fontWeight: 700 }}>Token</td><td><code>{result.token}</code></td></tr>
                 <tr><td style={{ fontWeight: 700 }}>用户</td><td><code>{result.customerId}</code></td></tr>
                 <tr><td style={{ fontWeight: 700 }}>模型</td><td><code>{result.publicModelId}</code></td></tr>
                 <tr><td style={{ fontWeight: 700 }}>分组</td><td><code>{result.modelGroup}</code></td></tr>

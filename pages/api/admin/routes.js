@@ -67,7 +67,27 @@ async function seedRouteChannel(body = {}) {
 }
 
 async function recentFailures(publicModelId = "") {
-  if (!hasDatabase()) return [];
+  if (!hasDatabase()) {
+    const attempts = globalThis.__TOKEN_ROUTER_CUSTOMERS__?.routeAttempts || [];
+    return attempts
+      .filter((row) => Number(row.ok) !== true && (!publicModelId || row.public_model_id === publicModelId))
+      .map((row) => ({
+        requestId: row.request_id || "",
+        publicModelId: row.public_model_id || "",
+        actualModelId: row.actual_model_id || "",
+        upstreamChannelId: row.upstream_channel_id || "",
+        upstreamChannel: row.upstream_channel || "",
+        upstreamProvider: row.upstream_provider || "",
+        attemptIndex: Number(row.attempt_index || 0),
+        statusCode: Number(row.status_code || 0),
+        errorCode: row.error_code || "",
+        errorMessage: row.error_message || "",
+        latencyMs: Number(row.latency_ms || 0),
+        firstTokenMs: Number(row.first_token_ms || 0),
+        createdAt: row.created_at || new Date().toISOString(),
+      }))
+      .slice(0, 30);
+  }
   const result = await query(
     `SELECT request_id, public_model_id, actual_model_id, upstream_channel, upstream_provider,
             upstream_channel_id,

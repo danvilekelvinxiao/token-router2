@@ -1926,7 +1926,7 @@ function DashboardOperationsSection({ stats, trendData, trendRange, setTrendRang
       />
       <div className="dash3-core-metrics-grid">
         <CoreMetricCard label="总消耗金额" value={<MetricValueInline prefix="¥" value={totalCost.toFixed(2)} />} detail="累计 API 调用消耗金额" chartData={hasMiniSeriesData(costMini) ? costMini : []} chartColor="purple" chartFormatter={moneyFormatter} chartEmptyText="" onClick={() => onOpenMetric("totalCost")} />
-        <CoreMetricCard label="API Key" value={<MetricValueInline value={stats.apiKeyCount} unit="个" />} detail={`可用 ${stats.activeApiKeyCount} 个，默认脱敏展示`} chartData={apiKeyMini} chartType="bar" chartColor="purple" chartFormatter={countFormatter} chartEmptyText="" onClick={() => onOpenMetric("keys")} />
+        <CoreMetricCard label="API Key" value={<MetricValueInline value={stats.apiKeyCount} unit="个" />} detail={`可用 ${stats.activeApiKeyCount} 个，完整值直接展示`} chartData={apiKeyMini} chartType="bar" chartColor="purple" chartFormatter={countFormatter} chartEmptyText="" onClick={() => onOpenMetric("keys")} />
         <CoreMetricCard label="今日消耗" value={<MetricValueInline prefix="¥" value={stats.todayCost.toFixed(2)} />} detail={`${formatCompactToken(stats.todayTokens)} Token`} chartData={hasMiniSeriesData(costMini) ? costMini : []} chartColor="yellow" chartFormatter={moneyFormatter} chartEmptyText="" onClick={() => onOpenMetric("today")} />
         <CoreMetricCard label="本月消耗" value={<MetricValueInline prefix="¥" value={stats.monthCost.toFixed(2)} />} detail={`${formatCompactToken(stats.monthTokens)} Token，帮助判断预算`} chartData={hasMiniSeriesData(costMini) ? costMini : []} chartColor="orange" chartFormatter={moneyFormatter} chartEmptyText="" onClick={() => onOpenMetric("month")} />
         <CoreMetricCard label="请求次数" value={<MetricValueInline value={`${stats.todayRequests} / ${stats.monthRequests}`} unit="次" />} detail="今日 / 本月请求次数" chartData={hasMiniSeriesData(requestMini) ? requestMini : []} chartType="bar" chartColor="cyan" chartFormatter={countFormatter} chartEmptyText="" onClick={() => onOpenMetric("requests")} />
@@ -2056,13 +2056,13 @@ function buildMetricDetail(metricKey, { stats, trendData, modelUsage, recentRows
       rows: [
         { label: "API Key 总数", value: `${Number(stats.apiKeyCount || 0)} 个` },
         { label: "可用 API Key", value: `${Number(stats.activeApiKeyCount || 0)} 个` },
-        { label: "安全状态", value: "默认脱敏展示，完整值只在复制时使用" },
+        { label: "安全状态", value: "完整值直接展示，复制按钮可用于取用" },
         { label: "最近更新时间", value: updatedAt },
       ],
       extraTitle: "最近调用来源",
       extraRows: calls,
       sheets: [
-        { sheetName: "API Key概览", data: [{ apiKeyCount: stats.apiKeyCount, activeApiKeyCount: stats.activeApiKeyCount, note: "API Key 默认脱敏展示" }] },
+        { sheetName: "API Key概览", data: [{ apiKeyCount: stats.apiKeyCount, activeApiKeyCount: stats.activeApiKeyCount, note: "API Key 完整值直接展示" }] },
         { sheetName: "调用来源", data: calls },
       ],
     },

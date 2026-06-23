@@ -7,21 +7,19 @@ import { getPublicModelDisplayName, getPublicModelRequestId } from "@/lib/models
 const apiBaseUrl = "https://api.flowapi.fun/v1";
 
 const modelDirectory = [
-  { name: "GPT5.4 mini", modelId: "gpt-5.4-mini", provider: "FlowAPI", bestFor: "日常对话、总结、通用任务" },
+  { name: "GPT5.5", modelId: "gpt-5.5", provider: "FlowAPI", bestFor: "复杂分析、结构化总结、代码辅助" },
   { name: "GPT5.4 Pro", modelId: "gpt-5.4-pro", provider: "FlowAPI", bestFor: "高质量推理、代码审查、专业办公" },
+  { name: "GPT5.3-Codex", modelId: "gpt-5.3-codex", provider: "FlowAPI", bestFor: "代码生成、代码修复、Agent 编程任务" },
+  { name: "GPT4o mini", modelId: "gpt-4o-mini", provider: "FlowAPI", bestFor: "轻量推理、日常问答、文本处理" },
   { name: "DeepSeek V4 Flash", modelId: "deepseek-chat", provider: "FlowAPI", bestFor: "中文内容、客服、批量文案" },
   { name: "Qwen3-32B", modelId: "qwen/qwen3-32b", provider: "FlowAPI", bestFor: "外贸邮件、商务沟通、中文办公" },
-  { name: "GPT5.5", modelId: "gpt-5.5", provider: "FlowAPI", bestFor: "复杂分析、结构化总结、代码辅助" },
-  { name: "Claude Haiku", modelId: "anthropic/claude-3.5-haiku", provider: "FlowAPI", bestFor: "长文分析、英文写作、轻量推理" },
-  { name: "Kimi", modelId: "moonshot/kimi-k2", provider: "FlowAPI", bestFor: "长文阅读、资料整理、中文知识库" },
-  { name: "GLM", modelId: "zhipu/glm-4.5", provider: "FlowAPI", bestFor: "办公问答、中文任务、轻量推理" },
 ];
 
 function getSelectedModel(queryModel) {
   const cleanModel = typeof queryModel === "string" ? queryModel : "";
   return modelDirectory.find((model) => model.modelId === cleanModel) || {
-    name: getPublicModelDisplayName(cleanModel || "gpt-5.4-mini"),
-    modelId: getPublicModelRequestId(cleanModel || "gpt-5.4-mini"),
+    name: getPublicModelDisplayName(cleanModel || "gpt-5.5"),
+    modelId: getPublicModelRequestId(cleanModel || "gpt-5.5"),
     provider: "FlowAPI",
     bestFor: "通用任务",
   };

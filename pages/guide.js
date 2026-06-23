@@ -9,7 +9,7 @@ import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import { listModelProducts } from "@/lib/model-products";
 const API_BASE_URL = getPublicApiBaseUrl();
-const defaultModel = "gpt-5.4-mini";
+const defaultModel = "gpt-5.5";
 const CC_SWITCH_RELEASE_URL = "https://github.com/farion1231/cc-switch/releases/tag/v3.15.0";
 const CC_SWITCH_WINDOWS_URL = "https://github.com/farion1231/cc-switch/releases/download/v3.15.0/CC-Switch-v3.15.0-Windows.msi";
 const MODEL_PRODUCT_OPTIONS = listModelProducts({ includeUnavailable: true });
@@ -30,7 +30,7 @@ function getStatus(key) {
   return { label: "已启用", tone: "success" };
 }
 
-function maskToken(token = "") {
+function displayToken(token = "") {
   return String(token || "");
 }
 
@@ -391,8 +391,6 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   const [message, setMessage] = useState("");
   const [query, setQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState([]);
-  const [visibleTokens, setVisibleTokens] = useState({});
-  const [visibleTimers, setVisibleTimers] = useState({});
   const [page, setPage] = useState(1);
   const [modal, setModal] = useState(null);
   const [openMoreKeyId, setOpenMoreKeyId] = useState(null);
@@ -686,23 +684,9 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
         </div>
         <div className={`api-primary-key-row ${primaryKey ? "" : "without-action"}`}>
           <strong>{primaryKey?.label || "尚未创建 API Key"}</strong>
-          <code>{visibleTokens[primaryKey?.id] ? primaryKey?.token : maskToken(primaryKey?.token || "")}</code>
+          <code>{displayToken(primaryKey?.token || "")}</code>
           {primaryKey ? (
             <div className="api-key-actions">
-              <button type="button" onClick={() => {
-                if (visibleTokens[primaryKey.id]) {
-                  clearTimeout(visibleTimers[primaryKey.id]);
-                  setVisibleTokens((t) => ({ ...t, [primaryKey.id]: false }));
-                } else {
-                  setVisibleTokens((t) => ({ ...t, [primaryKey.id]: true }));
-                  const timer = setTimeout(() => {
-                    setVisibleTokens((t) => ({ ...t, [primaryKey.id]: false }));
-                  }, 10000);
-                  setVisibleTimers((t) => ({ ...t, [primaryKey.id]: timer }));
-                }
-              }}>
-                {visibleTokens[primaryKey.id] ? "隐藏" : "显示"}
-              </button>
               <button type="button" onClick={() => copyText(primaryKey.label, primaryKey.token)}>复制</button>
             </div>
           ) : null}
@@ -754,7 +738,6 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
           <tbody>
             {pageKeys.map((key) => {
               const status = getStatus(key);
-              const isVisible = Boolean(visibleTokens[key.id]);
               return (
                 <tr key={key.id} className="api-key-row" onClick={() => openKeyDetail(key)}>
                   <td className="flow-check" onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(key.id)} onChange={() => toggleSelected(key.id)} /></td>
@@ -767,19 +750,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
                   <td><span className="flow-soft-pill">无限额度</span></td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <span className="flow-token-pill">
-                      <code>{isVisible ? key.token : maskToken(key.token)}</code>
-                      <button type="button" className="show" onClick={() => {
-                        if (isVisible) {
-                          clearTimeout(visibleTimers[key.id]);
-                          setVisibleTokens((tokens) => ({ ...tokens, [key.id]: false }));
-                        } else {
-                          setVisibleTokens((tokens) => ({ ...tokens, [key.id]: true }));
-                          const timer = setTimeout(() => {
-                            setVisibleTokens((tokens) => ({ ...tokens, [key.id]: false }));
-                          }, 10000);
-                          setVisibleTimers((t) => ({ ...t, [key.id]: timer }));
-                        }
-                      }}>{isVisible ? "隐藏" : "显示"}</button>
+                      <code>{displayToken(key.token)}</code>
                       <button type="button" className="copy" onClick={() => copyText(key.label, key.token)}>复制</button>
                     </span>
                   </td>

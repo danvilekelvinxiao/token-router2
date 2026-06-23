@@ -164,7 +164,7 @@ export default function DashboardLogsPage() {
                 <select value={filters.apiKeyId} onChange={(event) => updateFilter("apiKeyId", event.target.value)}>
                   <option value="">全部 API Key</option>
                   {apiKeys.map((key) => (
-                    <option key={key.id} value={key.id}>{key.label} · {key.masked}</option>
+                    <option key={key.id} value={key.id}>{key.label} · {key.token}</option>
                   ))}
                 </select>
               </label>
@@ -238,7 +238,7 @@ export default function DashboardLogsPage() {
                     <tr key={item.id}>
                       <td>{new Date(item.createdAt).toLocaleString("zh-CN")}</td>
                       <td>{item.id}</td>
-                      <td>{item.apiKeyLabel ? `${item.apiKeyLabel} · ${item.apiKeyMasked}` : "-"}</td>
+                      <td>{item.apiKeyLabel ? `${item.apiKeyLabel} · ${item.apiKey}` : "-"}</td>
                       <td>{item.model || "-"}</td>
                       <td>{TABS.find((entry) => entry.id === item.type)?.label || item.type}</td>
                       <td>{item.group || "-"}</td>
