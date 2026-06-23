@@ -1,7 +1,7 @@
 import { getContent } from "@/lib/content-cms";
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { listPublishedModels, listModelPricing } from "@/lib/admin-commercial-config";
-import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { dedupePublicModelList, sanitizePublicModelForClient } from "@/lib/public-model-provider";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -58,9 +58,9 @@ export default async function handler(req, res) {
           primaryButtonHref: "/api-management",
         });
       });
-    payload = [...payload, ...appended].sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
+    payload = dedupePublicModelList([...payload, ...appended]).sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
   } catch {
-    payload = data.map((model) => sanitizePublicModelForClient(model));
+    payload = dedupePublicModelList(data.map((model) => sanitizePublicModelForClient(model)));
   }
 
   return res.status(200).json({

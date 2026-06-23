@@ -1367,8 +1367,6 @@ export default async function handler(req, res) {
       const authorizationToken = String(candidate.apiKey || "").trim()
         || (candidate.name === "new-api" ? getNewApiAuthorizationToken({ modelProduct }) : "");
       if (!authorizationToken) {
-        const failureText = await response.clone().text().catch(() => "");
-        const contextLimitHit = isUpstreamContextLimitError({}, failureText, response.status);
         await recordRouteAttempt({
           requestId,
           customerId: customerMatch.customer.id,
@@ -1416,6 +1414,8 @@ export default async function handler(req, res) {
           signal: controller.signal,
         });
         const latencyMs = Date.now() - attemptStart;
+        const responseText = response.ok ? "" : await response.clone().text().catch(() => "");
+        const contextLimitHit = isUpstreamContextLimitError({}, responseText, response.status);
         await recordRouteAttempt({
           requestId,
           customerId: customerMatch.customer.id,

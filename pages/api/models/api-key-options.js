@@ -1,13 +1,13 @@
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { getContent } from "@/lib/content-cms";
-import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { dedupePublicModelList, sanitizePublicModelForClient } from "@/lib/public-model-provider";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed" });
 
   try {
     const products = await listModelProductsWithConfig({ includeUnavailable: true });
-    const models = products
+    const models = dedupePublicModelList(products
       .filter((model) => model.isAvailable && model.canCreateKey !== false && model.showInApiKeyCreate !== false)
       .map((model) => {
         const fallbackPrice = findContentPrice(model);
@@ -37,6 +37,7 @@ export default async function handler(req, res) {
           sortOrder: model.sortOrder || 999,
         });
       })
+    )
       .sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
 
     return res.status(200).json({

@@ -20,6 +20,7 @@
     "admin:bootstrap-model-pack": "node scripts/bootstrap-model-pack.mjs",
     "admin:aicards-sync": "node scripts/aicards-sync-publish.mjs",
     "test:aicards-provider": "node scripts/test-aicards-provider-contract.mjs",
+    "test:token-pool-secret": "node --loader ./scripts/alias-loader.mjs scripts/test-token-pool-secret.mjs",
     "test:commercial-loop": "node scripts/e2e-commercial-loop.mjs",
     "test:smart-router-cache": "node scripts/e2e-smart-router-cache.mjs",
     "send:audit-email": "node scripts/send-commercialization-audit-email.mjs",

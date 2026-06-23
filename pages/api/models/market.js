@@ -1,7 +1,7 @@
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { listModelPricing, listPublishedModels } from "@/lib/admin-commercial-config";
 import { getContent } from "@/lib/content-cms";
-import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { dedupePublicModelList, sanitizePublicModelForClient } from "@/lib/public-model-provider";
 import { listImageModels, mapPublicImageModel } from "@/lib/image-studio";
 
 const CATEGORY_META = {
@@ -24,45 +24,51 @@ export default async function handler(req, res) {
       listImageModels().then((models) => models.map(mapPublicImageModel)).catch(() => []),
     ]);
     const pricingMap = new Map(pricingConfigs.map((item) => [item.modelId, item]));
-    const staticModels = products
-      .filter((p) => p.isAvailable && p.showInModelSquare !== false)
-      .map((p) => sanitizePublicModelForClient(normalizeMarketModel({
-        id: p.id,
-        modelId: p.publicModelId || p.id,
-        displayName: p.displayName,
-        provider: p.provider || "FlowAPI",
-        description: p.description || "",
-        tags: p.useCases || [],
-        enabled: p.isAvailable,
-        officialReleaseDate: p.officialReleaseDate || "",
-        sortOrder: p.sortOrder || 999,
-        pricing: p.pricing,
-      })));
-    const existing = new Set(staticModels.map((model) => model.modelId));
-    const adminModels = publishedModels
-      .filter((model) => model.enabled && model.showInModelSquare && !existing.has(model.modelId))
-      .map((model) => sanitizePublicModelForClient(normalizeMarketModel({ ...model, pricing: pricingMap.get(model.modelId) })));
-    adminModels.forEach((model) => existing.add(model.modelId));
-    const publicImageModels = imageModels
-      .filter((model) => model.enabled && !existing.has(model.modelId || model.publicModelId || model.id))
-      .map((model) => sanitizePublicModelForClient(normalizeMarketModel({
-        id: model.id,
-        modelId: model.modelId || model.publicModelId || model.id,
-        publicModelId: model.publicModelId || model.modelId || model.id,
-        displayName: model.displayName,
-        provider: "FlowAPI",
-        modelType: "image",
-        description: model.sceneDescription || "",
-        tags: model.labelTags || model.tags || [],
-        enabled: model.enabled,
-        recommended: model.recommended,
-        hot: Boolean(model.recommended),
-        sortOrder: Number(model.sortOrder || 500) + 700,
-        pricing: {
-          billingMode: model.imageBillingMode?.startsWith("per_image") ? model.imageBillingMode : "per_image_fixed_profit",
-          imageSellPricePerImageCny: model.imageSellPricePerImageCny || model.unitPriceRmbTextToImage || 0,
-        },
-      })));
+    const staticModels = dedupePublicModelList(
+      products
+        .filter((p) => p.isAvailable && p.showInModelSquare !== false)
+        .map((p) => sanitizePublicModelForClient(normalizeMarketModel({
+          id: p.id,
+          modelId: p.publicModelId || p.id,
+          displayName: p.displayName,
+          provider: p.provider || "FlowAPI",
+          description: p.description || "",
+          tags: p.useCases || [],
+          enabled: p.isAvailable,
+          officialReleaseDate: p.officialReleaseDate || "",
+          sortOrder: p.sortOrder || 999,
+          pricing: p.pricing,
+        }))),
+    );
+    const existing = new Set(staticModels.map((model) => model.requestModelId || model.modelId || model.publicModelId || model.id));
+    const adminModels = dedupePublicModelList(
+      publishedModels
+        .filter((model) => model.enabled && model.showInModelSquare && !existing.has(model.modelId))
+        .map((model) => sanitizePublicModelForClient(normalizeMarketModel({ ...model, pricing: pricingMap.get(model.modelId) }))),
+    );
+    adminModels.forEach((model) => existing.add(model.requestModelId || model.modelId || model.publicModelId || model.id));
+    const publicImageModels = dedupePublicModelList(
+      imageModels
+        .filter((model) => model.enabled && !existing.has(model.modelId || model.publicModelId || model.id))
+        .map((model) => sanitizePublicModelForClient(normalizeMarketModel({
+          id: model.id,
+          modelId: model.modelId || model.publicModelId || model.id,
+          publicModelId: model.publicModelId || model.modelId || model.id,
+          displayName: model.displayName,
+          provider: "FlowAPI",
+          modelType: "image",
+          description: model.sceneDescription || "",
+          tags: model.labelTags || model.tags || [],
+          enabled: model.enabled,
+          recommended: model.recommended,
+          hot: Boolean(model.recommended),
+          sortOrder: Number(model.sortOrder || 500) + 700,
+          pricing: {
+            billingMode: model.imageBillingMode?.startsWith("per_image") ? model.imageBillingMode : "per_image_fixed_profit",
+            imageSellPricePerImageCny: model.imageSellPricePerImageCny || model.unitPriceRmbTextToImage || 0,
+          },
+        }))),
+    );
 
     const models = [...staticModels, ...adminModels, ...publicImageModels]
       .sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));

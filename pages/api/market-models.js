@@ -1,5 +1,5 @@
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
-import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { dedupePublicModelList, sanitizePublicModelForClient } from "@/lib/public-model-provider";
 
 function toMarketMetric(model = {}, index = 0) {
   const inputPrice = Number(model.flowapiInputPricePerM || model.inputPricePerM || model.inputPrice || 0);
@@ -27,8 +27,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    const models = (await listModelProductsWithConfig({ includeUnavailable: false }))
-      .map(sanitizePublicModelForClient)
+    const models = dedupePublicModelList((await listModelProductsWithConfig({ includeUnavailable: false }))
+      .map(sanitizePublicModelForClient))
       .filter((model) => model.enabled !== false && model.isAvailable !== false)
       .slice(0, 6)
       .map(toMarketMetric);
