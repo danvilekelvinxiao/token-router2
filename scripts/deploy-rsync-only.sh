@@ -15,6 +15,9 @@ rsync -az --delete \
   --exclude .env.local \
   --exclude .env.production \
   --exclude .claude \
+  --exclude .omx \
+  --exclude .playwright-cli \
+  --exclude services \
   --exclude .next/cache \
   ./ "${SERVER}:${APP_DIR}/"
 
