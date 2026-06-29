@@ -1141,7 +1141,8 @@ export default async function handler(req, res) {
   const ip = getClientIp(req);
   const flowDebugEnabled = shouldExposeFlowDebugHeaders(req);
   const body = parseRequestBody(req.body);
-  let requestId = normalizeClientRequestId(req.headers["idempotency-key"] || req.headers["x-request-id"] || body.request_id || body.requestId || "") || makeRequestId("chat");
+  const clientRequestId = normalizeClientRequestId(req.headers["idempotency-key"] || req.headers["x-request-id"] || body.request_id || body.requestId || "");
+  let requestId = clientRequestId || makeRequestId("chat");
   const sendEarlyInternalError = ({
     status = 503,
     code = "MODEL_SERVICE_REQUEST_FAILED",
