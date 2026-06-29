@@ -690,6 +690,18 @@ function shouldRetryResponsesAsChat(status = 0, upstreamError = {}) {
   return /unsupported|unknown|unrecognized|not found|no route|messages|max_tokens|chat\.completions|responses/.test(`${code} ${message}`);
 }
 
+function shouldRetryBadRequestViaFallback(status = 0, upstreamError = {}, requestBody = {}) {
+  if (Number(status || 0) !== 400) return false;
+  const code = String(upstreamError?.code || "").toLowerCase();
+  const message = String(upstreamError?.message || "").toLowerCase();
+  const hasTools = Array.isArray(requestBody?.tools) && requestBody.tools.length > 0;
+  const isStream = requestBody?.stream === true;
+  if (/no tool call found for function call output/.test(message)) return true;
+  if ((hasTools || isStream) && /event:\s*error|upstream request failed/.test(message)) return true;
+  if ((hasTools || isStream) && /invalid_request_error/.test(code) && /tool call|function call|call_id/.test(message)) return true;
+  return false;
+}
+
 function summarizeResponsesRequestShape(body = {}) {
   const messages = Array.isArray(body?.messages) ? body.messages : [];
   const input = body?.input;
@@ -2231,7 +2243,9 @@ export default async function handler(req, res) {
         }
 
         lastUpstreamError = new Error(`${candidate.label} 返回 ${response.status}`);
-        const shouldTryNext = [401, 402, 403, 404, 408, 429, 500, 502, 503, 504].includes(response.status) || response.status >= 500;
+        const shouldTryNext = [401, 402, 403, 404, 408, 429, 500, 502, 503, 504].includes(response.status)
+          || response.status >= 500
+          || shouldRetryBadRequestViaFallback(response.status, upstreamErrPayload, effectiveAttemptBody);
         const shouldTryNextWithBodyTooLarge = shouldTryNext || response.status === 413;
         if (shouldTryNextWithBodyTooLarge) continue;
 
@@ -2550,8 +2564,21 @@ export default async function handler(req, res) {
       return;
     }
 
-    const data = await upstreamResponse.json();
     const upstreamOk = upstreamResponse.ok;
+    const upstreamText = await upstreamResponse.text();
+    let data = {};
+    try {
+      data = upstreamText ? JSON.parse(upstreamText) : {};
+    } catch (error) {
+      if (upstreamOk) throw error;
+      const parsedUpstreamError = parseUpstreamErrorPayload(upstreamText);
+      data = {
+        error: {
+          type: parsedUpstreamError.code || "upstream_error",
+          message: parsedUpstreamError.message || sanitizeSecretText(error?.message || "模型服务返回了无法解析的错误响应"),
+        },
+      };
+    }
     const usage = upstreamOk ? normalizeSuccessUsage(data, promptTokens) : zeroUsage();
     const successfulBilling = upstreamOk
       ? buildBillingSnapshotForCandidate(selected.modelId, usage, modelProduct, billingMultiplier, upstream)
@@ -2917,19 +2944,59 @@ function summarizeBodyShape(body = {}) {
   };
 }
 
-function parseUpstreamErrorPayload(text = "") {
-  const safeText = sanitizeSecretText(String(text || "").slice(0, 2000));
-  if (!safeText) return { code: "", message: "" };
-  try {
-    const json = JSON.parse(safeText);
-    const error = json?.error || json;
-    return {
-      code: String(error?.code || json?.code || error?.type || "").slice(0, 120),
-      message: sanitizeSecretText(String(error?.message || json?.message || safeText).slice(0, 500)),
-    };
-  } catch {
-    return { code: "", message: safeText.slice(0, 500) };
+function extractLeadingJsonObject(text = "") {
+  const raw = String(text || "");
+  const start = raw.search(/[\[{]/);
+  if (start < 0) return "";
+  const open = raw[start];
+  const close = open === "[" ? "]" : "}";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < raw.length; index += 1) {
+    const char = raw[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === "\\") {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === open) depth += 1;
+    if (char === close) {
+      depth -= 1;
+      if (depth === 0) return raw.slice(start, index + 1);
+    }
   }
+  return "";
+}
+
+function parseUpstreamErrorPayload(text = "") {
+  const safeText = sanitizeSecretText(String(text || "").slice(0, 4000));
+  if (!safeText) return { code: "", message: "" };
+  const candidates = [
+    safeText,
+    safeText.split(/\nevent:/i)[0]?.trim() || "",
+    extractLeadingJsonObject(safeText),
+  ].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      const json = JSON.parse(candidate);
+      const error = json?.error || json;
+      return {
+        code: String(error?.code || json?.code || error?.type || "").slice(0, 120),
+        message: sanitizeSecretText(String(error?.message || json?.message || candidate).slice(0, 500)),
+      };
+    } catch {}
+  }
+  return { code: "", message: safeText.slice(0, 500) };
 }
 
 async function readUpstreamError(response) {
