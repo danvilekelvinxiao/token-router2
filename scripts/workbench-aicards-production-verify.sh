@@ -71,7 +71,7 @@ for line in \
   'FLOWAPI_AICARDS_AUTO_HEALTH_CHECK=true' \
   'FLOWAPI_AICARDS_PER_MODEL_HEALTH_CHECK=false' \
   'FLOWAPI_AICARDS_INCLUDE_IMAGES=false' \
-  'FLOWAPI_AICARDS_SYNC_MAX_COUNT=80'
+  'FLOWAPI_AICARDS_SYNC_MAX_COUNT=999'
 do
   key="${line%%=*}"
   if grep -q "^${key}=" .env.production; then

@@ -1,4 +1,4 @@
-import { getDashboard, listRechargeOrders } from "@/lib/customer-store";
+import { getDashboard, listRechargeOrders, listWalletLedgerEntries } from "@/lib/customer-store";
 import { requireCustomerSession } from "@/lib/session";
 import { getBillingPreference, resolveDeductionOrder } from "@/lib/billing/deduction-priority";
 import { claimDailyBonus, getMemberWallets, getUserMembership } from "@/lib/membership/store";
@@ -17,7 +17,7 @@ function parsePackageRef(ref = "") {
     purchaseType: lineValue("购买类型"),
     packageId: lineValue("套餐ID"),
     planName: lineValue("套餐名称") || "FlowAPI 套餐",
-    quotaText: lineValue("额度"),
+    quotaText: lineValue("用量") || lineValue("额度"),
     validDays: validDaysRaw ? Number(validDaysRaw) : null,
   };
 }
@@ -40,11 +40,17 @@ function isWithin(value, start, end) {
 }
 
 function mapBalanceLog(order) {
+  const isPackage = order.paymentRef?.includes("套餐");
   return {
     id: order.id,
-    type: order.paymentRef?.includes("套餐") ? "package" : "recharge",
-    title: order.paymentRef?.includes("套餐") ? "套餐到账" : "余额充值",
-    amountCny: Number(order.amount || 0),
+    type: isPackage ? "package" : "recharge",
+    title: isPackage ? "套餐到账" : "充值到账",
+    amountCny: Number(order.creditedAmountApi ?? order.amountApi ?? order.amount ?? 0),
+    amountApi: Number(order.creditedAmountApi ?? order.amountApi ?? order.amount ?? 0),
+    paymentAmountRmb: Number(order.paymentAmountRmb ?? order.amount ?? 0),
+    creditedAmountApi: Number(order.creditedAmountApi ?? order.amountApi ?? order.amount ?? 0),
+    rechargeRate: Number(order.rechargeRate || 5),
+    rechargeRateText: order.rechargeRateText || "¥1 = $ API 5",
     status: order.status,
     createdAt: order.createdAt,
     approvedAt: order.approvedAt,
@@ -80,6 +86,10 @@ const MODEL_CONSUMPTION_COLORS = [
   "#64748b",
 ];
 
+function hashModelName(value = "") {
+  return Array.from(String(value || "")).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+}
+
 function shanghaiDateKey(value) {
   const date = new Date(value || Date.now());
   if (Number.isNaN(date.getTime())) return "";
@@ -111,7 +121,7 @@ function getModelColor(modelName, index = 0) {
   if (name.includes("gemini") || name.includes("google")) return "#f59e0b";
   if (name.includes("qwen") || name.includes("通义")) return "#f97316";
   if (name.includes("seedream") || name.includes("doubao") || name.includes("字节")) return "#14b8a6";
-  return MODEL_CONSUMPTION_COLORS[index % MODEL_CONSUMPTION_COLORS.length];
+  return MODEL_CONSUMPTION_COLORS[(hashModelName(name) + index) % MODEL_CONSUMPTION_COLORS.length];
 }
 
 function createModelBucket(modelName, call, index) {
@@ -249,6 +259,18 @@ export default async function handler(req, res) {
   const now = new Date();
   const calls = Array.isArray(customer.calls) ? customer.calls : [];
   const currentBalance = Number(customer.balance || 0);
+  const walletLedger = await listWalletLedgerEntries({ customerId: session.customerId, limit: 80 }).catch(() => []);
+  const todayKey = shanghaiDateKey(new Date());
+  const monthKey = todayKey.slice(0, 7);
+  const isSameShanghaiDay = (value) => shanghaiDateKey(value) === todayKey;
+  const isSameShanghaiMonth = (value) => shanghaiDateKey(value).slice(0, 7) === monthKey;
+  const sumCalls = (items) => Number(items.reduce((sum, call) => sum + Number(call.cost || 0), 0).toFixed(6));
+  const todayConsumptionApi = sumCalls(calls.filter((call) => isSameShanghaiDay(call.createdAt)));
+  const monthConsumptionApi = sumCalls(calls.filter((call) => isSameShanghaiMonth(call.createdAt)));
+  const totalRechargedRmb = Number(approvedOrders.reduce((sum, order) => sum + Number(order.paymentAmountRmb ?? order.amount ?? 0), 0).toFixed(2));
+  const totalGrantedApi = Number(approvedOrders.reduce((sum, order) => sum + Number(order.creditedAmountApi ?? order.amountApi ?? order.amount ?? 0), 0).toFixed(6));
+  const totalConsumedApi = sumCalls(calls);
+  const requestCount = calls.length;
 
   let plan = null;
   let totalQuotaCny = 0;
@@ -322,7 +344,7 @@ export default async function handler(req, res) {
     ...getMemberWallets(session.customerId),
     ...(plan ? [{
       type: "package_quota",
-      name: plan.planName || "套餐额度",
+      name: plan.planName || "套餐用量",
       balanceTokens: totalTokens,
       balanceCnyEquivalent: remainingQuotaCny,
       expiresAt: plan.expiresAt,
@@ -368,6 +390,17 @@ export default async function handler(req, res) {
       recentRecharges: [],
       recentConsumptions: [],
       balanceLogs: [],
+      walletLedger: [],
+      walletStats: {
+        todayConsumptionApi: 0,
+        monthConsumptionApi: 0,
+        totalRechargedRmb: 0,
+        totalGrantedApi: 0,
+        totalConsumedApi: 0,
+        requestCount: 0,
+        rechargeRate: 5,
+        rechargeRateText: "¥1 = $ API 5",
+      },
       spendTrend7d: [],
       wallets,
       billingPreference,
@@ -386,10 +419,16 @@ export default async function handler(req, res) {
 
   const walletPayload = {
     balanceCny: currentBalance,
+    balanceApi: currentBalance,
+    apiBalance: currentBalance,
     totalQuotaCny: Number(totalQuotaCny.toFixed(6)),
+    totalQuotaApi: Number(totalQuotaCny.toFixed(6)),
     usedQuotaCny: Number(usedQuotaCny.toFixed(6)),
+    usedQuotaApi: Number(usedQuotaCny.toFixed(6)),
     remainingQuotaCny,
+    remainingQuotaApi: remainingQuotaCny,
     progressPercent: Number(Math.max(0, Math.min(100, progressPercent)).toFixed(2)),
+    currency: "$ API",
   };
   const tokenPayload = {
     totalTokens,
@@ -417,7 +456,9 @@ export default async function handler(req, res) {
     walletProgress,
     recentRecharges: (orders || []).slice(0, 5).map(mapBalanceLog),
     recentConsumptions: calls.slice(0, 5).map((call) => ({
-      id: call.id,
+      id: call.requestId || call.id,
+      requestId: call.requestId || "",
+      callId: call.callId || call.id,
       model: call.requestedModel || call.routedModel || "unknown",
       amountCny: Number(call.cost || 0),
       tokens: Number(call.tokens || 0),
@@ -426,14 +467,39 @@ export default async function handler(req, res) {
     })),
     spendTrend7d: buildSevenDaySpendTrend(calls),
     modelConsumptionChart: buildModelConsumptionChart(calls),
+    walletStats: {
+      todayConsumptionApi,
+      monthConsumptionApi,
+      totalRechargedRmb,
+      totalGrantedApi,
+      totalConsumedApi,
+      requestCount,
+      rechargeRate: 5,
+      rechargeRateText: "¥1 = $ API 5",
+    },
+    walletLedger,
     balanceLogs: [
+      ...(walletLedger || []).slice(0, 8).map((entry) => ({
+        id: entry.id,
+        type: entry.type,
+        title: entry.remark || entry.type,
+        amountCny: Number(entry.amountApi || 0),
+        amountApi: Number(entry.amountApi || 0),
+        balanceBeforeApi: Number(entry.balanceBeforeApi || 0),
+        balanceAfterApi: Number(entry.balanceAfterApi || 0),
+        requestId: entry.requestId || "",
+        status: "success",
+        createdAt: entry.createdAt,
+      })),
       ...(orders || []).slice(0, 5).map(mapBalanceLog),
       ...calls.slice(0, 5).map((call) => ({
-        id: call.id,
+        id: call.requestId || call.id,
+        requestId: call.requestId || "",
+        callId: call.callId || call.id,
         type: "consume",
         title: call.requestedModel || call.routedModel || "模型调用",
         amountCny: -Number(call.cost || 0),
-        status: Number(call.status || 0) >= 200 && Number(call.status || 0) < 400 ? "success" : "failed",
+        status: (call.billingStatus || call.deliveryStatus || "") === "success_completed" || (Number(call.status || 0) >= 200 && Number(call.status || 0) < 400 && !call.errorCode) ? "success" : "failed",
         createdAt: call.createdAt,
       })),
     ].sort((a, b) => new Date(b.createdAt || b.approvedAt) - new Date(a.createdAt || a.approvedAt)).slice(0, 8),

@@ -56,7 +56,7 @@ export default async function handler(req, res) {
       flowapiPaymentAudit: {
         gatewayAmountCrypto: normalized.amount,
         creditedAmountCny: Number(order.amount),
-        note: "GMWallet 回调金额是链上币数，FlowAPI 按订单人民币金额入账。",
+        note: "GMWallet 回调金额是链上币数，FlowAPI 按订单$ API金额入账。",
       },
     }).slice(0, 5000),
     approvedBy: "gmwallet-notify",

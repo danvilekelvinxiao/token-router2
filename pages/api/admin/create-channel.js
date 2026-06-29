@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/admin-auth";
 
-const NEW_API_BASE = process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080";
+const NEW_API_BASE = process.env.NEW_API_ADMIN_URL || process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080";
 const ADMIN = process.env.NEW_API_ADMIN_TOKEN || "";
 
 export default async function handler(req, res) {

@@ -14,7 +14,7 @@ import { useLocale } from "@/components/providers/locale-provider";
 import { applyLocalePrice } from "@/lib/pricing/locale-pricing";
 
 const API_BASE_URL = getPublicApiBaseUrl();
-const DEFAULT_MODEL_ID = "gpt-5.4-mini";
+const DEFAULT_MODEL_ID = "gpt-5.5";
 const CC_SWITCH_RELEASE_URL = "https://github.com/farion1231/cc-switch/releases/tag/v3.15.0";
 const CC_SWITCH_WINDOWS_URL = "https://github.com/farion1231/cc-switch/releases/download/v3.15.0/CC-Switch-v3.15.0-Windows.msi";
 
@@ -54,13 +54,35 @@ function modelPriceSummary(model = {}, locale = "zh-CN") {
 function keyStatus(key = {}) {
   if (key.disabledAt) return { label: "已禁用", tone: "danger" };
   if (key.expiresAt && new Date(key.expiresAt) < new Date()) return { label: "已过期", tone: "danger" };
-  if (key.quotaLimit?.status === "exceeded") return { label: "已达限额", tone: "danger" };
+  if (key.quotaLimit?.status === "exceeded") return { label: "已达限制", tone: "danger" };
   return { label: "已启用", tone: "success" };
 }
 
+function isCompleteApiKeyToken(token = "") {
+  const value = String(token || "").trim();
+  return value.startsWith("sk-") && value.length >= 24 && !value.includes("...") && !value.includes("*");
+}
+
+function getCcSwitchKeyModelId(key = {}) {
+  return getPublicModelRequestId(key.requestModelId || key.publicModelId || key.modelProductId || "");
+}
+
+function keyMatchesModel(key = {}, modelId = "") {
+  const targetModelId = getPublicModelRequestId(modelId || "");
+  const keyModelId = getCcSwitchKeyModelId(key);
+  return Boolean(targetModelId && keyModelId && targetModelId === keyModelId);
+}
+
+function isUsableCcSwitchKey(key = {}) {
+  if (!isCompleteApiKeyToken(key?.token)) return false;
+  if (key.disabledAt || key.deletedAt) return false;
+  if (key.expiresAt && new Date(key.expiresAt) < new Date()) return false;
+  return true;
+}
+
 const LIMIT_TYPE_OPTIONS = [
-  { value: "none", label: "不限额", hint: "使用账户可用余额" },
-  { value: "total", label: "总额度", hint: "达到后暂停调用" },
+  { value: "none", label: "无限制", hint: "不单独设置限制" },
+  { value: "total", label: "总限制", hint: "达到后暂停调用" },
   { value: "daily", label: "每日", hint: "每天 00:00 重置" },
   { value: "weekly", label: "每周", hint: "周一 00:00 重置" },
   { value: "monthly", label: "每月", hint: "每月 1 日重置" },
@@ -91,7 +113,7 @@ function buildLimitPayload(form = {}) {
 function getLimitValidationMessage(form = {}) {
   if (!form || form.type === "none") return "";
   const amount = Number(form.amount || 0);
-  if (!Number.isFinite(amount) || amount <= 0) return "请填写大于 0 的额度限制";
+  if (!Number.isFinite(amount) || amount <= 0) return "请填写大于 0 的余额限制";
   if (form.type !== "custom") return "";
   const interval = Number(form.resetIntervalValue || 0);
   if (!Number.isFinite(interval) || interval <= 0) return "请填写有效的自定义重置周期";
@@ -105,10 +127,10 @@ function formatLimitValue(value, unit = "cny") {
 
 function getLimitCopy(limit = {}) {
   if (!limit?.enabled || limit.type === "none") {
-    return { title: "额度：不限额", detail: "仍受账户余额和套餐余额限制", percent: 0, tone: "neutral" };
+    return { title: "余额限制：无限制", detail: "仍受账户余额和套餐余额限制", percent: 0, tone: "neutral" };
   }
   const typeLabel = {
-    total: "总额度",
+    total: "总限制",
     daily: "今日",
     weekly: "本周",
     monthly: "本月",
@@ -369,27 +391,45 @@ export default function ApiManagementPage() {
     setCreateModalOpen(true);
   }
 
+  function resolveAutoCcSwitchKey() {
+    if (isUsableCcSwitchKey(createdKey)) return createdKey;
+    const targetModelId = selectedModel?.modelId || selectedModelId || "";
+    return apiKeys.find((key) => isUsableCcSwitchKey(key) && keyMatchesModel(key, targetModelId)) || null;
+  }
+
   function handleAutoConfig() {
-    const primaryKey = apiKeys[0];
-    if (!primaryKey?.token || !String(primaryKey.token).startsWith("sk-")) {
-      showToast("请先在下方创建 API Key，再启动 CC-Switch");
+    const targetModelId = selectedModel?.modelId || selectedModelId || "";
+    const autoKey = resolveAutoCcSwitchKey();
+    if (!autoKey) {
+      const hasMatchingKey = apiKeys.some((key) => keyMatchesModel(key, targetModelId));
+      showToast(hasMatchingKey
+        ? "当前模型已有 API Key，但完整 Key 暂未同步，请刷新后重试"
+        : "请先为当前模型创建 API Key，再启动 CC-Switch");
       scrollToCreateCard();
       return;
     }
-    launchCcSwitchWithKey(primaryKey);
+    launchCcSwitchWithKey(autoKey);
     showToast("正在启动 CC-Switch");
   }
 
   function launchCcSwitchWithKey(key) {
-    if (!key?.token || !String(key.token).startsWith("sk-")) {
+    if (!isCompleteApiKeyToken(key?.token)) {
       setCcSwitchFallback({
         key,
         canImport: false,
-        message: "为了安全，完整 API Key 只在创建时显示一次。如需一键导入，请重新创建 API Key。",
+        message: "未能读取完整 API Key，请刷新后重试或重新创建 API Key。",
       });
       return;
     }
-    const modelId = key?.requestModelId || selectedModel?.modelId || key?.publicModelId || DEFAULT_MODEL_ID;
+    if (key.disabledAt || key.deletedAt || (key.expiresAt && new Date(key.expiresAt) < new Date())) {
+      setCcSwitchFallback({
+        key,
+        canImport: false,
+        message: "该 API Key 当前不可用，请启用或重新创建后再导入 CC-Switch。",
+      });
+      return;
+    }
+    const modelId = key?.requestModelId || key?.publicModelId || selectedModel?.modelId || DEFAULT_MODEL_ID;
     const manualConfig = buildCcSwitchCodexConfig({ apiKey: key.token, baseUrl: API_BASE_URL, model: modelId });
     const url = buildCcSwitchConfigUrl({
       apiKey: key?.token,
@@ -568,7 +608,7 @@ export default function ApiManagementPage() {
       localStorage.setItem("flowapi_customer", JSON.stringify(updated));
       const created = data.createdKey || null;
       setCreatedKey(created);
-      if (created?.token && String(created.token).startsWith("sk-")) {
+      if (isCompleteApiKeyToken(created?.token)) {
         launchCcSwitchWithKey(created);
         showToast("API Key 创建成功，已自动导入 CC-Switch");
       } else {
@@ -630,13 +670,13 @@ export default function ApiManagementPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.error?.message || data?.error || "额度保存失败");
+      if (!res.ok) throw new Error(data?.error?.message || data?.error || "余额保存失败");
       setCustomer(data);
       localStorage.setItem("flowapi_customer", JSON.stringify(data));
       setLimitEditorKey(null);
-      showToast("API Key 额度已更新");
+      showToast("API Key 余额已更新");
     } catch (error) {
-      showToast(error.message || "额度保存失败");
+      showToast(error.message || "余额保存失败");
     } finally {
       setSavingLimit(false);
     }
@@ -662,7 +702,7 @@ export default function ApiManagementPage() {
         {active ? (
           <div className="api-key-limit-input-row">
             <label>
-              <span>额度上限</span>
+              <span>限制上限</span>
               <input
                 type="number"
                 min="0"
@@ -675,8 +715,8 @@ export default function ApiManagementPage() {
             <label>
               <span>单位</span>
               <select value={form.unit} onChange={(event) => setForm((current) => ({ ...current, unit: event.target.value }))}>
-                <option value="cny">¥ 金额</option>
-                <option value="token">Token</option>
+                <option value="cny">$ API 余额</option>
+                <option value="token">Token 额度</option>
               </select>
             </label>
             {form.type === "custom" ? (
@@ -702,9 +742,9 @@ export default function ApiManagementPage() {
             ) : null}
           </div>
         ) : (
-          <p className="api-key-limit-note">该 API Key 可使用账户可用余额内的全部额度，仍受账户余额、套餐余额和会员赠送额度限制。</p>
+          <p className="api-key-limit-note">该 API Key 不单独设置余额限制，仍受账户余额、套餐余额和会员赠送余额限制。</p>
         )}
-        {active ? <p className="api-key-limit-note">达到限额后，此 API Key 将暂停请求；失败或未扣费调用不会计入额度。</p> : null}
+        {active ? <p className="api-key-limit-note">达到限制后，此 API Key 将暂停请求；失败或未扣费调用不会计入已用金额。</p> : null}
       </div>
     );
   }
@@ -732,8 +772,8 @@ export default function ApiManagementPage() {
       ];
       const quotaCopy = getLimitCopy(key.quotaLimit);
       const quotaRows = [
-        { label: "额度类型", value: key.quotaLimit?.enabled ? LIMIT_TYPE_OPTIONS.find((item) => item.value === key.quotaLimit.type)?.label || "周期额度" : "不限额" },
-        { label: "额度使用", value: quotaCopy.title.replace(/^额度：/, "") },
+        { label: "限制类型", value: key.quotaLimit?.enabled ? LIMIT_TYPE_OPTIONS.find((item) => item.value === key.quotaLimit.type)?.label || "周期限制" : "无限制" },
+        { label: "限制使用", value: quotaCopy.title.replace(/^余额限制：/, "") },
         { label: "重置时间", value: quotaCopy.detail },
         { label: "累计金额", value: formatCny(key.quotaLimit?.totalUsedCny || 0) },
         { label: "累计 Token", value: formatToken(key.quotaLimit?.totalUsedTokens || 0) },
@@ -750,7 +790,7 @@ export default function ApiManagementPage() {
         badge: data.source === "real" ? "真实数据" : "暂无数据",
         sections: [
           { title: "接入参数", content: <DetailRows rows={rows} /> },
-          { title: "额度使用", content: <DetailRows rows={quotaRows} /> },
+          { title: "余额使用", content: <DetailRows rows={quotaRows} /> },
           ...(summaryRows.length ? [{ title: "使用汇总", content: <DetailRows rows={summaryRows} /> }] : []),
           {
             title: "最近调用",
@@ -806,12 +846,12 @@ export default function ApiManagementPage() {
           <h1>{authRequired ? "先登录，再创建你的 FlowAPI Key" : "正在读取你的 API Key 工作台"}</h1>
           <p>
             {authRequired
-              ? "注册账号后会获得体验额度。登录后你可以选择模型、创建 API Key、复制 Base URL，并在使用日志里看到每次 Token 和金额消耗。"
+              ? "注册账号后会获得体验余额。登录后你可以选择模型、创建 API Key、复制 Base URL，并在使用日志里看到每次 Token 和金额消耗。"
               : "正在同步账号、模型和调用记录，请稍等几秒。"}
           </p>
           {authRequired ? (
             <div className="api-management-auth-actions">
-              <Link href="/register">注册送 ¥5 体验额度</Link>
+              <Link href="/register">注册送 $ API 5 体验余额</Link>
               <Link href="/login" className="secondary">登录账号</Link>
               <Link href="/help" className="ghost">看三步教程</Link>
             </div>
@@ -898,7 +938,7 @@ export default function ApiManagementPage() {
                       </div>
                       {key.quotaLimit?.enabled ? <em>{limitCopy.percent}%</em> : null}
                       {key.quotaLimit?.enabled ? (
-                        <div className="api-key-limit-progress" aria-label="额度使用进度">
+                        <div className="api-key-limit-progress" aria-label="余额使用进度">
                           <i style={{ width: `${limitCopy.percent}%` }} />
                         </div>
                       ) : null}
@@ -907,7 +947,7 @@ export default function ApiManagementPage() {
                       <button type="button" className="primary" onClick={() => launchCcSwitchWithKey(key)}>使用</button>
                       <button type="button" onClick={() => copyText(key.token, "API Key 已复制")}>复制 API Key</button>
                       <button type="button" onClick={() => openUsage(key)}>详情</button>
-                      <button type="button" onClick={() => openLimitEditor(key)}>调整额度</button>
+                      <button type="button" onClick={() => openLimitEditor(key)}>调整余额</button>
                       <button type="button" onClick={() => toggleKey(key)}>{key.disabledAt ? "启用" : "禁用"}</button>
                       <button type="button" className="danger" onClick={() => deleteKey(key)}>删除</button>
                     </div>
@@ -1027,7 +1067,7 @@ export default function ApiManagementPage() {
                   </div>
 
                   <div className="api-expiry-field">
-                    <span>额度限制</span>
+                    <span>余额限制</span>
                     {renderLimitFields(createForm.limit, (updater) => setCreateForm((current) => ({
                       ...current,
                       limit: typeof updater === "function" ? updater(current.limit) : updater,
@@ -1070,8 +1110,8 @@ export default function ApiManagementPage() {
           <div className="api-modal api-key-limit-modal">
             <header>
               <div>
-                <span>调整额度</span>
-                <h2>{limitEditorKey.label || "API Key 额度"}</h2>
+                <span>调整余额</span>
+                <h2>{limitEditorKey.label || "API Key 余额"}</h2>
               </div>
               <button type="button" onClick={() => setLimitEditorKey(null)}>×</button>
             </header>
@@ -1082,7 +1122,7 @@ export default function ApiManagementPage() {
               <button type="button" className="api-action" onClick={() => setLimitEditorKey(null)}>取消</button>
               <button type="button" className="api-action primary flowapi-primary-action" disabled={savingLimit} data-loading={savingLimit ? "true" : "false"} onClick={saveLimitEditor}>
                 {savingLimit ? <span className="api-action-spinner" aria-hidden="true" /> : null}
-                {savingLimit ? "保存中..." : "保存额度"}
+                {savingLimit ? "保存中..." : "保存余额"}
               </button>
             </footer>
           </div>
@@ -1105,7 +1145,7 @@ export default function ApiManagementPage() {
                 { label: "类型", value: "FlowAPI 兼容" },
                 { label: "Base URL", value: API_BASE_URL },
                 { label: "默认模型", value: ccSwitchFallback.modelId || ccSwitchFallback.key?.publicModelId || DEFAULT_MODEL_ID },
-                { label: "API Key", value: ccSwitchFallback.canImport ? "已写入 deeplink，不在本地保存" : "完整 Key 不可取回" },
+                { label: "API Key", value: ccSwitchFallback.canImport ? "已写入 deeplink，不在页面明文展示" : "完整 Key 读取失败" },
               ]} />
               {ccSwitchFallback.manualConfig ? (
                 <pre className="api-management-code-preview"><code>{ccSwitchFallback.manualConfig.config}</code></pre>

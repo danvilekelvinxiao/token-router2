@@ -73,7 +73,7 @@ export default function AdminMembershipPage() {
           <div className="admin-membership-card">
             <h2>会员等级配置</h2>
             <label><span>会员名称</span><input value={config?.name || ""} onChange={(event) => setConfig({ ...config, name: event.target.value })} /></label>
-            <label><span>会员价格 ¥</span><input type="number" value={config?.priceCny || 0} onChange={(event) => setConfig({ ...config, priceCny: Number(event.target.value) })} /></label>
+            <label><span>会员价格 $</span><input type="number" value={config?.priceCny || 0} onChange={(event) => setConfig({ ...config, priceCny: Number(event.target.value) })} /></label>
             <label><span>周期</span><select value={config?.period || "month"} onChange={(event) => setConfig({ ...config, period: event.target.value })}><option value="week">周</option><option value="month">月</option><option value="year">年</option></select></label>
             <label><span>每日赠送 Token</span><input type="number" value={config?.dailyBonusTokens || 0} onChange={(event) => setConfig({ ...config, dailyBonusTokens: Number(event.target.value) })} /></label>
             <label><span>会员专属额度 Token</span><input type="number" value={config?.memberQuotaTokens || 0} onChange={(event) => setConfig({ ...config, memberQuotaTokens: Number(event.target.value) })} /></label>

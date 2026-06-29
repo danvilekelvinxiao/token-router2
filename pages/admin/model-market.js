@@ -42,7 +42,7 @@ const emptyDraft = {
 
 function cnMoney(value) {
   const num = Number(value || 0);
-  return num > 0 ? `￥${num.toFixed(2)}` : "待配置";
+  return num > 0 ? `$ API ${num.toFixed(2)}` : "待配置";
 }
 
 function statusText(model) {
@@ -144,7 +144,6 @@ export default function AdminModelMarketPage() {
   const [toast, setToast] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
 
   function showToast(message) {
     setToast(message);
@@ -154,14 +153,13 @@ export default function AdminModelMarketPage() {
   function adminHeaders() {
     return {
       "Content-Type": "application/json",
-      ...(secret ? { "x-admin-secret": secret } : {}),
     };
   }
 
   async function loadData() {
     setLoading(true);
     try {
-      const response = await fetch("/api/admin/model-market", { headers: secret ? { "x-admin-secret": secret } : {} });
+      const response = await fetch("/api/admin/model-market");
       const data = await response.json().catch(() => ({}));
       if (!data.ok) throw new Error(data.error || "模型广场配置加载失败");
       setModels(data.models || []);
@@ -249,7 +247,6 @@ export default function AdminModelMarketPage() {
     if (!draft.displayName.trim()) return showToast("请先填写前台展示名");
     setSaving(true);
     try {
-      sessionStorage.setItem("flowapi_admin_secret", secret);
       const payload = {
         ...draft,
         tags: draft.tags,
@@ -275,7 +272,6 @@ export default function AdminModelMarketPage() {
   async function bootstrapModelPack(pack) {
     setBootstrapping(pack);
     try {
-      sessionStorage.setItem("flowapi_admin_secret", secret);
       const response = await fetch("/api/admin/model-market", {
         method: "POST",
         headers: adminHeaders(),
@@ -364,14 +360,6 @@ export default function AdminModelMarketPage() {
               <p>这个页面用于管理前台模型广场、API Key 创建页、生成图片页的可见模型、价格和上下架状态。你改完保存，刷新前台即可看到效果。</p>
             </div>
             <div className="model-market-admin__actions">
-              <input
-                value={secret}
-                onChange={(event) => setSecret(event.target.value)}
-                onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)}
-                type="password"
-                placeholder="管理密钥"
-                aria-label="管理密钥"
-              />
               <button type="button" className="model-market-admin__ghost" onClick={loadData}>刷新同步</button>
               <button type="button" className="model-market-admin__primary" onClick={openCreate}>新增模型</button>
             </div>
@@ -645,19 +633,19 @@ export default function AdminModelMarketPage() {
                     <input type="number" value={draft.sortOrder} onChange={(event) => updateDraft("sortOrder", event.target.value)} />
                   </label>
                   <div className="model-market-admin__price-grid">
-                    <label>输入成本 / 1M
+                    <label>输入成本 / 1M（$ API）
                       <input type="number" step="0.01" value={draft.pricing.inputCostPerMTokens} onChange={(event) => updatePricing("inputCostPerMTokens", event.target.value)} />
                     </label>
-                    <label>输出成本 / 1M
+                    <label>输出成本 / 1M（$ API）
                       <input type="number" step="0.01" value={draft.pricing.outputCostPerMTokens} onChange={(event) => updatePricing("outputCostPerMTokens", event.target.value)} />
                     </label>
                     <label>售卖倍率
                       <input type="number" step="0.1" value={draft.pricing.multiplier} onChange={(event) => updatePricing("multiplier", event.target.value)} />
                     </label>
-                    <label>每张图成本
+                    <label>每张图成本（$ API）
                       <input type="number" step="0.01" value={draft.pricing.imageCostPerImageCny} onChange={(event) => updatePricing("imageCostPerImageCny", event.target.value)} />
                     </label>
-                    <label>每张图利润
+                    <label>每张图利润（$ API）
                       <input type="number" step="0.01" value={draft.pricing.imageFixedProfitPerImageCny} onChange={(event) => updatePricing("imageFixedProfitPerImageCny", event.target.value)} />
                     </label>
                   </div>

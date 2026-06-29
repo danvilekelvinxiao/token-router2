@@ -33,18 +33,21 @@ function loadEnv(file) {
 loadEnv(envPath);
 
 const base = (process.env.NEW_API_BASE_URL || "").replace(/\/+$/, "");
+const adminUrl = (process.env.NEW_API_ADMIN_URL || process.env.NEW_API_BASE_URL || "").replace(/\/+$/, "");
 const defaultGroup = String(process.env.NEW_API_DEFAULT_GROUP || "default").trim();
 const runtimeKeyCandidates = [
   process.env.NEW_API_KEY,
   process.env.NEW_API_KEY_ALL_MODELS,
   process.env[`NEW_API_KEY_${defaultGroup.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`],
   process.env[`NEW_API_${defaultGroup.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}_KEY`],
+  process.env.NEW_API_ADMIN_TOKEN,
 ];
 const relayKey = runtimeKeyCandidates.find((value) => String(value || "").trim()) || "";
 const adminToken = process.env.NEW_API_ADMIN_TOKEN || "";
 
 console.log("=== 环境变量 ===");
 console.log("NEW_API_BASE_URL:", base || "(未设置)");
+console.log("NEW_API_ADMIN_URL:", adminUrl || "(未设置)");
 console.log("NEW_API_RUNTIME_KEY:", relayKey ? `${relayKey.slice(0, 12)}...` : "(未设置)");
 console.log("NEW_API_ADMIN_TOKEN:", adminToken ? `${adminToken.slice(0, 12)}...` : "(未设置)");
 console.log("NEW_API_DEFAULT_GROUP:", process.env.NEW_API_DEFAULT_GROUP || "default");
@@ -57,7 +60,7 @@ if (!base) {
 
 async function checkRuntimeModels(key) {
   if (!key) {
-    console.log("\n=== GET /v1/models (运行时 Key) === 缺少 NEW_API_KEY / NEW_API_KEY_ALL_MODELS");
+    console.log("\n=== GET /v1/models (运行时 Key) === 缺少 NEW_API_KEY / NEW_API_KEY_ALL_MODELS / NEW_API_ADMIN_TOKEN");
     return false;
   }
   const res = await fetch(`${base}/v1/models`, {
@@ -74,9 +77,13 @@ async function checkRuntimeModels(key) {
 async function checkAdmin() {
   if (!adminToken) {
     console.log("\n=== Admin /api/token/ === 跳过（无 NEW_API_ADMIN_TOKEN）");
-    return false;
+    return { ok: true, skipped: true };
   }
-  const res = await fetch(`${base}/api/token/`, {
+  if (!adminUrl) {
+    console.log("\n=== Admin /api/token/ === 跳过（无 NEW_API_ADMIN_URL / NEW_API_BASE_URL）");
+    return { ok: true, skipped: true };
+  }
+  const res = await fetch(`${adminUrl}/api/token/`, {
     headers: {
       Authorization: `Bearer ${adminToken}`,
       "New-Api-User": "1",
@@ -84,21 +91,30 @@ async function checkAdmin() {
   });
   const data = await res.json().catch(() => ({}));
   console.log("\n=== GET /api/token/ (Admin) ===", res.status, data.success ? "OK" : data);
-  return res.ok && data.success !== false;
+  if (res.status === 404 || res.status === 405) {
+    return { ok: true, skipped: true, unsupported: true };
+  }
+  return { ok: res.ok && data.success !== false, skipped: false };
 }
 
 const key = relayKey || adminToken;
 if (!key) {
-  console.error("\n需要 NEW_API_KEY / NEW_API_KEY_ALL_MODELS 至少一个；NEW_API_ADMIN_TOKEN 只用于后台验证");
+  console.error("\n需要 NEW_API_KEY / NEW_API_KEY_ALL_MODELS 至少一个；NEW_API_ADMIN_TOKEN 可作为运行时回退");
   process.exit(1);
 }
 
 let ok = true;
 let runtimeOk = false;
 try {
-  runtimeOk = await checkRuntimeModels(relayKey);
+  runtimeOk = await checkRuntimeModels(key);
   ok = runtimeOk && ok;
-  if (adminToken) ok = (await checkAdmin()) && ok;
+  if (adminToken) {
+    const adminCheck = await checkAdmin();
+    ok = adminCheck.ok && ok;
+    if (adminCheck.unsupported) {
+      console.log("\n提示: 当前 New API 管理端未暴露 /api/token/，已跳过管理校验。");
+    }
+  }
 } catch (e) {
   console.error("\n连接失败:", e.message);
   process.exit(1);

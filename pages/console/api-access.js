@@ -3,11 +3,12 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useMemo, useState } from "react";
 import { getPublicModelDisplayName, getPublicModelRequestId } from "@/lib/models";
+import { getPublicApiBaseUrl } from "@/lib/public-api";
 
-const apiBaseUrl = "https://api.flowapi.fun/v1";
+const apiBaseUrl = getPublicApiBaseUrl();
 
 const modelDirectory = [
-  { name: "GPT5.4 mini", modelId: "gpt-5.4-mini", provider: "FlowAPI", bestFor: "日常对话、总结、通用任务" },
+  { name: "GPT5.4 mini", modelId: "gpt-5.5", provider: "FlowAPI", bestFor: "日常对话、总结、通用任务" },
   { name: "GPT5.4 Pro", modelId: "gpt-5.4-pro", provider: "FlowAPI", bestFor: "高质量推理、代码审查、专业办公" },
   { name: "DeepSeek V4 Flash", modelId: "deepseek-chat", provider: "FlowAPI", bestFor: "中文内容、客服、批量文案" },
   { name: "Qwen3-32B", modelId: "qwen/qwen3-32b", provider: "FlowAPI", bestFor: "外贸邮件、商务沟通、中文办公" },
@@ -20,8 +21,8 @@ const modelDirectory = [
 function getSelectedModel(queryModel) {
   const cleanModel = typeof queryModel === "string" ? queryModel : "";
   return modelDirectory.find((model) => model.modelId === cleanModel) || {
-    name: getPublicModelDisplayName(cleanModel || "gpt-5.4-mini"),
-    modelId: getPublicModelRequestId(cleanModel || "gpt-5.4-mini"),
+    name: getPublicModelDisplayName(cleanModel || "gpt-5.5"),
+    modelId: getPublicModelRequestId(cleanModel || "gpt-5.5"),
     provider: "FlowAPI",
     bestFor: "通用任务",
   };

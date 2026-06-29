@@ -21,7 +21,7 @@ const emptyReview = {
 
 function money(value) {
   const n = Number(value || 0);
-  return n > 0 ? `¥${n.toFixed(3)}` : "待配置";
+  return n > 0 ? `$ API ${n.toFixed(3)}` : "待配置";
 }
 
 function makeReviewDraft(model = {}) {
@@ -70,25 +70,6 @@ function calcProfit(cost, sell) {
   };
 }
 
-function getSessionAdminSecret() {
-  if (typeof window === "undefined") return "";
-  try {
-    return window.sessionStorage.getItem("flowapi_admin_secret") || "";
-  } catch {
-    return "";
-  }
-}
-
-function rememberSessionAdminSecret(secret = "") {
-  if (typeof window === "undefined") return;
-  try {
-    if (secret) window.sessionStorage.setItem("flowapi_admin_secret", secret);
-    else window.sessionStorage.removeItem("flowapi_admin_secret");
-  } catch {
-    // Session storage is optional; the server-side admin session still works.
-  }
-}
-
 export default function AdminAicardsProviderPage() {
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,14 +77,12 @@ export default function AdminAicardsProviderPage() {
   const [message, setMessage] = useState("");
   const [health, setHealth] = useState(null);
   const [review, setReview] = useState(emptyReview);
-  const [secret, setSecret] = useState(getSessionAdminSecret);
   const [statusFilter, setStatusFilter] = useState("全部");
   const [bulkResult, setBulkResult] = useState(null);
 
   function adminHeaders() {
     return {
       "Content-Type": "application/json",
-      ...(secret ? { "x-admin-secret": secret } : {}),
     };
   }
 
@@ -111,9 +90,7 @@ export default function AdminAicardsProviderPage() {
     setLoading(true);
     setMessage("");
     try {
-      const res = await fetch("/api/admin/providers/aicards/sync-models", {
-        headers: secret ? { "x-admin-secret": secret } : {},
-      });
+      const res = await fetch("/api/admin/providers/aicards/sync-models");
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || "读取模型线路候选失败");
       setModels(data.models || []);
@@ -140,7 +117,6 @@ export default function AdminAicardsProviderPage() {
     setBusy("sync");
     setMessage("");
     try {
-      rememberSessionAdminSecret(secret);
       const res = await fetch("/api/admin/providers/aicards/sync-models", {
         method: "POST",
         headers: adminHeaders(),
@@ -160,7 +136,6 @@ export default function AdminAicardsProviderPage() {
     setBusy(`health:${modelId || "all"}`);
     setMessage("");
     try {
-      rememberSessionAdminSecret(secret);
       const res = await fetch("/api/admin/providers/aicards/health-check", {
         method: "POST",
         headers: adminHeaders(),
@@ -183,7 +158,6 @@ export default function AdminAicardsProviderPage() {
     setMessage("");
     setBulkResult(null);
     try {
-      rememberSessionAdminSecret(secret);
       const res = await fetch("/api/admin/providers/aicards/bulk-publish", {
         method: "POST",
         headers: adminHeaders(),
@@ -220,7 +194,6 @@ export default function AdminAicardsProviderPage() {
     setBusy("review");
     setMessage("");
     try {
-      rememberSessionAdminSecret(secret);
       const res = await fetch("/api/admin/providers/aicards/review", {
         method: "POST",
         headers: adminHeaders(),
@@ -277,13 +250,6 @@ export default function AdminAicardsProviderPage() {
               ))}
             </div>
             <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-              <input
-                type="password"
-                value={secret}
-                onChange={(event) => setSecret(event.target.value)}
-                placeholder="管理员密钥（如当前登录态已生效，可留空）"
-                style={inputStyle}
-              />
               <button onClick={syncModels} disabled={busy === "sync"} style={primaryButton}>
                 {busy === "sync" ? "同步中..." : "同步候选模型"}
               </button>
@@ -392,10 +358,10 @@ export default function AdminAicardsProviderPage() {
               <Field label="FlowAPI Model ID" value={review.publicModelId} onChange={(v) => setReview({ ...review, publicModelId: v })} />
               <Field label="内部线路模型 ID（仅后台）" value={review.actualModelId} onChange={(v) => setReview({ ...review, actualModelId: v })} />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <Field label="输入成本/1M" value={review.inputCostPerMillion} onChange={(v) => setReview({ ...review, inputCostPerMillion: v })} type="number" />
-                <Field label="输出成本/1M" value={review.outputCostPerMillion} onChange={(v) => setReview({ ...review, outputCostPerMillion: v })} type="number" />
-                <Field label="输入售价/1M" value={review.sellInputPricePerMillion} onChange={(v) => setReview({ ...review, sellInputPricePerMillion: v })} type="number" />
-                <Field label="输出售价/1M" value={review.sellOutputPricePerMillion} onChange={(v) => setReview({ ...review, sellOutputPricePerMillion: v })} type="number" />
+                <Field label="输入成本/1M（$ API）" value={review.inputCostPerMillion} onChange={(v) => setReview({ ...review, inputCostPerMillion: v })} type="number" />
+                <Field label="输出成本/1M（$ API）" value={review.outputCostPerMillion} onChange={(v) => setReview({ ...review, outputCostPerMillion: v })} type="number" />
+                <Field label="输入售价/1M（$ API）" value={review.sellInputPricePerMillion} onChange={(v) => setReview({ ...review, sellInputPricePerMillion: v })} type="number" />
+                <Field label="输出售价/1M（$ API）" value={review.sellOutputPricePerMillion} onChange={(v) => setReview({ ...review, sellOutputPricePerMillion: v })} type="number" />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <Field label={`最低毛利率（当前 ${marginPercent(review.minProfitMargin)}）`} value={review.minProfitMargin} onChange={(v) => setReview({ ...review, minProfitMargin: v })} type="number" />
@@ -403,8 +369,8 @@ export default function AdminAicardsProviderPage() {
               </div>
               <div style={profitBoxStyle}>
                 <strong>毛利预览</strong>
-                <span>输入：{inputProfit ? `每 1M 赚 ¥${inputProfit.profit.toFixed(3)}，毛利率 ${marginPercent(inputProfit.margin)}` : "填完成本和售价后自动计算"}</span>
-                <span>输出：{outputProfit ? `每 1M 赚 ¥${outputProfit.profit.toFixed(3)}，毛利率 ${marginPercent(outputProfit.margin)}` : "填完成本和售价后自动计算"}</span>
+                <span>输入：{inputProfit ? `每 1M 赚 $ API ${inputProfit.profit.toFixed(3)}，毛利率 ${marginPercent(inputProfit.margin)}` : "填完成本和售价后自动计算"}</span>
+                <span>输出：{outputProfit ? `每 1M 赚 $ API ${outputProfit.profit.toFixed(3)}，毛利率 ${marginPercent(outputProfit.margin)}` : "填完成本和售价后自动计算"}</span>
                 <em>低于最低毛利率时，后端会拒绝启用或发布，避免亏钱兜底。</em>
               </div>
               <label style={checkStyle}>

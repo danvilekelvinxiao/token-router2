@@ -164,11 +164,18 @@ assert(
   "AICards 必须提供批量发布达标候选的管理员 API",
 );
 assert(
+  upstreamSource.includes('name: "aicards-claude"')
+    && upstreamSource.includes("AICARDS_API_KEY_CLAUDE")
+    && upstreamSource.includes("AICARDS_CLAUDE_API_KEY"),
+  "AICards 必须拆分 Claude 和非 Claude 两组上游密钥",
+);
+assert(
   providerSource.includes("function buildAicardsAutoPricing")
     && providerSource.includes("FLOWAPI_AICARDS_AUTO_SELL_MULTIPLIER")
     && providerSource.includes("FLOWAPI_AICARDS_ALLOW_ESTIMATED_COST")
     && providerSource.includes("estimated_guardrail")
     && providerSource.includes("extractAicardsRawPricing")
+    && providerSource.includes("upstream_public_prices")
     && providerSource.includes("缺少真实上游成本")
     && providerSource.includes("autoSync")
     && providerSource.includes("autoHealthCheck")
@@ -243,15 +250,16 @@ assert(
 );
 assert(
   publicApiKeyDtoSource.includes("function publicApiKeyDto")
+    && publicApiKeyDtoSource.includes("const token = String(key.token || \"\")")
     && publicApiKeyDtoSource.includes("maskedToken")
-    && publicApiKeyDtoSource.includes("token: maskedToken")
+    && publicApiKeyDtoSource.includes("token,")
     && publicApiKeyDtoSource.includes("const publicAllowedModels")
     && publicApiKeyDtoSource.includes("allowedModels: publicAllowedModels")
     && publicApiKeyDtoSource.includes("modelProductId: publicModelId")
     && !publicApiKeyDtoSource.includes("key.modelProductId")
     && !publicApiKeyDtoSource.includes("token: key.token")
     && !publicApiKeyDtoSource.includes("allowedModels: Array.isArray(key.allowedModels) ? key.allowedModels : []"),
-  "普通用户 API Key DTO 只能返回脱敏 Key 和公开模型 ID，不能把完整 token 或 allowedModels 里的真实上游模型 ID 透给前台",
+  "普通用户 API Key DTO 必须给认证用户返回完整 token 供复制/cc-switch 导入，同时保留 maskedToken 展示并只暴露公开模型 ID",
 );
 assert(
   legacyOpenRouterTopModelsSource.trim() === 'export { default } from "@/pages/api/analytics/global-model-rank";'
@@ -278,12 +286,14 @@ assert(
     && aicardsSyncScriptSource.includes("syncAicardsModels")
     && aicardsSyncScriptSource.includes("healthCheckAicards")
     && aicardsSyncScriptSource.includes("AICARDS_API_KEY")
+    && aicardsSyncScriptSource.includes("AICARDS_API_KEY_CLAUDE")
     && aicardsSyncScriptSource.includes("mask(process.env.AICARDS_API_KEY)")
     && aicardsSyncScriptSource.includes("loadEnvFileIfExists")
     && !aicardsSyncScriptSource.includes('from "node:process"')
     && aicardsSyncScriptSource.includes("spawnSync")
     && aicardsSyncScriptSource.includes("scripts/scan-public-branding.mjs")
     && aicardsSyncScriptSource.includes("Public branding scan failed")
+    && providerSource.includes("AICARDS_PUBLIC_MODELS_PATH")
     && !/sk-[A-Za-z0-9_-]{32,}/.test(aicardsSyncScriptSource),
   "AICards 同步发布脚本必须从服务器环境变量读取密钥、批量发布候选，并在发布后扫描公开接口，禁止硬编码用户密钥",
 );

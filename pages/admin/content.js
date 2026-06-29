@@ -21,12 +21,12 @@ const MODEL_FIELDS = [
   { key: "officialReleaseDate", label: "官方发布时间", type: "text", help: "格式建议 YYYY-MM-DD；只知道月份可填 YYYY-MM；未知可留空。" },
   { key: "description", label: "描述", type: "textarea" },
   { key: "detailDescription", label: "详情介绍", type: "textarea" },
-  { key: "inputPricePerM", label: "输入价格 ¥/M", type: "number" },
-  { key: "outputPricePerM", label: "输出价格 ¥/M", type: "number" },
-  { key: "officialInputPricePerM", label: "官方输入价格 ¥/M Token", type: "number" },
-  { key: "officialOutputPricePerM", label: "官方输出价格 ¥/M Token", type: "number" },
-  { key: "flowapiInputPricePerM", label: "FlowAPI 输入价格 ¥/M Token", type: "number" },
-  { key: "flowapiOutputPricePerM", label: "FlowAPI 输出价格 ¥/M Token", type: "number" },
+  { key: "inputPricePerM", label: "输入价格 $/M", type: "number" },
+  { key: "outputPricePerM", label: "输出价格 $/M", type: "number" },
+  { key: "officialInputPricePerM", label: "官方输入价格 $/M Token", type: "number" },
+  { key: "officialOutputPricePerM", label: "官方输出价格 $/M Token", type: "number" },
+  { key: "flowapiInputPricePerM", label: "FlowAPI 输入价格 $/M Token", type: "number" },
+  { key: "flowapiOutputPricePerM", label: "FlowAPI 输出价格 $/M Token", type: "number" },
   { key: "priceUpdatedAt", label: "价格更新时间", type: "text" },
   { key: "priceNote", label: "价格备注", type: "textarea" },
   { key: "memberLevelRequired", label: "需要会员等级", type: "text" },
@@ -213,8 +213,8 @@ export default function AdminContentPage() {
                 <th>Provider</th>
                 <th>Model ID</th>
                 <th>官方发布时间</th>
-                <th>输入 ¥/M</th>
-                <th>输出 ¥/M</th>
+                <th>输入 $/M</th>
+                <th>输出 $/M</th>
                 <th>推荐</th>
                 <th>上架</th>
                 <th>操作</th>
@@ -231,8 +231,8 @@ export default function AdminContentPage() {
                   <td>{m.provider}</td>
                   <td><code>{m.modelId}</code></td>
                   <td>{m.officialReleaseDate || "待确认"}</td>
-                  <td>{Number(m.inputPricePerM) > 0 ? `¥${m.inputPricePerM}` : "价格同步中"}</td>
-                  <td>{Number(m.outputPricePerM) > 0 ? `¥${m.outputPricePerM}` : "价格同步中"}</td>
+                  <td>{Number(m.inputPricePerM) > 0 ? `$${m.inputPricePerM}` : "价格同步中"}</td>
+                  <td>{Number(m.outputPricePerM) > 0 ? `$${m.outputPricePerM}` : "价格同步中"}</td>
                   <td><span style={{ color: m.isRecommended ? "#16a34a" : "#9ca3af" }}>{m.isRecommended ? "★" : "—"}</span></td>
                   <td><span style={{ color: m.enabled ? "#16a34a" : "#ef4444" }}>{m.enabled ? "已上架" : "已下架"}</span></td>
                   <td className="redeem-row-actions">
@@ -310,7 +310,7 @@ export default function AdminContentPage() {
             {list.map((s) => (
               <tr key={s.id}>
                 <td><strong>{s.title}</strong></td>
-                <td>¥{s.priceCny}/{s.unit}</td>
+                <td>${s.priceCny}/{s.unit}</td>
                 <td>{s.type}</td>
                 <td>{(s.tags || []).join(", ")}</td>
                 <td><span style={{ color: s.enabled ? "#16a34a" : "#ef4444" }}>{s.enabled ? "启用" : "禁用"}</span></td>
@@ -497,8 +497,8 @@ export default function AdminContentPage() {
           <p>by {form.provider || "Provider"}</p>
           <code>{form.modelId || "Model ID 同步中"}</code>
           <div>
-            <strong>{Number.isFinite(inputPrice) && inputPrice > 0 ? `输入 ¥${inputPrice} / M Token` : "输入价格同步中"}</strong>
-            <strong>{Number.isFinite(outputPrice) && outputPrice > 0 ? `输出 ¥${outputPrice} / M Token` : "输出价格同步中"}</strong>
+            <strong>{Number.isFinite(inputPrice) && inputPrice > 0 ? `输入 $${inputPrice} / M Token` : "输入价格同步中"}</strong>
+            <strong>{Number.isFinite(outputPrice) && outputPrice > 0 ? `输出 $${outputPrice} / M Token` : "输出价格同步中"}</strong>
             <strong>{Number.isFinite(officialInputPrice) && officialInputPrice > 0 && Number.isFinite(officialOutputPrice) && officialOutputPrice > 0 ? "已配置官方价格，可参与节省计算" : "官方价格同步中，暂不参与节省计算"}</strong>
           </div>
           <p>{form.description || "卡片简介会展示在这里。"}</p>

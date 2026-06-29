@@ -55,7 +55,7 @@ async function seedRouteChannel(body = {}) {
       String(body.groupName || body.group_name || "").trim(),
       Number(body.inputCostPerMillion ?? body.input_cost_per_million ?? 0),
       Number(body.outputCostPerMillion ?? body.output_cost_per_million ?? 0),
-      String(body.currency || "CNY").trim() || "CNY",
+      String(body.currency || "$ API").trim() || "$ API",
       Number(body.priority ?? 10),
       Number(body.qualityScore ?? body.quality_score ?? 80),
       String(body.routeStrategy || body.route_strategy || "balanced"),

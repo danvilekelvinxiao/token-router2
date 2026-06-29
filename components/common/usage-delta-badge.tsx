@@ -16,7 +16,7 @@ function formatToken(value: number) {
 }
 
 function formatMoney(value: number) {
-  return `¥${value.toFixed(2)}`;
+  return `$${value.toFixed(2)}`;
 }
 
 export default function UsageDeltaBadge({
@@ -38,7 +38,7 @@ export default function UsageDeltaBadge({
   return (
     <div className={["usage-delta", animated ? "is-animated" : ""].filter(Boolean).join(" ")} title={titleParts.join(" · ")}>
       <strong className="usage-delta-token">{hasTokens ? `-${formatToken(Number(tokens))}` : "Token 数据同步中"}</strong>
-      <strong className="usage-delta-money">{hasCost ? `-${formatMoney(Number(costCny))}` : "¥ 数据同步中"}</strong>
+      <strong className="usage-delta-money">{hasCost ? `-${formatMoney(Number(costCny))}` : "$ 数据同步中"}</strong>
       {hasSaved ? <span className="usage-delta-saved">已省 {formatMoney(Number(savedCny))}</span> : null}
     </div>
   );

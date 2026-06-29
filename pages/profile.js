@@ -10,6 +10,7 @@ import ProfileAiCard from "@/components/dashboard/profile-ai-card";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
 import LiveNumber from "@/components/ui/live-number";
 import { useSafePolling } from "@/hooks/useSafePolling";
+import { formatRmb } from "@/lib/format/number-format";
 
 const ANNOUNCEMENTS = [
   {
@@ -48,8 +49,8 @@ const ANNOUNCEMENTS = [
     status: "已发布",
     tone: "default",
     pinned: false,
-    title: "赠送额度规则说明",
-    content: "登录赠送 0.5 额度，实际产生 Token 使用时赠送 1.5 额度。赠送额度仅当日可用，并优先消耗。",
+    title: "赠送余额规则说明",
+    content: "登录赠送 $ API 0.50，实际产生 Token 使用时赠送 $ API 1.50。赠送余额仅当日可用，并优先消耗。",
     publishedAt: "2026-05-19T10:00:00+08:00",
   },
   {
@@ -94,7 +95,7 @@ function formatRelativeUpdate(value) {
 }
 
 function formatMoney(value) {
-  return `¥${Number(value || 0).toFixed(2)}`;
+  return formatRmb(value);
 }
 
 function formatDate(value) {
@@ -454,7 +455,7 @@ export default function ProfilePage() {
               totalTokens={walletData?.token?.totalTokens ?? null}
               usedTokens={walletData?.token?.usedTokens ?? null}
               remainingTokens={walletData?.token?.remainingTokens ?? null}
-              planName={walletData?.plan?.planName || "普通余额钱包"}
+              planName={walletData?.plan?.planName || "普通账户余额"}
               planAmountCny={walletData?.plan?.planAmountCny || 0}
               planStatus={walletData?.plan?.status || "none"}
               startedAt={walletData?.plan?.startedAt || ""}
@@ -475,7 +476,7 @@ export default function ProfilePage() {
               <div className="profile-rank-grid">
                 <div>
                   <span>累计消费</span>
-                  <strong>¥{Number(ranking.totalSpendCny || 0).toFixed(2)}</strong>
+                  <strong>${Number(ranking.totalSpendCny || 0).toFixed(2)}</strong>
                   <p>消费排名：<b>前 {Number(ranking.spendPercentileTop || 0)}%</b></p>
                   <small>你的累计消费超过了平台 {Number(ranking.spendBeatsUsersPercent || 0)}% 的用户。</small>
                 </div>
@@ -641,10 +642,10 @@ export default function ProfilePage() {
             <form className="referral-action-modal" onSubmit={submitReferralAction} onMouseDown={(event) => event.stopPropagation()}>
               <button type="button" className="referral-modal-close" onClick={() => setReferralModal("")}>×</button>
               <span>{referralModal === "convert" ? "佣金兑换" : "提现申请"}</span>
-              <h2>{referralModal === "convert" ? "使用佣金购买 Token" : "申请提现"}</h2>
+              <h2>{referralModal === "convert" ? "佣金兑换账户余额" : "申请提现"}</h2>
               <p>
                 当前可提现佣金为 <strong>{formatMoney(referral?.withdrawableCommissionCny || 0)}</strong>。
-                {referralModal === "convert" ? "确认后会增加 FlowAPI 账户余额，可继续购买 Token。" : "提现申请提交后，客服审核通过后打款到你的支付宝或微信。"}
+                {referralModal === "convert" ? "确认后会增加 FlowAPI 账户余额，可用于模型调用。" : "提现申请提交后，客服审核通过后打款到你的支付宝或微信。"}
               </p>
               <label>
                 <span>{referralModal === "convert" ? "使用金额" : "提现金额"}</span>
@@ -745,11 +746,11 @@ function ReferralProgram({
         <div>
           <span>邀请返佣</span>
           <h2>邀请好友赚佣金</h2>
-          <p>分享专属链接给好友。好友完成真实充值后，系统自动结算佣金和奖励额度。</p>
+          <p>分享专属链接给好友。好友完成真实充值后，系统自动结算佣金和奖励金额。</p>
         </div>
         <div className="profile-referral-actions">
           <button type="button" className="btn-primary" onClick={() => onOpenAction("withdraw")}>申请提现</button>
-          <button type="button" className="btn-secondary" onClick={() => onOpenAction("convert")}>用佣金购买 Token</button>
+          <button type="button" className="btn-secondary" onClick={() => onOpenAction("convert")}>用佣金兑换账户余额</button>
         </div>
       </div>
 
@@ -772,8 +773,8 @@ function ReferralProgram({
       <div className="profile-referral-summary">
         {[
           { label: "累计邀请", value: Number(referral?.totalInvites || 0), suffix: "人", hint: "通过你的链接注册的好友" },
-          { label: "有效邀请", value: Number(referral?.validInvites || 0), suffix: "人", hint: "累计充值满 ￥30 后计入" },
-          { label: "可提现佣金", value: Number(referral?.withdrawableCommissionCny || 0), prefix: "¥", decimals: 2, hint: "可申请提现或购买 Token" },
+          { label: "有效邀请", value: Number(referral?.validInvites || 0), suffix: "人", hint: "累计充值满 ¥30 后计入" },
+          { label: "可提现佣金", value: Number(referral?.withdrawableCommissionCny || 0), prefix: "¥", decimals: 2, hint: "可申请提现或兑换账户余额" },
         ].map((item) => (
           <div key={item.label} className="profile-referral-kpi">
             <span>{item.label}</span>
@@ -784,7 +785,7 @@ function ReferralProgram({
         <button type="button" className="profile-referral-detail-card" onClick={onOpenDetails}>
           <span>佣金明细</span>
           <strong>查看完整返佣数据</strong>
-          <p>累计佣金、已提现、奖励额度、购买 Token 记录都收进这里。</p>
+          <p>累计佣金、已提现、奖励金额、余额兑换记录都收进这里。</p>
           <em aria-hidden="true">↗</em>
         </button>
       </div>
@@ -828,7 +829,7 @@ function ReferralProgram({
                 </div>
                 <ul>
                   <li>{rule.commissionRate}% 可提现佣金</li>
-                  <li>{rule.creditBonusRate}% 等额 Token 额度</li>
+                  <li>{rule.creditBonusRate}% 等额奖励余额</li>
                 </ul>
                 <em>{rule.isUnlocked ? "已解锁" : "未解锁"}</em>
               </article>
@@ -839,7 +840,7 @@ function ReferralProgram({
 
       <ReferralList
         title="我的邀请用户"
-        subtitle="查看好友充值金额、你获得的可提现佣金和奖励额度。"
+        subtitle="查看好友充值金额、你获得的可提现佣金和奖励金额。"
         expanded={invitesExpanded}
         setExpanded={setInvitesExpanded}
         total={invitedUsers.length}
@@ -850,7 +851,7 @@ function ReferralProgram({
             <div><span>{item.firstRecharge ? "有效邀请" : Number(item.totalRechargeCny || 0) > 0 ? "待充值达标" : "已注册"}</span><b>{formatMoney(item.totalRechargeCny)}</b></div>
             <div><span>最近充值</span><b>{item.latestRechargeCny ? formatMoney(item.latestRechargeCny) : "-"}</b></div>
             <div><span>可提现佣金</span><b>{formatMoney(item.commissionCny)}</b></div>
-            <div><span>奖励额度</span><b>{formatMoney(item.creditBonusCny)}</b></div>
+            <div><span>奖励金额</span><b>{formatMoney(item.creditBonusCny)}</b></div>
             <em>{item.status}</em>
           </article>
         ))}
@@ -870,7 +871,7 @@ function ReferralProgram({
             <div><span>奖励类型</span><b>{item.rewardType === "first_recharge_bonus" ? "首笔双向奖励" : "充值返佣"}</b></div>
             <div><span>奖励比例</span><b>{item.commissionRate}% / {item.creditBonusRate}%</b></div>
             <div><span>可提现佣金</span><b>{formatMoney(item.commissionAmountCny)}</b></div>
-            <div><span>奖励额度</span><b>{formatMoney(item.creditBonusCny)}</b></div>
+            <div><span>奖励金额</span><b>{formatMoney(item.creditBonusCny)}</b></div>
             <em>{item.status === "settled" ? "已结算" : item.status}</em>
           </article>
         ))}
@@ -885,10 +886,10 @@ function ReferralDetailDrawer({ open, referral, onClose, onOpenAction }) {
     ["累计邀请", `${referral?.totalInvites || 0} 人`, "所有通过你邀请链接或邀请码注册的用户。"],
     ["有效充值", `${referral?.validInvites || 0} 人`, "完成真实充值后才会进入有效邀请统计。"],
     ["累计佣金", formatMoney(referral?.totalCommissionCny), "历史累计获得的可提现佣金总额。"],
-    ["可提现佣金", formatMoney(referral?.withdrawableCommissionCny), "当前可以提现，也可以直接购买 Token。"],
+    ["可提现佣金", formatMoney(referral?.withdrawableCommissionCny), "当前可以提现，也可以直接兑换账户余额。"],
     ["已提现佣金", formatMoney(referral?.withdrawnCommissionCny), "已经提交并完成处理的提现金额。"],
-    ["累计奖励额度", formatMoney(referral?.totalCreditBonusCny), "系统发放到账户的等额奖励额度。"],
-    ["已用佣金购买 Token", formatMoney(referral?.usedCommissionForTokenCny), "已转入 FlowAPI 余额用于模型调用的佣金。"],
+    ["累计奖励金额", formatMoney(referral?.totalCreditBonusCny), "系统发放到账户的等额奖励金额。"],
+    ["已用佣金兑换账户余额", formatMoney(referral?.usedCommissionForTokenCny), "已转入 FlowAPI 余额用于模型调用的佣金。"],
   ];
 
   return (
@@ -898,7 +899,7 @@ function ReferralDetailDrawer({ open, referral, onClose, onOpenAction }) {
           <div>
             <span>Referral Detail</span>
             <h2>邀请返佣明细</h2>
-            <p>这里集中展示返佣、提现和奖励额度，主页面只保留最关键的行动数字。</p>
+            <p>这里集中展示返佣、提现和奖励金额，主页面只保留最关键的行动数字。</p>
           </div>
           <button type="button" onClick={onClose}>×</button>
         </header>
@@ -913,7 +914,7 @@ function ReferralDetailDrawer({ open, referral, onClose, onOpenAction }) {
         </div>
         <div className="referral-detail-actions">
           <button type="button" className="btn-primary" onClick={() => onOpenAction("withdraw")}>申请提现</button>
-          <button type="button" className="btn-secondary" onClick={() => onOpenAction("convert")}>用佣金购买 Token</button>
+          <button type="button" className="btn-secondary" onClick={() => onOpenAction("convert")}>用佣金兑换账户余额</button>
         </div>
         <p className="referral-detail-note">返佣数据以服务端真实充值订单和结算记录为准，没有记录时不会用假数据冒充收益。</p>
       </aside>
@@ -929,7 +930,7 @@ function ReferralList({ title, subtitle, children, expanded, setExpanded, total 
         {total > 5 ? <button type="button" onClick={() => setExpanded(!expanded)}>{expanded ? "收起" : "展开全部"}</button> : null}
       </div>
       <div className="profile-referral-list">
-        {total ? children : <p className="profile-referral-empty">暂无记录。好友通过邀请链接注册并完成充值后，这里会显示佣金和奖励额度。</p>}
+        {total ? children : <p className="profile-referral-empty">暂无记录。好友通过邀请链接注册并完成充值后，这里会显示佣金和奖励金额。</p>}
       </div>
     </div>
   );

@@ -10,17 +10,19 @@ import QrPaymentModal from "@/components/payments/qr-payment-modal";
 import CryptoPaymentModal from "@/components/payments/crypto-payment-modal";
 import PaymentSuccessModal from "@/components/payments/payment-success-modal";
 import PaymentMethodIcon from "@/components/payments/payment-method-icon";
-import { formatSmallCny } from "@/lib/format/number-format";
+import { formatApiMoney, formatApiMoneyPrecise, formatRechargeRate, formatRmb } from "@/lib/format/number-format";
 import { useLocale } from "@/components/providers/locale-provider";
 import { useSafePolling } from "@/hooks/useSafePolling";
 
+const RECHARGE_RATE = 5;
+
 const amounts = [
-  { value: 20, label: "¥20", desc: "体验测试" },
-  { value: 50, label: "¥50", desc: "轻度使用" },
-  { value: 100, label: "¥100", desc: "推荐入门" },
-  { value: 200, label: "¥200", desc: "开发常用" },
-  { value: 500, label: "¥500", desc: "团队测试" },
-  { value: 1000, label: "¥1,000", desc: "大额充值" },
+  { value: 10, label: "¥10.00", desc: "到账 $ API 50.00" },
+  { value: 20, label: "¥20.00", desc: "到账 $ API 100.00" },
+  { value: 50, label: "¥50.00", desc: "到账 $ API 250.00" },
+  { value: 100, label: "¥100.00", desc: "到账 $ API 500.00" },
+  { value: 200, label: "¥200.00", desc: "到账 $ API 1,000.00" },
+  { value: 500, label: "¥500.00", desc: "到账 $ API 2,500.00" },
 ];
 
 const paymentMethods = [
@@ -51,12 +53,12 @@ const addOnServices = [
   },
   {
     id: "openrouter_credits",
-    title: "模型官方额度代充",
+    title: "模型官方余额代充",
     priceCny: 9,
     unit: "credits",
     minQuantity: 5,
-    description: "适合需要单独购买模型官方额度的用户，最低 5 份起充。",
-    tags: ["最低 5 个", "适合开发者", "额度代充"],
+    description: "适合需要单独购买模型官方余额的用户，最低 5 份起充。",
+    tags: ["最低 5 个", "适合开发者", "余额代充"],
     type: "quantity",
   },
 ];
@@ -122,16 +124,16 @@ function applyOrderUpdate(nextOrder) {
 }
 
 const weeklyPackages = [
-  { id: "cell_50", code: "CELL-50", name: "点火测试", scene: "低成本验证", price: 12, quotaText: "50 万", quotaTokens: 500000, validDays: 7, unitPrice: "¥0.24 / 万 Token", tag: "试用", highlight: false, benefits: ["有效期：7 天", "单价：¥0.24 / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
-  { id: "drive_100", code: "DRIVE-100", name: "日常推进", scene: "日常 Coding", price: 24, quotaText: "100 万", quotaTokens: 1000000, validDays: 7, unitPrice: "¥0.24 / 万 Token", tag: "常用", highlight: true, benefits: ["有效期：7 天", "单价：¥0.24 / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
-  { id: "orbit_200", code: "ORBIT-200", name: "高频航段", scene: "高频自动化", price: 45, quotaText: "200 万", quotaTokens: 2000000, validDays: 7, unitPrice: "¥0.23 / 万 Token", tag: "高频", highlight: false, benefits: ["有效期：7 天", "单价：¥0.23 / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
-  { id: "core_500", code: "CORE-500", name: "主推燃料舱", scene: "长程主力", price: 108, quotaText: "500 万", quotaTokens: 5000000, validDays: 7, unitPrice: "¥0.22 / 万 Token", tag: "主推", highlight: true, featured: true, benefits: ["有效期：7 天", "单价：¥0.22 / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
+  { id: "cell_50", code: "CELL-50", name: "点火测试", scene: "低成本验证", price: 12, quotaText: "50 万", quotaTokens: 500000, validDays: 7, unitPrice: "$0.24 API / 万 Token", tag: "试用", highlight: false, benefits: ["有效期：7 天", "单价：$0.24 API / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
+  { id: "drive_100", code: "DRIVE-100", name: "日常推进", scene: "日常 Coding", price: 24, quotaText: "100 万", quotaTokens: 1000000, validDays: 7, unitPrice: "$0.24 API / 万 Token", tag: "常用", highlight: true, benefits: ["有效期：7 天", "单价：$0.24 API / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
+  { id: "orbit_200", code: "ORBIT-200", name: "高频航段", scene: "高频自动化", price: 45, quotaText: "200 万", quotaTokens: 2000000, validDays: 7, unitPrice: "$0.23 API / 万 Token", tag: "高频", highlight: false, benefits: ["有效期：7 天", "单价：$0.23 API / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
+  { id: "core_500", code: "CORE-500", name: "主推燃料舱", scene: "长程主力", price: 108, quotaText: "500 万", quotaTokens: 5000000, validDays: 7, unitPrice: "$0.22 API / 万 Token", tag: "主推", highlight: true, featured: true, benefits: ["有效期：7 天", "单价：$0.22 API / 万 Token", "可叠加购买", "优先消耗最早到期权益"] },
 ];
 
 const monthlyPackages = [
-  { id: "monthly_probe", name: "前进一：探测", quotaText: "每日 10 万 / 月共 300 万", price: 30, validDays: 30, unitPrice: "¥0.10 / 万 Token", totalValue: "¥72.00", plusEquivalent: "约等于 1 个 Plus", recommended: false, benefits: ["有效期：30 天", "单价：¥0.10 / 万 Token", "额度重置：每天", "总额度：¥72.00", "约等于 1 个 Plus"] },
-  { id: "monthly_launch", name: "前进二：启航", quotaText: "每日 30 万 / 月共 900 万", price: 98, validDays: 30, unitPrice: "¥0.11 / 万 Token", totalValue: "¥216.00", plusEquivalent: "约等于 2 个 Plus", recommended: false, benefits: ["有效期：30 天", "单价：¥0.11 / 万 Token", "额度重置：每天", "总额度：¥216.00", "约等于 2 个 Plus"] },
-  { id: "monthly_cruise", name: "前进三：巡航", quotaText: "每日 50 万 / 月共 1500 万", price: 168, validDays: 30, unitPrice: "¥0.11 / 万 Token", totalValue: "¥360.00", plusEquivalent: "约等于 3.5 个 Plus", recommended: true, benefits: ["有效期：30 天", "单价：¥0.11 / 万 Token", "额度重置：每天", "总额度：¥360.00", "约等于 3.5 个 Plus"] },
+  { id: "monthly_probe", name: "前进一：探测", quotaText: "每日 10 万 / 月共 300 万", price: 30, validDays: 30, unitPrice: "$0.10 API / 万 Token", totalValue: "$72.00 API", plusEquivalent: "约等于 1 个 Plus", recommended: false, benefits: ["有效期：30 天", "单价：$0.10 API / 万 Token", "用量重置：每天", "总量：$72.00 API", "约等于 1 个 Plus"] },
+  { id: "monthly_launch", name: "前进二：启航", quotaText: "每日 30 万 / 月共 900 万", price: 98, validDays: 30, unitPrice: "$0.11 API / 万 Token", totalValue: "$216.00 API", plusEquivalent: "约等于 2 个 Plus", recommended: false, benefits: ["有效期：30 天", "单价：$0.11 API / 万 Token", "用量重置：每天", "总量：$216.00 API", "约等于 2 个 Plus"] },
+  { id: "monthly_cruise", name: "前进三：巡航", quotaText: "每日 50 万 / 月共 1500 万", price: 168, validDays: 30, unitPrice: "$0.11 API / 万 Token", totalValue: "$360.00 API", plusEquivalent: "约等于 3.5 个 Plus", recommended: true, benefits: ["有效期：30 天", "单价：$0.11 API / 万 Token", "用量重置：每天", "总量：$360.00 API", "约等于 3.5 个 Plus"] },
 ];
 
 const rechargeTrustItems = [
@@ -156,11 +158,32 @@ function formatDate(value) {
 }
 
 function formatMoney(value) {
-  return formatSmallCny(value);
+  return formatApiMoney(value);
 }
 
-function getPaymentPayload({ customerId, amount, paymentMethod, purchaseType, pkg, paymentRef = "" }) {
-  return { customerId, amount, paymentMethod, purchaseType, packageId: pkg?.id || "", packageName: pkg ? `${pkg.name}${pkg.code ? ` ${pkg.code}` : ""}` : "", quotaText: pkg?.quotaText || "", validDays: pkg?.validDays || null, paymentRef };
+function formatPreciseMoney(value) {
+  return formatApiMoneyPrecise(value);
+}
+
+function estimateApiArrival(paymentAmountRmb) {
+  const number = Number(paymentAmountRmb || 0);
+  if (!Number.isFinite(number) || number <= 0) return 0;
+  return Number((number * RECHARGE_RATE).toFixed(6));
+}
+
+function getPaymentPayload({ customerId, paymentAmountRmb, paymentMethod, purchaseType, pkg, paymentRef = "" }) {
+  return {
+    customerId,
+    amount: paymentAmountRmb,
+    paymentAmountRmb,
+    paymentMethod,
+    purchaseType,
+    packageId: pkg?.id || "",
+    packageName: pkg ? `${pkg.name}${pkg.code ? ` ${pkg.code}` : ""}` : "",
+    quotaText: pkg?.quotaText || "",
+    validDays: pkg?.validDays || null,
+    paymentRef,
+  };
 }
 
 async function fetchJsonWithTimeout(url, options = {}, timeoutMs = 1500) {
@@ -215,7 +238,6 @@ export default function RechargePage() {
   const [redeemResult, setRedeemResult] = useState(null);
   const [packageDetail, setPackageDetail] = useState(null);
   const [selectedAddOns, setSelectedAddOns] = useState([]);
-  const [showMoreRechargeOptions, setShowMoreRechargeOptions] = useState(false);
   const [openrouterCredits, setOpenrouterCredits] = useState(5);
   const [referral, setReferral] = useState(null);
   const [commissionModal, setCommissionModal] = useState("");
@@ -334,6 +356,7 @@ export default function RechargePage() {
   }, [selectedAddOns, openrouterCredits]);
 
   const finalAmount = baseAmount + addOnTotal;
+  const estimatedArrivalApi = purchaseType === "balance_recharge" ? estimateApiArrival(baseAmount) : 0;
 
   const currentMethod = useMemo(() => localizedPaymentMethods.find((item) => item.key === paymentMethod) || localizedPaymentMethods[0], [localizedPaymentMethods, paymentMethod]);
   const manualModeNotice = useMemo(() => {
@@ -378,9 +401,9 @@ export default function RechargePage() {
   const orderSummary = useMemo(() => {
     let summary = { typeLabel: isEn ? "Balance Top-up" : "余额充值", packageName: "", quotaLabel: "", quotaValue: "", validDays: null, amount: baseAmount };
     if (purchaseType === "weekly_package" && selectedPackage) {
-      summary = { typeLabel: isEn ? "Weekly Pack" : "周畅用包", packageName: `${selectedPackage.name} ${selectedPackage.code}`, quotaLabel: isEn ? "Token Quota" : "获得额度", quotaValue: `${selectedPackage.quotaText} Token`, validDays: selectedPackage.validDays, amount: selectedPackage.price };
+      summary = { typeLabel: isEn ? "Weekly Pack" : "周畅用包", packageName: `${selectedPackage.name} ${selectedPackage.code}`, quotaLabel: isEn ? "Token Quota" : "获得用量", quotaValue: `${selectedPackage.quotaText} Token`, validDays: selectedPackage.validDays, amount: selectedPackage.price };
     } else if (purchaseType === "monthly_subscription" && selectedPackage) {
-      summary = { typeLabel: isEn ? "Monthly Plan" : "月卡套餐", packageName: selectedPackage.name, quotaLabel: isEn ? "Daily / Monthly Quota" : "每日额度 / 月总额度", quotaValue: `${selectedPackage.quotaText} Token`, validDays: selectedPackage.validDays, amount: selectedPackage.price };
+      summary = { typeLabel: isEn ? "Monthly Plan" : "月卡套餐", packageName: selectedPackage.name, quotaLabel: isEn ? "Daily / Monthly Quota" : "每日用量 / 月总量", quotaValue: `${selectedPackage.quotaText} Token`, validDays: selectedPackage.validDays, amount: selectedPackage.price };
     }
     return summary;
   }, [purchaseType, selectedPackage, baseAmount, isEn]);
@@ -445,7 +468,7 @@ export default function RechargePage() {
     setManualFallback(false);
     const payload = getPaymentPayload({
       customerId: customer?.id,
-      amount: finalAmount,
+      paymentAmountRmb: finalAmount,
       paymentMethod,
       cryptoToken,
       cryptoNetwork,
@@ -565,7 +588,7 @@ export default function RechargePage() {
       setPaying(false);
       return;
     }
-    const payload = getPaymentPayload({ customerId: customer.id, amount: finalAmount, paymentMethod, purchaseType, pkg: selectedPackage, paymentRef });
+    const payload = getPaymentPayload({ customerId: customer.id, paymentAmountRmb: finalAmount, paymentMethod, purchaseType, pkg: selectedPackage, paymentRef });
     setPaying(true);
     try {
       const res = await fetch("/api/recharge", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -676,7 +699,7 @@ export default function RechargePage() {
       setCommissionMessage(data.error || "操作失败，请稍后重试");
       return;
     }
-    setCommissionMessage(commissionModal === "convert" ? `已成功使用 ¥${Number(payload.amountCny).toFixed(2)} 佣金兑换 FlowAPI 余额。` : "已提交提现申请，客服审核后会处理。");
+    setCommissionMessage(commissionModal === "convert" ? `已成功使用 ${formatRmb(payload.amountCny)} 佣金兑换 FlowAPI 余额。` : "已提交提现申请，客服审核后会处理。");
     setCommissionForm({ amountCny: "", method: "alipay", account: "", realName: "", remark: "" });
     refreshCustomer(customer);
   }
@@ -699,7 +722,7 @@ export default function RechargePage() {
         <div className="recharge-page-header">
           <div>
             <span className="recharge-page-kicker">{L("资产管理", "Asset Management")}</span>
-            <h1>{L("充值 Token", "Recharge Token")}</h1>
+            <h1>{L("充值余额", "Recharge Balance")}</h1>
           </div>
         </div>
 
@@ -754,24 +777,12 @@ export default function RechargePage() {
                 </label>
               </div>
 
-              <div className="recharge-more-options-bar">
-                <div>
-                  <strong>更多套餐与人工服务</strong>
-                  <span>周包、月卡和附加服务默认收起，新用户先完成 Token 充值即可。</span>
-                </div>
-                <button type="button" onClick={() => setShowMoreRechargeOptions((value) => !value)}>
-                  {showMoreRechargeOptions ? "收起" : "展开更多"}
-                </button>
-              </div>
-
-              {showMoreRechargeOptions && (
-                <>
-                  {/* 2. Add-on services */}
+              {/* 2. Add-on services */}
                   <div className="recharge-section-card">
                     <div className="section-heading-row">
                       <div>
                         <h2>{L("附加服务", "Add-on Services")}</h2>
-                        <p>{L("可选增值服务，适合需要人工协助、订阅支持、额度代充或接入配置的用户。", "Optional value-added services for setup, subscriptions, and credits support.")}</p>
+                        <p>{L("可选增值服务，适合需要人工协助、订阅支持、余额代充或接入配置的用户。", "Optional value-added services for setup, subscriptions, and credits support.")}</p>
                       </div>
                     </div>
                     <div className="addon-services-grid">
@@ -787,7 +798,7 @@ export default function RechargePage() {
                           >
                             <div className="addon-service-head">
                               <strong>{svc.title}</strong>
-                              <span className="addon-service-price">¥{svc.priceCny}{svc.type === "quantity" ? ` / ${svc.unit}` : ` / ${svc.unit}`}</span>
+                              <span className="addon-service-price">{formatRmb(svc.priceCny)}{svc.type === "quantity" ? ` / ${svc.unit}` : ` / ${svc.unit}`}</span>
                             </div>
                             <p>{svc.description}</p>
                             <div className="addon-service-tags">
@@ -795,13 +806,13 @@ export default function RechargePage() {
                             </div>
                             {isSelected && isQuantity && (
                               <div className="addon-service-quantity" onClick={(e) => e.stopPropagation()}>
-                                <span>官方额度数量</span>
+                                <span>官方余额数量</span>
                                 <div className="addon-quantity-control">
                                   <button type="button" onClick={() => setOpenrouterCredits((v) => Math.max(5, v - 1))} disabled={openrouterCredits <= 5}>−</button>
                                   <strong>{openrouterCredits}</strong>
                                   <button type="button" onClick={() => setOpenrouterCredits((v) => v + 1)}>+</button>
                                 </div>
-                                <span className="addon-quantity-total">合计 ¥{svc.priceCny * openrouterCredits}</span>
+                                <span className="addon-quantity-total">合计 {formatRmb(svc.priceCny * openrouterCredits)}</span>
                               </div>
                             )}
                             <span className={`addon-service-action ${isSelected ? "selected" : ""}`}>
@@ -816,7 +827,7 @@ export default function RechargePage() {
                   {/* 3. Codex API weekly packages */}
                   <div className="recharge-section-card">
                     <div className="section-heading-row">
-                      <div><h2>Codex API — 周畅用包</h2><p>点击档位后生成订单，支付后自动或人工确认开通对应额度包。</p></div>
+                      <div><h2>Codex API — 周畅用包</h2><p>点击档位后生成订单，支付后自动或人工确认开通对应资源包。</p></div>
                       <span>支付宝直购 · 一周畅用</span>
                     </div>
                     <div className="recharge-package-grid weekly">
@@ -830,7 +841,7 @@ export default function RechargePage() {
                   <div className="recharge-section-card">
                     <div className="section-heading-row">
                       <div><h2>月卡套餐</h2><p>购买区独立展示，已购权益以上方“我的订阅”为准。</p></div>
-                      <span>每日额度 · 月度资源包</span>
+                      <span>每日用量 · 月度资源包</span>
                     </div>
                     <div className="recharge-package-grid monthly">
                       {monthlyPackages.map((pkg) => (
@@ -838,8 +849,6 @@ export default function RechargePage() {
                       ))}
                     </div>
                   </div>
-                </>
-              )}
 
             </section>
 
@@ -859,7 +868,13 @@ export default function RechargePage() {
                   {orderSummary.packageName ? <Row label={L("套餐名称", "Plan Name")} value={orderSummary.packageName} /> : null}
                   {orderSummary.quotaValue ? <Row label={orderSummary.quotaLabel} value={orderSummary.quotaValue} /> : null}
                   {orderSummary.validDays ? <Row label={L("有效期", "Validity")} value={`${orderSummary.validDays} ${L("天", "days")}`} /> : null}
-                  <Row label={purchaseType === "balance_recharge" ? L("充值金额", "Top-up Amount") : L("套餐价格", "Plan Price")} value={formatMoney(baseAmount)} strong />
+                  <Row label={purchaseType === "balance_recharge" ? L("充值金额", "Top-up Amount") : L("套餐价格", "Plan Price")} value={formatRmb(baseAmount)} strong />
+                  {purchaseType === "balance_recharge" ? (
+                    <>
+                      <Row label={L("当前比例", "Rate")} value={formatRechargeRate(RECHARGE_RATE)} />
+                      <Row label={L("预计到账", "Estimated Credit")} value={formatApiMoney(estimatedArrivalApi)} strong />
+                    </>
+                  ) : null}
 
                   {selectedAddOnDetails.length > 0 && (
                     <div className="summary-addons">
@@ -867,14 +882,14 @@ export default function RechargePage() {
                       {selectedAddOnDetails.map((svc) => (
                         <div key={svc.id} className="summary-addon-row">
                           <span>{svc.title}{svc.quantity ? ` ${svc.quantity} ${svc.unit}` : ""}</span>
-                          <span>¥{svc.total.toFixed(2)}</span>
+                          <span>{formatRmb(svc.total)}</span>
                         </div>
                       ))}
                     </div>
                   )}
 
                   <div className="summary-divider" />
-                  <Row label={L("应付金额", "Amount Due")} value={formatMoney(finalAmount)} strong />
+                  <Row label={L("应付金额", "Amount Due")} value={formatRmb(finalAmount)} strong />
                 </div>
               </div>
 
@@ -990,7 +1005,7 @@ export default function RechargePage() {
                         {cryptoAmountEstimate} {activeCryptoToken}
                       </div>
                       <div style={{ fontSize: 13, color: "var(--page-sub)" }}>
-                        {L("订单金额", "Order Amount")}：{formatMoney(finalAmount)}
+                        {L("订单金额", "Order Amount")}：{formatRmb(finalAmount)}
                       </div>
                       <div style={{ fontSize: 13, color: "var(--page-sub)" }}>
                         {L("订单号", "Order No.")}：{paymentSession?.orderId || submittedOrder?.outTradeNo || submittedOrder?.transactionNo || "-"}
@@ -1060,7 +1075,7 @@ export default function RechargePage() {
               <div className="recharge-summary-card">
                 <h2>{L("到账说明", "Payment Notes")}</h2>
                 <div className="summary-rows">
-                  <Row label={L("应付金额", "Amount Due")} value={formatMoney(finalAmount)} strong />
+                  <Row label={L("应付金额", "Amount Due")} value={formatRmb(finalAmount)} strong />
                   <Row label={L("支付方式", "Payment Method")} value={currentMethod.name} />
                   {paymentMethod === "crypto" ? <Row label={L("币种 / 网络", "Token / Network")} value={`${activeCryptoToken} / ${activeCryptoNetwork}`} /> : null}
                   <Row label={L("交易流水号", "Transaction No.")} value={submittedOrder?.outTradeNo || submittedOrder?.transactionNo || L("生成中", "Generating")} />
@@ -1095,7 +1110,7 @@ export default function RechargePage() {
         <QrPaymentModal
           open={activePaymentModal === "qr"}
           title={qrModalTitle}
-          amountLabel={formatMoney(finalAmount)}
+          amountLabel={formatRmb(finalAmount)}
           orderNumber={paymentOrderNumber}
           methodName={currentMethod.name}
           qrSrc={paymentSession?.qrImage || paymentQrImages[paymentMethod]}
@@ -1117,7 +1132,7 @@ export default function RechargePage() {
           open={activePaymentModal === "crypto"}
           title={L("加密货币支付", "Crypto Payment")}
           amountLabel={`${cryptoAmountEstimate} ${activeCryptoToken}`}
-          cnyAmountLabel={formatMoney(finalAmount)}
+          cnyAmountLabel={formatRmb(finalAmount)}
           usdAmountLabel={cryptoUsdEstimate}
           orderNumber={paymentOrderNumber}
           token={activeCryptoToken}
@@ -1146,7 +1161,7 @@ export default function RechargePage() {
           description={L("这笔充值已经到账，你现在可以继续调用模型或返回数据面板查看最新资产变化。", "This top-up has been credited. You can continue calling models or return to the dashboard to view your updated balance.")}
           orderNumber={paymentOrderNumber}
           methodName={currentMethod.name}
-          amountLabel={formatMoney(finalAmount)}
+          amountLabel={formatRmb(finalAmount)}
           onViewOrders={() => router.push("/profile")}
           onGoDashboard={() => router.push("/dashboard")}
           onContinue={() => {
@@ -1159,10 +1174,10 @@ export default function RechargePage() {
             <form className="referral-action-modal" onSubmit={submitCommissionAction} onMouseDown={(event) => event.stopPropagation()}>
               <button type="button" className="referral-modal-close" onClick={() => setCommissionModal("")}>×</button>
               <span>{commissionModal === "convert" ? "佣金兑换" : "提现申请"}</span>
-              <h2>{commissionModal === "convert" ? "使用佣金购买 Token" : "申请提现"}</h2>
+              <h2>{commissionModal === "convert" ? "佣金兑换账户余额" : "申请提现"}</h2>
               <p>
-                当前可提现佣金为 <strong>¥{Number(referral?.withdrawableCommissionCny || 0).toFixed(2)}</strong>。
-                {commissionModal === "convert" ? "确认使用佣金兑换 FlowAPI 余额 / Token 额度吗？" : "提现申请提交后，客服审核通过后打款到你的支付宝或微信。"}
+                当前可提现佣金为 <strong>{formatRmb(referral?.withdrawableCommissionCny || 0)}</strong>。
+                {commissionModal === "convert" ? "确认使用佣金兑换 FlowAPI 账户余额吗？" : "提现申请提交后，客服审核通过后打款到你的支付宝或微信。"}
               </p>
               <label>
                 <span>{commissionModal === "convert" ? "使用金额" : "提现金额"}</span>
@@ -1180,7 +1195,7 @@ export default function RechargePage() {
                   <label><span>收款账号</span><input value={commissionForm.account} onChange={(event) => setCommissionForm({ ...commissionForm, account: event.target.value })} placeholder="支付宝账号 / 微信号" required /></label>
                   <label><span>收款姓名</span><input value={commissionForm.realName} onChange={(event) => setCommissionForm({ ...commissionForm, realName: event.target.value })} placeholder="用于人工核对" required /></label>
                   <label><span>备注</span><input value={commissionForm.remark} onChange={(event) => setCommissionForm({ ...commissionForm, remark: event.target.value })} placeholder="可选" /></label>
-                  <small>最低提现金额：¥20。提现状态可在个人资料页查看。</small>
+                  <small>最低提现金额：$20 API。提现状态可在个人资料页查看。</small>
                 </>
               ) : null}
               {commissionMessage ? <p className={commissionMessage.includes("失败") || commissionMessage.includes("不足") ? "referral-error" : "referral-success"}>{commissionMessage}</p> : null}
@@ -1239,10 +1254,10 @@ function CommissionAssetCard({ referral, onConvert, onWithdraw }) {
     <div className="recharge-summary-card recharge-commission-card">
       <span>邀请返佣资产</span>
       <h2>可提现佣金</h2>
-      <strong>¥{amount.toFixed(2)}</strong>
-      <p>你可以将佣金提现到支付宝 / 微信，也可以直接用佣金购买 Token。</p>
+      <strong>{formatRmb(amount)}</strong>
+      <p>你可以将佣金提现到支付宝 / 微信，也可以直接用佣金兑换账户余额。</p>
       <div className="recharge-commission-actions">
-        <button type="button" className="btn-secondary" onClick={onConvert}>用佣金购买 Token</button>
+        <button type="button" className="btn-secondary" onClick={onConvert}>兑换账户余额</button>
         <button type="button" className="btn-secondary" onClick={onWithdraw}>申请提现</button>
       </div>
     </div>
@@ -1258,7 +1273,7 @@ function PackageCard({ pkg, type, selected, onSelect, onDetail }) {
       <div className="recharge-package-topline"><span className="recharge-package-code">{pkg.code || pkg.name}</span>{(pkg.tag || pkg.recommended) && <span className={`recharge-package-tag ${pkg.featured ? "orange" : ""}`}>{pkg.recommended ? "推荐" : pkg.tag}</span>}</div>
       <div className="recharge-package-name">{pkg.name}</div>
       <div className="recharge-package-scene">{isMonthly ? pkg.quotaText : pkg.scene}</div>
-      <div className="recharge-package-price"><strong>¥{Number(pkg.price).toFixed(0)}</strong><span>{isMonthly ? "/ 月" : ` / ${pkg.quotaText}`}</span></div>
+      <div className="recharge-package-price"><strong>{formatRmb(pkg.price)}</strong><span>{isMonthly ? "/ 月" : ` / ${pkg.quotaText}`}</span></div>
       <ul className="recharge-package-benefits">{pkg.benefits.map((benefit) => <li key={benefit}><span>✓</span>{benefit}</li>)}</ul>
       <div className="recharge-package-actions">
         <span className={selected ? "recharge-package-action selected" : "recharge-package-action"}>{isMonthly ? "立即订阅" : "立即购买"}</span>
@@ -1271,16 +1286,16 @@ function PackageCard({ pkg, type, selected, onSelect, onDetail }) {
 function buildPackageDetail(pkg, type) {
   const isMonthly = type === "monthly_subscription";
   const rows = isMonthly ? [
-    { label: "套餐名称", value: pkg.name }, { label: "每日额度 / 月总额度", value: `${pkg.quotaText} Token` }, { label: "售价", value: formatMoney(pkg.price) }, { label: "有效期", value: `${pkg.validDays} 天` }, { label: "每日重置规则", value: "每天自动重置当日额度，未使用部分不累计到下一天。" }, { label: "适合人群", value: "每天稳定使用 AI Coding、文案、自动化任务的用户。" },
+    { label: "套餐名称", value: pkg.name }, { label: "每日用量 / 月总量", value: `${pkg.quotaText} Token` }, { label: "售价", value: formatRmb(pkg.price) }, { label: "有效期", value: `${pkg.validDays} 天` }, { label: "每日重置规则", value: "每天自动重置当日用量，未使用部分不累计到下一天。" }, { label: "适合人群", value: "每天稳定使用 AI Coding、文案、自动化任务的用户。" },
   ] : [
-    { label: "套餐名称", value: pkg.name }, { label: "套餐代号", value: pkg.code }, { label: "售价", value: formatMoney(pkg.price) }, { label: "Token 额度", value: `${pkg.quotaText} Token` }, { label: "有效期", value: `${pkg.validDays} 天` }, { label: "单价", value: pkg.unitPrice }, { label: "是否可叠加", value: "可叠加购买" }, { label: "消耗规则", value: "优先消耗最早到期权益" },
+    { label: "套餐名称", value: pkg.name }, { label: "套餐代号", value: pkg.code }, { label: "售价", value: formatRmb(pkg.price) }, { label: "Token 额度", value: `${pkg.quotaText} Token` }, { label: "有效期", value: `${pkg.validDays} 天` }, { label: "单价", value: pkg.unitPrice }, { label: "是否可叠加", value: "可叠加购买" }, { label: "消耗规则", value: "优先消耗最早到期权益" },
   ];
   const scenes = [
     { scenario: "日常轻量 Coding", description: "100 万 Token 大约适合日常轻量 Coding、接口调试、文案生成和简单自动化任务。" },
     { scenario: "批量任务", description: "适合摘要、分类、客服问答等重复任务，建议配合低成本模型。" },
     { scenario: "高价值任务", description: "复杂代码和长文本建议保留高质量模型，避免只按价格选择。" },
   ];
-  return { title: `${pkg.name} 套餐详情`, description: isMonthly ? "查看月卡额度、重置规则、适合人群和购买后权益说明。" : "查看周畅用包额度、有效期、消耗规则和适合人群。", badge: isMonthly ? "月卡套餐" : "周畅用包", sections: [{ title: "套餐基础信息", content: <DetailRows rows={rows} /> }, { title: "套餐权益", content: <DetailTable columns={[{ key: "description", label: "权益说明" }]} rows={(pkg.benefits || []).map((benefit) => ({ description: benefit }))} /> }, { title: "适合场景", content: <DetailTable columns={[{ key: "scenario", label: "场景" }, { key: "description", label: "说明" }]} rows={scenes} /> }] };
+  return { title: `${pkg.name} 套餐详情`, description: isMonthly ? "查看月卡用量、重置规则、适合人群和购买后权益说明。" : "查看周畅用包用量、有效期、消耗规则和适合人群。", badge: isMonthly ? "月卡套餐" : "周畅用包", sections: [{ title: "套餐基础信息", content: <DetailRows rows={rows} /> }, { title: "套餐权益", content: <DetailTable columns={[{ key: "description", label: "权益说明" }]} rows={(pkg.benefits || []).map((benefit) => ({ description: benefit }))} /> }, { title: "适合场景", content: <DetailTable columns={[{ key: "scenario", label: "场景" }, { key: "description", label: "说明" }]} rows={scenes} /> }] };
 }
 
 function Row({ label, value, strong = false }) {

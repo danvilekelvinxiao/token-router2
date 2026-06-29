@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
 export default function AdminBillingRules() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [config, setConfig] = useState(null);
   const [prices, setPrices] = useState([]);
   const [alerts, setAlerts] = useState([]);
@@ -20,14 +19,13 @@ export default function AdminBillingRules() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
-    fetchData(s);
+    fetchData();
   }, []);
 
-  async function fetchData(sec) {
+  async function fetchData() {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/billing", { headers: { "x-admin-secret": sec } });
+      const res = await fetch("/api/admin/billing");
       const data = await res.json();
       if (res.ok) {
         setConfig(data.config || {});
@@ -39,9 +37,8 @@ export default function AdminBillingRules() {
   }
 
   async function apiPost(body) {
-    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     const res = await fetch("/api/admin/billing", {
-      method: "POST", headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(body),
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "请求失败");
@@ -57,7 +54,7 @@ export default function AdminBillingRules() {
       if (editingPrice !== null) newPrices[editingPrice] = p;
       else newPrices.push(p);
       await apiPost({ action: "savePrices", data: newPrices });
-      await fetchData(secret);
+      await fetchData();
       setEditingPrice(null);
     } catch (e) { setMsg(e.message); }
     setSaving(false);
@@ -67,7 +64,7 @@ export default function AdminBillingRules() {
     try {
       const newPrices = prices.filter((_, i) => i !== idx);
       await apiPost({ action: "savePrices", data: newPrices });
-      await fetchData(secret);
+      await fetchData();
     } catch (e) { setMsg(e.message); }
   }
 
@@ -76,14 +73,14 @@ export default function AdminBillingRules() {
     setSaving(true);
     try {
       await apiPost({ action: "saveAlert", data: { ...alertForm, id: editingAlert || undefined } });
-      await fetchData(secret);
+      await fetchData();
       setAlertModal(false);
     } catch (e) { setMsg(e.message); }
     setSaving(false);
   }
   async function deleteAlert(id) {
     if (!confirm("确认删除此预警规则？")) return;
-    try { await apiPost({ action: "deleteAlert", data: { id } }); await fetchData(secret); } catch (e) { setMsg(e.message); }
+    try { await apiPost({ action: "deleteAlert", data: { id } }); await fetchData(); } catch (e) { setMsg(e.message); }
   }
 
   function openConfigEdit() { setConfigForm({ ...config }); setConfigModal(true); }
@@ -91,21 +88,13 @@ export default function AdminBillingRules() {
     setSaving(true);
     try {
       await apiPost({ action: "saveConfig", data: configForm });
-      await fetchData(secret);
+      await fetchData();
       setConfigModal(false);
     } catch (e) { setMsg(e.message); }
     setSaving(false);
   }
 
-  function handleSecretSave() {
-    const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
-    sessionStorage.setItem("flowapi_admin_secret", s);
-    setMsg("");
-    fetchData(s);
-  }
-
-  const formatMoney = (v) => { const n = Number(v); return isNaN(n) ? "-" : `¥${n.toFixed(2)}`; };
+  const formatMoney = (v) => { const n = Number(v); return isNaN(n) ? "-" : `$ API ${n.toFixed(2)}`; };
 
   return (
     <>
@@ -118,8 +107,7 @@ export default function AdminBillingRules() {
               <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>管理模型定价、计费单位和余额预警规则</p>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={handleSecretSave} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>验证</button>
+              <button onClick={() => fetchData()} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
             </div>
           </header>
 
@@ -147,7 +135,7 @@ export default function AdminBillingRules() {
                 <div style={{ padding: "16px 24px", borderBottom: "1px solid var(--dash-border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0 }}>模型价格表</h2>
-                    <p style={{ fontSize: 12, color: "var(--dash-sub)", margin: "2px 0 0" }}>价格单位：¥ / 1M Token</p>
+                    <p style={{ fontSize: 12, color: "var(--dash-sub)", margin: "2px 0 0" }}>价格单位：$ / 1M Token</p>
                   </div>
                   <button onClick={() => openPriceEdit(null)} style={{ padding: "8px 16px", borderRadius: 7, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>+ 新增价格</button>
                 </div>

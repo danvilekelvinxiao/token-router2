@@ -65,6 +65,20 @@ try {
   }
 
   await exec(`
+    ALTER TABLE customers ALTER COLUMN balance TYPE NUMERIC(20, 6);
+  `);
+  await exec(`
+    ALTER TABLE customers ALTER COLUMN total_spend TYPE NUMERIC(20, 6);
+  `);
+  await exec(`
+    DO $$
+    BEGIN
+      IF to_regclass('public.activity_logs') IS NOT NULL THEN
+        ALTER TABLE activity_logs ALTER COLUMN amount TYPE NUMERIC(20, 6);
+      END IF;
+    END $$;
+  `);
+  await exec(`
     ALTER TABLE calls ADD COLUMN IF NOT EXISTS request_id TEXT DEFAULT '';
   `);
   await exec(`
@@ -169,6 +183,78 @@ try {
 	    ALTER TABLE upstream_channels ADD COLUMN IF NOT EXISTS is_user_visible BOOLEAN NOT NULL DEFAULT false;
 	    ALTER TABLE upstream_channels ADD COLUMN IF NOT EXISTS requires_admin_review BOOLEAN NOT NULL DEFAULT false;
 	  `);
+  await exec(`
+    CREATE TABLE IF NOT EXISTS providers (
+      id VARCHAR(64) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      type VARCHAR(64) NOT NULL,
+      base_url TEXT NOT NULL,
+      api_key_encrypted TEXT NOT NULL,
+      api_key_preview TEXT NOT NULL DEFAULT '',
+      enabled BOOLEAN DEFAULT TRUE,
+      priority INT DEFAULT 0,
+      weight INT DEFAULT 1,
+      models JSONB DEFAULT '[]'::jsonb,
+      timeout_ms INT DEFAULT 120000,
+      max_retries INT DEFAULT 2,
+      supports_stream BOOLEAN DEFAULT TRUE,
+      supports_responses_api BOOLEAN DEFAULT FALSE,
+      supports_chat_completions_api BOOLEAN DEFAULT TRUE,
+      balance_check_url TEXT,
+      health_check_path VARCHAR(255),
+      last_health_status VARCHAR(32) DEFAULT 'unknown',
+      last_health_checked_at TIMESTAMPTZ NULL,
+      last_error_message TEXT NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  await exec(`
+    ALTER TABLE providers ADD COLUMN IF NOT EXISTS api_key_preview TEXT NOT NULL DEFAULT '';
+  `);
+  await exec(`
+    CREATE TABLE IF NOT EXISTS model_mappings (
+      id VARCHAR(64) PRIMARY KEY,
+      public_model_name VARCHAR(255) NOT NULL,
+      upstream_provider_id VARCHAR(64) NOT NULL REFERENCES providers(id) ON DELETE RESTRICT,
+      upstream_model_name VARCHAR(255) NOT NULL,
+      enabled BOOLEAN DEFAULT TRUE,
+      input_price_per_1m NUMERIC(18, 8) NULL,
+      output_price_per_1m NUMERIC(18, 8) NULL,
+      cached_input_price_per_1m NUMERIC(18, 8) NULL,
+      display_name VARCHAR(255) NULL,
+      description TEXT NULL,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_model_mappings_public ON model_mappings(public_model_name, enabled);
+    CREATE INDEX IF NOT EXISTS idx_model_mappings_provider ON model_mappings(upstream_provider_id);
+  `);
+  await exec(`
+    CREATE TABLE IF NOT EXISTS provider_request_logs (
+      id VARCHAR(64) PRIMARY KEY,
+      user_id VARCHAR(64),
+      user_api_key_id VARCHAR(64),
+      provider_id VARCHAR(64),
+      public_model_name VARCHAR(255),
+      upstream_model_name VARCHAR(255),
+      request_id VARCHAR(255),
+      status VARCHAR(32),
+      http_status INT NULL,
+      error_code VARCHAR(255) NULL,
+      error_message TEXT NULL,
+      prompt_tokens INT DEFAULT 0,
+      completion_tokens INT DEFAULT 0,
+      cached_tokens INT DEFAULT 0,
+      estimated_cost NUMERIC(18, 8) DEFAULT 0,
+      latency_ms INT DEFAULT 0,
+      first_token_ms INT DEFAULT 0,
+      cache_hit BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_provider_request_logs_provider_created ON provider_request_logs(provider_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_provider_request_logs_request ON provider_request_logs(request_id);
+  `);
 	  await exec(`
 	    CREATE TABLE IF NOT EXISTS upstream_models (
 	      id TEXT PRIMARY KEY,
@@ -374,6 +460,38 @@ try {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+  await exec(`
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS payment_amount_rmb NUMERIC(14, 2);
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS credited_amount_api NUMERIC(20, 6);
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS recharge_rate NUMERIC(14, 6) NOT NULL DEFAULT 5;
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS payment_currency TEXT NOT NULL DEFAULT 'CNY';
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS credit_currency TEXT NOT NULL DEFAULT '$ API';
+  `);
+  await exec(`
+    CREATE TABLE IF NOT EXISTS wallet_ledger_entries (
+      id TEXT PRIMARY KEY,
+      customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      type TEXT NOT NULL DEFAULT 'adjustment',
+      amount_api NUMERIC(20, 6) NOT NULL DEFAULT 0,
+      balance_before_api NUMERIC(20, 6) NOT NULL DEFAULT 0,
+      balance_after_api NUMERIC(20, 6) NOT NULL DEFAULT 0,
+      currency TEXT NOT NULL DEFAULT '$ API',
+      source_type TEXT NOT NULL DEFAULT '',
+      source_id TEXT NOT NULL DEFAULT '',
+      model_name TEXT NOT NULL DEFAULT '',
+      request_id TEXT NOT NULL DEFAULT '',
+      admin_id TEXT NOT NULL DEFAULT '',
+      remark TEXT NOT NULL DEFAULT '',
+      idempotency_key TEXT NOT NULL UNIQUE,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_wallet_ledger_customer_created ON wallet_ledger_entries(customer_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_wallet_ledger_source ON wallet_ledger_entries(source_type, source_id);
+    CREATE INDEX IF NOT EXISTS idx_wallet_ledger_request_id ON wallet_ledger_entries(request_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_recharge_orders_provider_trade_no_unique ON recharge_orders(provider_trade_no) WHERE provider_trade_no IS NOT NULL AND provider_trade_no <> '';
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_calls_customer_request_unique ON calls(customer_id, request_id) WHERE request_id IS NOT NULL AND request_id <> '';
   `);
   await exec(`
     CREATE TABLE IF NOT EXISTS new_api_token_whitelist (

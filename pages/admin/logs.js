@@ -1,10 +1,10 @@
 export const dynamic = "force-dynamic";
 import Head from "next/head";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
+import { formatApiMoneyPrecise } from "@/lib/format/number-format";
 
 export default function AdminLogs() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -14,7 +14,12 @@ export default function AdminLogs() {
   const [page, setPage] = useState(0);
   const pageSize = 50;
 
-  async function fetchLogs(sec, filt, pg) {
+  useEffect(() => {
+    fetchLogs(appliedFilters, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function fetchLogs(filt, pg) {
     setLoading(true);
     setMsg("");
     const params = new URLSearchParams();
@@ -26,9 +31,7 @@ export default function AdminLogs() {
     params.set("offset", String(pg * pageSize));
 
     try {
-      const res = await fetch(`/api/admin/logs?${params.toString()}`, {
-        headers: { "x-admin-secret": sec },
-      });
+      const res = await fetch(`/api/admin/logs?${params.toString()}`);
       const data = await res.json();
       if (res.ok) {
         setLogs(data.logs || []);
@@ -39,28 +42,22 @@ export default function AdminLogs() {
   }
 
   function handleSearch() {
-    const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
-    sessionStorage.setItem("flowapi_admin_secret", s);
     setAppliedFilters({ ...filters });
     setPage(0);
-    fetchLogs(s, filters, 0);
+    fetchLogs(filters, 0);
   }
 
   function handlePageChange(newPage) {
-    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     setPage(newPage);
-    fetchLogs(s, appliedFilters, newPage);
+    fetchLogs(appliedFilters, newPage);
   }
 
-  function handleSecretSave() {
-    const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
-    sessionStorage.setItem("flowapi_admin_secret", s);
-    setMsg("");
-    setAppliedFilters({ user: "", model: "", status: "", channel: "" });
+  function handleRefresh() {
+    const emptyFilters = { user: "", model: "", status: "", channel: "" };
+    setFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
     setPage(0);
-    fetchLogs(s, { user: "", model: "", status: "", channel: "" }, 0);
+    fetchLogs(emptyFilters, 0);
   }
 
   const totalPages = Math.ceil(total / pageSize);
@@ -76,8 +73,7 @@ export default function AdminLogs() {
               <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>查看每一次 API 调用的详细记录，支持多维度筛选</p>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={handleSecretSave} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>验证</button>
+              <button onClick={handleRefresh} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
             </div>
           </header>
 
@@ -116,7 +112,7 @@ export default function AdminLogs() {
                         <td style={tdS}>{l.channel}</td>
                         <td style={{ ...tdS, fontFamily: "'SF Mono', monospace" }}>{(l.inputTokens || 0).toLocaleString()}</td>
                         <td style={{ ...tdS, fontFamily: "'SF Mono', monospace" }}>{(l.outputTokens || 0).toLocaleString()}</td>
-                        <td style={{ ...tdS, fontFamily: "'SF Mono', monospace", fontWeight: 600 }}>¥{Number(l.cost || 0).toFixed(4)}</td>
+                        <td style={{ ...tdS, fontFamily: "'SF Mono', monospace", fontWeight: 600 }}>{formatApiMoneyPrecise(l.cost || 0)}</td>
                         <td style={tdS}>
                           {l.status === "success" ? (
                             <span style={{ padding: "3px 10px", borderRadius: 999, background: "rgba(34,197,94,0.1)", color: "#22c55e", fontSize: 11, fontWeight: 700 }}>{l.statusCode || 200}</span>

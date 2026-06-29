@@ -21,7 +21,7 @@ const NAV_CARDS = [
   {
     key: "tokens",
     title: "API Key 管理",
-    desc: "查看和管理用户 API Key，调整额度、分组与模型限制。",
+    desc: "查看和管理用户 API Key，调整 Token 额度、分组与模型限制。",
     href: "/newapi-admin/token",
     icon: "🔑",
   },
@@ -179,7 +179,7 @@ export default function AdminNewApiPage() {
             <div className="admin-stat-value" style={{ fontSize: 15 }}>{config.defaultGroup || "default"}</div>
           </div>
           <div className="admin-stat-card">
-            <div className="admin-stat-label">默认额度</div>
+            <div className="admin-stat-label">默认 Token 额度</div>
             <div className="admin-stat-value" style={{ fontSize: 15 }}>{(config.defaultQuota || 0).toLocaleString()} Token</div>
           </div>
         </div>

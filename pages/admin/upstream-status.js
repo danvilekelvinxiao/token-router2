@@ -9,18 +9,15 @@ function statusText(item) {
 }
 
 export default function UpstreamStatusPage() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function load(nextSecret = secret) {
+  async function load() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/admin/channel-monitor/summary", {
-        headers: nextSecret ? { "x-admin-secret": nextSecret } : {},
-      });
+      const response = await fetch("/api/admin/channel-monitor/summary");
       const json = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(json.error || "上游状态读取失败");
       setData(json);
@@ -31,9 +28,7 @@ export default function UpstreamStatusPage() {
   }
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("flowapi_admin_secret") || "";
-    queueMicrotask(() => load(stored));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    queueMicrotask(() => load());
   }, []);
 
   const upstreams = data?.upstreams || data?.channels || [];
@@ -50,8 +45,7 @@ export default function UpstreamStatusPage() {
               <p>这里看 FlowAPI 当前能不能连到 New API、sub2api、OpenRouter 或备用聚合路由。红色异常会直接影响用户调用成功率。</p>
             </div>
             <div>
-              <input value={secret} onChange={(event) => setSecret(event.target.value)} onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)} type="password" placeholder="管理密钥" />
-              <button type="button" disabled={loading} onClick={() => { sessionStorage.setItem("flowapi_admin_secret", secret); load(secret); }}>{loading ? "检查中..." : "刷新状态"}</button>
+              <button type="button" disabled={loading} onClick={() => load()}>{loading ? "检查中..." : "刷新状态"}</button>
             </div>
           </header>
 

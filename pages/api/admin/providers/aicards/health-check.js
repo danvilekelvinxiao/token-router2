@@ -28,11 +28,11 @@ export default async function handler(req, res) {
     });
     return res.status(result.ok ? 200 : 502).json(result);
 	  } catch (error) {
-	    return res.status(502).json({
-	      ok: false,
-	      providerKey: "flowapi",
-	      channelName: "FlowAPI 备用线路",
-	      error: sanitizeSecretText(error.message || "备用上游健康检查失败"),
-	    });
+    return res.status(502).json({
+      ok: false,
+      providerKey: "aicards",
+      channelName: "AICards 备用线路",
+      error: sanitizeSecretText(error.message || "备用上游健康检查失败"),
+    });
 	  }
 	}

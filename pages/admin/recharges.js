@@ -3,11 +3,14 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
+import { formatApiMoney, formatRmb, formatRechargeRate } from "@/lib/format/number-format";
 
 const statusText = {
-  pending: "待确认",
-  approved: "已到账",
-  rejected: "未通过",
+  pending: "待审核",
+  approved: "已完成",
+  rejected: "已拒绝",
+  cancelled: "已取消",
+  expired: "已过期",
 };
 
 function isAdminCustomer(customer) {
@@ -21,7 +24,6 @@ function isAdminCustomer(customer) {
 export default function AdminRechargesPage() {
   const router = useRouter();
   const [customer, setCustomer] = useState(null);
-  const [secret, setSecret] = useState("");
   const [orders, setOrders] = useState([]);
   const [status, setStatus] = useState("pending");
   const [loading, setLoading] = useState(false);
@@ -47,32 +49,35 @@ export default function AdminRechargesPage() {
       await Promise.resolve();
       if (cancelled) return;
 
-      const stored = localStorage.getItem("flowapi_customer");
-      if (!stored) {
-        router.push("/login");
-        return;
-      }
       try {
-        const parsed = JSON.parse(stored);
-        setCustomer(parsed);
-        if (!isAdminCustomer(parsed)) {
+        const response = await fetch("/api/admin-access");
+        const data = await response.json().catch(() => ({}));
+        if (cancelled) return;
+
+        if (response.status === 401) {
+          router.push("/login");
+          return;
+        }
+        if (!response.ok || !isAdminCustomer(data.customer)) {
           setForbidden(true);
           return;
         }
+
+        setCustomer(data.customer);
+        try {
+          localStorage.setItem("flowapi_customer", JSON.stringify(data.customer));
+        } catch {}
+        await loadOrders("pending");
       } catch {
-        router.push("/login");
-        return;
+        setMessage("管理员身份校验失败，请刷新后重试");
       }
-      const savedSecret = sessionStorage.getItem("flowapi_admin_secret") || "";
-      setSecret(savedSecret);
-      if (savedSecret) loadOrders(savedSecret, "pending");
     }
 
     initializeAdmin();
     return () => {
       cancelled = true;
     };
-    // This page intentionally performs one-time localStorage bootstrapping.
+    // This page intentionally performs one-time admin bootstrapping.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -94,22 +99,15 @@ export default function AdminRechargesPage() {
     );
   }
 
-  async function loadOrders(nextSecret = secret, nextStatus = status) {
-    if (!nextSecret) {
-      setMessage("请输入管理密钥");
-      return;
-    }
+  async function loadOrders(nextStatus = status) {
     setLoading(true);
     setMessage("");
-    sessionStorage.setItem("flowapi_admin_secret", nextSecret);
     try {
       const query = nextStatus ? `?status=${encodeURIComponent(nextStatus)}` : "";
-      const res = await fetch(`/api/admin/recharges${query}`, {
-        headers: { "x-admin-secret": nextSecret },
-      });
+      const res = await fetch(`/api/admin/recharges${query}`);
       const data = await res.json();
       if (!res.ok) {
-        setMessage(data.error || "加载失败");
+        setMessage(data.message || data.error || "加载失败");
         setOrders([]);
       } else {
         setOrders(data.orders || []);
@@ -120,19 +118,13 @@ export default function AdminRechargesPage() {
     setLoading(false);
   }
 
-  async function loadCodes(nextSecret = secret, nextStatus = codeStatus) {
-    if (!nextSecret) {
-      setMessage("请输入管理密钥");
-      return;
-    }
+  async function loadCodes(nextStatus = codeStatus) {
     setLoading(true);
     setMessage("");
-    sessionStorage.setItem("flowapi_admin_secret", nextSecret);
     try {
-      const query = nextStatus ? `?status=${encodeURIComponent(nextStatus)}` : "";
-      const res = await fetch(`/api/admin/activation-codes${query}`, {
-        headers: { "x-admin-secret": nextSecret },
-      });
+      const normalizedStatus = nextStatus === "active" ? "unused" : nextStatus;
+      const query = normalizedStatus ? `?status=${encodeURIComponent(normalizedStatus)}` : "";
+      const res = await fetch(`/api/admin/activation-codes${query}`);
       const data = await res.json();
       if (!res.ok) {
         setMessage(data.error || "加载失败");
@@ -147,23 +139,38 @@ export default function AdminRechargesPage() {
   }
 
   async function generateCodes() {
-    if (!secret || !codeAmount) return;
+    const amountApi = Number(codeAmount);
+    const quantity = Math.max(1, Math.min(100, Number(codeCount) || 1));
+    if (!Number.isFinite(amountApi) || amountApi <= 0) return;
     setLoading(true);
     setMessage("");
     setGenResult(null);
     try {
-      const res = await fetch("/api/admin/activation-codes", {
+      const res = await fetch("/api/admin/activation-codes?action=batch", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-admin-secret": secret },
-        body: JSON.stringify({ amount: Number(codeAmount), count: codeCount, note: codeNote }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: `FlowAPI $ API ${amountApi} 激活码`,
+          type: "balance",
+          amountCny: amountApi,
+          priceCny: amountApi,
+          source: "taobao",
+          quantity,
+          note: codeNote,
+          maxRedemptionsPerCode: 1,
+          enabled: true,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
         setMessage(data.error || "生成失败");
       } else {
-        setGenResult(data.codes || []);
-        setMessage(`已生成 ${data.codes.length} 个激活码`);
-        await loadCodes(secret, codeStatus);
+        const generatedCodes = Array.isArray(data.codes)
+          ? data.codes.map((item, index) => typeof item === "string" ? { id: `${item}-${index}`, code: item } : item)
+          : data.code ? [data.code] : [];
+        setGenResult(generatedCodes);
+        setMessage(`已生成 ${generatedCodes.length} 个激活码`);
+        await loadCodes(codeStatus);
       }
     } catch {
       setMessage("网络异常，请稍后再试");
@@ -171,23 +178,16 @@ export default function AdminRechargesPage() {
     setLoading(false);
   }
 
-  async function loadLogs(nextSecret = secret, category = logCategory, action = logAction, page = logPage) {
-    if (!nextSecret) {
-      setMessage("请输入管理密钥");
-      return;
-    }
+  async function loadLogs(category = logCategory, action = logAction, page = logPage) {
     setLoading(true);
     setMessage("");
-    sessionStorage.setItem("flowapi_admin_secret", nextSecret);
     try {
       const params = new URLSearchParams();
       if (category) params.set("category", category);
       if (action) params.set("action", action);
       params.set("limit", "50");
       params.set("offset", String(page * 50));
-      const res = await fetch(`/api/admin/activity-logs?${params.toString()}`, {
-        headers: { "x-admin-secret": nextSecret },
-      });
+      const res = await fetch(`/api/admin/activity-logs?${params.toString()}`);
       const data = await res.json();
       if (!res.ok) {
         setMessage(data.error || "加载失败");
@@ -212,16 +212,15 @@ export default function AdminRechargesPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-secret": secret,
         },
         body: JSON.stringify({ orderId, action: "approve" }),
       });
       const data = await res.json();
       if (!res.ok) {
-        setMessage(data.error || "确认失败");
+        setMessage(data.message || data.error || "确认失败");
       } else {
-        setMessage(`已到账：¥ ${Number(data.order.amount).toFixed(2)}`);
-        await loadOrders(secret, status);
+        setMessage(`已到账：${formatApiMoney(data.order.creditedAmountApi ?? data.order.amountApi ?? data.order.amount)}`);
+        await loadOrders(status);
       }
     } catch {
       setMessage("网络异常，请稍后再试");
@@ -277,21 +276,14 @@ export default function AdminRechargesPage() {
           </button>
         </div>
 
-        <div className="admin-recharge-filter-card" style={{ background: "var(--page-card-bg)", border: "1px solid var(--page-card-border)", borderRadius: 16, padding: 20, marginBottom: 20, display: "grid", gridTemplateColumns: "minmax(200px, 1fr) auto auto", gap: 12 }}>
-          <input
-            type="password"
-            value={secret}
-            onChange={(event) => setSecret(event.target.value)}
-            placeholder="管理密钥"
-            style={{ border: "1px solid var(--page-input-border)", borderRadius: 12, padding: "12px 14px", outline: "none", fontSize: 14, fontFamily: "inherit" }}
-          />
+        <div className="admin-recharge-filter-card" style={{ background: "var(--page-card-bg)", border: "1px solid var(--page-card-border)", borderRadius: 16, padding: 20, marginBottom: 20, display: "grid", gridTemplateColumns: "1fr auto", gap: 12 }}>
           {tab === "orders" ? (
             <>
               <select
                 value={status}
                 onChange={(event) => {
                   setStatus(event.target.value);
-                  loadOrders(secret, event.target.value);
+                  loadOrders(event.target.value);
                 }}
                 style={{ border: "1px solid var(--page-input-border)", borderRadius: 12, padding: "12px 14px", outline: "none", fontSize: 14, fontFamily: "inherit", background: "var(--page-card-bg)" }}
               >
@@ -309,13 +301,13 @@ export default function AdminRechargesPage() {
                 value={codeStatus}
                 onChange={(event) => {
                   setCodeStatus(event.target.value);
-                  loadCodes(secret, event.target.value);
+                  loadCodes(event.target.value);
                 }}
                 style={{ border: "1px solid var(--page-input-border)", borderRadius: 12, padding: "12px 14px", outline: "none", fontSize: 14, fontFamily: "inherit", background: "var(--page-card-bg)" }}
               >
                 <option value="">全部状态</option>
-                <option value="active">未使用</option>
-                <option value="redeemed">已使用</option>
+                <option value="unused">未使用</option>
+                <option value="used">已使用</option>
               </select>
               <button className="btn-primary" onClick={() => loadCodes()} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>
                 {loading ? "加载中" : "加载激活码"}
@@ -328,7 +320,7 @@ export default function AdminRechargesPage() {
                 onChange={(event) => {
                   setLogCategory(event.target.value);
                   setLogPage(0);
-                  loadLogs(secret, event.target.value, logAction, 0);
+                  loadLogs(event.target.value, logAction, 0);
                 }}
                 style={{ border: "1px solid var(--page-input-border)", borderRadius: 12, padding: "12px 14px", outline: "none", fontSize: 14, fontFamily: "inherit", background: "var(--page-card-bg)" }}
               >
@@ -338,7 +330,7 @@ export default function AdminRechargesPage() {
                 <option value="api">API 调用</option>
                 <option value="api_key">API Key</option>
               </select>
-              <button className="btn-primary" onClick={() => { setLogPage(0); loadLogs(secret, logCategory, logAction, 0); }} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>
+              <button className="btn-primary" onClick={() => { setLogPage(0); loadLogs(logCategory, logAction, 0); }} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>
                 {loading ? "加载中" : "加载日志"}
               </button>
             </>
@@ -357,16 +349,17 @@ export default function AdminRechargesPage() {
               <div key={order.id} style={{ background: "var(--page-card-bg)", border: "1px solid var(--page-card-border)", borderRadius: 16, padding: 18, display: "grid", gridTemplateColumns: "1fr 150px 120px", gap: 16, alignItems: "center" }}>
                 <div>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                    <strong style={{ fontSize: 18, color: "var(--page-heading)" }}>¥ {Number(order.amount).toFixed(2)}</strong>
+                    <strong style={{ fontSize: 18, color: "var(--page-heading)" }}>{formatRmb(order.paymentAmountRmb ?? order.amount)}</strong>
                     <span style={{ padding: "5px 9px", borderRadius: 999, background: order.status === "approved" ? "#f0fdf4" : "#fffbeb", color: order.status === "approved" ? "#16a34a" : "#f59e0b", fontSize: 12, fontWeight: 800 }}>
                       {statusText[order.status] || order.status}
                     </span>
+                    <span style={{ fontSize: 12, color: "var(--page-sub)", fontWeight: 800 }}>到账 {formatApiMoney(order.creditedAmountApi ?? order.amountApi ?? order.amount)}</span>
                   </div>
                   <div style={{ fontSize: 13, color: "var(--page-code-text)", marginTop: 8 }}>
                     {order.customerName || "未填姓名"} · {order.customerEmail || "无邮箱"}
                   </div>
                   <div style={{ fontSize: 12, color: "#999", marginTop: 6, lineHeight: 1.6 }}>
-                    {formatPayment(order.paymentMethod)} · {order.paymentRef || "未填写备注"} · {formatDate(order.createdAt)}
+                    {formatPayment(order.paymentMethod)} · {formatRechargeRate(order.rechargeRate || 5)} · {order.paymentRef || "未填写备注"} · {formatDate(order.createdAt)}
                   </div>
                   <div style={{ fontSize: 11, color: "#bbb", marginTop: 4 }}>{order.id}</div>
                 </div>
@@ -399,7 +392,7 @@ export default function AdminRechargesPage() {
                   type="number"
                   value={codeAmount}
                   onChange={(e) => setCodeAmount(e.target.value)}
-                  placeholder="面额（元）"
+                  placeholder="面额（$ API）"
                   min={1}
                   style={{ border: "1px solid var(--page-input-border)", borderRadius: 12, padding: "12px 14px", outline: "none", fontSize: 14, fontFamily: "inherit" }}
                 />
@@ -426,7 +419,7 @@ export default function AdminRechargesPage() {
               {genResult && genResult.length > 0 && (
                 <div style={{ marginTop: 16, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 12, padding: 16 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, color: "#16a34a", marginBottom: 10 }}>
-                    已生成 {genResult.length} 个激活码（面额 ¥{Number(codeAmount).toFixed(2)}）：
+                    已生成 {genResult.length} 个激活码（面额 {formatApiMoney(codeAmount)}）：
                   </div>
                   <div style={{ display: "grid", gap: 6 }}>
                     {genResult.map((c) => (
@@ -447,13 +440,13 @@ export default function AdminRechargesPage() {
                     <code style={{ fontSize: 15, fontFamily: "'SF Mono', monospace", letterSpacing: "0.03em", color: "var(--page-heading)" }}>{c.code}</code>
                     <div style={{ fontSize: 12, color: "var(--page-subtle)", marginTop: 4 }}>{c.note || "无备注"}</div>
                   </div>
-                  <strong style={{ fontSize: 18, color: "var(--page-heading)" }}>¥ {Number(c.amount).toFixed(2)}</strong>
+                  <strong style={{ fontSize: 18, color: "var(--page-heading)" }}>{formatApiMoney(c.amountApi ?? c.amountCny ?? c.amount)}</strong>
                   <div style={{ fontSize: 12, color: "var(--page-sub)" }}>
                     {formatDate(c.createdAt)}
-                    {c.redeemedAt && <><br />使用于 {formatDate(c.redeemedAt)}</>}
+                    {(c.usedAt || c.redeemedAt) && <><br />使用于 {formatDate(c.usedAt || c.redeemedAt)}</>}
                   </div>
-                  <span style={{ padding: "5px 9px", borderRadius: 999, background: c.status === "active" ? "#f0fdf4" : "#fef2f2", color: c.status === "active" ? "#16a34a" : "#ef4444", fontSize: 12, fontWeight: 800, textAlign: "center" }}>
-                    {c.status === "active" ? "未使用" : "已使用"}
+                  <span style={{ padding: "5px 9px", borderRadius: 999, background: ["active", "unused"].includes(c.status) ? "#f0fdf4" : "#fef2f2", color: ["active", "unused"].includes(c.status) ? "#16a34a" : "#ef4444", fontSize: 12, fontWeight: 800, textAlign: "center" }}>
+                    {["active", "unused"].includes(c.status) ? "未使用" : c.status === "disabled" ? "已禁用" : "已使用"}
                   </span>
                 </div>
               ))}
@@ -470,7 +463,7 @@ export default function AdminRechargesPage() {
               <strong style={{ whiteSpace: "nowrap", fontSize: 13, color: "var(--page-code-text)" }}>操作类型</strong>
               <select
                 value={logAction}
-                onChange={(e) => { setLogAction(e.target.value); setLogPage(0); loadLogs(secret, logCategory, e.target.value, 0); }}
+                onChange={(e) => { setLogAction(e.target.value); setLogPage(0); loadLogs(logCategory, e.target.value, 0); }}
                 style={{ border: "1px solid var(--page-input-border)", borderRadius: 10, padding: "8px 12px", outline: "none", fontSize: 13, fontFamily: "inherit", background: "var(--page-card-bg)" }}
               >
                 <option value="">全部</option>
@@ -498,8 +491,8 @@ export default function AdminRechargesPage() {
                     <div style={{ fontSize: 13, color: "var(--page-text)" }}>{log.detail || "—"}</div>
                     <div style={{ fontSize: 11, color: "var(--page-subtle)", marginTop: 2 }}>{log.email || log.customerId?.slice(0, 12) || "—"}</div>
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: log.amount ? "#6366f1" : "#888", textAlign: "right" }}>
-                    {log.amount != null ? `¥ ${Number(log.amount).toFixed(2)}` : "—"}
+                  <span style={{ fontSize: 13, fontWeight: 700, color: log.amount != null ? "#6366f1" : "#888", textAlign: "right" }}>
+                    {formatActivityAmount(log)}
                   </span>
                   <div style={{ fontSize: 11, color: "var(--page-sub)", textAlign: "right" }}>
                     <div>{formatDate(log.createdAt)}</div>
@@ -516,13 +509,13 @@ export default function AdminRechargesPage() {
 
             {logTotal > 50 && (
               <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-                <button className="btn-secondary" disabled={logPage === 0} onClick={() => { const p = logPage - 1; setLogPage(p); loadLogs(secret, logCategory, logAction, p); }}>
+                <button className="btn-secondary" disabled={logPage === 0} onClick={() => { const p = logPage - 1; setLogPage(p); loadLogs(logCategory, logAction, p); }}>
                   上一页
                 </button>
                 <span style={{ display: "flex", alignItems: "center", fontSize: 13, color: "var(--page-sub)" }}>
                   第 {logPage + 1} 页 / 共 {Math.ceil(logTotal / 50)} 页
                 </span>
-                <button className="btn-secondary" disabled={(logPage + 1) * 50 >= logTotal} onClick={() => { const p = logPage + 1; setLogPage(p); loadLogs(secret, logCategory, logAction, p); }}>
+                <button className="btn-secondary" disabled={(logPage + 1) * 50 >= logTotal} onClick={() => { const p = logPage + 1; setLogPage(p); loadLogs(logCategory, logAction, p); }}>
                   下一页
                 </button>
               </div>
@@ -544,4 +537,12 @@ function formatPayment(value) {
   if (value === "alipay") return "支付宝";
   if (value === "taobao") return "淘宝激活码";
   return value || "未知方式";
+}
+
+function formatActivityAmount(log) {
+  if (log?.amount == null) return "—";
+  const detail = String(log?.detail || "");
+  if (log?.action === "recharge_order") return formatRmb(log.amount);
+  if (log?.category === "payment" && !detail.includes("→ $ API")) return formatRmb(log.amount);
+  return formatApiMoney(log.amount);
 }

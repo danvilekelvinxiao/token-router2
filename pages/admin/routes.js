@@ -186,8 +186,8 @@ export default function AdminRoutesPage() {
                                 <span style={mutedBlock}>{candidate.providerName}</span>
                               </td>
                               <td style={tdStyle}>
-                                <span>入 ¥{Number(candidate.inputCostPerMillion || 0).toFixed(3)}</span>
-                                <span style={mutedBlock}>出 ¥{Number(candidate.outputCostPerMillion || 0).toFixed(3)}</span>
+                                <span>入 ${Number(candidate.inputCostPerMillion || 0).toFixed(3)}</span>
+                                <span style={mutedBlock}>出 ${Number(candidate.outputCostPerMillion || 0).toFixed(3)}</span>
                               </td>
                               <td style={tdStyle}>{Number(candidate.avgFirstTokenMs || 0)}ms</td>
                               <td style={tdStyle}>{Number(candidate.avgLatencyMs || 0)}ms</td>

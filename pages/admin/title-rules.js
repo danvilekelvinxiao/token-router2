@@ -22,22 +22,21 @@ function categoryLabel(key) {
 }
 
 export default function AdminTitleRules() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [rules, setRules] = useState([]);
   const [metrics, setMetrics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    queueMicrotask(() => fetchRules(sessionStorage.getItem("flowapi_admin_secret") || ""));
+    queueMicrotask(() => fetchRules());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function fetchRules(sec = secret) {
+  async function fetchRules() {
     setLoading(true);
     setMessage("");
     try {
-      const res = await fetch("/api/admin/title-rules", { headers: { "x-admin-secret": sec } });
+      const res = await fetch("/api/admin/title-rules");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "加载失败");
       setRules(data.rules || []);
@@ -51,7 +50,7 @@ export default function AdminTitleRules() {
   async function updateRule(ruleKey, patch) {
     const res = await fetch("/api/admin/title-rules", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-admin-secret": secret },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "updateRule", ruleKey, patch }),
     });
     const data = await res.json();
@@ -66,7 +65,7 @@ export default function AdminTitleRules() {
     setMessage("正在重算全站称号...");
     const res = await fetch("/api/admin/title-rules", {
       method: "POST",
-      headers: { "content-type": "application/json", "x-admin-secret": secret },
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "recalculateAll" }),
     });
     const data = await res.json();
@@ -90,7 +89,6 @@ export default function AdminTitleRules() {
               <p>根据真实调用、充值、图片生成、邀请返佣和 API Key 配置自动授予称号。新增功能只要注册指标，就能进入排行体系。</p>
             </div>
             <div className="admin-title-rules-actions">
-              <input value={secret} onChange={(event) => setSecret(event.target.value)} onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)} type="password" placeholder="管理密钥" />
               <button type="button" onClick={() => fetchRules()}>刷新</button>
               <button type="button" onClick={recalculateAll}>全站重算</button>
             </div>

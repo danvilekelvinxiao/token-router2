@@ -9,6 +9,7 @@ import { formatTokens } from "@/lib/model-format";
 import { getPublicModelDisplayName, getPublicModelRequestId } from "@/lib/models";
 import { getPublicApiBaseUrl } from "@/lib/public-api";
 import { sanitizePublicModelProvider } from "@/lib/public-model-provider";
+import { formatApiMoney, formatApiMoneyPrecise } from "@/lib/format/number-format";
 import { useSafePolling } from "@/hooks/useSafePolling";
 
 const DEFAULT_CATEGORIES = [
@@ -84,7 +85,7 @@ function hasRealPrice(value) {
 
 function priceLabel(value) {
   if (!hasRealPrice(value)) return "价格同步中";
-  return `¥${Number(value).toFixed(Number(value) % 1 === 0 ? 0 : 2)} / M Token`;
+  return `${formatApiMoneyPrecise(value, { minimumFractionDigits: Number(value) % 1 === 0 ? 0 : 2, maximumFractionDigits: 6, trimTrailingZeros: true })} / 1M tokens`;
 }
 
 function discountLabel(model) {
@@ -110,7 +111,7 @@ function numberLabel(value) {
 function cnyLabel(value) {
   const number = Number(value);
   if (!Number.isFinite(number) || number <= 0) return "暂无数据";
-  return `¥${number.toFixed(2)}`;
+  return formatApiMoney(number);
 }
 
 function percentLabel(value) {

@@ -4,21 +4,19 @@ import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
 export default function AdminSettings() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
-    fetchSettings(s);
+    fetchSettings();
   }, []);
 
-  async function fetchSettings(sec) {
+  async function fetchSettings() {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/settings", { headers: { "x-admin-secret": sec } });
+      const res = await fetch("/api/admin/settings");
       const data = await res.json();
       if (res.ok) setSettings(data.settings || {});
       else setMsg(data.error || "加载失败");
@@ -29,10 +27,9 @@ export default function AdminSettings() {
   async function handleSave() {
     setSaving(true);
     setMsg("");
-    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     try {
       const res = await fetch("/api/admin/settings", {
-        method: "POST", headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(settings),
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(settings),
       });
       const data = await res.json();
       if (res.ok) setMsg("设置已保存");
@@ -54,13 +51,6 @@ export default function AdminSettings() {
     });
   }
 
-  function handleSecretSave() {
-    const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
-    sessionStorage.setItem("flowapi_admin_secret", s);
-    setMsg("");
-    fetchSettings(s);
-  }
 
   return (
     <>
@@ -73,8 +63,7 @@ export default function AdminSettings() {
               <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>管理 FlowAPI 平台的全局配置参数</p>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={handleSecretSave} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>验证</button>
+              <button onClick={() => fetchSettings()} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
             </div>
           </header>
 
@@ -93,7 +82,7 @@ export default function AdminSettings() {
 
               <Section title="注册与用户">
                 <ToggleEditField label="开放注册" checked={!!settings.openRegistration} onChange={(v) => update("openRegistration", v)} />
-                <EditField label="注册即送额度" value={String(settings.registerBonus || 0)} onChange={(v) => update("registerBonus", Number(v))} type="number" prefix="¥" />
+                <EditField label="注册即送 $ API" value={String(settings.registerBonus || 0)} onChange={(v) => update("registerBonus", Number(v))} type="number" prefix="$ API" />
                 <EditField label="默认用户等级" value={settings.defaultLevel || ""} onChange={(v) => update("defaultLevel", v)} />
                 <EditField label="最低充值金额" value={String(settings.minRecharge || 0)} onChange={(v) => update("minRecharge", Number(v))} type="number" prefix="¥" />
               </Section>
@@ -114,7 +103,7 @@ export default function AdminSettings() {
               </Section>
 
               <Section title="预警通知">
-                <EditField label="低余额提醒阈值" value={String(settings.lowBalanceAlert || 0)} onChange={(v) => update("lowBalanceAlert", Number(v))} type="number" prefix="¥" />
+                <EditField label="低余额提醒阈值" value={String(settings.lowBalanceAlert || 0)} onChange={(v) => update("lowBalanceAlert", Number(v))} type="number" prefix="$ API" />
                 <ToggleEditField label="低余额邮件通知" checked={!!settings.lowBalanceAlertEmail} onChange={(v) => update("lowBalanceAlertEmail", v)} />
                 <ToggleEditField label="异常调用通知" checked={!!settings.abnormalCallAlert} onChange={(v) => update("abnormalCallAlert", v)} />
                 <ToggleEditField label="上游异常通知" checked={!!settings.upstreamErrorAlert} onChange={(v) => update("upstreamErrorAlert", v)} />

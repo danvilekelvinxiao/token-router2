@@ -1,12 +1,13 @@
 import { getContent } from "@/lib/content-cms";
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { listPublishedModels, listModelPricing } from "@/lib/admin-commercial-config";
-import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { dedupePublicModelList, sanitizePublicModelForClient } from "@/lib/public-model-provider";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
   const data = getContent("models");
-  let payload = data;
+  const legacyProIds = new Set(["gpt55-pro", "flowapi-gpt55-pro", "gpt-5.5-pro"]);
+  let payload = data.filter((model) => !legacyProIds.has(String(model?.id || model?.modelId || model?.publicModelId || "").toLowerCase()));
 
   try {
     const [products, publishedModels, pricingConfigs] = await Promise.all([
@@ -27,7 +28,7 @@ export default async function handler(req, res) {
         .map((item) => String(item || "").toLowerCase())
         .find((item) => releaseMap.has(item));
       return sanitizePublicModelForClient(key ? { ...model, officialReleaseDate: releaseMap.get(key) || model.officialReleaseDate || "" } : model);
-    });
+    }).filter((model) => !legacyProIds.has(String(model?.id || model?.modelId || model?.publicModelId || "").toLowerCase()));
     const existingIds = new Set(payload.flatMap((model) => [model.id, model.modelId, model.publicModelId].filter(Boolean)));
     const appended = publishedModels
       .filter((model) => !existingIds.has(model.modelId))
@@ -58,9 +59,11 @@ export default async function handler(req, res) {
           primaryButtonHref: "/api-management",
         });
       });
-    payload = [...payload, ...appended].sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
+    payload = dedupePublicModelList([...payload, ...appended])
+      .sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
   } catch {
-    payload = data.map((model) => sanitizePublicModelForClient(model));
+    payload = dedupePublicModelList(data.map((model) => sanitizePublicModelForClient(model)))
+      .sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
   }
 
   return res.status(200).json({

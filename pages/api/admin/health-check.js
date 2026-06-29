@@ -32,7 +32,7 @@ export default async function handler(req, res) {
 
   const checks = [
     item("管理员鉴权", "normal", `当前管理员：${admin.customer?.email || admin.customer?.id || "admin"}`),
-    item("激活码创建接口", checkActivationPayloads() && fileExists("pages/api/admin/activation-codes.js") ? "normal" : "abnormal", "支持金额额度、Token 额度、套餐服务三类 dry-run 校验。"),
+    item("激活码创建接口", checkActivationPayloads() && fileExists("pages/api/admin/activation-codes.js") ? "normal" : "abnormal", "支持 $ API 余额、Token 额度、套餐服务三类 dry-run 校验。"),
     item("激活码兑换接口", fileExists("pages/api/redeem.js") ? "normal" : "abnormal", "用户兑换入口存在。"),
     item("用户删除接口", fileExists("pages/api/admin/users.js") ? "normal" : "abnormal", "支持 deleteCustomer 软删除动作。"),
     item("API Key 创建接口", fileExists("pages/api/api-keys.js") || fileExists("pages/api/admin/api-keys/import-newapi-token.js") ? "normal" : "待确认", "检查 API Key 创建/导入入口。"),

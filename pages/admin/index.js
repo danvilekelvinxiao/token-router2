@@ -3,6 +3,7 @@ import Head from "next/head";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import AdminLayout from "@/components/AdminLayout";
+import { formatApiMoney, formatRmb } from "@/lib/format/number-format";
 
 function StatusDot({ status }) {
   const c = status === "正常" ? "#22c55e" : status === "异常" ? "#ef4444" : "#f59e0b";
@@ -10,26 +11,28 @@ function StatusDot({ status }) {
 }
 
 export default function AdminOverview() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [stats, setStats] = useState([
-    { label: "今日调用", value: "-" },
-    { label: "今日 Token", value: "-" },
-    { label: "今日收入", value: "-" },
-    { label: "活跃用户", value: "-" },
+    { label: "平台 $ API 总余额", value: "-" },
+    { label: "今日充值", value: "-" },
+    { label: "今日发放", value: "-" },
+    { label: "今日消费", value: "-" },
+    { label: "本月消费", value: "-" },
+    { label: "待审核订单", value: "-" },
+    { label: "累计充值人民币", value: "-" },
+    { label: "累计发放 $ API", value: "-" },
   ]);
   const [channelStatus, setChannelStatus] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
-    fetchOverview(s);
+    fetchOverview();
   }, []);
 
-  async function fetchOverview(sec) {
+  async function fetchOverview() {
     setLoading(true);
     try {
       const [chRes] = await Promise.all([
-        fetch("/api/admin/channels", { headers: { "x-admin-secret": sec } }),
+        fetch("/api/admin/channels"),
       ]);
       if (chRes.ok) {
         const chData = await chRes.json();
@@ -43,28 +46,20 @@ export default function AdminOverview() {
       }
 
       try {
-        const logRes = await fetch(`/api/admin/logs?limit=0`, { headers: { "x-admin-secret": sec } });
-        if (logRes.ok) {
-          const logData = await logRes.json();
+        const walletRes = await fetch("/api/admin/wallet-stats");
+        if (walletRes.ok) {
+          const walletData = await walletRes.json();
+          const wallet = walletData.stats || {};
           setStats([
-            { label: "今日调用", value: String(logData.todayCount || logData.today || "—") },
-            { label: "今日 Token", value: logData.todayTokens ? String(Math.round(logData.todayTokens).toLocaleString()) : "—" },
-            { label: "今日收入", value: logData.todayRevenue ? `¥${Number(logData.todayRevenue).toFixed(2)}` : "—" },
-            { label: "记录总数", value: String(logData.total || 0) },
+            { label: "平台 $ API 总余额", value: formatApiMoney(wallet.platformApiBalance || 0) },
+            { label: "今日充值", value: formatRmb(wallet.todayRechargeRmb || 0) },
+            { label: "今日发放", value: formatApiMoney(wallet.todayGrantedApi || 0) },
+            { label: "今日消费", value: formatApiMoney(wallet.todayConsumptionApi || 0) },
+            { label: "本月消费", value: formatApiMoney(wallet.monthConsumptionApi || 0) },
+            { label: "待审核订单", value: `${Number(wallet.pendingOrders || 0).toLocaleString()} 单` },
+            { label: "累计充值人民币", value: formatRmb(wallet.totalRechargeRmb || 0) },
+            { label: "累计发放 $ API", value: formatApiMoney(wallet.totalGrantedApi || 0) },
           ]);
-        }
-      } catch {}
-
-      try {
-        const userRes = await fetch("/api/admin/users", { headers: { "x-admin-secret": sec } });
-        if (userRes.ok) {
-          const userData = await userRes.json();
-          const users = userData.customers || [];
-          setStats((prev) => {
-            const n = [...prev];
-            n[3] = { label: "用户总数", value: String(users.length) };
-            return n;
-          });
         }
       } catch {}
     } catch {}
@@ -92,8 +87,7 @@ export default function AdminOverview() {
               <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>FlowAPI 平台运行状态与关键指标</p>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={() => { const s = secret.trim(); if (s) { sessionStorage.setItem("flowapi_admin_secret", s); fetchOverview(s); } }} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
+              <button onClick={() => fetchOverview()} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
             </div>
           </header>
 

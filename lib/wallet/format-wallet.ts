@@ -1,9 +1,8 @@
+import { formatApiMoney, formatToken } from "@/lib/format/number-format";
+
+// Legacy function name kept for compatibility. Wallet balance is station `$ API`, not RMB.
 export function formatWalletCny(value?: number | null) {
-  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "暂无数据";
-  return `¥${Number(value).toLocaleString("zh-CN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })}`;
+  return formatApiMoney(value, "暂无数据");
 }
 
 export function formatWalletDate(value?: string | null) {
@@ -22,13 +21,7 @@ export function formatWalletDate(value?: string | null) {
 }
 
 export function formatWalletTokens(value?: number | null) {
-  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "暂无数据";
-  const num = Number(value);
-  if (num >= 1_000_000_000_000) return `${(num / 1_000_000_000_000).toFixed(2).replace(/\.?0+$/, "")}T Token`;
-  if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(2).replace(/\.?0+$/, "")}B Token`;
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2).replace(/\.?0+$/, "")}M Token`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(2).replace(/\.?0+$/, "")}K Token`;
-  return `${num.toLocaleString()} Token`;
+  return formatToken(value, { emptyText: "暂无数据" });
 }
 
 export function clampWalletProgress(value?: number | null) {

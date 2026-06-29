@@ -45,7 +45,7 @@ export default function WalletProgressSection({ walletProgress, onOpenDetail, va
           percent={plan.tokenPercent}
           leftLabel={plan.totalTokens ? `已用 ${formatWalletTokens(plan.usedTokens)}` : (plan.enabled ? `已用 ${formatWalletCny(plan.usedCny)}` : "已用 0 Token")}
           rightLabel={plan.totalTokens ? `总 ${formatWalletTokens(plan.totalTokens)}` : (plan.enabled ? `总 ${formatWalletCny(plan.totalCny)}` : "总 0 Token")}
-          unit={plan.totalTokens ? "Token" : "CNY"}
+          unit={plan.totalTokens ? "Token" : "$ API"}
           expiresAt={plan.expiresAt}
           remainingDays={plan.remainingDays}
           status={getPlanStatus(plan)}

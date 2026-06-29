@@ -5,6 +5,7 @@ import WalletProgressSection from "@/components/dashboard/wallet-progress-sectio
 import LiveNumber from "@/components/ui/live-number";
 import { calculateWalletStatus } from "@/lib/wallet/calculate-wallet-status";
 import { buildWalletProgress } from "@/lib/wallet/build-wallet-progress";
+import { formatApiMoney } from "@/lib/format/number-format";
 import { clampWalletProgress, formatWalletCny, formatWalletDate, formatWalletTokens } from "@/lib/wallet/format-wallet";
 import WalletDetailDrawer from "./wallet-detail-drawer";
 import WalletProgressBar from "./wallet-progress-bar";
@@ -60,7 +61,7 @@ const MODE_COPY = {
     title: "我的 FlowAPI 钱包",
     subtitle: "你的余额、套餐、Token 使用状态会在这里汇总。",
     primary: "查看全部账单",
-    secondary: "使用佣金购买 Token",
+    secondary: "使用佣金兑换余额",
   },
 };
 
@@ -101,8 +102,8 @@ export default function WalletProgressCard({
   const membership = data?.membership;
   const wallets = Array.isArray(data?.wallets) ? data.wallets : [];
   const hasPlan = planStatus === "active" && Number(totalQuotaCny || 0) > 0;
-  const usedTotalLabel = hasPlan ? `${formatWalletCny(usedQuotaCny)} / ${formatWalletCny(totalQuotaCny)}` : "普通余额钱包";
-  const progressTitle = hasPlan ? "当前使用进度" : "普通余额可用";
+  const usedTotalLabel = hasPlan ? `${formatWalletCny(usedQuotaCny)} / ${formatWalletCny(totalQuotaCny)}` : "钱包余额计费";
+  const progressTitle = hasPlan ? "当前使用进度" : "钱包余额可用";
   const planTimeline = hasPlan
     ? `兑换 ${startedAt ? formatWalletDate(startedAt) : "暂无记录"} · 到期 ${formatWalletDate(expiresAt)}${remainingDays !== null && remainingDays !== undefined ? ` · 剩余 ${remainingDays} 天` : ""}`
     : "暂无套餐到期时间，余额按实际模型调用扣费。";
@@ -170,7 +171,7 @@ export default function WalletProgressCard({
   }
 
   function renderEyebrow() {
-    return "资产钱包";
+    return "钱包余额";
   }
 
   if (loading) {
@@ -195,7 +196,7 @@ export default function WalletProgressCard({
             <WalletProgressSection walletProgress={walletProgress} onOpenDetail={openDetail} />
           ) : (
             <div className="wallet-empty-state">
-              <strong>￥0.00</strong>
+              <strong>$ API 0.00</strong>
               <p>0 Token</p>
               <Link href="/recharge">立即充值</Link>
             </div>
@@ -224,15 +225,13 @@ export default function WalletProgressCard({
           <>
             <div className="wallet-summary-grid wallet-summary-grid-compact">
               <WalletSummaryStat
-                label="当前余额"
-                value={Number(remaining || 0)}
-                prefix="¥"
-                decimals={2}
+                label="钱包余额"
+                value={formatApiMoney(remaining || 0)}
                 tone="primary"
               />
               <WalletSummaryStat
                 label="当前套餐"
-                value={planName || "普通余额钱包"}
+                value={planName || "钱包余额计费"}
                 tone={hasPlan ? "token" : "default"}
               />
             </div>
@@ -241,10 +240,8 @@ export default function WalletProgressCard({
         ) : (
           <div className="wallet-summary-grid">
             <WalletSummaryStat
-              label={mode === "recharge" ? "当前余额" : "总剩余额度"}
-              value={Number(remaining || 0)}
-              prefix="¥"
-              decimals={2}
+              label={mode === "recharge" ? "钱包余额" : "可用余额"}
+              value={formatApiMoney(remaining || 0)}
               note={remaining <= 0 ? "建议充值" : "可继续调用"}
               tone="primary"
               onClick={() => openDetail("余额详情")}
@@ -280,7 +277,7 @@ export default function WalletProgressCard({
             {mode === "dashboard" ? null : <div className="wallet-billing-preference">
               <div>
                 <span>消耗优先级</span>
-                <p>会员赠送额度和黑金会员额度始终优先消耗。</p>
+                <p>会员赠送金额和黑金会员余额始终优先消耗。</p>
               </div>
               <div className="wallet-priority-switch" aria-label="消耗优先级切换">
                 <button type="button" className={priorityMode === "package_first" ? "active" : ""} disabled={savingPreference} onClick={() => switchPriority("package_first")}>优先使用套餐</button>

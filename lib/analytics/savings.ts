@@ -91,12 +91,12 @@ export function formatSmallCny(value: unknown): string {
   if (value === null || value === undefined || value === "") return "暂无数据";
   const number = Number(value);
   if (!Number.isFinite(number)) return "暂无数据";
-  if (number === 0) return "¥0";
+  if (number === 0) return "$0";
   const sign = number < 0 ? "-" : "";
   const abs = Math.abs(number);
-  if (abs >= 1) return `${sign}¥${abs.toFixed(2)}`;
-  if (abs >= 0.01) return `${sign}¥${abs.toFixed(2)}`;
-  return `${sign}¥${abs.toFixed(6)}`;
+  if (abs >= 1) return `${sign}$${abs.toFixed(2)}`;
+  if (abs >= 0.01) return `${sign}$${abs.toFixed(2)}`;
+  return `${sign}$${abs.toFixed(6)}`;
 }
 
 export function findModelPriceConfig(call: any, modelConfigs: any[] = []) {

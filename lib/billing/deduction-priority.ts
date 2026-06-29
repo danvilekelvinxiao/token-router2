@@ -15,8 +15,8 @@ export const WALLET_TYPE_LABELS: Record<WalletType, string> = {
   member_quota: "黑金会员额度",
   package_quota: "套餐额度",
   balance_credit: "充值余额",
-  referral_credit: "邀请奖励额度",
-  admin_grant: "管理员赠送额度",
+  referral_credit: "邀请奖励余额",
+  admin_grant: "管理员赠送余额",
 };
 
 const fallbackStore = globalThis.__FLOWAPI_BILLING_PREFERENCES__ || {};

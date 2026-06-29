@@ -11,7 +11,7 @@ type AssetProgressBarProps = {
   percent?: number | null;
   leftLabel?: string;
   rightLabel?: string;
-  unit?: "Token" | "CNY" | "day";
+  unit?: "Token" | "$ API" | "day";
   expiresAt?: string | null;
   remainingDays?: number | null;
   totalDays?: number | null;
@@ -30,11 +30,11 @@ type AssetProgressBarProps = {
 
 function renderValue(value?: number | null, unit?: AssetProgressBarProps["unit"]) {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) {
-    if (unit === "CNY") return "￥0.00";
+    if (unit === "$ API") return "$0.00 API";
     if (unit === "day") return "0 天";
     return "0 Token";
   }
-  if (unit === "CNY") return formatWalletCny(value);
+  if (unit === "$ API") return formatWalletCny(value);
   if (unit === "day") return `${Math.max(0, Math.round(Number(value)))} 天`;
   return formatWalletTokens(value);
 }

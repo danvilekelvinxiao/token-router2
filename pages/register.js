@@ -167,7 +167,7 @@ export default function RegisterPage() {
           {step === "form" && (
             <>
               <p style={{ textAlign: "center", color: "var(--page-sub)", fontSize: 15, marginTop: 10 }}>
-                注册即送体验额度，可先测试 API 是否跑通
+                注册即送体验余额，可先测试 API 是否跑通
               </p>
               <form onSubmit={handleRegister} style={{ marginTop: 32 }}>
                 <div className="form-field">
@@ -182,7 +182,7 @@ export default function RegisterPage() {
                   <label>邀请码</label>
                   <input type="text" value={invitationCode} onChange={(e) => setInvitationCode(e.target.value)} placeholder="请输入邀请码，可选" autoComplete="off" />
                   <span style={{ fontSize: 11, color: "var(--page-subtle)", marginTop: 3, display: "block" }}>
-                    填写邀请码后，完成首笔充值可获得额外奖励额度。
+                    填写邀请码后，完成首笔充值可获得额外奖励余额。
                   </span>
                 </div>
 
@@ -238,7 +238,7 @@ export default function RegisterPage() {
           {step === "done" && (
             <div style={{ textAlign: "center", marginTop: 40 }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
-              <p style={{ color: "var(--page-sub)", fontSize: 15 }}>邮箱验证成功，体验额度已发放到你的账户。下一步先创建 API Key，马上跑通第一次真实调用。</p>
+              <p style={{ color: "var(--page-sub)", fontSize: 15 }}>邮箱验证成功，体验余额已发放到你的账户。下一步先创建 API Key，马上跑通第一次真实调用。</p>
               <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 24 }}>
                 <Link href="/api-management?source=register" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "12px 24px", borderRadius: 10, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 15, fontWeight: 700, textDecoration: "none" }}>立即使用</Link>
                 <Link href="/images" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "12px 24px", borderRadius: 10, border: "1px solid rgba(99,102,241,0.24)", background: "rgba(255,255,255,0.9)", color: "var(--page-heading)", fontSize: 15, fontWeight: 700, textDecoration: "none" }}>直接去生成图片</Link>

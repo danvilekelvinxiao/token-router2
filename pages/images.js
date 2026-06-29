@@ -7,6 +7,7 @@ import ModelBrandIcon from "@/components/common/model-brand-icon";
 import UsageDeltaBadge from "@/components/common/usage-delta-badge";
 import ConsoleLayout from "@/components/ConsoleLayout";
 import ImageCostIsland from "@/components/images/image-cost-island";
+import { formatApiMoney } from "@/lib/format/number-format";
 
 const DEFAULT_MODEL_ID = "flowapi-seedream-45";
 const MODEL_STORAGE_KEY = "flowapi_default_image_model";
@@ -63,7 +64,7 @@ function formatTokenValue(value) {
 }
 
 function formatMoneyValue(value) {
-  return hasPositiveNumber(value) ? `¥${Number(value).toFixed(2)}` : "数据同步中";
+  return hasPositiveNumber(value) ? `$${Number(value).toFixed(2)}` : "数据同步中";
 }
 
 function formatLatencyValue(value) {
@@ -532,7 +533,7 @@ export default function ImagesPage() {
             <ModelLogo model={item} />
             <span>
               <strong>{item.displayName}</strong>
-              <small>{(item.labelTags || []).slice(0, 3).join(" / ")} · ¥{Number(item.unitPriceRmbTextToImage || 0).toFixed(2)} 起</small>
+              <small>{(item.labelTags || []).slice(0, 3).join(" / ")} · ${Number(item.unitPriceRmbTextToImage || 0).toFixed(2)} 起</small>
             </span>
           </button>
         ))}
@@ -718,7 +719,7 @@ export default function ImagesPage() {
         tokenCost: Number(json.tokenCost ?? usage.tokens ?? 0).toFixed(1),
         moneyCost: Number(json.moneyCost ?? usage.costCny ?? 0).toFixed(2),
         modelDisplayName: json.modelDisplayName || json.model || selectedModel?.displayName,
-        balanceAfterText: `¥${Number(json.balanceAfter ?? usage.balanceAfterCny ?? 0).toFixed(2)}`,
+        balanceAfterText: `$${Number(json.balanceAfter ?? usage.balanceAfterCny ?? 0).toFixed(2)}`,
       });
       setGenerationProgress(100);
       if (saveHistory === false) {
@@ -842,7 +843,7 @@ export default function ImagesPage() {
             <div className="image-studio-top-cards">
               <article>
                 <span>当前余额</span>
-                <strong>¥{Number(summary?.currentBalance || customer?.balance || 0).toFixed(2)}</strong>
+                <strong>${Number(summary?.currentBalance || customer?.balance || 0).toFixed(2)}</strong>
                 <p>余额不足时会直接提醒充值，提示词会保留。</p>
               </article>
               <article className="image-model-card">
@@ -911,7 +912,7 @@ export default function ImagesPage() {
                       <span className="image-model-card-title"><ModelLogo model={item} />{item.displayName}</span>
                       <small>{(item.labelTags || []).slice(0, 3).join(" / ") || "图片模型"}</small>
                       <p>{item.sceneDescription || "适合商业图片生成场景。"}</p>
-                      <em>每张约 ¥{Number(item.unitPriceRmbTextToImage || 0).toFixed(2)} 起</em>
+                      <em>每张约 ${Number(item.unitPriceRmbTextToImage || 0).toFixed(2)} 起</em>
                     </button>
                   ))}
                 </div>
@@ -1103,7 +1104,7 @@ export default function ImagesPage() {
                 <div className="image-studio-side-metrics">
                   <article><span>今日生成图片数</span><strong>{summary?.todayImages || 0}</strong></article>
                   <article><span>今日消耗 Token</span><strong>{Number(summary?.todayTokens || 0).toFixed(1)}</strong></article>
-                  <article><span>今日消耗金额</span><strong>¥{Number(summary?.todayMoney || 0).toFixed(2)}</strong></article>
+                  <article><span>今日消耗金额</span><strong>{formatApiMoney(summary?.todayMoney || 0)}</strong></article>
                   <article><span>使用次数最多模型</span><strong>{summary?.topModelByUsage || summary?.topModel || "暂无"}</strong></article>
                   <article><span>消耗金额最多模型</span><strong>{summary?.topModelBySpend || "暂无"}</strong></article>
                 </div>
@@ -1114,7 +1115,7 @@ export default function ImagesPage() {
                 <div className="image-studio-side-links">
                   <Link href="/images/history">查看图片历史</Link>
                   <Link href="/dashboard/logs">查看使用日志</Link>
-                  <Link href="/recharge">去充值额度</Link>
+                  <Link href="/recharge">去充值钱包余额</Link>
                   <Link href="/help/images">查看使用指南</Link>
                 </div>
               </section>

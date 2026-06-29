@@ -26,7 +26,7 @@ type UserBadge = {
   rank?: number | null;
   percentileTop?: number | null;
   metricValue: number;
-  metricUnit: "¥" | "Token" | "次" | "人";
+  metricUnit: "$" | "Token" | "次" | "人";
   model?: string | null;
   provider?: string | null;
   description: string;
@@ -124,7 +124,7 @@ function createBadge({
   userId: string;
   type: BadgeType;
   titlePrefix: string;
-  metricUnit: "¥" | "Token" | "次" | "人";
+  metricUnit: "$" | "Token" | "次" | "人";
   metricValue: number;
   rank: number;
   totalUsers: number;
@@ -244,7 +244,7 @@ export async function generateUserBadges(userId: string) {
     userId,
     type: "spend",
     titlePrefix: "花费",
-    metricUnit: "¥",
+    metricUnit: "$",
     metricValue: spendRank.metricValue,
     rank: spendRank.rank,
     totalUsers: spendRank.totalUsers,
@@ -290,7 +290,7 @@ export async function generateUserBadges(userId: string) {
     userId,
     type: "saving",
     titlePrefix: "节省",
-    metricUnit: "¥",
+    metricUnit: "$",
     metricValue: savingRank.metricValue,
     rank: savingRank.rank,
     totalUsers: savingRank.totalUsers,

@@ -47,7 +47,7 @@ export function calculateCallCost({
 }
 
 /**
- * Format CNY amounts with precision appropriate to the magnitude.
+ * Format $ API amounts with precision appropriate to the magnitude.
  * >= 1: 2 decimal places
  * >= 0.01: 2-4 decimal places
  * < 0.01: up to 6 decimal places (no scientific notation)
@@ -55,20 +55,20 @@ export function calculateCallCost({
 export function formatSmallCny(value: number | null | undefined): string {
   if (value === null || value === undefined) return "暂无数据";
   if (!Number.isFinite(value)) return "暂无数据";
-  if (value === 0) return "¥0";
+  if (value === 0) return "$0";
   const sign = value < 0 ? "-" : "";
   const abs = Math.abs(value);
-  if (abs >= 1) return `${sign}¥${abs.toFixed(2)}`;
-  if (abs >= 0.01) return `${sign}¥${abs.toFixed(2)}`;
-  return `${sign}¥${abs.toFixed(6)}`;
+  if (abs >= 1) return `${sign}$${abs.toFixed(2)}`;
+  if (abs >= 0.01) return `${sign}$${abs.toFixed(2)}`;
+  return `${sign}$${abs.toFixed(6)}`;
 }
 
 /**
  * Format a per-M price for display.
  */
 export function formatPricePerM(value: number): string {
-  if (!Number.isFinite(value)) return "¥0 / M";
-  return `¥${value.toFixed(value >= 1 ? 2 : value >= 0.1 ? 1 : 0)} / M`;
+  if (!Number.isFinite(value)) return "$0 / M";
+  return `$${value.toFixed(value >= 1 ? 2 : value >= 0.1 ? 1 : 0)} / M`;
 }
 
 /**

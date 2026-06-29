@@ -7,8 +7,8 @@ npm run build
 echo "==> pack"
 tar czf /tmp/flowapi-deploy.tgz --exclude node_modules --exclude .git --exclude .claude .
 echo "==> upload + install on server"
-scp -o ConnectTimeout=30 -i "${FLOWAPI_SSH_ID:-$HOME/.ssh/id_ed25519}" /tmp/flowapi-deploy.tgz root@47.238.81.210:/tmp/
-ssh -o ConnectTimeout=30 -i "${FLOWAPI_SSH_ID:-$HOME/.ssh/id_ed25519}" root@47.238.81.210 bash -s <<'REMOTE'
+scp -o ConnectTimeout=30 -i "${FLOWAPI_SSH_ID:-$HOME/.ssh/id_ed25519}" /tmp/flowapi-deploy.tgz root@8.209.211.209:/tmp/
+ssh -o ConnectTimeout=30 -i "${FLOWAPI_SSH_ID:-$HOME/.ssh/id_ed25519}" root@8.209.211.209 bash -s <<'REMOTE'
 set -e
 swapon /swapfile 2>/dev/null || true
 APP=/var/www/flowapi

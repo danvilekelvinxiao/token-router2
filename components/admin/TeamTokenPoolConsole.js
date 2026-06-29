@@ -235,7 +235,7 @@ export default function TeamTokenPoolConsole({ initialTab = "tokens" }) {
         <Metric label="正常 Token" value={metrics.normal} tone="good" />
         <Metric label="异常提醒" value={metrics.warning} tone={metrics.warning ? "warn" : "good"} />
         <Metric label="最近日志" value={metrics.calls} />
-        <Metric label="最近花费" value={`¥${metrics.cost.toFixed(4)}`} />
+        <Metric label="最近花费" value={`$${metrics.cost.toFixed(4)}`} />
       </section>
 
       <nav style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "18px 0" }}>
@@ -293,7 +293,7 @@ export default function TeamTokenPoolConsole({ initialTab = "tokens" }) {
             <div style={formGrid}>
               <Field label="团队名称" value={teamForm.name} onChange={(v) => setTeamForm({ ...teamForm, name: v })} placeholder="市场部" />
               <Field label="团队 Code" value={teamForm.code} onChange={(v) => setTeamForm({ ...teamForm, code: v })} placeholder="marketing" />
-              <Field label="月预算 ¥" type="number" value={teamForm.monthlyBudgetCny} onChange={(v) => setTeamForm({ ...teamForm, monthlyBudgetCny: v })} />
+              <Field label="月预算 $" type="number" value={teamForm.monthlyBudgetCny} onChange={(v) => setTeamForm({ ...teamForm, monthlyBudgetCny: v })} />
               <Field label="月 Token 预算" type="number" value={teamForm.monthlyTokenBudget} onChange={(v) => setTeamForm({ ...teamForm, monthlyTokenBudget: v })} />
               <Field label="描述" type="textarea" value={teamForm.description} onChange={(v) => setTeamForm({ ...teamForm, description: v })} />
             </div>
@@ -307,7 +307,7 @@ export default function TeamTokenPoolConsole({ initialTab = "tokens" }) {
                   <strong>{team.name}</strong>
                   <span>{team.code}</span>
                   <small>{team.description || "暂无描述"}</small>
-                  <em>月预算 ¥{Number(team.monthlyBudgetCny || 0).toFixed(2)} / {Number(team.monthlyTokenBudget || 0).toLocaleString()} Token</em>
+                  <em>月预算 ${Number(team.monthlyBudgetCny || 0).toFixed(2)} / {Number(team.monthlyTokenBudget || 0).toLocaleString()} Token</em>
                 </article>
               ))}
             </div>

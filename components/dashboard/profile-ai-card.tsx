@@ -37,7 +37,7 @@ type ProfileAiCardProps = {
 function formatCny(value: unknown, digits = 2) {
   const number = Number(value);
   if (!Number.isFinite(number)) return "暂无数据";
-  return `¥${number.toFixed(digits)}`;
+  return `$${number.toFixed(digits)}`;
 }
 
 function modelName(model?: ModelSummary | null) {

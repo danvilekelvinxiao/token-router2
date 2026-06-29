@@ -5,7 +5,7 @@ import AdminLayout from "@/components/AdminLayout";
 
 function money(value) {
   const num = Number(value || 0);
-  return num > 0 ? `￥${num.toFixed(2)}` : "待配置";
+  return num > 0 ? `$${num.toFixed(2)}` : "待配置";
 }
 
 export default function AdminImageModelsPage() {

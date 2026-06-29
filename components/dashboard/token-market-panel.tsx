@@ -131,7 +131,7 @@ export default function TokenMarketPanel() {
             </article>
             <article>
               <span>FlowAPI 实际消费</span>
-              <TokenMarketSummaryValue prefix="¥" value={formatSummaryCnyNumber(summary.spend)} />
+              <TokenMarketSummaryValue prefix="$" value={formatSummaryCnyNumber(summary.spend)} />
               <p>按真实账单扣费统计</p>
             </article>
             <article>
@@ -141,7 +141,7 @@ export default function TokenMarketPanel() {
             </article>
             <article>
               <span>节省金额</span>
-              <TokenMarketSummaryValue prefix="¥" value={hasOfficialPricing ? formatSummaryCnyNumber(summary.saving) : null} emptyText="同步中" />
+              <TokenMarketSummaryValue prefix="$" value={hasOfficialPricing ? formatSummaryCnyNumber(summary.saving) : null} emptyText="同步中" />
               <p>{hasOfficialPricing ? "官方价与 FlowAPI 价差" : "等待后台官方价格配置"}</p>
             </article>
           </div>

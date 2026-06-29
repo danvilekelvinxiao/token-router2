@@ -18,7 +18,7 @@ loadEnvFileIfExists(".env.production");
 loadEnvFileIfExists(".env.local");
 
 const adminId = process.env.FLOWAPI_DEPLOY_ADMIN_ID || "workbench-aicards-sync";
-const maxCount = Number(process.env.FLOWAPI_AICARDS_SYNC_MAX_COUNT || 80);
+const maxCount = Number(process.env.FLOWAPI_AICARDS_SYNC_MAX_COUNT || 999);
 const autoPrice = process.env.FLOWAPI_AICARDS_AUTO_PRICE !== "false";
 const autoHealthCheck = process.env.FLOWAPI_AICARDS_AUTO_HEALTH_CHECK !== "false";
 const perModelHealthCheck = process.env.FLOWAPI_AICARDS_PER_MODEL_HEALTH_CHECK === "true";
@@ -36,6 +36,7 @@ async function main() {
   console.log(JSON.stringify({
     aicardsBaseUrl: process.env.AICARDS_API_BASE_URL || process.env.AICARDS_BASE_URL || "(admin upstream or not set)",
     aicardsApiKey: mask(process.env.AICARDS_API_KEY),
+    aicardsClaudeApiKey: mask(process.env.AICARDS_API_KEY_CLAUDE || process.env.AICARDS_CLAUDE_API_KEY),
     maxCount,
     autoPrice,
     autoHealthCheck,

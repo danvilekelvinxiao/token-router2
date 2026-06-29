@@ -16,7 +16,7 @@ function buildPurchaseRef(body = {}) {
     `购买类型：${purchaseType}`,
     packageId ? `套餐ID：${packageId}` : "",
     packageName ? `套餐名称：${packageName}` : "",
-    quotaText ? `额度：${quotaText} Token` : "",
+    quotaText ? `用量：${quotaText} Token` : "",
     validDays ? `有效期：${validDays} 天` : "",
     paymentRef ? `付款备注：${paymentRef}` : "",
   ].filter(Boolean).join("\n");
@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     customerId: session.customerId,
     action: "recharge_order",
     category: "payment",
-    detail: `生成加密货币交易流水：${created.order?.outTradeNo || created.order?.id || "-"} · ¥${value.toFixed(2)}`,
+    detail: `生成加密货币交易流水：${created.order?.outTradeNo || created.order?.id || "-"} · ¥${value.toFixed(2)}，预计到账 $ API ${Number(created.order?.creditedAmountApi || 0).toFixed(2)}`,
     amount: value,
     ip: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || "",
     userAgent: req.headers["user-agent"] || "",

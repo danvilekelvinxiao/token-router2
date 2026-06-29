@@ -13,8 +13,8 @@ const features = [
   },
   {
     icon: "🎁",
-    title: "注册即送额度",
-    desc: "新用户注册即可获得体验额度先用起来再决定是否充值。",
+    title: "注册即送余额",
+    desc: "新用户注册即可获得 $ API 20 体验余额先用起来再决定是否充值。",
   },
   {
     icon: "⚡",
@@ -52,6 +52,10 @@ export default function HomePage() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    if (typeof window !== "undefined" && window.location.hostname === "check-cx.flowapi.fun") {
+      window.location.replace("/pool-status");
+      return;
+    }
     try {
       const stored = localStorage.getItem("flowapi_customer");
       if (stored) queueMicrotask(() => setCustomer(JSON.parse(stored)));
@@ -75,10 +79,10 @@ export default function HomePage() {
   return (
     <>
       <Head>
-        <title>FlowAPI - AI API Token 充值与统一调用平台</title>
+        <title>FlowAPI - AI API Token 企业级多模型统一调用平台</title>
         <meta
           name="description"
-          content="FlowAPI 提供 AI API Token 充值、统一 Base URL、API Key 管理、模型调用、扣费记录和用量日志。三步接入 Claude、GPT、Gemini、DeepSeek 等 AI 模型。"
+          content="FlowAPI 提供 AI API 余额充值、统一 Base URL、API Key 管理、模型调用、扣费记录和用量日志。三步接入 Claude、GPT、Gemini、DeepSeek 等 AI 模型。"
         />
       </Head>
 
@@ -121,9 +125,9 @@ export default function HomePage() {
 
         {/* ======== 第一部分：Hero ======== */}
         <section className="hero-wrap">
-          <h1 className="hero-title">AI API Token 充值与统一调用平台</h1>
+          <h1 className="hero-title">AI API Token 企业级多模型统一调用平台</h1>
           <p className="hero-subtitle">
-            <strong>注册即送 ¥5 体验额度</strong>
+            <strong>注册即送 $ API 20 体验余额</strong>
             <br />
             自动生成 API Key，三步完成接入
             <br />
@@ -160,7 +164,7 @@ export default function HomePage() {
           {/* 数据条 */}
           <div className="hero-stats">
             {[
-              ["¥5", "注册送额度"],
+              ["$ API 20", "注册送余额"],
               ["3 步", "完成接入"],
               ["多模型", "统一调用"],
               ["1 Key", "统一接入"],
@@ -281,7 +285,7 @@ export default function HomePage() {
 
         {/* ---- Footer ---- */}
         <footer className="landing-footer">
-          FlowAPI · AI API Token 充值与统一调用平台
+          FlowAPI · AI API Token 企业级多模型统一调用平台
         </footer>
       </main>
     </>

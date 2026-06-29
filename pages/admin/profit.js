@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
 function money(value) {
-  return `¥${Number(value || 0).toFixed(2)}`;
+  return `$ API ${Number(value || 0).toFixed(2)}`;
 }
 
 function numberText(value) {
@@ -63,19 +63,16 @@ function MetricCard({ label, value, hint, tone = "neutral" }) {
 }
 
 export default function AdminProfitPage() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [days, setDays] = useState(7);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
-  const fetchProfit = useCallback(async (sec = "", selectedDays = days) => {
+  const fetchProfit = useCallback(async (selectedDays = days) => {
     setLoading(true);
     setMessage("");
     try {
-      const res = await fetch(`/api/admin/profit-overview?days=${selectedDays}`, {
-        headers: sec ? { "x-admin-secret": sec } : {},
-      });
+      const res = await fetch(`/api/admin/profit-overview?days=${selectedDays}`);
       const json = await res.json().catch(() => null);
       if (!res.ok) {
         setData(null);
@@ -93,9 +90,8 @@ export default function AdminProfitPage() {
 
   useEffect(() => {
     let active = true;
-    const stored = sessionStorage.getItem("flowapi_admin_secret") || "";
     queueMicrotask(() => {
-      if (active) fetchProfit(stored, days);
+      if (active) fetchProfit(days);
     });
     return () => {
       active = false;
@@ -127,8 +123,7 @@ export default function AdminProfitPage() {
                 <option value={30}>近 30 天</option>
                 <option value={90}>近 90 天</option>
               </select>
-              <input value={secret} onChange={(event) => setSecret(event.target.value)} placeholder="管理密钥" type="password" style={{ height: 36, width: 150, borderRadius: 8, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", padding: "0 10px" }} />
-              <button type="button" onClick={() => { const next = secret.trim(); if (next) sessionStorage.setItem("flowapi_admin_secret", next); fetchProfit(next, days); }} style={{ height: 36, padding: "0 14px", borderRadius: 8, border: "1px solid var(--dash-accent)", color: "var(--dash-accent)", background: "transparent", fontWeight: 800, cursor: "pointer" }}>
+              <button type="button" onClick={() => fetchProfit(days)} style={{ height: 36, padding: "0 14px", borderRadius: 8, border: "1px solid var(--dash-accent)", color: "var(--dash-accent)", background: "transparent", fontWeight: 800, cursor: "pointer" }}>
                 刷新
               </button>
             </div>

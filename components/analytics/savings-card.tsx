@@ -26,7 +26,7 @@ export default function SavingsCard({
   onClick,
 }: SavingsCardProps) {
   const hasRealData = source === "real" && amount !== null && amount !== undefined;
-  const formatted = hasRealData ? formatSmallCny(amount) : "￥0.00";
+  const formatted = hasRealData ? formatSmallCny(amount) : "$0.00 API";
 
   return (
     <article
@@ -46,15 +46,15 @@ export default function SavingsCard({
         <em>{loading ? "同步中" : subtitle}</em>
       </div>
       <strong className="savings-card-value">
-        {loading ? "同步中" : hasRealData ? <LiveNumber value={formatted.replace("¥", "")} prefix="¥" /> : formatted}
+        {loading ? "同步中" : hasRealData ? <LiveNumber value={formatted.replace("$", "")} prefix="$" /> : formatted}
       </strong>
       {rankText ? <p className="savings-card-rank">{rankText}</p> : null}
-      <p>{hasRealData ? description : "￥0.00"}</p>
+      <p>{hasRealData ? description : "$0.00 API"}</p>
       <MiniMetricChart
         data={chartData}
         type="area"
         color="green"
-        valueFormatter={(value) => `¥${Number(value || 0).toFixed(2)}`}
+        valueFormatter={(value) => `$${Number(value || 0).toFixed(2)}`}
         height={62}
         emptyText=""
       />

@@ -1,18 +1,19 @@
 import Head from "next/head";
 import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
+import { formatRmb } from "@/lib/format/number-format";
 import { DEFAULT_REFERRAL_SETTINGS } from "@/lib/referrals/calculate";
 
 const tabs = [
   { key: "overview", label: "邀请概览" },
   { key: "relations", label: "邀请关系" },
-  { key: "rewards", label: "佣金与额度记录" },
+  { key: "rewards", label: "佣金与余额记录" },
   { key: "withdrawals", label: "提现审核" },
   { key: "settings", label: "规则配置" },
 ];
 
 function money(value) {
-  return `¥${Number(value || 0).toFixed(2)}`;
+  return formatRmb(value || 0);
 }
 
 export default function AdminReferralsPage() {
@@ -56,7 +57,7 @@ export default function AdminReferralsPage() {
     { label: "总可提现佣金", value: money(overview?.totalCommissionCny) },
     { label: "待提现金额", value: money(overview?.pendingWithdrawCny) },
     { label: "已提现金额", value: money(overview?.paidWithdrawCny) },
-    { label: "奖励额度发放", value: money(overview?.totalCreditBonusCny) },
+    { label: "奖励余额发放", value: money(overview?.totalCreditBonusCny) },
   ]), [overview]);
 
   async function reviewWithdrawal(id, action) {
@@ -91,7 +92,7 @@ export default function AdminReferralsPage() {
           <div>
             <span>Growth System</span>
             <h1>邀请返佣管理</h1>
-            <p>管理邀请关系、可提现佣金、奖励额度、提现审核和返佣规则。佣金提现必须人工审核，适合商业站上线前风控。</p>
+            <p>管理邀请关系、可提现佣金、奖励余额、提现审核和返佣规则。佣金提现必须人工审核，适合商业站上线前风控。</p>
           </div>
         </div>
 
@@ -133,7 +134,7 @@ export default function AdminReferralsPage() {
 
         {activeTab === "rewards" && (
           <AdminTable
-            columns={["时间", "邀请人", "好友", "订单金额", "等级", "佣金比例", "可提现佣金", "奖励额度", "状态"]}
+            columns={["时间", "邀请人", "好友", "订单金额", "等级", "佣金比例", "可提现佣金", "奖励余额", "状态"]}
             rows={rewards.map((item) => [
               item.createdAt ? new Date(item.createdAt).toLocaleString("zh-CN", { hour12: false }) : "-",
               item.referrer || item.referrerUserId,
@@ -188,7 +189,7 @@ export default function AdminReferralsPage() {
             <h2>规则配置</h2>
             <label><input type="checkbox" checked={Boolean(settings.enabled)} onChange={(event) => setSettings({ ...settings, enabled: event.target.checked })} /> 开启邀请返佣</label>
             <label><input type="checkbox" checked={Boolean(settings.continueRechargeReward)} onChange={(event) => setSettings({ ...settings, continueRechargeReward: event.target.checked })} /> 好友后续充值继续返佣</label>
-            <label><input type="checkbox" checked={Boolean(settings.allowCommissionConvert)} onChange={(event) => setSettings({ ...settings, allowCommissionConvert: event.target.checked })} /> 允许佣金购买 Token</label>
+            <label><input type="checkbox" checked={Boolean(settings.allowCommissionConvert)} onChange={(event) => setSettings({ ...settings, allowCommissionConvert: event.target.checked })} /> 允许佣金兑换账户余额</label>
             <div className="admin-form-grid">
               <label>首充双向奖励比例<input type="number" value={settings.firstRechargeBonusRate} onChange={(event) => setSettings({ ...settings, firstRechargeBonusRate: Number(event.target.value) })} /></label>
               <label>最低提现金额<input type="number" value={settings.minWithdrawAmountCny} onChange={(event) => setSettings({ ...settings, minWithdrawAmountCny: Number(event.target.value) })} /></label>
@@ -199,7 +200,7 @@ export default function AdminReferralsPage() {
                 <div key={level.key}>
                   <strong>{level.level}</strong>
                   <span>{level.rangeLabel}</span>
-                  <p>可提现佣金 {level.commissionRate}% · 等额额度 {level.creditBonusRate}%</p>
+                  <p>可提现佣金 {level.commissionRate}% · 等额余额 {level.creditBonusRate}%</p>
                 </div>
               ))}
             </div>
@@ -221,7 +222,10 @@ function AdminTable({ columns, rows }) {
           </thead>
           <tbody>
             {rows.map((row, index) => (
-              <tr key={`${row[0]}-${index}`}>{row.map((cell, cellIndex) => <td key={`${columns[cellIndex]}-${cellIndex}`} className={String(cell).startsWith("¥") ? "num" : ""}>{cell}</td>)}</tr>
+              <tr key={`${row[0]}-${index}`}>{row.map((cell, cellIndex) => {
+                const text = String(cell);
+                return <td key={`${columns[cellIndex]}-${cellIndex}`} className={text.startsWith("¥") || text.startsWith("$ API") ? "num" : ""}>{cell}</td>;
+              })}</tr>
             ))}
             {!rows.length ? <tr><td colSpan={columns.length}>暂无数据</td></tr> : null}
           </tbody>

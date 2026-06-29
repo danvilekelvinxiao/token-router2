@@ -57,9 +57,9 @@ function modelKey(model: ModelConsumptionPoint) {
 
 function formatCny(value?: number) {
   const amount = Number(value || 0);
-  if (amount >= 1000) return `￥${amount.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`;
-  if (amount >= 1) return `￥${amount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`;
-  return `￥${amount.toLocaleString("zh-CN", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
+  if (amount >= 1000) return `$${amount.toLocaleString("zh-CN", { maximumFractionDigits: 0 })}`;
+  if (amount >= 1) return `$${amount.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}`;
+  return `$${amount.toLocaleString("zh-CN", { minimumFractionDigits: 4, maximumFractionDigits: 4 })}`;
 }
 
 function formatToken(value?: number) {
@@ -259,7 +259,7 @@ export default function ModelConsumptionChartCard({ data }: Props) {
 
       {!hasData ? (
         <div className="model-consumption-empty">
-          <strong>￥0.00</strong>
+          <strong>$0.00 API</strong>
           <span>0 Token</span>
         </div>
       ) : (

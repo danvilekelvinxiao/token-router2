@@ -60,7 +60,7 @@ export default function TeamMemberBillingDetailPage() {
               <article><span>累计生成任务</span><strong>{data.summary.totalGenerations}</strong></article>
               <article><span>累计生成图片数</span><strong>{data.summary.totalImages}</strong></article>
               <article><span>累计 Token 消耗</span><strong>{Number(data.summary.totalTokens || 0).toFixed(1)}</strong></article>
-              <article><span>累计金额消耗</span><strong>￥{Number(data.summary.totalMoney || 0).toFixed(2)}</strong></article>
+              <article><span>累计金额消耗</span><strong>${Number(data.summary.totalMoney || 0).toFixed(2)}</strong></article>
               <article><span>成功率</span><strong>{Number(data.summary.successRate || 0).toFixed(1)}%</strong></article>
               <article><span>最常用模型</span><strong>{data.summary.topModel || "暂无"}</strong></article>
             </section>

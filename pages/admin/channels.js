@@ -13,7 +13,6 @@ function StatusBadge({ status }) {
 }
 
 export default function AdminChannels() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [channels, setChannels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -23,14 +22,13 @@ export default function AdminChannels() {
   const [msg, setMsg] = useState("");
 
   useEffect(() => {
-    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
-    fetchChannels(s);
+    fetchChannels();
   }, []);
 
-  async function fetchChannels(sec) {
+  async function fetchChannels() {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/channels", { headers: { "x-admin-secret": sec } });
+      const res = await fetch("/api/admin/channels");
       const data = await res.json();
       if (res.ok) setChannels(data.channels || []);
       else setMsg(data.error || "加载失败");
@@ -39,9 +37,8 @@ export default function AdminChannels() {
   }
 
   async function apiCall(method, body) {
-    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     const res = await fetch("/api/admin/channels", {
-      method, headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(body),
+      method, headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "请求失败");
@@ -56,7 +53,7 @@ export default function AdminChannels() {
     try {
       const models = typeof form.models === "string" ? form.models.split(",").map((s) => s.trim()).filter(Boolean) : form.models;
       await apiCall("POST", { ...form, id: editing || undefined, models });
-      await fetchChannels(secret);
+      await fetchChannels();
       setModalOpen(false);
     } catch (e) { setMsg(e.message); }
     setSaving(false);
@@ -64,23 +61,16 @@ export default function AdminChannels() {
 
   async function handleDelete(id) {
     if (!confirm("确认删除此渠道？")) return;
-    try { await apiCall("DELETE", { id }); await fetchChannels(secret); } catch (e) { setMsg(e.message); }
+    try { await apiCall("DELETE", { id }); await fetchChannels(); } catch (e) { setMsg(e.message); }
   }
 
   async function handleToggle(ch) {
     try {
       await apiCall("POST", { ...ch, status: ch.status === "active" ? "disabled" : "active" });
-      await fetchChannels(secret);
+      await fetchChannels();
     } catch (e) { setMsg(e.message); }
   }
 
-  function handleSecretSave() {
-    const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
-    sessionStorage.setItem("flowapi_admin_secret", s);
-    setMsg("");
-    fetchChannels(s);
-  }
 
   return (
     <>
@@ -93,8 +83,7 @@ export default function AdminChannels() {
               <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>管理所有上游 API 渠道的接入配置、权重和定价</p>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={handleSecretSave} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>验证</button>
+              <button onClick={() => fetchChannels()} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
               <button onClick={openNew} style={{ padding: "10px 18px", borderRadius: 8, border: "none", background: "linear-gradient(135deg, #6366f1, #8b5cf6)", color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>+ 新增渠道</button>
             </div>
           </header>
@@ -120,7 +109,7 @@ export default function AdminChannels() {
                         <td style={tdStyle}>{ch.type}</td>
                         <td style={{ ...tdStyle, fontFamily: "'SF Mono', monospace", fontSize: 11, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ch.baseUrl}</td>
                         <td style={tdStyle}>{ch.weight}</td>
-                        <td style={{ ...tdStyle, fontFamily: "'SF Mono', monospace" }}>¥{ch.costInput} / ¥{ch.costOutput}</td>
+                        <td style={{ ...tdStyle, fontFamily: "'SF Mono', monospace" }}>${ch.costInput} / ${ch.costOutput}</td>
                         <td style={tdStyle}>x{ch.priceMultiplier}</td>
                         <td style={tdStyle}><StatusBadge status={ch.status} /></td>
                         <td style={tdStyle}>
@@ -155,8 +144,8 @@ export default function AdminChannels() {
                   <Field label="上游 API Key" value={form.apiKey || ""} onChange={(v) => setForm({ ...form, apiKey: v })} type="password" />
                   <Field label="权重" value={String(form.weight || 0)} onChange={(v) => setForm({ ...form, weight: Number(v) })} type="number" />
                   <Field label="超时(秒)" value={String(form.timeout || 0)} onChange={(v) => setForm({ ...form, timeout: Number(v) })} type="number" />
-                  <Field label="输入成本(¥/1M)" value={String(form.costInput || "")} onChange={(v) => setForm({ ...form, costInput: v })} />
-                  <Field label="输出成本(¥/1M)" value={String(form.costOutput || "")} onChange={(v) => setForm({ ...form, costOutput: v })} />
+                  <Field label="输入成本($/1M)" value={String(form.costInput || "")} onChange={(v) => setForm({ ...form, costInput: v })} />
+                  <Field label="输出成本($/1M)" value={String(form.costOutput || "")} onChange={(v) => setForm({ ...form, costOutput: v })} />
                   <Field label="售价倍率" value={String(form.priceMultiplier || 0)} onChange={(v) => setForm({ ...form, priceMultiplier: Number(v) })} type="number" />
                   <Field label="支持模型(逗号分隔)" value={typeof form.models === "string" ? form.models : (form.models || []).join(", ")} onChange={(v) => setForm({ ...form, models: v })} />
                   <Field label="故障转移渠道ID" value={form.fallback || ""} onChange={(v) => setForm({ ...form, fallback: v })} />

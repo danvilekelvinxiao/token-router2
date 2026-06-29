@@ -15,6 +15,8 @@
 
 const NEW_API_BASE_URL =
   process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080";
+const NEW_API_ADMIN_BASE_URL =
+  process.env.NEW_API_ADMIN_URL || NEW_API_BASE_URL;
 const NEW_API_ADMIN_TOKEN =
   process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || "";
 const NEW_API_DEFAULT_GROUP =
@@ -45,6 +47,7 @@ function getRuntimeToken() {
     process.env.NEW_API_KEY_ALL_MODELS,
     process.env[`NEW_API_KEY_${defaultGroup}`],
     process.env[`NEW_API_${defaultGroup}_KEY`],
+    NEW_API_ADMIN_TOKEN,
   ];
   return candidates.map((value) => String(value || "").trim()).find(Boolean) || "";
 }
@@ -55,7 +58,7 @@ async function apiFetch(
 ): Promise<{ ok: boolean; data: any }> {
   if (!NEW_API_ADMIN_TOKEN) return { ok: false, data: null };
   try {
-    const url = `${NEW_API_BASE_URL}${path}`;
+    const url = `${NEW_API_ADMIN_BASE_URL}${path}`;
     const res = await fetch(url, {
       ...options,
       headers: { ...adminHeaders(), ...((options.headers as Record<string, string>) || {}) },
@@ -289,7 +292,7 @@ export async function getNewApiUsage(params: {
       const date = new Date(log.created_at * 1000).toISOString().slice(0, 10);
       if (!dailyMap[date]) dailyMap[date] = { tokens: 0, cost: 0, requests: 0 };
       dailyMap[date].tokens += (log.prompt_tokens || 0) + (log.completion_tokens || 0);
-      // New API quota is in internal units; convert to CNY
+      // New API quota is in internal units; convert to $ API
       // quota_per_unit=500000, usd_exchange_rate=7.3 → divide by ~68493
       dailyMap[date].cost += (log.quota || 0) / 10000;
       dailyMap[date].requests += 1;

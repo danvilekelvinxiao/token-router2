@@ -16,7 +16,9 @@ function normalizeCall(call = {}) {
   const totalTokens = Number(call.tokens || call.totalTokens || inputTokens + outputTokens || 0);
   const statusCode = Number(call.status || 0);
   return {
-    id: call.id,
+    id: call.requestId || call.id,
+    requestId: call.requestId || "",
+    callId: call.callId || call.id,
     createdAt: call.createdAt,
     model: call.publicModelId || call.requestedModel || call.routedModel || call.model || "unknown",
     provider: "FlowAPI",
@@ -24,7 +26,9 @@ function normalizeCall(call = {}) {
     outputTokens,
     totalTokens,
     costCny: Number(call.cost || call.costCny || 0),
-    status: statusCode >= 200 && statusCode < 300 ? "success" : statusCode ? "failed" : "unknown",
+    status: (call.billingStatus || call.deliveryStatus || "") === "success_completed" || (statusCode >= 200 && statusCode < 300 && !call.errorCode) ? "success" : statusCode ? "failed" : "unknown",
+    billingStatus: call.billingStatus || "",
+    deliveryStatus: call.deliveryStatus || "",
     requestIp: call.requestIp || "",
     deductionBreakdown: Array.isArray(call.deductionBreakdown) ? call.deductionBreakdown : [],
   };

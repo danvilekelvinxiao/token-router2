@@ -40,7 +40,7 @@ const initialPrice = {
 };
 
 function money(value) {
-  return `￥${Number(value || 0).toFixed(2)}`;
+  return `$ API ${Number(value || 0).toFixed(2)}`;
 }
 
 function compactId(value = "") {
@@ -130,7 +130,6 @@ const buttonBase = {
 
 export default function BossWizardPage() {
   const [step, setStep] = useState(0);
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [upstream, setUpstream] = useState(initialUpstream);
   const [savedUpstream, setSavedUpstream] = useState(null);
   const [connection, setConnection] = useState(null);
@@ -161,7 +160,6 @@ export default function BossWizardPage() {
   function adminHeaders(extra = {}) {
     return {
       "Content-Type": "application/json",
-      "x-admin-secret": secret,
       ...extra,
     };
   }
@@ -328,14 +326,6 @@ export default function BossWizardPage() {
               </p>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input
-                value={secret}
-                onChange={(event) => setSecret(event.target.value)}
-                onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)}
-                type="password"
-                placeholder="管理密钥"
-                style={{ ...inputStyle, width: 150, minHeight: 36, fontSize: 12 }}
-              />
               <button type="button" style={{ ...buttonBase, background: "var(--dash-card-bg)", color: "var(--dash-text)" }} onClick={saveDraft}>
                 {busy === "draft" ? "保存中..." : "保存草稿"}
               </button>

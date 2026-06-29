@@ -53,7 +53,7 @@ export const STATIC_TITLE_METRICS: TitleMetricDefinition[] = [
   { metricKey: "commission_amount_cny", metricName: "返佣金额", metricType: "currency", dataSource: "referral_rewards + commission_transactions", rankDirection: "desc", minEligibility: 1, titlePrefix: "返佣", category: "invite", enabled: true },
   { metricKey: "active_streak_days", metricName: "连续活跃天数", metricType: "day", dataSource: "calls.created_at + activity_logs", rankDirection: "desc", minEligibility: 2, titlePrefix: "连续活跃", category: "stability", enabled: true },
   { metricKey: "api_key_count", metricName: "API Key 数量", metricType: "count", dataSource: "api_keys", rankDirection: "desc", minEligibility: 1, titlePrefix: "密钥配置", category: "developer", enabled: true },
-  { metricKey: "api_key_limit_config_count", metricName: "API Key 限额配置数", metricType: "count", dataSource: "api_keys.limit_enabled", rankDirection: "desc", minEligibility: 1, titlePrefix: "额度管理", category: "developer", enabled: true },
+  { metricKey: "api_key_limit_config_count", metricName: "API Key 限制配置数", metricType: "count", dataSource: "api_keys.limit_enabled", rankDirection: "desc", minEligibility: 1, titlePrefix: "限制管理", category: "developer", enabled: true },
   { metricKey: "export_count", metricName: "导出次数", metricType: "count", dataSource: "activity_logs", rankDirection: "desc", minEligibility: 1, titlePrefix: "数据导出", category: "data", enabled: true },
   { metricKey: "saved_amount_cny", metricName: "累计节省", metricType: "currency", dataSource: "model pricing savings", rankDirection: "desc", minEligibility: 1, titlePrefix: "节省", category: "asset", enabled: true },
 ];
@@ -77,7 +77,7 @@ export function getRegisteredTitleMetrics(dynamicMetrics: TitleMetricDefinition[
 
 export function formatTitleMetricValue(value: number, metricType: TitleMetricDefinition["metricType"]) {
   const number = Number(value || 0);
-  if (metricType === "currency") return `¥${number.toFixed(number >= 1 ? 2 : 6)}`;
+  if (metricType === "currency") return `$${number.toFixed(number >= 1 ? 2 : 6)}`;
   if (metricType === "token") return `${Math.round(number).toLocaleString()} Token`;
   if (metricType === "day") return `${Math.round(number).toLocaleString()} 天`;
   return `${Math.round(number).toLocaleString()} 次`;

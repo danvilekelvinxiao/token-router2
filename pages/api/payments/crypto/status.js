@@ -81,7 +81,7 @@ export default async function handler(req, res) {
       flowapiPaymentAudit: {
         gatewayAmountCrypto: extractAmount(payload, 0),
         creditedAmountCny: Number(order.amount),
-        note: "GMWallet 返回的链上币数只用于对账，用户余额按 FlowAPI 订单人民币金额入账。",
+        note: "GMWallet 返回的链上币数只用于对账，用户余额按 FlowAPI 订单$ API金额入账。",
       },
     }),
     approvedBy: "gmwallet-query",

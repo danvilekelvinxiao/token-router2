@@ -10,7 +10,6 @@ function LevelBadge({ level }) {
 }
 
 export default function AdminSecurity() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [blacklist, setBlacklist] = useState([]);
   const [riskRules, setRiskRules] = useState([]);
   const [riskEvents, setRiskEvents] = useState([]);
@@ -24,14 +23,13 @@ export default function AdminSecurity() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
-    fetchData(s);
+    fetchData();
   }, []);
 
-  async function fetchData(sec) {
+  async function fetchData() {
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/security", { headers: { "x-admin-secret": sec } });
+      const res = await fetch("/api/admin/security");
       const data = await res.json();
       if (res.ok) {
         setBlacklist(data.blacklist || []);
@@ -43,9 +41,8 @@ export default function AdminSecurity() {
   }
 
   async function apiPost(body) {
-    const s = secret || sessionStorage.getItem("flowapi_admin_secret") || "";
     const res = await fetch("/api/admin/security", {
-      method: "POST", headers: { "content-type": "application/json", "x-admin-secret": s }, body: JSON.stringify(body),
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "请求失败");
@@ -57,7 +54,7 @@ export default function AdminSecurity() {
     setSaving(true);
     try {
       await apiPost({ action: "addBlacklist", data: blForm });
-      await fetchData(secret);
+      await fetchData();
       setBlModal(false);
       setBlForm({ type: "IP", value: "", reason: "" });
     } catch (e) { setMsg(e.message); }
@@ -65,7 +62,7 @@ export default function AdminSecurity() {
   }
 
   async function handleRemoveBlacklist(id) {
-    try { await apiPost({ action: "removeBlacklist", data: { id } }); await fetchData(secret); } catch (e) { setMsg(e.message); }
+    try { await apiPost({ action: "removeBlacklist", data: { id } }); await fetchData(); } catch (e) { setMsg(e.message); }
   }
 
   function openRrEdit(r) { setEditingRr(r ? r.id : null); setRrForm(r || { name: "", condition: "", action: "", enabled: true }); setRrModal(true); }
@@ -73,27 +70,20 @@ export default function AdminSecurity() {
     setSaving(true);
     try {
       await apiPost({ action: "saveRiskRule", data: { ...rrForm, id: editingRr || undefined } });
-      await fetchData(secret);
+      await fetchData();
       setRrModal(false);
     } catch (e) { setMsg(e.message); }
     setSaving(false);
   }
   async function deleteRiskRule(id) {
     if (!confirm("确认删除此规则？")) return;
-    try { await apiPost({ action: "deleteRiskRule", data: { id } }); await fetchData(secret); } catch (e) { setMsg(e.message); }
+    try { await apiPost({ action: "deleteRiskRule", data: { id } }); await fetchData(); } catch (e) { setMsg(e.message); }
   }
 
   async function handleToggleEvent(id, handled) {
-    try { await apiPost({ action: "updateRiskEvent", data: { id, updates: { handled: !handled } } }); await fetchData(secret); } catch (e) { setMsg(e.message); }
+    try { await apiPost({ action: "updateRiskEvent", data: { id, updates: { handled: !handled } } }); await fetchData(); } catch (e) { setMsg(e.message); }
   }
 
-  function handleSecretSave() {
-    const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
-    sessionStorage.setItem("flowapi_admin_secret", s);
-    setMsg("");
-    fetchData(s);
-  }
 
   return (
     <>
@@ -106,8 +96,7 @@ export default function AdminSecurity() {
               <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>管理黑名单、风控规则和风险事件处理</p>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={handleSecretSave} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>验证</button>
+              <button onClick={() => fetchData()} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
             </div>
           </header>
 

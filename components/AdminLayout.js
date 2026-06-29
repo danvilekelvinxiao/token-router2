@@ -20,8 +20,10 @@ const adminMenuGroups = [
     items: [
 	      { key: "modelWizard", label: "模型接入向导", href: "/admin/model-wizard", icon: IconBossWizard, aliases: ["/admin/boss-wizard"] },
 	      { key: "upstreams", label: "上游渠道", href: "/admin/upstreams", icon: IconChannels, aliases: ["/admin/channels"] },
+      { key: "providers", label: "Providers 渠道池", href: "/admin/providers", icon: IconChannels },
+      { key: "modelMappings", label: "模型映射", href: "/admin/model-mappings", icon: IconRouting, aliases: ["/admin/model-mapping"] },
       { key: "backupProviderReview", label: "备用线路审核", href: `/admin/providers/${["ai", "cards"].join("")}`, icon: IconChannels },
-	      { key: "routes", label: "智能路由", href: "/admin/routes", icon: IconRouting, aliases: ["/admin/routing", "/admin/model-mapping"] },
+      { key: "routes", label: "智能路由", href: "/admin/routes", icon: IconRouting, aliases: ["/admin/routing"] },
       { key: "modelMarket", label: "模型广场", href: "/admin/model-market", icon: IconModels },
       { key: "imageModels", label: "图片模型", href: "/admin/image-models", icon: IconModels },
       { key: "models", label: "模型测试", href: "/admin/models", icon: IconModels },
@@ -77,6 +79,7 @@ const adminMenuGroups = [
     helper: "健康、渠道、告警",
     items: [
       { key: "healthCheck", label: "功能健康检查", href: "/admin/health-check", icon: IconMaintenance },
+      { key: "poolStatus", label: "号池实时状态", href: "/admin/pool-status", icon: IconTokenPool },
       { key: "upstreamStatus", label: "上游状态", href: "/admin/upstream-status", icon: IconTokenPool, aliases: ["/admin/token-pool/status"] },
       { key: "tokenAlerts", label: "Token 告警", href: "/admin/token-alerts", icon: IconSecurity },
       { key: "operatorGuide", label: "老板操作指南", href: "/admin/operator-guide", icon: IconBossWizard },
@@ -171,10 +174,7 @@ export default function AdminLayout({ currentPath, children }) {
   async function verifyAdminAccess() {
     setChecking(true);
     try {
-      const secret = typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || "";
-      const { response, data } = await fetchJsonWithTimeout("/api/admin-access", {
-        headers: secret ? { "x-admin-secret": secret } : {},
-      });
+      const { response, data } = await fetchJsonWithTimeout("/api/admin-access");
       if (response.ok && data?.ok && isAdminCustomer(data.customer)) {
         try {
           if (typeof window !== "undefined" && data.customer) {
@@ -185,46 +185,10 @@ export default function AdminLayout({ currentPath, children }) {
         setChecking(false);
         return;
       }
-
-      const { response: fallbackResponse, data: fallbackData } = await fetchJsonWithTimeout("/api/admin/channels", {
-        headers: secret ? { "x-admin-secret": secret } : {},
-      });
-      if (fallbackResponse.ok) {
-        const customer = fallbackData?.customer || fallbackData?.admin || {
-          id: "cus_admin",
-          email: "xiaoyijie@flowapi.fun",
-          role: "admin",
-          isAdmin: true,
-        };
-        try {
-          if (typeof window !== "undefined" && customer) {
-            localStorage.setItem("flowapi_customer", JSON.stringify({
-              ...customer,
-              isAdmin: true,
-            }));
-          }
-        } catch {}
-        setAccess("allowed");
-        setChecking(false);
-        return;
-      }
     } catch {}
 
-    try {
-      if (typeof window === "undefined") {
-        setAccess("denied");
-        return;
-      }
-      try {
-        const stored = localStorage.getItem("flowapi_customer");
-        const customer = stored ? JSON.parse(stored) : null;
-        setAccess(isAdminCustomer(customer) ? "allowed" : "denied");
-      } catch {
-        setAccess("denied");
-      }
-    } finally {
-      setChecking(false);
-    }
+    setAccess("denied");
+    setChecking(false);
   }
 
   useEffect(() => {

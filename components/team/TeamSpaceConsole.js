@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 const tabs = [
   ["overview", "团队总览"],
-  ["members", "成员额度"],
+  ["members", "成员限制"],
   ["keys", "团队 Key"],
   ["usage", "Token 去向"],
   ["logs", "调用日志"],
@@ -17,25 +17,25 @@ const roleOptions = [
 ];
 
 const limitTypeOptions = [
-  ["none", "不限额"],
-  ["daily", "每日额度"],
-  ["weekly", "每周额度"],
-  ["monthly", "每月额度"],
-  ["total", "总额度"],
+  ["none", "无限制"],
+  ["daily", "每日限制"],
+  ["weekly", "每周限制"],
+  ["monthly", "每月限制"],
+  ["total", "总限制"],
 ];
 
 const limitUnitOptions = [
-  ["cny", "金额 ¥"],
-  ["token", "Token"],
+  ["cny", "$ API 余额限制"],
+  ["token", "Token 额度"],
   ["request", "请求次数"],
 ];
 
 function money(value) {
-  return `¥${Number(value || 0).toFixed(4)}`;
+  return `$ API ${Number(value || 0).toFixed(4)}`;
 }
 
 function money2(value) {
-  return `¥${Number(value || 0).toFixed(2)}`;
+  return `$ API ${Number(value || 0).toFixed(2)}`;
 }
 
 function tokens(value) {
@@ -68,8 +68,8 @@ function purposeText(value = "") {
 }
 
 function limitText(limit) {
-  if (!limit?.enabled) return "不限额";
-  const typeLabel = Object.fromEntries(limitTypeOptions)[limit.limitType] || "额度";
+  if (!limit?.enabled) return "无限制";
+  const typeLabel = Object.fromEntries(limitTypeOptions)[limit.limitType] || "限制";
   const unitLabel = Object.fromEntries(limitUnitOptions)[limit.limitUnit] || "";
   const used = limit.limitUnit === "token"
     ? tokens(limit.usedTokens)
@@ -201,10 +201,10 @@ export default function TeamSpaceConsole({ initialTab = "overview" }) {
         }),
       });
       const json = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(json.error || "额度保存失败");
+      if (!response.ok) throw new Error(json.error || "限制保存失败");
       await load(teamId);
     } catch (err) {
-      setError(err.message || "额度保存失败");
+      setError(err.message || "限制保存失败");
     }
     setSaving(false);
   }
@@ -217,7 +217,7 @@ export default function TeamSpaceConsole({ initialTab = "overview" }) {
         <div>
           <span>Team Workspace</span>
           <h1>{activeTeam?.name || "团队空间"}</h1>
-          <p>统一查看团队 API 消耗、成员用量和额度。普通成员只能看到自己的数据，队长和财务可以对账导出。</p>
+          <p>统一查看团队 API 消耗、成员用量和限制。普通成员只能看到自己的数据，队长和财务可以对账导出。</p>
         </div>
         <div className="team-console-actions">
           <select value={teamId} onChange={(event) => load(event.target.value)} aria-label="切换团队空间">
@@ -233,7 +233,7 @@ export default function TeamSpaceConsole({ initialTab = "overview" }) {
       {!activeTeam ? (
         <section className="team-console-empty">
           <h2>还没有团队空间</h2>
-          <p>创建一个团队后，你就可以邀请成员、分配额度、创建团队 API Key，并按成员对账。</p>
+          <p>创建一个团队后，你就可以邀请成员、分配调用限制、创建团队 API Key，并按成员对账。</p>
           <button type="button" onClick={() => setCreateOpen(true)}>创建第一个团队</button>
         </section>
       ) : null}
@@ -287,7 +287,7 @@ export default function TeamSpaceConsole({ initialTab = "overview" }) {
           {tab === "members" ? (
             <section className="team-console-panel">
               <div className="team-console-panel-head">
-                <div><h2>团队成员与额度</h2><p>邀请和管理团队成员，设置他们每天、每月或总共能用多少额度。</p></div>
+                <div><h2>团队成员与限制</h2><p>邀请和管理团队成员，设置他们每天、每月或总共能用多少 Token 额度、余额限制或请求次数。</p></div>
                 {canManageMembers ? <button type="button" onClick={createInvite} disabled={saving}>{saving ? "生成中..." : "生成邀请链接"}</button> : null}
               </div>
               {canManageMembers ? (
@@ -295,12 +295,12 @@ export default function TeamSpaceConsole({ initialTab = "overview" }) {
                   <select value={inviteForm.role} onChange={(event) => setInviteForm({ ...inviteForm, role: event.target.value })}>{roleOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
                   <select value={inviteForm.type} onChange={(event) => setInviteForm({ ...inviteForm, type: event.target.value })}>{limitTypeOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
                   <select value={inviteForm.unit} onChange={(event) => setInviteForm({ ...inviteForm, unit: event.target.value })}>{limitUnitOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-                  <input value={inviteForm.amount} onChange={(event) => setInviteForm({ ...inviteForm, amount: event.target.value })} inputMode="decimal" aria-label="默认额度" />
+                  <input value={inviteForm.amount} onChange={(event) => setInviteForm({ ...inviteForm, amount: event.target.value })} inputMode="decimal" aria-label="默认限制" />
                 </div>
               ) : null}
               {lastInvite ? <div className="team-console-invite-result">邀请链接：<code>{`${typeof window !== "undefined" ? window.location.origin : ""}/invite/team/${lastInvite.inviteCode || lastInvite.invite_code}`}</code></div> : null}
               <Table
-                columns={["成员", "角色", "今日花费", "本月 Token", "剩余额度", "成功率", "最近使用", "操作"]}
+                columns={["成员", "角色", "今日花费", "本月 Token", "剩余限制", "成功率", "最近使用", "操作"]}
                 rows={(data.members || []).map((member) => ({
                   key: member.userId,
                   cells: [
@@ -447,7 +447,7 @@ function InlineLimitEditor({ member, onSave, saving }) {
     <div className="team-console-inline-editor">
       <select value={type} onChange={(event) => setType(event.target.value)}>{limitTypeOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
       <select value={unit} onChange={(event) => setUnit(event.target.value)}>{limitUnitOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-      <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" aria-label="成员额度" />
+      <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" aria-label="成员限制" />
       <button type="button" onClick={() => onSave(member, { type, unit, amount })} disabled={saving}>保存</button>
     </div>
   );

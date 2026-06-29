@@ -72,7 +72,7 @@ export default function V3Page() {
             </h2>
             <p style={{ margin: "18px auto 0", maxWidth: 780, color: "#aeb9cc", fontSize: 18, lineHeight: 1.8 }}>
               面向中国用户的 AI API 中转站。无需海外支付，无需复杂配置，
-              充值 Token 后即可统一接入 GPT、Claude、DeepSeek、Qwen 等模型。
+              充值余额后即可统一接入 GPT、Claude、DeepSeek、Qwen 等模型。
             </p>
             <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 28, flexWrap: "wrap" }}>
               <a

@@ -74,7 +74,7 @@ export default function V4Page() {
               </h2>
               <p style={{ margin: "18px 0 0", color: "#4b5563", fontSize: 18, lineHeight: 1.9, maxWidth: 720 }}>
                 面向中国用户的 AI API 中转站。用户打开首页后，
-                第一眼就知道可以充值 Token、统一调用多个模型、不会 API 也能三步接入。
+                第一眼就知道可以充值余额、统一调用多个模型、不会 API 也能三步接入。
               </p>
               <div style={{ display: "flex", gap: 14, marginTop: 30, flexWrap: "wrap" }}>
                 <a
@@ -129,7 +129,7 @@ export default function V4Page() {
                 </div>
               </div>
               <div style={{ marginTop: 20, display: "grid", gap: 10 }}>
-                {["人民币充值 Token", "OpenAI 兼容接口", "CC Switch 一键配置", "OpenClaw / Cline / Roo-Code 兼容"].map((item) => (
+                {["$ API 余额充值", "OpenAI 兼容接口", "CC Switch 一键配置", "OpenClaw / Cline / Roo-Code 兼容"].map((item) => (
                   <div
                     key={item}
                     style={{

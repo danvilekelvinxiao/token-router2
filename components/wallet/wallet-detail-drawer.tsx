@@ -85,9 +85,9 @@ export default function WalletDetailDrawer({ open, onClose, data, loading = fals
         ) : (
           <>
             <div className="wallet-detail-metrics">
-              <div><span>当前余额</span><strong><LiveNumber value={Number(wallet.balanceCny || 0)} prefix="¥" decimals={2} /></strong></div>
-              <div><span>当前套餐</span><strong>{plan?.planName || "普通余额钱包"}</strong></div>
-              <div><span>已用额度</span><strong><LiveNumber value={Number(wallet.usedQuotaCny || 0)} prefix="¥" decimals={2} /></strong></div>
+              <div><span>钱包余额</span><strong>{formatWalletCny(wallet.balanceApi ?? wallet.balanceCny)}</strong></div>
+              <div><span>当前套餐</span><strong>{plan?.planName || "钱包余额计费"}</strong></div>
+              <div><span>已用金额</span><strong>{formatWalletCny(wallet.usedQuotaApi ?? wallet.usedQuotaCny)}</strong></div>
               <div><span>使用进度</span><strong><LiveNumber value={Number(wallet.progressPercent || 0)} suffix="%" decimals={1} /></strong></div>
             </div>
 
@@ -95,13 +95,13 @@ export default function WalletDetailDrawer({ open, onClose, data, loading = fals
               <h3>套餐周期</h3>
               <Row label="套餐开始时间" value={formatWalletDate(plan?.startedAt)} />
               <Row label="套餐到期时间" value={formatWalletDate(plan?.expiresAt)} />
-              <Row label="剩余额度" value={formatWalletCny(wallet.remainingQuotaCny)} />
-              <Row label="总额度" value={wallet.totalQuotaCny ? formatWalletCny(wallet.totalQuotaCny) : "暂无套餐额度"} />
+              <Row label="可用余额" value={formatWalletCny(wallet.remainingQuotaCny)} />
+              <Row label="总金额" value={wallet.totalQuotaCny ? formatWalletCny(wallet.totalQuotaCny) : "暂无套餐金额"} />
               <Row label="已用 Token" value={formatWalletTokens(data?.token?.usedTokens)} />
             </section>
 
             <section className="wallet-detail-section">
-              <h3>额度池明细</h3>
+              <h3>余额池明细</h3>
               {wallets.length ? (
                 <div className="wallet-pool-list">
                   {wallets.map((wallet: any) => (
@@ -117,8 +117,8 @@ export default function WalletDetailDrawer({ open, onClose, data, loading = fals
                     </article>
                   ))}
                 </div>
-              ) : <p className="wallet-detail-muted">暂无可用额度池。</p>}
-              <p className="wallet-detail-muted">系统会优先消耗会员赠送额度和会员专属额度，之后根据你选择的消耗优先级使用套餐额度或充值余额。</p>
+              ) : <p className="wallet-detail-muted">暂无可用余额池。</p>}
+              <p className="wallet-detail-muted">系统会优先消耗会员赠送金额和会员专属余额，之后根据你选择的消耗优先级使用套餐用量或充值余额。</p>
             </section>
 
             <section className="wallet-detail-section">

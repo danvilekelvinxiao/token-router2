@@ -45,7 +45,7 @@ export default function ImageHelpPage() {
             </article>
             <article>
               <h2>4. 如何看每次消耗</h2>
-              <p>生成前会显示预计消耗，生成成功后顶部会出现灵动岛式扣费提示：-xx Token / -￥xx。</p>
+              <p>生成前会显示预计消耗，生成成功后顶部会出现灵动岛式扣费提示：-xx Token / -$xx API。</p>
             </article>
             <article>
               <h2>5. 如何查看自己的日志</h2>
@@ -69,7 +69,7 @@ export default function ImageHelpPage() {
             </article>
             <article>
               <h2>10. 失败为什么不扣费</h2>
-              <p>系统会先做余额校验，失败后自动退回预占额度，所以你看到的结果会是“生成失败，未扣费”。</p>
+              <p>系统会先做钱包余额校验，失败后自动退回预占金额，所以你看到的结果会是“生成失败，未扣费”。</p>
             </article>
             <article>
               <h2>11. 请求 ID 如何提交客服排查</h2>

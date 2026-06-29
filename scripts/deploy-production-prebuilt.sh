@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SERVER="${FLOWAPI_SERVER:-root@47.238.81.210}"
+SERVER="${FLOWAPI_SERVER:-root@8.209.211.209}"
 APP_DIR="${FLOWAPI_APP_DIR:-/var/www/flowapi}"
 SSH_OPTS="${FLOWAPI_SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o StrictHostKeyChecking=no}"
 
@@ -16,9 +16,16 @@ rsync -az --delete \
   --exclude .env.local \
   --exclude .env.production \
   --exclude .claude \
-  --exclude .next/cache \
+  --exclude .next \
   --exclude public/generated-images \
   ./ "$SERVER:$APP_DIR/"
+
+# Keep the runtime build atomic and exact. Syncing .next separately avoids leaving a
+# mixed build on the server while still deleting stale build cache and old chunks.
+rsync -az --delete --delete-excluded \
+  -e "ssh $SSH_OPTS" \
+  --exclude cache \
+  .next/ "$SERVER:$APP_DIR/.next/"
 
 if [ "${FLOWAPI_SYNC_NODE_MODULES:-0}" = "1" ]; then
   rsync -az --delete \
@@ -57,4 +64,4 @@ echo "==> Public health check"
 curl -fsS -m 20 "https://flowapi.fun/api/health" && echo
 
 echo "==> Public asset check"
-node scripts/check-public-page-assets.mjs "${FLOWAPI_PUBLIC_BASE_URL:-https://flowapi.fun}" /admin/model-market /admin/image-models
+node scripts/check-public-page-assets.mjs "${FLOWAPI_PUBLIC_BASE_URL:-https://flowapi.fun}" / /login /api-management /dashboard /admin/model-market /admin/image-models

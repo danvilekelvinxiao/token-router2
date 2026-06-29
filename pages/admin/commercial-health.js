@@ -10,7 +10,6 @@ const LEVEL_META = {
 };
 
 export default function CommercialHealthPage() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [health, setHealth] = useState(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState("");
@@ -23,10 +22,7 @@ export default function CommercialHealthPage() {
   async function runCheck() {
     setLoading(true);
     try {
-      sessionStorage.setItem("flowapi_admin_secret", secret);
-      const response = await fetch("/api/admin/commercial-health", {
-        headers: secret ? { "x-admin-secret": secret } : {},
-      });
+      const response = await fetch("/api/admin/commercial-health");
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.success) throw new Error(data.error || "商业闭环检查失败");
       setHealth(data);
@@ -61,14 +57,6 @@ export default function CommercialHealthPage() {
               <p>一键检查注册验证码、API Key、模型广场、上游转发、扣费账本、充值订单、图片生成、Excel 导出和 sub2api 渠道状态。</p>
             </div>
             <div className="commercial-health-actions">
-              <input
-                value={secret}
-                onChange={(event) => setSecret(event.target.value)}
-                onBlur={() => sessionStorage.setItem("flowapi_admin_secret", secret)}
-                type="password"
-                placeholder="管理密钥"
-                aria-label="管理密钥"
-              />
               <button type="button" onClick={runCheck} disabled={loading}>{loading ? "检查中..." : "一键检查商业闭环"}</button>
             </div>
           </header>

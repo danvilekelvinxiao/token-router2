@@ -14,7 +14,7 @@ export default function ImageCostIsland({ notice, onClose }) {
         ) : hasCost ? (
           <>
             <span>-{notice.tokenCost} Token</span>
-            <span>-¥{notice.moneyCost}</span>
+            <span>-${notice.moneyCost}</span>
           </>
         ) : (
           <span>{notice.message || "操作成功"}</span>

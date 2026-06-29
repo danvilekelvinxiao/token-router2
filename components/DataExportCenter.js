@@ -31,7 +31,7 @@ const EXPORTS = [
   {
     key: "package",
     title: "套餐与兑换记录",
-    description: "兑换时间、套餐名称、激活码、有效期、到账额度、状态。",
+    description: "兑换时间、套餐名称、激活码、有效期、到账金额、状态。",
     button: "导出套餐与兑换记录",
     endpoint: "/api/user/export/package-records",
   },

@@ -18,10 +18,10 @@ const models = [
 ];
 
 const plans = [
-  { name: "免费体验", price: "¥0", desc: "注册即送 Token，适合先测试效果", features: ["网页端体验", "基础模型试用", "新手文档"] },
-  { name: "个人版", price: "按量充值", desc: "适合个人开发者、AI 工具玩家", features: ["人民币充值", "调用日志", "模型广场"] },
+  { name: "免费体验", price: "$0", desc: "注册即送 Token，适合先测试效果", features: ["网页端体验", "基础模型试用", "新手文档"] },
+  { name: "个人版", price: "按量充值", desc: "适合个人开发者、AI 工具玩家", features: ["$ API 充值", "调用日志", "模型广场"] },
   { name: "团队版", price: "余额池", desc: "适合工作室、小团队、自媒体", features: ["多API Key管理", "成本统计", "智能路由"] },
-  { name: "企业版", price: "专属方案", desc: "更高额度、独立通道、专属客服", features: ["独立通道", "专属客服", "用量对账"] },
+  { name: "企业版", price: "专属方案", desc: "更高用量上限、独立通道、专属客服", features: ["独立通道", "专属客服", "用量对账"] },
 ];
 
 export default function V2() {
@@ -312,7 +312,7 @@ export default function V2() {
                         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", color: "#777", fontSize: 11, marginTop: 8 }}>
                           <span>首字 {item.firstTokenMs || 0}ms</span>
                           <span>总耗时 {item.latencyMs || 0}ms</span>
-                          <span>¥{Number(item.cost || 0).toFixed(6)}</span>
+                          <span>${Number(item.cost || 0).toFixed(6)}</span>
                         </div>
                         <p style={{ margin: "12px 0 0", color: item.status === "success" ? "#333" : "#dc2626", lineHeight: 1.7, whiteSpace: "pre-wrap", fontSize: 13 }}>
                           {item.status === "success" ? item.responseText : item.errorMessage}

@@ -29,7 +29,7 @@ export default function ImageLogCard({
         </div>
         <div className="image-log-metrics">
           <strong>-{Number(item.tokenCost || 0).toFixed(1)} Token</strong>
-          <span>-￥{Number(item.moneyCost || 0).toFixed(2)}</span>
+          <span>-${Number(item.moneyCost || 0).toFixed(2)}</span>
         </div>
       </div>
 

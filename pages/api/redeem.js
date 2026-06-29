@@ -4,6 +4,13 @@ import { assertCustomerOwner } from "@/lib/session";
 import { seedMockData } from "@/lib/redeem-codes";
 import { upsertUserMembership } from "@/lib/membership/store";
 import { grantUserPackage } from "@/lib/packages/store";
+import { toApiMoneyString } from "@/lib/wallet/money";
+
+const NEW_API_ADMIN_URL = process.env.NEW_API_ADMIN_URL || process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080";
+
+function formatApiAmount(value) {
+  return `$ API ${toApiMoneyString(value).replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1")}`;
+}
 
 // Only seed mock data in development mode, never in production
 const ALLOW_MOCK_REDEEM_CODES = process.env.NODE_ENV !== "production" && process.env.ALLOW_DEV_REDEEM_MOCK !== "false";
@@ -41,7 +48,7 @@ export default async function handler(req, res) {
     await grantTemporaryCredit(session.customerId, {
       amount: Number((Number(result.tokenAmount || 0) / 10000).toFixed(6)),
       reason: `redeem_token_code:${result.record?.codeId || code.trim()}`,
-      detail: `激活码兑换 ${Number(result.tokenAmount || 0).toLocaleString()} Token 额度`,
+      detail: `激活码兑换 ${Number(result.tokenAmount || 0).toLocaleString()} Token`,
     });
   }
   if (result.packageId) {
@@ -69,8 +76,8 @@ export default async function handler(req, res) {
   const redeemDetail = result.packageId
     ? `激活码兑换成功: ${code.trim()}，套餐/服务 ${result.packageId}`
     : result.tokenAmount > 0
-      ? `激活码兑换成功: ${code.trim()}，到账 ${Number(result.tokenAmount).toLocaleString()} Token`
-      : `激活码兑换成功: ${code.trim()}，到账 ¥${Number(result.amountCny).toFixed(2)}`;
+      ? `激活码兑换成功: ${code.trim()}，到账 ${Number(result.tokenAmount).toLocaleString()} Token 额度`
+      : `激活码兑换成功: ${code.trim()}，到账 ${formatApiAmount(result.amountCny)}`;
 
   await logActivity({
     customerId: session.customerId,
@@ -88,7 +95,7 @@ export default async function handler(req, res) {
     const apiKeys = updatedCustomer?.apiKeys || [];
     const primaryKey = apiKeys[0];
     if (primaryKey?.newApiId) {
-      await fetch(`${(process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/+$/, "")}/api/token/${primaryKey.newApiId}/quota`, {
+      await fetch(`${NEW_API_ADMIN_URL.replace(/\/+$/, "")}/api/token/${primaryKey.newApiId}/quota`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -110,11 +117,13 @@ export default async function handler(req, res) {
       ? `兑换成功，已为你的账户开通 ${result.packageId}。`
       : result.tokenAmount > 0
         ? `兑换成功，已为你的账户增加 ${Number(result.tokenAmount).toLocaleString()} Token 额度。`
-        : `兑换成功，已为你的账户增加 ¥${result.amountCny.toFixed(2)} 余额。`,
+        : `兑换成功，已为你的账户增加 ${formatApiAmount(result.amountCny)} 余额。`,
     amountCny: result.amountCny,
+    amountApi: result.amountCny,
     tokenAmount: result.tokenAmount || 0,
     packageId: result.packageId || "",
     newBalanceCny: result.newBalanceCny,
+    newBalanceApi: result.newBalanceCny,
     customer: updatedCustomer,
   });
 }

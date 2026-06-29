@@ -9,7 +9,7 @@ import InteractiveCard from "@/components/InteractiveCard";
 import CardDetailModal, { DetailRows, DetailTable } from "@/components/CardDetailModal";
 import { listModelProducts } from "@/lib/model-products";
 const API_BASE_URL = getPublicApiBaseUrl();
-const defaultModel = "gpt-5.4-mini";
+const defaultModel = "gpt-5.5";
 const CC_SWITCH_RELEASE_URL = "https://github.com/farion1231/cc-switch/releases/tag/v3.15.0";
 const CC_SWITCH_WINDOWS_URL = "https://github.com/farion1231/cc-switch/releases/download/v3.15.0/CC-Switch-v3.15.0-Windows.msi";
 const MODEL_PRODUCT_OPTIONS = listModelProducts({ includeUnavailable: true });
@@ -57,7 +57,11 @@ function makeCcSwitchConfig(keys, apiBaseUrl) {
     }), null, 2);
   }
   return JSON.stringify({
-    name: "FlowAPI", app: "codex", endpoint: apiBaseUrl,
+    name: "FlowAPI",
+    app: "codex",
+    base_url: apiBaseUrl,
+    endpoint: apiBaseUrl,
+    models: [defaultModel],
     keys: keys.map((key) => ({ name: key.label, api_key: key.token, model: key.publicModelId || defaultModel })),
   }, null, 2);
 }
@@ -471,7 +475,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
 
   function openCcSwitch(key) {
     if (!key?.token || !String(key.token).startsWith("sk-")) {
-      showMessage("没有拿到完整 sk- 开头 API Key，已停止导入 CC-Switch。请重新创建 API Key。");
+      showMessage("没有拿到完整 sk- 开头 API Key，已停止导入 CC-Switch。请刷新后重试或重新创建 API Key。");
       return;
     }
     const currentApiBaseUrl = getPublicApiBaseUrl();
@@ -653,7 +657,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       <div className="api-hero-banner">
         <div>
           <h1>API 管理</h1>
-          <p>为不同模型创建独立 API Key，方便管理额度、权限和消耗。请先选择你要使用的模型，再创建对应的 API Key。</p>
+          <p>为不同模型创建独立 API Key，方便管理 Token 额度、权限和消耗。请先选择你要使用的模型，再创建对应的 API Key。</p>
         </div>
         <div className="api-hero-actions">
           <a href={CC_SWITCH_WINDOWS_URL} target="_blank" rel="noopener noreferrer">下载 CC-Switch 自动配置</a>
@@ -744,7 +748,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
               <th>API Key名称</th>
               <th>绑定模型</th>
               <th>状态</th>
-              <th>剩余额度 / 总额度</th>
+              <th>Token 额度 / 调用限制</th>
               <th>API Key</th>
               <th>最后调用</th>
               <th>操作</th>
@@ -763,7 +767,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
                     <code>{key.publicModelId || "请重新创建模型专用 Key"}</code>
                   </td>
                   <td><span className={`flow-status-pill ${status.tone}`}>{status.label}</span></td>
-                  <td><span className="flow-soft-pill">无限额度</span></td>
+                  <td><span className="flow-soft-pill">无限制</span></td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <span className="flow-token-pill">
                       <code>{isVisible ? key.token : maskToken(key.token)}</code>

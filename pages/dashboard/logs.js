@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
+import { formatApiMoneyPrecise, formatToken } from "@/lib/format/number-format";
 
 const TABS = [
   { id: "all", label: "全部" },
@@ -195,12 +196,12 @@ export default function DashboardLogsPage() {
                 <input type="date" value={filters.endDate} onChange={(event) => updateFilter("endDate", event.target.value)} />
               </label>
               <label>
-                <span>最小金额</span>
-                <input type="number" value={filters.minAmount} onChange={(event) => updateFilter("minAmount", event.target.value)} placeholder="￥0.00" />
+                <span>最小消费金额</span>
+                <input type="number" value={filters.minAmount} onChange={(event) => updateFilter("minAmount", event.target.value)} placeholder="$ API 0.00" />
               </label>
               <label>
-                <span>最大金额</span>
-                <input type="number" value={filters.maxAmount} onChange={(event) => updateFilter("maxAmount", event.target.value)} placeholder="￥999.00" />
+                <span>最大消费金额</span>
+                <input type="number" value={filters.maxAmount} onChange={(event) => updateFilter("maxAmount", event.target.value)} placeholder="$ API 999.00" />
               </label>
             </div>
             <div className="usage-log-filter-actions">
@@ -242,8 +243,8 @@ export default function DashboardLogsPage() {
                       <td>{item.model || "-"}</td>
                       <td>{TABS.find((entry) => entry.id === item.type)?.label || item.type}</td>
                       <td>{item.group || "-"}</td>
-                      <td>{Number(item.totalTokens || 0).toFixed(1)}</td>
-                      <td>￥{Number(item.moneyCost || 0).toFixed(2)}</td>
+                      <td>{formatToken(item.totalTokens, { compact: false })}</td>
+                      <td>{formatApiMoneyPrecise(item.moneyCost || 0)}</td>
                       <td>{item.status}</td>
                       <td>{item.latencyMs ? `${item.latencyMs} ms` : "-"}</td>
                       <td><a href={item.type === "image" || item.id?.startsWith("img_") ? `/images/history?requestId=${encodeURIComponent(item.id)}` : `/dashboard?callId=${encodeURIComponent(item.id || "")}`}>查看</a></td>

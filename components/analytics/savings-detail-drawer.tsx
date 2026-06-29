@@ -72,9 +72,9 @@ export default function SavingsDetailDrawer({
         ) : (
           <>
             <div className="savings-summary-grid">
-              <div><span>官方预估费用</span><strong><LiveNumber value={formatSmallCny(summary.officialCostCny).replace("¥", "")} prefix="¥" /></strong></div>
-              <div><span>FlowAPI 实际费用</span><strong><LiveNumber value={formatSmallCny(summary.actualCostCny).replace("¥", "")} prefix="¥" /></strong></div>
-              <div className="saving-positive"><span>已节省费用</span><strong><LiveNumber value={formatSmallCny(summary.savedAmountCny).replace("¥", "")} prefix="¥" /></strong></div>
+              <div><span>官方预估费用</span><strong><LiveNumber value={formatSmallCny(summary.officialCostCny).replace("$", "")} prefix="$" /></strong></div>
+              <div><span>FlowAPI 实际费用</span><strong><LiveNumber value={formatSmallCny(summary.actualCostCny).replace("$", "")} prefix="$" /></strong></div>
+              <div className="saving-positive"><span>已节省费用</span><strong><LiveNumber value={formatSmallCny(summary.savedAmountCny).replace("$", "")} prefix="$" /></strong></div>
               <div><span>平均节省比例</span><strong><LiveNumber value={Number(summary.savedPercent || 0)} suffix="%" decimals={1} /></strong></div>
             </div>
 

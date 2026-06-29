@@ -10,8 +10,8 @@ export default async function handler(req, res) {
     const models = await listAicardsSyncedModels();
     return res.status(200).json({
       ok: true,
-      providerKey: "flowapi",
-      channelName: "FlowAPI 备用线路",
+      providerKey: "aicards",
+      channelName: "AICards 备用线路",
       isUserVisible: false,
       models,
     });

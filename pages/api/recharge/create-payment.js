@@ -17,7 +17,7 @@ function buildPurchaseRef(body = {}) {
     `购买类型：${purchaseType}`,
     packageId ? `套餐ID：${packageId}` : "",
     packageName ? `套餐名称：${packageName}` : "",
-    quotaText ? `额度：${quotaText} Token` : "",
+    quotaText ? `用量：${quotaText} Token` : "",
     validDays ? `有效期：${validDays} 天` : "",
     paymentRef ? `付款备注：${paymentRef}` : "",
   ].filter(Boolean).join("\n");
@@ -29,10 +29,11 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { customerId, amount, paymentMethod, purchaseType = "balance_recharge", packageId = "", packageName = "", quotaText = "", validDays = null } = req.body || {};
+  const { customerId, amount, paymentAmountRmb, paymentMethod, purchaseType = "balance_recharge", packageId = "", packageName = "", quotaText = "", validDays = null } = req.body || {};
   const session = assertCustomerOwner(req, res, customerId);
   if (!session) return;
-  const value = Number(amount);
+  const requestedPaymentAmountRmb = paymentAmountRmb ?? amount;
+  const value = Number(requestedPaymentAmountRmb);
   if (!Number.isFinite(value) || value <= 0) {
     return res.status(400).json({ error: "缺少有效的充值参数" });
   }

@@ -56,7 +56,7 @@ export default function CallSavingsList({ items = [] }: { items?: CallSaving[] }
           ? item.deductionBreakdown.map((part) => {
               const tokenText = Number(part.tokensDeducted || 0) > 0 ? `${Number(part.tokensDeducted || 0).toLocaleString()} Token` : "";
               const amountText = Number(part.amountCnyDeducted || 0) > 0 ? formatSmallCny(part.amountCnyDeducted) : "";
-              return `${part.walletName || part.walletType || "额度"}${tokenText || amountText ? `：${tokenText || amountText}` : ""}`;
+              return `${part.walletName || part.walletType || "钱包余额"}${tokenText || amountText ? `：${tokenText || amountText}` : ""}`;
             }).join(" · ")
           : item.deductionSource || "扣费来源同步中";
         return (

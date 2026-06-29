@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-SERVER="${FLOWAPI_SERVER:-root@47.238.81.210}"
+SERVER="${FLOWAPI_SERVER:-root@8.209.211.209}"
 APP_DIR="${FLOWAPI_APP_DIR:-/var/www/flowapi}"
 SSH_OPTS="${FLOWAPI_SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=10 -o StrictHostKeyChecking=no}"
 SSH_ID="${FLOWAPI_SSH_ID:-$HOME/.ssh/id_ed25519}"

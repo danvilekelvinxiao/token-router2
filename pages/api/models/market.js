@@ -1,7 +1,7 @@
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { listModelPricing, listPublishedModels } from "@/lib/admin-commercial-config";
 import { getContent } from "@/lib/content-cms";
-import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { dedupePublicModelList, sanitizePublicModelForClient } from "@/lib/public-model-provider";
 import { listImageModels, mapPublicImageModel } from "@/lib/image-studio";
 
 const CATEGORY_META = {
@@ -24,7 +24,9 @@ export default async function handler(req, res) {
       listImageModels().then((models) => models.map(mapPublicImageModel)).catch(() => []),
     ]);
     const pricingMap = new Map(pricingConfigs.map((item) => [item.modelId, item]));
+    const legacyProIds = new Set(["gpt55-pro", "flowapi-gpt55-pro", "gpt-5.5-pro"]);
     const staticModels = products
+      .filter((p) => !legacyProIds.has(String(p.id || p.publicModelId || p.modelId || "").toLowerCase()))
       .filter((p) => p.isAvailable && p.showInModelSquare !== false)
       .map((p) => sanitizePublicModelForClient(normalizeMarketModel({
         id: p.id,
@@ -40,7 +42,7 @@ export default async function handler(req, res) {
       })));
     const existing = new Set(staticModels.map((model) => model.modelId));
     const adminModels = publishedModels
-      .filter((model) => model.enabled && model.showInModelSquare && !existing.has(model.modelId))
+      .filter((model) => model.enabled && model.showInModelSquare && !existing.has(model.modelId) && !legacyProIds.has(String(model?.id || model?.modelId || model?.publicModelId || "").toLowerCase()))
       .map((model) => sanitizePublicModelForClient(normalizeMarketModel({ ...model, pricing: pricingMap.get(model.modelId) })));
     adminModels.forEach((model) => existing.add(model.modelId));
     const publicImageModels = imageModels
@@ -64,7 +66,7 @@ export default async function handler(req, res) {
         },
       })));
 
-    const models = [...staticModels, ...adminModels, ...publicImageModels]
+    const models = dedupePublicModelList([...staticModels, ...adminModels, ...publicImageModels])
       .sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));
     const categories = getCategoryCounts(models);
 

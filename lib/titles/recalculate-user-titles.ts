@@ -294,7 +294,7 @@ function buildTitle(rule: any, metric: TitleMetricDefinition | undefined, userMe
   const id = `${rule.metricKey.replace(/[^a-zA-Z0-9]+/g, "_")}_${userMetric.rank <= rule.topRankLimit ? `rank_${userMetric.rank}` : `top_${userMetric.percentileTop}`}`;
   const title = String(rule.nameTemplate || `${rule.metricName}{rankLabel}`).replace("{rank}", String(userMetric.rank)).replace("{rankLabel}", rankLabel).replace("{percentile}", String(userMetric.percentileTop || ""));
   const description = String(rule.descriptionTemplate || `你是 FlowAPI ${rule.metricName}排名{rankDescription}的用户。`).replace("{rank}", String(userMetric.rank)).replace("{rankLabel}", rankLabel).replace("{rankDescription}", rankDescription).replace("{percentile}", String(userMetric.percentileTop || ""));
-  const metricUnit = rule.metricType === "currency" ? "¥" : rule.metricType === "token" ? "Token" : rule.metricType === "day" ? "天" : "次";
+  const metricUnit = rule.metricType === "currency" ? "$" : rule.metricType === "token" ? "Token" : rule.metricType === "day" ? "天" : "次";
   return {
     id,
     name: title,

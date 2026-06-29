@@ -15,7 +15,7 @@ function buildPurchaseRef(body = {}) {
     `购买类型：${purchaseType}`,
     packageId ? `套餐ID：${packageId}` : "",
     packageName ? `套餐名称：${packageName}` : "",
-    quotaText ? `额度：${quotaText} Token` : "",
+    quotaText ? `用量：${quotaText} Token` : "",
     validDays ? `有效期：${validDays} 天` : "",
     paymentRef ? `付款备注：${paymentRef}` : "",
   ].filter(Boolean).join("\n");
@@ -42,14 +42,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { customerId, amount, paymentMethod = "wechat", purchaseType = "balance_recharge", packageId = "", packageName = "", quotaText = "", validDays = null } = req.body || {};
+  const { customerId, amount, paymentAmountRmb, paymentMethod = "wechat", purchaseType = "balance_recharge", packageId = "", packageName = "", quotaText = "", validDays = null } = req.body || {};
   const session = assertCustomerOwner(req, res, customerId);
   if (!session) return;
-  if (!amount) {
+  const requestedPaymentAmountRmb = paymentAmountRmb ?? amount;
+  if (!requestedPaymentAmountRmb) {
     return res.status(400).json({ error: "缺少参数" });
   }
 
-  const value = Number(amount);
+  const value = Number(requestedPaymentAmountRmb);
   if (!Number.isFinite(value) || value <= 0) {
     return res.status(400).json({ error: "金额无效" });
   }
@@ -62,7 +63,7 @@ export default async function handler(req, res) {
     customerId: session.customerId,
     action: "recharge_order",
     category: "payment",
-    detail: purchaseType === "balance_recharge" ? `${paymentMethod} 充值订单 ¥${value.toFixed(2)}` : `${paymentMethod} 套餐订单 ¥${value.toFixed(2)} ${paymentRef}`,
+    detail: purchaseType === "balance_recharge" ? `${paymentMethod} 充值订单 ¥${value.toFixed(2)}，预计到账 $ API ${Number(result.order?.creditedAmountApi || 0).toFixed(2)}` : `${paymentMethod} 套餐订单 ¥${value.toFixed(2)} ${paymentRef}`,
     amount: value,
     ip: req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || "",
     userAgent: req.headers["user-agent"] || "",

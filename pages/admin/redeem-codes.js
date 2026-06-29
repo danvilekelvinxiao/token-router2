@@ -1,6 +1,7 @@
 import Head from "next/head";
 import { useCallback, useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
+import { formatApiMoney, formatRmb } from "@/lib/format/number-format";
 
 /* ==================== Helpers ==================== */
 
@@ -30,7 +31,7 @@ const SOURCE_MAP = {
   gift: "客服补偿",
 };
 
-const TYPE_LABELS = { balance: "金额额度", token: "Token 额度", package: "套餐服务" };
+const TYPE_LABELS = { balance: "账户余额", token: "Token 额度", package: "套餐服务" };
 
 const AMOUNT_OPTIONS = [20, 50, 100, 200, 500, 1000];
 const TOKEN_OPTIONS = [
@@ -52,6 +53,12 @@ const PACKAGE_OPTIONS = [
   { label: "黑金会员", value: "black_gold_membership" },
   { label: "附加服务", value: "addon_service" },
 ];
+
+function formatActivationValue(item = {}) {
+  if (item.type === "balance") return formatApiMoney(item.amountApi ?? item.amountCny ?? item.amount);
+  if (item.type === "token") return `${(Number(item.tokenAmount || 0) / 1000).toFixed(0)}K Token 额度`;
+  return PACKAGE_OPTIONS.find((opt) => opt.value === item.packageId)?.label || item.packageId || "套餐服务";
+}
 
 function computeExpiry(option, customDate) {
   if (!option) return null;
@@ -82,12 +89,11 @@ export default function RedeemCodesPage() {
   const [createError, setCreateError] = useState("");
 
   // Form states
-  const [form, setForm] = useState({ name: "淘宝 ¥100 充值码", type: "balance", amountCny: 100, tokenAmount: "", packageId: "weekly_plan", priceCny: 100, source: "taobao", note: "", expireOption: "", expireDate: "", maxRedemptionsPerCode: 1, enabled: true });
+  const [form, setForm] = useState({ name: "淘宝 $ API 100 充值码", type: "balance", amountCny: 100, tokenAmount: "", packageId: "weekly_plan", priceCny: 100, source: "taobao", note: "", expireOption: "", expireDate: "", maxRedemptionsPerCode: 1, enabled: true });
   const [batchForm, setBatchForm] = useState({ name: "", type: "balance", amountCny: 100, tokenAmount: "", packageId: "weekly_plan", priceCny: 100, source: "taobao", quantity: 10, note: "", expireOption: "", expireDate: "", maxRedemptionsPerCode: 1, enabled: true });
 
   function adminHeaders(extra = {}) {
-    const secret = typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || "";
-    return { ...extra, ...(secret ? { "x-admin-secret": secret } : {}) };
+    return { ...extra };
   }
 
   const loadData = useCallback(async () => {
@@ -139,7 +145,7 @@ export default function RedeemCodesPage() {
   async function handleBatch() {
     setCreateError("");
     const body = {
-      name: batchForm.name || `淘宝 ¥${batchForm.amountCny} 激活码批次`,
+      name: batchForm.name || `淘宝 $ API ${batchForm.amountCny} 激活码批次`,
       type: batchForm.type,
       amountCny: batchForm.type === "balance" ? Number(batchForm.amountCny) : 0,
       tokenAmount: batchForm.type === "token" ? Number(batchForm.tokenAmount) : 0,
@@ -215,7 +221,7 @@ export default function RedeemCodesPage() {
           <header className="redeem-admin-header">
             <div>
               <h1>激活码管理</h1>
-              <p>创建、发放和管理淘宝激活码，用户可在充值页自助兑换余额或 Token 额度。</p>
+              <p>创建、发放和管理淘宝激活码，用户可在充值页自助兑换 $ API 余额或 Token 额度。</p>
             </div>
             <div className="redeem-admin-actions">
               <button type="button" className="redeem-btn primary" onClick={() => { setShowCreate(true); setCreateResult(null); setCreateError(""); }}>创建激活码</button>
@@ -269,7 +275,7 @@ export default function RedeemCodesPage() {
                       <th>激活码</th>
                       <th>名称</th>
                       <th>类型</th>
-                      <th>兑换额度</th>
+                      <th>兑换内容</th>
                       <th>售价</th>
                       <th>来源</th>
                       <th>状态</th>
@@ -292,8 +298,8 @@ export default function RedeemCodesPage() {
                           </td>
                           <td>{c.name}</td>
                           <td>{TYPE_LABELS[c.type] || c.type}</td>
-                          <td>{c.type === "balance" ? `¥${c.amountCny}` : c.type === "token" ? `${(c.tokenAmount / 1000).toFixed(0)}K Token` : (PACKAGE_OPTIONS.find((opt) => opt.value === c.packageId)?.label || c.packageId || "套餐服务")}</td>
-                          <td>¥{c.priceCny}</td>
+                          <td>{formatActivationValue(c)}</td>
+                          <td>{formatRmb(c.priceCny)}</td>
                           <td>{SOURCE_MAP[c.source] || c.source}</td>
                           <td><span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 6, fontSize: 12, fontWeight: 700, background: displayStatus.bg, color: displayStatus.color }}>{displayStatus.label}</span></td>
                           <td>{c.usedByUserName || "-"}</td>
@@ -330,7 +336,7 @@ export default function RedeemCodesPage() {
                       <th>用户</th>
                       <th>激活码</th>
                       <th>类型</th>
-                      <th>兑换额度</th>
+                      <th>兑换内容</th>
                       <th>来源</th>
                     </tr>
                   </thead>
@@ -341,7 +347,7 @@ export default function RedeemCodesPage() {
                         <td>{r.userName || r.userId}</td>
                         <td><code>{maskCode(r.code)}</code></td>
                         <td>{TYPE_LABELS[r.type] || r.type}</td>
-                        <td>{r.type === "balance" ? `¥${r.amountCny}` : r.type === "token" ? `${(r.tokenAmount / 1000).toFixed(0)}K Token` : (PACKAGE_OPTIONS.find((opt) => opt.value === r.packageId)?.label || r.packageId || "套餐服务")}</td>
+                        <td>{formatActivationValue(r)}</td>
                         <td>{SOURCE_MAP[r.source] || r.source}</td>
                       </tr>
                     ))}
@@ -372,7 +378,7 @@ export default function RedeemCodesPage() {
                       <tr key={b.id}>
                         <td>{b.name}</td>
                         <td>{b.quantity}</td>
-                        <td>{b.type === "balance" ? `¥${b.amountCny}` : `${(b.tokenAmount / 1000).toFixed(0)}K Token`}</td>
+                        <td>{formatActivationValue(b)}</td>
                         <td>{TYPE_LABELS[b.type] || b.type}</td>
                         <td>{SOURCE_MAP[b.source] || b.source}</td>
                         <td>{formatDate(b.createdAt)}</td>
@@ -402,7 +408,7 @@ export default function RedeemCodesPage() {
                     <div className="redeem-result-actions">
                       <button type="button" onClick={() => copyText(createResult.code)}>{copied === createResult.code ? "已复制" : "复制激活码"}</button>
                       <button type="button" onClick={() => { setShowCreate(false); loadData(); }}>查看列表</button>
-                      <button type="button" onClick={() => { setCreateResult(null); setCreateError(""); setForm({ name: "淘宝 ¥100 充值码", type: "balance", amountCny: 100, tokenAmount: "", packageId: "weekly_plan", priceCny: 100, source: "taobao", note: "", expireOption: "", expireDate: "", maxRedemptionsPerCode: 1, enabled: true }); }}>继续创建</button>
+                      <button type="button" onClick={() => { setCreateResult(null); setCreateError(""); setForm({ name: "淘宝 $ API 100 充值码", type: "balance", amountCny: 100, tokenAmount: "", packageId: "weekly_plan", priceCny: 100, source: "taobao", note: "", expireOption: "", expireDate: "", maxRedemptionsPerCode: 1, enabled: true }); }}>继续创建</button>
                     </div>
                   </div>
                 ) : (
@@ -410,17 +416,17 @@ export default function RedeemCodesPage() {
                     <label>名称 <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
                     <label>兑换类型
                       <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-                        <option value="balance">金额额度</option>
+                        <option value="balance">账户余额</option>
                         <option value="token">Token 额度</option>
                         <option value="package">套餐服务</option>
                       </select>
                     </label>
                     {form.type === "balance" ? (
                       <div className="redeem-amount-grid">
-                        <span>兑换金额</span>
+                        <span>$ API 到账金额</span>
                         <div>
                           {AMOUNT_OPTIONS.map((v) => (
-                            <button key={v} type="button" className={form.amountCny === v ? "active" : ""} onClick={() => setForm({ ...form, amountCny: v })}>¥{v}</button>
+                            <button key={v} type="button" className={form.amountCny === v ? "active" : ""} onClick={() => setForm({ ...form, amountCny: v })}>{formatApiMoney(v)}</button>
                           ))}
                           <input type="number" placeholder="自定义" value={form.amountCny === 0 || !AMOUNT_OPTIONS.includes(form.amountCny) ? form.amountCny : ""} onChange={(e) => setForm({ ...form, amountCny: Number(e.target.value) || 0 })} />
                         </div>
@@ -442,7 +448,7 @@ export default function RedeemCodesPage() {
                         </select>
                       </label>
                     )}
-                    <label>售卖价格 <input type="number" value={form.priceCny} onChange={(e) => setForm({ ...form, priceCny: Number(e.target.value) || 0 })} placeholder="¥100" /></label>
+                    <label>售卖价格（¥） <input type="number" value={form.priceCny} onChange={(e) => setForm({ ...form, priceCny: Number(e.target.value) || 0 })} placeholder="¥100" /></label>
                     <label>单码可使用次数 <input type="number" min={1} value={form.maxRedemptionsPerCode} onChange={(e) => setForm({ ...form, maxRedemptionsPerCode: Number(e.target.value) || 1 })} /></label>
                     <label>有效期
                       <select value={form.expireOption} onChange={(e) => setForm({ ...form, expireOption: e.target.value })}>
@@ -490,23 +496,23 @@ export default function RedeemCodesPage() {
                   </div>
                 ) : (
                   <div className="redeem-modal-body">
-                    <label>批次名称 <input value={batchForm.name} onChange={(e) => setBatchForm({ ...batchForm, name: e.target.value })} placeholder="淘宝 ¥100 激活码 2026-05 批次" /></label>
+                    <label>批次名称 <input value={batchForm.name} onChange={(e) => setBatchForm({ ...batchForm, name: e.target.value })} placeholder="淘宝 $ API 100 激活码 2026-05 批次" /></label>
                     <label>生成数量 <input type="number" min={1} max={500} value={batchForm.quantity} onChange={(e) => setBatchForm({ ...batchForm, quantity: Number(e.target.value) || 0 })} /></label>
                     <label>兑换类型
                       <select value={batchForm.type} onChange={(e) => setBatchForm({ ...batchForm, type: e.target.value })}>
-                        <option value="balance">金额额度</option>
+                        <option value="balance">账户余额</option>
                         <option value="token">Token 额度</option>
                         <option value="package">套餐服务</option>
                       </select>
                     </label>
                     {batchForm.type === "balance" ? (
-                      <div className="redeem-amount-grid"><span>兑换金额</span><div>{AMOUNT_OPTIONS.map((v) => (<button key={v} type="button" className={batchForm.amountCny === v ? "active" : ""} onClick={() => setBatchForm({ ...batchForm, amountCny: v })}>¥{v}</button>))}<input type="number" placeholder="自定义" value={batchForm.amountCny === 0 || !AMOUNT_OPTIONS.includes(batchForm.amountCny) ? batchForm.amountCny : ""} onChange={(e) => setBatchForm({ ...batchForm, amountCny: Number(e.target.value) || 0 })} /></div></div>
+                      <div className="redeem-amount-grid"><span>$ API 到账金额</span><div>{AMOUNT_OPTIONS.map((v) => (<button key={v} type="button" className={batchForm.amountCny === v ? "active" : ""} onClick={() => setBatchForm({ ...batchForm, amountCny: v })}>{formatApiMoney(v)}</button>))}<input type="number" placeholder="自定义" value={batchForm.amountCny === 0 || !AMOUNT_OPTIONS.includes(batchForm.amountCny) ? batchForm.amountCny : ""} onChange={(e) => setBatchForm({ ...batchForm, amountCny: Number(e.target.value) || 0 })} /></div></div>
                     ) : batchForm.type === "token" ? (
                       <div className="redeem-amount-grid"><span>Token 额度</span><div>{TOKEN_OPTIONS.map((opt) => (<button key={opt.value} type="button" className={batchForm.tokenAmount === opt.value ? "active" : ""} onClick={() => setBatchForm({ ...batchForm, tokenAmount: opt.value })}>{opt.label}</button>))}<input type="number" placeholder="自定义" value={batchForm.tokenAmount && !TOKEN_OPTIONS.find((o) => o.value === batchForm.tokenAmount) ? batchForm.tokenAmount : ""} onChange={(e) => setBatchForm({ ...batchForm, tokenAmount: Number(e.target.value) || 0 })} /></div></div>
                     ) : (
                       <label>套餐 / 服务 <select value={batchForm.packageId} onChange={(e) => setBatchForm({ ...batchForm, packageId: e.target.value })}>{PACKAGE_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></label>
                     )}
-                    <label>售卖价格 <input type="number" value={batchForm.priceCny} onChange={(e) => setBatchForm({ ...batchForm, priceCny: Number(e.target.value) || 0 })} /></label>
+                    <label>售卖价格（¥） <input type="number" value={batchForm.priceCny} onChange={(e) => setBatchForm({ ...batchForm, priceCny: Number(e.target.value) || 0 })} /></label>
                     <label>单码可使用次数 <input type="number" min={1} value={batchForm.maxRedemptionsPerCode} onChange={(e) => setBatchForm({ ...batchForm, maxRedemptionsPerCode: Number(e.target.value) || 1 })} /></label>
                     <label>有效期 <select value={batchForm.expireOption} onChange={(e) => setBatchForm({ ...batchForm, expireOption: e.target.value })}>{EXPIRE_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}</select></label>
                     {batchForm.expireOption === "custom" && <label>自定义日期 <input type="date" value={batchForm.expireDate} onChange={(e) => setBatchForm({ ...batchForm, expireDate: e.target.value })} /></label>}

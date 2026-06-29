@@ -34,7 +34,7 @@ function formatToken(value: unknown) {
 function formatCny(value: unknown) {
   const number = Number(value);
   if (!Number.isFinite(number)) return "暂无数据";
-  return `¥${number.toFixed(number > 0 && number < 0.01 ? 6 : 2)}`;
+  return `$${number.toFixed(number > 0 && number < 0.01 ? 6 : 2)}`;
 }
 
 export default function ActivityHeatmapGrid({ weeks, onSelectDay }: ActivityHeatmapGridProps) {

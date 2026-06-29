@@ -14,7 +14,7 @@ type UserBadgeDrawerProps = {
 
 function formatMetric(badge: UserBadge) {
   const value = Number(badge.metricValue || 0);
-  if (badge.metricUnit === "¥") return `¥${value.toFixed(value >= 1 ? 2 : 6)}`;
+  if (badge.metricUnit === "$") return `$${value.toFixed(value >= 1 ? 2 : 6)}`;
   if (badge.metricUnit === "Token") return `${value.toLocaleString()} Token`;
   return `${value.toLocaleString()} ${badge.metricUnit}`;
 }

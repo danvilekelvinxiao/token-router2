@@ -45,10 +45,10 @@ export default function ModelCard({ model, onAccess, creating, isAdmin }) {
       {avail && model.inputPrice != null ? (
         <div className="model-card-v2-pricing">
           <div className="model-card-v2-price-row">
-            <span>输入</span><b>¥{model.inputPrice} / M Token</b>
+            <span>输入</span><b>${model.inputPrice} / M Token</b>
           </div>
           <div className="model-card-v2-price-row">
-            <span>输出</span><b>¥{model.outputPrice} / M Token</b>
+            <span>输出</span><b>${model.outputPrice} / M Token</b>
           </div>
         </div>
       ) : (

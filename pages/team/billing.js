@@ -1,6 +1,7 @@
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
+import { formatApiMoney } from "@/lib/format/number-format";
 
 export default function TeamBillingPage() {
   const [customer] = useState(() => {
@@ -50,9 +51,9 @@ export default function TeamBillingPage() {
               <section className="team-billing-summary">
                 <article><span>团队今日总生成数</span><strong>{data.summary.todayGenerations}</strong></article>
                 <article><span>团队今日总消耗 Token</span><strong>{Number(data.summary.todayTokens || 0).toFixed(1)}</strong></article>
-                <article><span>团队今日总金额</span><strong>￥{Number(data.summary.todayMoney || 0).toFixed(2)}</strong></article>
-                <article><span>团队累计消耗</span><strong>￥{Number(data.summary.totalMoney || 0).toFixed(2)}</strong></article>
-                <article><span>当前剩余额度</span><strong>￥{Number(data.workspace?.balance || 0).toFixed(2)}</strong></article>
+                <article><span>团队今日总金额</span><strong>{formatApiMoney(data.summary.todayMoney || 0)}</strong></article>
+                <article><span>团队累计消耗</span><strong>{formatApiMoney(data.summary.totalMoney || 0)}</strong></article>
+                <article><span>当前剩余余额</span><strong>{formatApiMoney(data.workspace?.balance || 0)}</strong></article>
                 <article><span>最常用模型</span><strong>{data.summary.topModel || "暂无"}</strong></article>
               </section>
 
@@ -76,8 +77,8 @@ export default function TeamBillingPage() {
                         <td>{item.memberName}</td>
                         <td>{item.todayImages}</td>
                         <td>{Number(item.todayTokens || 0).toFixed(1)}</td>
-                        <td>￥{Number(item.todayMoney || 0).toFixed(2)}</td>
-                        <td>￥{Number(item.totalMoney || 0).toFixed(2)}</td>
+                        <td>{formatApiMoney(item.todayMoney || 0)}</td>
+                        <td>{formatApiMoney(item.totalMoney || 0)}</td>
                         <td>{item.lastUsedAt ? new Date(item.lastUsedAt).toLocaleString("zh-CN") : "暂无"}</td>
                         <td>{Number(item.successRate || 0).toFixed(1)}%</td>
                         <td><a href={`/team/billing/${encodeURIComponent(item.userId)}`}>查看成员明细</a></td>
