@@ -4,6 +4,7 @@
  * It reuses FlowAPI's chat completions route so authentication, balance,
  * billing, model routing, and logs stay on the same commercial ledger.
  */
+import { getPublicModelRequestId } from "@/lib/models";
 
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -28,11 +29,18 @@ function normalizeText(content) {
 }
 
 function normalizeModel(model = "") {
-  const value = String(model || "").trim().toLowerCase();
+  const value = String(model || "").trim();
   if (!value) return "claude-sonnet-4.6";
-  if (value.includes("opus")) return "claude-opus-4.7";
-  if (value.includes("sonnet") || value.includes("claude")) return "claude-sonnet-4.6";
-  return String(model || "claude-sonnet-4.6").trim();
+
+  const normalized = String(getPublicModelRequestId(value) || value).trim();
+  if (["claude-opus-4.8", "claude-opus-4.7", "claude-opus-4.6", "claude-sonnet-4.6"].includes(normalized)) {
+    return normalized;
+  }
+
+  const lower = normalized.toLowerCase();
+  if (lower.includes("opus")) return "claude-opus-4.7";
+  if (lower.includes("sonnet") || lower.includes("claude")) return "claude-sonnet-4.6";
+  return normalized || "claude-sonnet-4.6";
 }
 
 function toChatBody(body = {}) {

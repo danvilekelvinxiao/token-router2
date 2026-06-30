@@ -24,6 +24,7 @@ const adminMenuGroups = [
       { key: "modelMappings", label: "模型映射", href: "/admin/model-mappings", icon: IconRouting, aliases: ["/admin/model-mapping"] },
       { key: "backupProviderReview", label: "备用线路审核", href: `/admin/providers/${["ai", "cards"].join("")}`, icon: IconChannels },
       { key: "routes", label: "智能路由", href: "/admin/routes", icon: IconRouting, aliases: ["/admin/routing"] },
+      { key: "modelRoutingTest", label: "路由验证", href: "/admin/model-routing-test", icon: IconRouting },
       { key: "modelMarket", label: "模型广场", href: "/admin/model-market", icon: IconModels },
       { key: "imageModels", label: "图片模型", href: "/admin/image-models", icon: IconModels },
       { key: "models", label: "模型测试", href: "/admin/models", icon: IconModels },

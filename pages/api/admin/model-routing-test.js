@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { hasDatabase, query } from "@/lib/db";
 import { getModelProductWithConfig, listModelProductsWithConfig } from "@/lib/model-products-server";
+import { getPublicModelRequestId, normalizeModelLookup } from "@/lib/models";
 import { listModelMappings, listProviders } from "@/lib/provider-store";
 import { sanitizeSecretText } from "@/lib/safe-upstream-url";
 import { getRouteCandidates, selectUpstream, STRATEGY } from "@/lib/smart-router";
@@ -8,7 +9,21 @@ import { getRouteCandidates, selectUpstream, STRATEGY } from "@/lib/smart-router
 const DEFAULT_MODEL = "gpt-5.5";
 const DEFAULT_PROMPT = "Reply exactly with FLOWAPI_ROUTING_TEST_OK.";
 const DEFAULT_STATUS_CHAIN = [429, 503, 200];
+const DEFAULT_LIVE_API = "chat";
 const FALLBACK_STATUS_CODES = new Set([401, 402, 403, 404, 408, 413, 429, 500, 502, 503, 504]);
+const FLOW_DEBUG_RESPONSE_HEADERS = [
+  "X-Flow-Request-Id",
+  "X-Flow-Model",
+  "X-Flow-Wire-Api",
+  "X-Flow-Selected-Channel",
+  "X-Flow-Upstream-Provider",
+  "X-Flow-Upstream-Model",
+  "X-Flow-Fallback-Attempt",
+  "X-Flow-Fallback-Chain",
+  "X-Flow-Fallback-Reason",
+  "X-Flow-Upstream-Status",
+  "X-Flow-Upstream-Endpoint",
+];
 const SIMULATION_SCENARIOS = {
   primary_429: [429, 200],
   primary_401: [401, 200],
@@ -23,7 +38,9 @@ function error(res, status, code, message, extra = {}) {
 }
 
 function normalizeModel(value = "") {
-  return String(value || "").trim() || DEFAULT_MODEL;
+  const raw = String(value || "").trim();
+  if (!raw) return normalizeModelLookup(DEFAULT_MODEL);
+  return normalizeModelLookup(raw) || getPublicModelRequestId(raw) || DEFAULT_MODEL;
 }
 
 function requestIdBase(value = "") {
@@ -39,6 +56,35 @@ function routeLineFromName(routeName = "") {
   if (name.includes("new-api") || name.includes("newapi")) return "B";
   if (name.includes("openrouter")) return "X";
   return "";
+}
+
+function safeUrlHost(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    return new URL(raw).host || "";
+  } catch {
+    return "";
+  }
+}
+
+function detectCandidateSource(candidate = {}) {
+  if (!candidate || typeof candidate !== "object") return "unknown";
+  if (candidate.source) return String(candidate.source);
+  if (candidate.mappingId || candidate.providerId || candidate.raw?.mapping || candidate.raw?.provider) return "provider";
+  if (
+    candidate.raw?.public_model_id != null
+    || candidate.raw?.actual_model_id != null
+    || candidate.raw?.base_url != null
+    || candidate.raw?.upstream_channel_id != null
+  ) return "db";
+  if (
+    candidate.raw?.status != null
+    || candidate.raw?.models != null
+    || candidate.raw?.channelName != null
+    || candidate.raw?.groupName != null
+  ) return "admin";
+  return "env";
 }
 
 function detectFallbackReason(status = 0) {
@@ -78,17 +124,21 @@ function normalizeStatusChain(input) {
 
 function sanitizeCandidate(candidate = {}) {
   if (!candidate) return null;
+  const routeCode = candidate.routeCode || routeLineFromName(candidate.name || candidate.id || candidate.label || candidate.channelName || "");
   return {
     id: candidate.id || "",
     providerId: candidate.providerId || "",
     mappingId: candidate.mappingId || "",
-    line: routeLineFromName(candidate.name || candidate.id || candidate.label || candidate.channelName || ""),
+    routeCode,
+    line: routeCode,
+    source: detectCandidateSource(candidate),
     name: candidate.name || "",
-    label: candidate.label || candidate.channelName || "FlowAPI 模型服务",
-    channelName: candidate.channelName || candidate.label || candidate.name || "FlowAPI 模型服务",
-    providerName: candidate.providerName || candidate.label || "FlowAPI",
+    label: candidate.label || candidate.channelName || "模型服务",
+    channelName: candidate.channelName || candidate.label || candidate.name || "模型服务",
+    providerName: candidate.providerName || candidate.label || "Provider",
     providerKey: candidate.providerKey || "",
     publicModelId: candidate.publicModelId || "",
+    requestModelId: getPublicModelRequestId(candidate.publicModelId || candidate.id || "") || "",
     actualModelId: candidate.actualModelId || "",
     priority: toFiniteNumber(candidate.priority, 0),
     qualityScore: toFiniteNumber(candidate.qualityScore, 0),
@@ -102,14 +152,16 @@ function sanitizeCandidate(candidate = {}) {
     scoreBreakdown: candidate.scoreBreakdown || null,
     estimatedUpstreamCost: candidate.estimatedUpstreamCost == null ? null : toFiniteNumber(candidate.estimatedUpstreamCost, 0),
     profitProtected: Boolean(candidate.profitProtected),
+    baseUrlHost: safeUrlHost(candidate.baseUrl || candidate.upstreamUrl || candidate.chatCompletionsUrl || candidate.responsesUrl),
+    endpointType: candidate.endpointType || "chat",
+    supportsResponsesApi: candidate.supportsResponsesApi === true,
+    supportsChatCompletionsApi: candidate.supportsChatCompletionsApi !== false,
     health: candidate.health ? {
       ok: Boolean(candidate.health.ok),
       status: candidate.health.status || "unknown",
       latency: Number.isFinite(candidate.health.latency) ? Number(candidate.health.latency) : null,
       statusCode: toFiniteNumber(candidate.health.statusCode, 0),
     } : null,
-    supportsResponsesApi: candidate.supportsResponsesApi === true,
-    supportsChatCompletionsApi: candidate.supportsChatCompletionsApi !== false,
   };
 }
 
@@ -134,6 +186,7 @@ function sanitizeMapping(mapping = {}, providerMap = new Map()) {
   return {
     id: mapping.id,
     publicModelName: mapping.publicModelName,
+    requestModelId: getPublicModelRequestId(mapping.publicModelName || "") || "",
     upstreamProviderId: mapping.upstreamProviderId,
     upstreamProviderName: provider?.name || mapping.upstreamProviderId,
     upstreamProviderType: provider?.type || "",
@@ -173,20 +226,64 @@ function sanitizeUsage(usage = {}) {
   };
 }
 
+function collectTextSegments(value, bucket = []) {
+  if (value == null) return bucket;
+  if (typeof value === "string") {
+    if (value.trim()) bucket.push(value.trim());
+    return bucket;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectTextSegments(item, bucket));
+    return bucket;
+  }
+  if (typeof value !== "object") return bucket;
+
+  if (typeof value.output_text === "string" && value.output_text.trim()) bucket.push(value.output_text.trim());
+  if (typeof value.text === "string" && value.text.trim()) bucket.push(value.text.trim());
+  if (typeof value.content === "string" && value.content.trim()) bucket.push(value.content.trim());
+  if (Array.isArray(value.content)) collectTextSegments(value.content, bucket);
+  if (Array.isArray(value.output)) collectTextSegments(value.output, bucket);
+  if (Array.isArray(value.contents)) collectTextSegments(value.contents, bucket);
+  return bucket;
+}
+
 function extractAssistantText(payload = {}) {
+  const segments = [];
+  collectTextSegments(payload?.output_text, segments);
+  collectTextSegments(payload?.output, segments);
+  collectTextSegments(payload?.content, segments);
+
   const choices = Array.isArray(payload?.choices) ? payload.choices : [];
-  const content = choices
-    .map((choice) => choice?.message?.content ?? choice?.delta?.content ?? choice?.text ?? "")
-    .flatMap((value) => Array.isArray(value) ? value : [value])
-    .map((value) => {
-      if (typeof value === "string") return value;
-      if (value?.type === "text") return value.text || value.content || "";
-      return value?.text || value?.content || "";
-    })
-    .filter(Boolean)
-    .join("\n")
-    .trim();
-  return sanitizeSecretText(content);
+  choices.forEach((choice) => {
+    collectTextSegments(choice?.message?.content, segments);
+    collectTextSegments(choice?.delta?.content, segments);
+    collectTextSegments(choice?.text, segments);
+  });
+
+  return sanitizeSecretText(Array.from(new Set(segments)).join("\n").trim());
+}
+
+function countToolCallsInPayload(payload = {}) {
+  let total = 0;
+  const choices = Array.isArray(payload?.choices) ? payload.choices : [];
+  choices.forEach((choice) => {
+    total += Array.isArray(choice?.message?.tool_calls) ? choice.message.tool_calls.length : 0;
+    total += Array.isArray(choice?.delta?.tool_calls) ? choice.delta.tool_calls.length : 0;
+  });
+
+  const output = Array.isArray(payload?.output) ? payload.output : [];
+  output.forEach((item) => {
+    if (["function_call", "tool_call", "tool_use"].includes(String(item?.type || ""))) total += 1;
+    if (Array.isArray(item?.content)) {
+      total += item.content.filter((part) => ["function_call", "tool_call", "tool_use"].includes(String(part?.type || ""))).length;
+    }
+  });
+
+  return total;
+}
+
+function extractRequestIdFromPayload(payload = {}) {
+  return String(payload?.token_router?.request_id || payload?.request_id || payload?.id || "").trim();
 }
 
 function summarizeResponseError(payload = {}, fallbackMessage = "") {
@@ -236,8 +333,76 @@ function sanitizeRelayAudit(row = null) {
   };
 }
 
+function sanitizeProviderLog(row = {}) {
+  return {
+    id: row.id || "",
+    providerId: row.provider_id || row.providerId || "",
+    publicModelName: row.public_model_name || row.publicModelName || "",
+    upstreamModelName: row.upstream_model_name || row.upstreamModelName || "",
+    requestId: row.request_id || row.requestId || "",
+    status: row.status || "",
+    httpStatus: toFiniteNumber(row.http_status ?? row.httpStatus, 0),
+    errorCode: String(row.error_code || row.errorCode || "").slice(0, 120),
+    errorMessage: sanitizeSecretText(String(row.error_message || row.errorMessage || "")).slice(0, 180),
+    promptTokens: toFiniteNumber(row.prompt_tokens ?? row.promptTokens, 0),
+    completionTokens: toFiniteNumber(row.completion_tokens ?? row.completionTokens, 0),
+    cachedTokens: toFiniteNumber(row.cached_tokens ?? row.cachedTokens, 0),
+    estimatedCost: toFiniteNumber(row.estimated_cost ?? row.estimatedCost, 0),
+    latencyMs: toFiniteNumber(row.latency_ms ?? row.latencyMs, 0),
+    firstTokenMs: toFiniteNumber(row.first_token_ms ?? row.firstTokenMs, 0),
+    cacheHit: Boolean(row.cache_hit ?? row.cacheHit),
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : row.createdAt || null,
+  };
+}
+
+function sanitizeCall(row = {}) {
+  return {
+    id: row.id || "",
+    requestId: row.request_id || row.requestId || "",
+    endpoint: row.endpoint || "",
+    requestedModel: row.requested_model || row.requestedModel || "",
+    routedModel: row.routed_model || row.routedModel || "",
+    publicModelId: row.public_model_id || row.publicModelId || "",
+    actualModelId: row.actual_model_id || row.actualModelId || "",
+    provider: row.provider || "",
+    upstreamChannel: row.upstream_channel || row.upstreamChannel || "",
+    upstreamProvider: row.upstream_provider || row.upstreamProvider || "",
+    upstreamStatus: toFiniteNumber(row.upstream_status ?? row.upstreamStatus, 0),
+    status: toFiniteNumber(row.status, 0),
+    latencyMs: toFiniteNumber(row.latency_ms ?? row.latencyMs, 0),
+    firstTokenMs: toFiniteNumber(row.first_token_ms ?? row.firstTokenMs, 0),
+    inputTokens: toFiniteNumber(row.input_tokens ?? row.inputTokens, 0),
+    outputTokens: toFiniteNumber(row.output_tokens ?? row.outputTokens, 0),
+    totalTokens: toFiniteNumber(row.total_tokens ?? row.totalTokens, 0),
+    routeAttempts: toFiniteNumber(row.route_attempts ?? row.routeAttempts, 0),
+    userCharge: toFiniteNumber(row.user_charge ?? row.userCharge, 0),
+    upstreamCostCny: toFiniteNumber(row.upstream_cost_cny ?? row.upstreamCostCny, 0),
+    profitCny: toFiniteNumber(row.profit_cny ?? row.profitCny, 0),
+    billingStatus: row.billing_status || row.billingStatus || "",
+    deliveryStatus: row.delivery_status || row.deliveryStatus || "",
+    errorCode: String(row.error_code || row.errorCode || "").slice(0, 120),
+    errorMessage: sanitizeSecretText(String(row.error_message || row.errorMessage || "")).slice(0, 180),
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : row.createdAt || null,
+  };
+}
+
 function pickSelectedAttempt(attempts = []) {
   return attempts.find((item) => item.ok) || attempts[attempts.length - 1] || null;
+}
+
+function summarizeEvidence({ attempts = [], relayAudit = null, providerLogs = [], calls = [], debugHeaders = null } = {}) {
+  const hasDebugHeaders = Boolean(debugHeaders && Object.values(debugHeaders).some(Boolean));
+  const hasAnyEvidence = hasDebugHeaders || attempts.length > 0 || providerLogs.length > 0 || calls.length > 0 || Boolean(relayAudit);
+  return {
+    routeAttemptsCount: attempts.length,
+    providerLogsCount: providerLogs.length,
+    callsCount: calls.length,
+    hasRelayAudit: Boolean(relayAudit),
+    hasDebugHeaders,
+    hasAnyEvidence,
+    selectedAttemptFound: Boolean(pickSelectedAttempt(attempts)),
+    hasCrossCandidateFallback: attempts.length > 1,
+  };
 }
 
 function fallbackRulesSummary() {
@@ -253,13 +418,13 @@ function fallbackRulesSummary() {
       429: "限流，应 fallback",
       500: "上游异常，应 fallback",
       529: "provider overloaded，在当前代码里通过 status >= 500 进入 fallback",
-      400: "参数错误，当前代码不会 fallback，而是直接返回错误",
+      400: "参数错误，当前代码不会 fallback，而是直接返回错误；只有极少数工具/流式异常会在主路由内特判重试",
       timeout: "网络超时会记录 route_attempt，并继续尝试下一候选",
     },
     currentCodePath: {
       selection: "selectUpstream() -> routeDecision.fallbackChain",
       execution: "/api/v1/chat/completions upstream loop",
-      evidence: "route_attempts + provider_request_logs + relay_request_audits",
+      evidence: "X-Flow-* debug headers + route_attempts + provider_request_logs + relay_request_audits + calls",
     },
   };
 }
@@ -269,6 +434,72 @@ function getOriginFromRequest(req) {
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim();
   if (!host) throw new Error("无法确定当前站点 Host");
   return `${proto}://${host}`;
+}
+
+function safeResponseHeader(headers, name) {
+  return sanitizeSecretText(String(headers?.get?.(name) || headers?.get?.(name.toLowerCase()) || "")).slice(0, 220);
+}
+
+function summarizeFlowDebugHeaders(headers) {
+  if (!headers) return null;
+  return {
+    requestId: safeResponseHeader(headers, "X-Flow-Request-Id"),
+    model: safeResponseHeader(headers, "X-Flow-Model"),
+    wireApi: safeResponseHeader(headers, "X-Flow-Wire-Api"),
+    selectedChannel: safeResponseHeader(headers, "X-Flow-Selected-Channel"),
+    upstreamProvider: safeResponseHeader(headers, "X-Flow-Upstream-Provider"),
+    upstreamModel: safeResponseHeader(headers, "X-Flow-Upstream-Model"),
+    fallbackAttempt: safeResponseHeader(headers, "X-Flow-Fallback-Attempt"),
+    fallbackChain: safeResponseHeader(headers, "X-Flow-Fallback-Chain"),
+    fallbackReason: safeResponseHeader(headers, "X-Flow-Fallback-Reason"),
+    upstreamStatus: safeResponseHeader(headers, "X-Flow-Upstream-Status"),
+    upstreamEndpoint: safeResponseHeader(headers, "X-Flow-Upstream-Endpoint"),
+  };
+}
+
+function extractStreamPreview(raw = "") {
+  const previewParts = [];
+  const lines = String(raw || "").split(/\r?\n/);
+  for (const line of lines) {
+    if (!line.startsWith("data:")) continue;
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") continue;
+    try {
+      const parsed = JSON.parse(data);
+      const text = extractAssistantText(parsed);
+      if (text) previewParts.push(text);
+      continue;
+    } catch {}
+    if (!data.startsWith("{")) previewParts.push(data);
+  }
+  return sanitizeSecretText(previewParts.join("\n").trim()).slice(0, 220);
+}
+
+function countToolCallsInStream(raw = "") {
+  let total = 0;
+  const lines = String(raw || "").split(/\r?\n/);
+  for (const line of lines) {
+    if (!line.startsWith("data:")) continue;
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") continue;
+    try {
+      total += countToolCallsInPayload(JSON.parse(data));
+    } catch {}
+  }
+  return total;
+}
+
+function summarizeStreamError(raw = "", fallbackMessage = "") {
+  const lines = String(raw || "").split(/\r?\n/).reverse();
+  for (const line of lines) {
+    if (!line.startsWith("data:")) continue;
+    const data = line.slice(5).trim();
+    if (!data || data === "[DONE]") continue;
+    try {
+      return summarizeResponseError(JSON.parse(data), fallbackMessage);
+    } catch {}
+  }
+  return { code: "", message: sanitizeSecretText(String(fallbackMessage || "")).slice(0, 220) };
 }
 
 async function loadAttemptsByRequestId(requestId = "") {
@@ -315,48 +546,149 @@ async function loadRelayAuditByRequestId(requestId = "") {
   return sanitizeRelayAudit(result?.rows?.[0] || null);
 }
 
+async function loadProviderLogsByRequestId(requestId = "") {
+  if (!hasDatabase() || !requestId) return [];
+  const exact = String(requestId || "").trim();
+  const base = requestIdBase(exact);
+  const result = await query(
+    `SELECT id, provider_id, public_model_name, upstream_model_name, request_id, status, http_status,
+            error_code, error_message, prompt_tokens, completion_tokens, cached_tokens, estimated_cost,
+            latency_ms, first_token_ms, cache_hit, created_at
+       FROM provider_request_logs
+      WHERE request_id = $1 OR request_id LIKE $2
+      ORDER BY created_at ASC
+      LIMIT 40`,
+    [exact, `${base}%`]
+  );
+  return (result?.rows || []).map(sanitizeProviderLog);
+}
+
+async function loadCallsByRequestId(requestId = "") {
+  if (!hasDatabase() || !requestId) return [];
+  const exact = String(requestId || "").trim();
+  const base = requestIdBase(exact);
+  const result = await query(
+    `SELECT id, request_id, endpoint, requested_model, routed_model, public_model_id, actual_model_id,
+            provider, upstream_channel, upstream_provider, upstream_status, latency_ms, first_token_ms,
+            input_tokens, output_tokens, total_tokens, user_charge, upstream_cost_cny, profit_cny,
+            route_attempts, status, billing_status, delivery_status, error_code, error_message, created_at
+       FROM calls
+      WHERE request_id = $1 OR request_id LIKE $2
+      ORDER BY created_at DESC
+      LIMIT 20`,
+    [exact, `${base}%`]
+  );
+  return (result?.rows || []).map(sanitizeCall);
+}
+
+async function loadRecentCallsForModel(model = "") {
+  if (!hasDatabase() || !model) return [];
+  const result = await query(
+    `SELECT id, request_id, endpoint, requested_model, routed_model, public_model_id, actual_model_id,
+            provider, upstream_channel, upstream_provider, upstream_status, latency_ms, first_token_ms,
+            input_tokens, output_tokens, total_tokens, user_charge, upstream_cost_cny, profit_cny,
+            route_attempts, status, billing_status, delivery_status, error_code, error_message, created_at
+       FROM calls
+      WHERE public_model_id = $1
+      ORDER BY created_at DESC
+      LIMIT 12`,
+    [model]
+  );
+  return (result?.rows || []).map(sanitizeCall);
+}
+
+async function safeResolve(load, fallback) {
+  try {
+    return await load();
+  } catch {
+    return fallback;
+  }
+}
+
+async function buildRequestLookup(requestId = "", { debugHeaders = null } = {}) {
+  const exact = String(requestId || "").trim();
+  if (!exact) return null;
+  const [attempts, relayAudit, providerLogs, calls] = await Promise.all([
+    safeResolve(() => loadAttemptsByRequestId(exact), []),
+    safeResolve(() => loadRelayAuditByRequestId(exact), null),
+    safeResolve(() => loadProviderLogsByRequestId(exact), []),
+    safeResolve(() => loadCallsByRequestId(exact), []),
+  ]);
+  return {
+    requestId: exact,
+    selectedAttempt: pickSelectedAttempt(attempts),
+    attempts,
+    relayAudit,
+    providerLogs,
+    calls,
+    evidenceSummary: summarizeEvidence({ attempts, relayAudit, providerLogs, calls, debugHeaders }),
+  };
+}
+
 function sanitizeModelProduct(product = null) {
   if (!product) return null;
   return {
     id: product.id || "",
     publicModelId: product.publicModelId || product.id || "",
+    requestModelId: product.requestModelId || getPublicModelRequestId(product.publicModelId || product.id || "") || "",
     actualModelId: product.actualModelId || "",
     displayName: product.displayName || product.publicModelId || product.id || "",
-    provider: product.provider || "FlowAPI",
+    provider: product.provider || "Provider",
     routeStrategy: product.routeStrategy || STRATEGY.AUTO,
     isAvailable: product.isAvailable !== false,
     group: product.group || "text",
     status: product.status || "",
     statusLabel: product.statusLabel || "",
+    executionGroup: product.executionGroup || "",
+    underlyingRoute: product.underlyingRoute || "",
   };
 }
 
 async function loadRoutingContext(inputModel = DEFAULT_MODEL) {
-  const targetModel = normalizeModel(inputModel);
-  const modelProduct = await getModelProductWithConfig(targetModel);
-  const publicModelId = modelProduct?.publicModelId || targetModel;
-  const actualModelId = modelProduct?.actualModelId || targetModel;
-  const providers = await listProviders();
+  const inputName = String(inputModel || "").trim() || DEFAULT_MODEL;
+  const lookupModel = normalizeModel(inputName);
+  const requestModelId = getPublicModelRequestId(lookupModel || inputName) || getPublicModelRequestId(inputName) || DEFAULT_MODEL;
+  const modelProduct = await safeResolve(async () => {
+    return await getModelProductWithConfig(lookupModel) || await getModelProductWithConfig(requestModelId);
+  }, null);
+  const productPublicModelId = modelProduct?.publicModelId || lookupModel;
+  const actualModelId = modelProduct?.actualModelId || requestModelId;
+  const providers = await safeResolve(() => listProviders(), []);
   const providerMap = new Map(providers.map((provider) => [provider.id, provider]));
-  const mappings = await listModelMappings({ publicModelName: publicModelId, includeDisabled: true });
-  const candidates = await getRouteCandidates({
-    publicModelId,
-    actualModelId,
-    modelProduct,
-    includeDisabled: true,
-  });
-  const decision = await selectUpstream({
-    modelId: actualModelId,
-    publicModelId,
-    modelProduct,
-    strategy: modelProduct?.routeStrategy || STRATEGY.AUTO,
-    usageEstimate: { prompt_tokens: 256, completion_tokens: 96 },
-    userChargeEstimate: 0,
-  });
-  const recentAttempts = await loadRecentAttemptsForModel(publicModelId);
+
+  const mappingKeys = Array.from(new Set([requestModelId, productPublicModelId, lookupModel].filter(Boolean)));
+  const mappingGroups = await Promise.all(
+    mappingKeys.map((publicModelName) => safeResolve(() => listModelMappings({ publicModelName, includeDisabled: true }), []))
+  );
+  const mappings = Array.from(new Map(mappingGroups.flat().map((item) => [item.id, item])).values());
+
+  const [candidates, decision, recentAttempts, recentCalls] = await Promise.all([
+    safeResolve(() => getRouteCandidates({
+      publicModelId: requestModelId,
+      actualModelId,
+      modelProduct,
+      includeDisabled: true,
+    }), []),
+    safeResolve(() => selectUpstream({
+      modelId: actualModelId,
+      publicModelId: requestModelId,
+      modelProduct,
+      strategy: modelProduct?.routeStrategy || STRATEGY.AUTO,
+      usageEstimate: { prompt_tokens: 256, completion_tokens: 96 },
+      userChargeEstimate: 0,
+    }), { fallbackChain: [], candidates: [], upstream: null, channel: null, strategy: modelProduct?.routeStrategy || STRATEGY.AUTO, error: "routing_context_unavailable" }),
+    safeResolve(() => loadRecentAttemptsForModel(requestModelId), []),
+    safeResolve(() => loadRecentCallsForModel(requestModelId), []),
+  ]);
+
   return {
-    targetModel,
-    publicModelId,
+    inputName,
+    lookupModel,
+    requestedModel: requestModelId,
+    targetModel: requestModelId,
+    requestModelId,
+    publicModelId: requestModelId,
+    productPublicModelId,
     actualModelId,
     modelProduct,
     providers,
@@ -365,16 +697,27 @@ async function loadRoutingContext(inputModel = DEFAULT_MODEL) {
     candidates,
     decision,
     recentAttempts,
+    recentCalls,
   };
 }
 
 function buildSnapshot(context = {}) {
   const providersInUse = new Set((context.mappings || []).map((item) => item.upstreamProviderId).filter(Boolean));
   return {
+    requestedModel: context.requestedModel,
     targetModel: context.targetModel,
+    requestModelId: context.requestModelId,
     publicModelId: context.publicModelId,
+    productPublicModelId: context.productPublicModelId,
     actualModelId: context.actualModelId,
     modelProduct: sanitizeModelProduct(context.modelProduct),
+    lookupKeys: {
+      inputName: context.inputName,
+      lookupModel: context.lookupModel,
+      requestModelId: context.requestModelId,
+      productPublicModelId: context.productPublicModelId,
+      actualModelId: context.actualModelId,
+    },
     fallbackRules: fallbackRulesSummary(),
     mappings: (context.mappings || []).map((mapping) => sanitizeMapping(mapping, context.providerMap)),
     providers: (context.providers || [])
@@ -385,6 +728,7 @@ function buildSnapshot(context = {}) {
       ? context.candidates.map(sanitizeCandidate).filter(Boolean)
       : [],
     recentAttempts: context.recentAttempts || [],
+    recentCalls: context.recentCalls || [],
   };
 }
 
@@ -439,12 +783,82 @@ async function loadSupportedTargetModels() {
   const preferred = ["gpt-5.5", "opus4.8", "opus4.7", "opus4.6"];
   const aliases = new Set(preferred);
   for (const product of products) {
-    for (const alias of [product?.id, product?.publicModelId, product?.displayName]) {
+    for (const alias of [product?.id, product?.publicModelId, product?.requestModelId, product?.displayName]) {
       const value = String(alias || "").trim();
-      if (/^(gpt-5\.5|opus4\.8|opus4\.7|opus4\.6)$/i.test(value)) aliases.add(value);
+      if (/^(gpt-5\.5|opus4\.8|opus4\.7|opus4\.6|claude-opus-4\.8|claude-opus-4\.7|claude-opus-4\.6)$/i.test(value)) aliases.add(value);
     }
   }
   return Array.from(aliases);
+}
+
+function buildChatProbeBody(context = {}, { prompt, maxTokens, stream, useTools }) {
+  if (useTools) {
+    return {
+      model: context.requestModelId || context.publicModelId || context.targetModel,
+      messages: [{ role: "user", content: "Call the function once with result=FLOWAPI_ROUTING_TEST_OK. Do not answer with plain text before calling the tool." }],
+      max_tokens: maxTokens,
+      temperature: 0,
+      stream,
+      tools: [{
+        type: "function",
+        function: {
+          name: "flowapi_routing_probe",
+          description: "Return the fixed routing probe marker.",
+          parameters: {
+            type: "object",
+            properties: {
+              result: { type: "string", description: "Must be FLOWAPI_ROUTING_TEST_OK" },
+            },
+            required: ["result"],
+            additionalProperties: false,
+          },
+        },
+      }],
+      tool_choice: "auto",
+    };
+  }
+
+  return {
+    model: context.requestModelId || context.publicModelId || context.targetModel,
+    messages: [{ role: "user", content: prompt }],
+    max_tokens: maxTokens,
+    temperature: 0,
+    stream,
+  };
+}
+
+function buildResponsesProbeBody(context = {}, { prompt, maxTokens, stream, useTools }) {
+  if (useTools) {
+    return {
+      model: context.requestModelId || context.publicModelId || context.targetModel,
+      input: "Call the function once with result=FLOWAPI_ROUTING_TEST_OK. Do not answer with plain text before calling the tool.",
+      max_output_tokens: maxTokens,
+      temperature: 0,
+      stream,
+      tools: [{
+        type: "function",
+        name: "flowapi_routing_probe",
+        description: "Return the fixed routing probe marker.",
+        parameters: {
+          type: "object",
+          properties: {
+            result: { type: "string", description: "Must be FLOWAPI_ROUTING_TEST_OK" },
+          },
+          required: ["result"],
+          additionalProperties: false,
+        },
+      }],
+      tool_choice: "auto",
+    };
+  }
+
+  return {
+    model: context.requestModelId || context.publicModelId || context.targetModel,
+    input: prompt,
+    max_output_tokens: maxTokens,
+    temperature: 0,
+    stream,
+  };
 }
 
 async function runLiveProbe(req, context = {}, body = {}) {
@@ -453,43 +867,64 @@ async function runLiveProbe(req, context = {}, body = {}) {
     throw new Error("LIVE 模式需要临时提供低额度测试 Key；该 Key 只用于本次请求，不会保存。");
   }
 
+  const apiVariant = String(body.api || body.endpoint || DEFAULT_LIVE_API).trim().toLowerCase() === "responses" ? "responses" : "chat";
+  const stream = body.stream === true;
+  const useTools = body.useTools === true || body.tools === true;
   const origin = getOriginFromRequest(req);
   const prompt = String(body.prompt || DEFAULT_PROMPT).trim().slice(0, 500) || DEFAULT_PROMPT;
   const maxTokens = Math.max(1, Math.min(Number(body.maxTokens || 24), 64));
-  const response = await fetch(new URL("/v1/chat/completions", origin), {
+  const response = await fetch(new URL(apiVariant === "responses" ? "/v1/responses" : "/v1/chat/completions", origin), {
     method: "POST",
     headers: {
       Authorization: `Bearer ${transientApiKey}`,
       "Content-Type": "application/json",
       "X-Flow-Debug": "1",
     },
-    body: JSON.stringify({
-      model: context.publicModelId || context.targetModel,
-      messages: [{ role: "user", content: prompt }],
-      max_tokens: maxTokens,
-      temperature: 0,
-      stream: false,
-    }),
+    body: JSON.stringify(
+      apiVariant === "responses"
+        ? buildResponsesProbeBody(context, { prompt, maxTokens, stream, useTools })
+        : buildChatProbeBody(context, { prompt, maxTokens, stream, useTools })
+    ),
     signal: AbortSignal.timeout(45000),
   });
 
-  const payload = await response.json().catch(() => ({}));
-  const requestId = String(payload?.token_router?.request_id || payload?.request_id || payload?.id || "").trim();
-  const attempts = requestId ? await loadAttemptsByRequestId(requestId) : [];
-  const selectedAttempt = pickSelectedAttempt(attempts);
-  const relayAudit = requestId ? await loadRelayAuditByRequestId(requestId) : null;
-  const responseText = extractAssistantText(payload);
-  const upstreamError = summarizeResponseError(payload, response.ok ? "" : `HTTP ${response.status}`);
+  const debugHeaders = summarizeFlowDebugHeaders(response.headers);
+  const responseContentType = String(response.headers.get("content-type") || "");
+  let payload = {};
+  let rawStream = "";
+
+  if (stream) {
+    rawStream = await response.text().catch(() => "");
+  } else {
+    payload = await response.json().catch(() => ({}));
+  }
+
+  const requestId = String(debugHeaders?.requestId || extractRequestIdFromPayload(payload) || "").trim();
+  const requestLookup = requestId ? await buildRequestLookup(requestId, { debugHeaders }) : null;
+  const responseText = stream ? extractStreamPreview(rawStream) : extractAssistantText(payload);
+  const upstreamError = stream
+    ? summarizeStreamError(rawStream, response.ok ? "" : `HTTP ${response.status}`)
+    : summarizeResponseError(payload, response.ok ? "" : `HTTP ${response.status}`);
+  const toolCallCount = stream ? countToolCallsInStream(rawStream) : countToolCallsInPayload(payload);
+  const attempts = requestLookup?.attempts || [];
+  const selectedAttempt = requestLookup?.selectedAttempt || pickSelectedAttempt(attempts);
 
   return {
+    requestedApi: apiVariant,
+    stream,
+    usedTools: useTools,
     status: response.status,
     ok: response.ok,
     requestId,
+    responseContentType,
     hasText: Boolean(responseText),
     textPreview: responseText.slice(0, 220),
-    modelNotFound: /model[_\s-]*not[_\s-]*found/i.test(`${upstreamError.code} ${upstreamError.message}`),
+    modelNotFound: /model[_\s-]*not[_\s-]*found/i.test(`${upstreamError.code} ${upstreamError.message} ${debugHeaders?.fallbackReason || ""}`),
     authError: [401, 403].includes(response.status),
     rateLimited: response.status === 429,
+    sameCandidateResponsesToChatFallback: apiVariant === "responses" && debugHeaders?.upstreamEndpoint === "chat",
+    crossCandidateFallback: attempts.length > 1,
+    debugHeaders,
     tokenRouter: payload?.token_router ? {
       routedModel: payload.token_router.routed_model || "",
       routedModelId: payload.token_router.routed_model_id || "",
@@ -499,10 +934,15 @@ async function runLiveProbe(req, context = {}, body = {}) {
     } : null,
     usage: sanitizeUsage(payload?.usage),
     upstreamError,
+    toolCallCount,
+    hasToolCall: toolCallCount > 0,
     fallbackCount: Math.max(0, attempts.length - 1),
     selectedAttempt,
     attempts,
-    relayAudit,
+    relayAudit: requestLookup?.relayAudit || null,
+    providerLogs: requestLookup?.providerLogs || [],
+    calls: requestLookup?.calls || [],
+    evidenceSummary: requestLookup?.evidenceSummary || summarizeEvidence({ debugHeaders }),
   };
 }
 
@@ -519,13 +959,7 @@ export default async function handler(req, res) {
         loadRoutingContext(targetModel),
       ]);
       const snapshot = buildSnapshot(context);
-      const requestLookup = requestId
-        ? {
-            requestId,
-            attempts: await loadAttemptsByRequestId(requestId),
-            relayAudit: await loadRelayAuditByRequestId(requestId),
-          }
-        : null;
+      const requestLookup = requestId ? await buildRequestLookup(requestId) : null;
       return res.status(200).json({
         ok: true,
         mode: "snapshot",
@@ -562,11 +996,7 @@ export default async function handler(req, res) {
           mode,
           supportedTargets,
           ...snapshot,
-          requestLookup: {
-            requestId,
-            attempts: await loadAttemptsByRequestId(requestId),
-            relayAudit: await loadRelayAuditByRequestId(requestId),
-          },
+          requestLookup: await buildRequestLookup(requestId),
         });
       }
 

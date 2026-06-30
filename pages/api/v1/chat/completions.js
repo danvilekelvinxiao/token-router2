@@ -1164,10 +1164,18 @@ export default async function handler(req, res) {
     error = null,
   } = {}) => {
     if (error) console.error(`[flowapi:${fallbackReason}]`, error);
+    const guardChannel = fallbackReason === "auth_store_unavailable"
+      ? "internal-auth-guard"
+      : fallbackReason === "upstream_config_unavailable"
+        ? "internal-config-guard"
+        : "internal-service-guard";
     setFlowDebugHeaders(res, flowDebugEnabled, {
       requestId,
       model: body?.model || "",
       wireApi: getWireApiMode(req),
+      selectedChannel: guardChannel,
+      upstreamProvider: "Internal Guard",
+      upstreamModel: body?.model || "",
       fallbackReason,
       upstreamStatus: status,
       upstreamEndpoint: "chat",
@@ -1365,13 +1373,25 @@ export default async function handler(req, res) {
     }
     const pricingGuard = validateTextModelProfitConfig(modelProduct, { multiplier: billingMultiplier });
     if (!pricingGuard.ok) {
+      setFlowDebugHeaders(res, flowDebugEnabled, {
+        requestId,
+        model: publicModelId || body.model || "",
+        wireApi: wireApiMode,
+        selectedChannel: "internal-pricing-guard",
+        upstreamProvider: "Internal Guard",
+        upstreamModel: modelProduct?.actualModelId || selected.modelId || body.model || "",
+        fallbackReason: pricingGuard.code || "model_pricing_not_ready",
+        upstreamStatus: 503,
+        upstreamEndpoint: preferResponsesUpstream ? "responses" : "chat",
+      });
       releaseConcurrency(concurrencyKey);
       return sendApiError(
         res,
         503,
         pricingGuard.code || "MODEL_PRICING_NOT_READY",
         pricingGuard.userMessage || "该模型价格尚未通过毛利审核，请先选择其他模型。",
-        "该模型正在进行价格和成本审核。你可以先切换其他模型，或把 request_id 发给 FlowAPI 客服排查。"
+        "该模型正在进行价格和成本审核。你可以先切换其他模型，或把 request_id 发给 FlowAPI 客服排查。",
+        { request_id: requestId }
       );
     }
   }
@@ -1484,13 +1504,24 @@ export default async function handler(req, res) {
   }, modelProduct, billingMultiplier);
   let routeDecision = { strategy: "not_started" };
   if (shouldBlockForProfitProtection(estimatedBilling)) {
+    setFlowDebugHeaders(res, flowDebugEnabled, {
+      requestId,
+      model: publicModelId || body.model || "",
+      wireApi: wireApiMode,
+      selectedChannel: "internal-profit-guard",
+      upstreamProvider: "Internal Guard",
+      fallbackReason: "profit_margin_protected",
+      upstreamStatus: 503,
+      upstreamEndpoint: preferResponsesUpstream ? "responses" : "chat",
+    });
     releaseConcurrency(concurrencyKey);
     return sendApiError(
       res,
       503,
       "MODEL_MARGIN_PROTECTED",
       "该模型当前维护中，请稍后再试。",
-      "该模型正在维护。你可以先切换其他模型，或把 request_id 发给 FlowAPI 客服排查。"
+      "该模型正在维护。你可以先切换其他模型，或把 request_id 发给 FlowAPI 客服排查。",
+      { request_id: requestId }
     );
   }
   routeDecision = await selectUpstream({
@@ -1506,6 +1537,19 @@ export default async function handler(req, res) {
     endpoint: preferResponsesUpstream ? "responses" : "chat",
   });
   if (routeDecision?.error === "profit_protected") {
+    setFlowDebugHeaders(res, flowDebugEnabled, {
+      requestId,
+      model: publicModelId || body.model || "",
+      wireApi: wireApiMode,
+      selectedChannel: routeDecision?.upstream?.channelName || routeDecision?.upstream?.name || routeDecision?.upstream?.id || routeDecision?.upstream?.label || routeDecision?.channel?.channelName || routeDecision?.channel?.name || routeDecision?.channel?.id || routeDecision?.channel?.label || "",
+      upstreamProvider: routeDecision?.upstream?.providerName || routeDecision?.upstream?.label || routeDecision?.upstream?.provider || routeDecision?.channel?.providerName || routeDecision?.channel?.label || routeDecision?.channel?.provider || "",
+      upstreamModel: routeDecision?.upstream?.upstreamModelName || routeDecision?.upstream?.actualModelId || routeDecision?.channel?.upstreamModelName || routeDecision?.channel?.actualModelId || upstreamModelId || body.model || "",
+      fallbackAttempt: summarizeFallbackAttempt(0, Array.isArray(routeDecision?.fallbackChain) ? routeDecision.fallbackChain.length : 0),
+      fallbackChain: summarizeFallbackChain(Array.isArray(routeDecision?.fallbackChain) ? routeDecision.fallbackChain : []),
+      fallbackReason: "profit_protected",
+      upstreamStatus: 503,
+      upstreamEndpoint: preferResponsesUpstream ? "responses" : "chat",
+    });
     releaseConcurrency(concurrencyKey);
     return sendApiError(
       res,
@@ -1669,9 +1713,9 @@ export default async function handler(req, res) {
       requestId: requestIdOverride,
       model: publicModelId || body.model || "",
       wireApi: wireApiMode,
-      selectedChannel: activeCandidate?.name || activeCandidate?.id || "",
-      upstreamProvider: activeCandidate?.label || activeCandidate?.provider || activeCandidate?.name || activeCandidate?.id || "",
-      upstreamModel: activeCandidate?.actualModelId || upstreamModelId || body.model || "",
+      selectedChannel: activeCandidate?.channelName || activeCandidate?.name || activeCandidate?.id || activeCandidate?.label || "",
+      upstreamProvider: activeCandidate?.providerName || activeCandidate?.label || activeCandidate?.provider || activeCandidate?.channelName || activeCandidate?.name || activeCandidate?.id || "",
+      upstreamModel: activeCandidate?.upstreamModelName || activeCandidate?.actualModelId || upstreamModelId || body.model || "",
       fallbackAttempt: summarizeFallbackAttempt(routeAttemptCount, orderedFallbackTotal),
       fallbackChain: orderedFallbackChain,
       fallbackReason,

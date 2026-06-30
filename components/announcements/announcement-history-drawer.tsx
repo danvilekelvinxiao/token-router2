@@ -1,4 +1,4 @@
-/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/set-state-in-effect, @next/next/no-img-element */
 import { useEffect, useMemo, useState } from "react";
 
 type AnnouncementImage = {

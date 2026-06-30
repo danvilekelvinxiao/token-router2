@@ -27,6 +27,7 @@
     "test:codex-provider": "node scripts/test-codex-provider.mjs",
     "jobs:pool-status": "node scripts/jobs/check-pool-status.mjs",
     "test:provider-routing": "node scripts/test-provider-routing-config.mjs",
+    "test:model-routing": "node scripts/test-model-routing-and-fallback.mjs",
     "test:wallet-money": "node scripts/test-wallet-money-config.mjs",
     "test:stream-billing": "node scripts/test-stream-billing-and-request-id.js",
     "send:audit-email": "node scripts/send-commercialization-audit-email.mjs",

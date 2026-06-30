@@ -1,4 +1,4 @@
-/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/set-state-in-effect, @next/next/no-img-element */
 import Head from "next/head";
 import { useEffect, useMemo, useRef, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
