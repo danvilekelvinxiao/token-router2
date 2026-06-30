@@ -53,6 +53,10 @@ else
   git reset --hard "origin/$BRANCH"
 fi
 DEPLOYED_COMMIT="$(git rev-parse HEAD)"
+DEPLOYED_BRANCH="$(git branch --show-current || true)"
+if [ -z "$DEPLOYED_BRANCH" ] || [ "$DEPLOYED_BRANCH" = "HEAD" ]; then
+  DEPLOYED_BRANCH="$BRANCH"
+fi
 echo "deployed_commit=${DEPLOYED_COMMIT}"
 if [ -n "$COMMIT" ] && [ "$DEPLOYED_COMMIT" != "$COMMIT" ]; then
   echo "Commit mismatch after reset." >&2
@@ -91,7 +95,13 @@ mask_env "NEW_API_ADMIN_TOKEN"
 echo "==> 3. Install, migrate, build"
 npm install --no-audit --no-fund
 FLOWAPI_REQUIRE_DATABASE=true node scripts/run-production-migrations.mjs
-NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=512}" npm run build
+$SUDO rm -rf .next .turbo node_modules/.cache 2>/dev/null || true
+$SUDO mkdir -p .next node_modules/.cache
+$SUDO chown -R "$(id -un):$(id -gn)" .next node_modules/.cache
+FLOWAPI_DEPLOY_COMMIT="$DEPLOYED_COMMIT" \
+FLOWAPI_DEPLOY_BRANCH="$DEPLOYED_BRANCH" \
+NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=512}" \
+npx next build --webpack
 
 echo "==> 4. Restart PM2 and nginx"
 pm2 delete flowapi >/dev/null 2>&1 || true
@@ -100,25 +110,28 @@ if [ -n "$PORT_PIDS" ]; then
   kill $PORT_PIDS 2>/dev/null || true
   sleep 1
 fi
-pm2 start node_modules/next/dist/bin/next --name flowapi -- start -p "$PORT"
+FLOWAPI_DEPLOY_COMMIT="$DEPLOYED_COMMIT" \
+FLOWAPI_DEPLOY_BRANCH="$DEPLOYED_BRANCH" \
+pm2 start node_modules/next/dist/bin/next --cwd "$APP" --name flowapi -- start -p "$PORT"
 pm2 save >/dev/null || true
 $SUDO nginx -t
 $SUDO systemctl reload nginx || $SUDO service nginx reload || true
 
-echo "==> 5. Local runtime proof"
-sleep 2
-curl -fsS "http://127.0.0.1:${PORT}/api/health" && echo
-curl -fsS "http://127.0.0.1:${PORT}/api/deploy-info" && echo
+echo "==> 5. Runtime deploy proof"
+sleep 3
+node scripts/verify-flowapi-deploy.mjs "$DEPLOYED_COMMIT" "$DEPLOYED_BRANCH" "http://127.0.0.1:${PORT}" "$PUBLIC_BASE"
+
+echo "==> 6. Local model market proof"
 curl -fsS "http://127.0.0.1:${PORT}/api/models/market" \
   | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const j=JSON.parse(s);const rows=j.models||j.data||[];console.log(JSON.stringify({count:rows.length,providers:[...new Set(rows.map(x=>x.provider||x.providerName).filter(Boolean))],imageCount:rows.filter(x=>String(x.category||x.primaryButtonHref||"").includes("image")||x.primaryButtonHref==="/images").length},null,2));})'
 
-echo "==> 6. Sync and publish AICards backup models"
+echo "==> 7. Sync and publish AICards backup models"
 FLOWAPI_PUBLIC_BASE_URL="http://127.0.0.1:${PORT}" node scripts/aicards-sync-publish.mjs
 
-echo "==> 7. Public FlowAPI branding proof"
+echo "==> 8. Public FlowAPI branding proof"
 FLOWAPI_PUBLIC_SCAN_ATTEMPTS=5 node scripts/scan-public-branding.mjs "$PUBLIC_BASE"
 
-echo "==> 8. Final production proof"
-echo "commit=$(git rev-parse HEAD)"
+echo "==> 9. Final production proof"
+echo "commit=${DEPLOYED_COMMIT}"
 pm2 list
 echo "FlowAPI production deploy and branding verification complete."

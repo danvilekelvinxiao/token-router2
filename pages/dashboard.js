@@ -58,19 +58,28 @@ const subscribeClientSnapshot = (callback) => {
   return () => window.clearTimeout(id);
 };
 
+const subscribeClientClock = (callback) => {
+  if (typeof window === "undefined") return () => {};
+  const timeoutId = window.setTimeout(callback, 0);
+  const intervalId = window.setInterval(callback, 60 * 1000);
+  return () => {
+    window.clearTimeout(timeoutId);
+    window.clearInterval(intervalId);
+  };
+};
+
 function getClientLocalDemoMode() {
   if (typeof window === "undefined") return false;
   const params = new URLSearchParams(window.location.search || "");
   return params.get("demo") === "1" || window.localStorage.getItem("flowapi_demo_mode") === "true";
 }
 
-function getClientGreeting() {
+function getClientDayPeriod() {
   const h = new Date().getHours();
-  if (h < 6) return "凌晨好";
-  if (h < 12) return "上午好";
-  if (h < 14) return "中午好";
-  if (h < 18) return "下午好";
-  return "晚上好";
+  if (h < 6) return "晚上";
+  if (h < 12) return "上午";
+  if (h < 18) return "下午";
+  return "晚上";
 }
 
 function generateMonthCalendar(calls, year, month) {
@@ -4011,7 +4020,7 @@ export default function DashboardPage() {
   const localDemoMode = useSyncExternalStore(subscribeClientSnapshot, getClientLocalDemoMode, () => false);
   const [heatmapYear, setHeatmapYear] = useState(() => new Date().getFullYear());
   const [heatmapMonth, setHeatmapMonth] = useState(() => new Date().getMonth());
-  const greeting = useSyncExternalStore(subscribeClientSnapshot, getClientGreeting, () => "你好");
+  const dayPeriod = useSyncExternalStore(subscribeClientClock, getClientDayPeriod, () => "上午");
   const tooltipFrameRef = useRef(null);
   const pendingTooltipRef = useRef(null);
 
@@ -4501,31 +4510,45 @@ export default function DashboardPage() {
           box-shadow: var(--card-shadow-light, 0 12px 40px rgba(15, 23, 42, 0.06)) !important;
         }
 
-        .dashboard-part1 .dash3-header > div:first-child {
-          display: grid !important;
-          align-content: center !important;
-          justify-content: stretch !important;
-          gap: 16px !important;
+        .dashboard-part1 .dash3-welcome-card {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: flex-start !important;
+          justify-content: center !important;
           padding: 26px !important;
         }
 
-        .dashboard-part1 .dash3-header h1 {
+        .dashboard-part1 .dash3-welcome-card h1 {
           max-width: 100% !important;
           margin: 0 !important;
           color: var(--dash-readable-number, var(--dash-text)) !important;
           font-size: clamp(34px, 3.2vw, 54px) !important;
           font-weight: 950 !important;
-          line-height: 1.05 !important;
+          line-height: 1.12 !important;
           letter-spacing: -0.035em !important;
           overflow-wrap: anywhere !important;
         }
 
-        .dashboard-part1 .dash3-header > div:first-child p {
+        .dashboard-part1 .dash3-welcome-card p {
           max-width: 100% !important;
           margin: 0 !important;
           color: var(--dash-sub) !important;
-          font-size: 15px !important;
-          line-height: 1.7 !important;
+          overflow-wrap: anywhere !important;
+        }
+
+        .dashboard-part1 .dash3-welcome-copy {
+          margin-top: 10px !important;
+          font-size: 16px !important;
+          font-weight: 700 !important;
+          line-height: 1.56 !important;
+        }
+
+        .dashboard-part1 .dash3-welcome-meta {
+          margin-top: 18px !important;
+          font-size: 13px !important;
+          font-weight: 600 !important;
+          line-height: 1.72 !important;
+          color: var(--dash-sub) !important;
         }
 
         .dashboard-part1 .dash3-header-center {
@@ -5878,9 +5901,10 @@ export default function DashboardPage() {
 
           <section className="dashboard-part1" aria-label="FlowAPI 首页资产总览">
             <header className="dash3-header">
-              <div>
-                <h1>{greeting}，{userName}</h1>
-                <p>你的 AI Token 资产正在流动，<FlowApiBrandText size="sm" /> 帮你看清每一次模型调用、每一笔消耗和未来余额需求。</p>
+              <div className="dash3-welcome-card">
+                <h1>{dayPeriod}，{userName}</h1>
+                <p className="dash3-welcome-copy">AI Token 在流动，FlowAPI 在守护</p>
+                <p className="dash3-welcome-meta">统一接入全球先进模型·Token 消耗可视化·企业级稳定性</p>
               </div>
               <div className="dash3-header-center" aria-label="登录陪伴进度">
                 <p className="dash3-companion-title">

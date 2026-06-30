@@ -2,6 +2,8 @@
 set -euo pipefail
 
 SERVER="${FLOWAPI_SERVER:-root@8.209.211.209}"
+APP_DIR="${FLOWAPI_APP_DIR:-/var/www/flowapi}"
+PUBLIC_BASE="${FLOWAPI_PUBLIC_BASE_URL:-https://flowapi.fun}"
 SSH_OPTS="${FLOWAPI_SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=10 -o StrictHostKeyChecking=no}"
 SSH_ID="${FLOWAPI_SSH_ID:-$HOME/.ssh/id_ed25519}"
 SSH_CMD=(ssh)
@@ -9,19 +11,23 @@ if [[ -f "${SSH_ID}" ]]; then
   SSH_CMD+=(-i "${SSH_ID}")
 fi
 
+print_workbench_fallback() {
+  echo "SSH unavailable. Do not keep debugging over SSH." >&2
+  echo "Switch to Alibaba Cloud Workbench and print the exact command with:" >&2
+  echo "  npm run deploy:workbench" >&2
+}
+
 echo "==> Testing SSH to ${SERVER} ..."
 if ! "${SSH_CMD[@]}" ${SSH_OPTS} "${SERVER}" "echo ok" 2>/tmp/flowapi-ssh-test.log; then
-  echo "SSH failed. Log:"
-  cat /tmp/flowapi-ssh-test.log
-  echo ""
-  echo "522 常见原因：阿里云 ECS 已关机、安全组未放行 22/80/443、或 IP 已变。"
-  echo "请登录阿里云控制台确认实例 8.209.211.209 为「运行中」，安全组放行 TCP 22/80/443。"
+  echo "SSH failed. Log:" >&2
+  cat /tmp/flowapi-ssh-test.log >&2
+  print_workbench_fallback
   exit 1
 fi
 
 echo "==> Connecting to ${SERVER} for repair ..."
 
-"${SSH_CMD[@]}" ${SSH_OPTS} "${SERVER}" bash -s <<'REMOTE'
+"${SSH_CMD[@]}" ${SSH_OPTS} "${SERVER}" APP_DIR="${APP_DIR}" PUBLIC_BASE="${PUBLIC_BASE}" bash -s <<'REMOTE'
 set -euo pipefail
 
 echo "=== System ==="
@@ -43,24 +49,35 @@ grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fs
 
 echo "=== Restart flowapi (pm2) ==="
 export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=768}"
-cd /var/www/flowapi
+cd "$APP_DIR"
+
+if [ ! -d .git ]; then
+  echo "ERROR: missing .git checkout in $APP_DIR. Use Workbench deploy to restore the repo state." >&2
+  exit 1
+fi
 
 if [ ! -d .next ]; then
-  echo "ERROR: missing .next build. Run on Mac: cd token-router2 && npm run deploy"
+  echo "ERROR: missing .next build. Use Workbench deploy to rebuild FlowAPI." >&2
   exit 1
+fi
+
+DEPLOY_COMMIT="$(git rev-parse HEAD)"
+DEPLOY_BRANCH="$(git branch --show-current || true)"
+if [ -z "$DEPLOY_BRANCH" ] || [ "$DEPLOY_BRANCH" = "HEAD" ]; then
+  DEPLOY_BRANCH="${FLOWAPI_DEPLOY_BRANCH:-}"
 fi
 
 pm2 delete flowapi >/dev/null 2>&1 || true
-pm2 start npm --name flowapi --cwd /var/www/flowapi -- start -- -p 3000
+PORT_PIDS="$(ss -ltnp 'sport = :3000' 2>/dev/null | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | sort -u || true)"
+if [ -n "$PORT_PIDS" ]; then
+  kill $PORT_PIDS 2>/dev/null || true
+  sleep 1
+fi
+FLOWAPI_DEPLOY_COMMIT="$DEPLOY_COMMIT" \
+FLOWAPI_DEPLOY_BRANCH="$DEPLOY_BRANCH" \
+pm2 start node_modules/next/dist/bin/next --cwd "$APP_DIR" --name flowapi -- start -p 3000
 pm2 save >/dev/null || true
 sleep 5
-
-echo "=== Local app health ==="
-if ! curl -fsS -m 15 http://127.0.0.1:3000/api/health && echo; then
-  echo "WARN: app health failed, pm2 logs:"
-  pm2 logs flowapi --lines 60 --nostream || true
-  exit 1
-fi
 
 echo "=== Nginx ==="
 if ! systemctl is-active --quiet nginx; then
@@ -86,12 +103,10 @@ fi
 echo "=== Origin HTTPS probe ==="
 curl -kfsS -m 10 https://127.0.0.1/api/health -H "Host: flowapi.fun" && echo || echo "WARN: local HTTPS probe failed"
 
-echo "=== Done on server ==="
+echo "=== Runtime verification ==="
+node scripts/verify-flowapi-deploy.mjs "$DEPLOY_COMMIT" "$DEPLOY_BRANCH" "http://127.0.0.1:3000" "$PUBLIC_BASE"
 REMOTE
 
-echo "==> Public check https://flowapi.fun/api/health"
-sleep 2
-curl -fsS -m 20 "https://flowapi.fun/api/health" && echo
 echo "==> Public admin asset check"
-node scripts/check-public-page-assets.mjs "${FLOWAPI_PUBLIC_BASE_URL:-https://flowapi.fun}" /admin/model-market /admin/image-models
+node scripts/check-public-page-assets.mjs "$PUBLIC_BASE" /admin/model-market /admin/image-models
 echo "==> Fix script finished OK"
