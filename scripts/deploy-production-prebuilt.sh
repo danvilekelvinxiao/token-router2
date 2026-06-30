@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SERVER="${FLOWAPI_SERVER:-root@47.238.81.210}"
+cd "$(dirname "$0")/.."
+
+SERVER="${FLOWAPI_SERVER:-root@8.209.211.209}"
 APP_DIR="${FLOWAPI_APP_DIR:-/var/www/flowapi}"
 SSH_OPTS="${FLOWAPI_SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o StrictHostKeyChecking=no}"
 
@@ -18,6 +20,9 @@ rsync -az --delete \
   --exclude .claude \
   --exclude .omx \
   --exclude .playwright-cli \
+  --exclude backups \
+  --exclude reports \
+  --exclude outputs \
   --exclude services \
   --exclude .next/cache \
   --exclude public/generated-images \
@@ -48,7 +53,7 @@ ssh $SSH_OPTS "$SERVER" "
     kill \$PORT_PIDS 2>/dev/null || true
     sleep 1
   fi
-  pm2 start node_modules/next/dist/bin/next --name flowapi -- start -p 3000
+  pm2 start node_modules/next/dist/bin/next --cwd '$APP_DIR' --name flowapi -- start -p 3000
   pm2 save >/dev/null
   systemctl start nginx 2>/dev/null || true
   nginx -t && systemctl reload nginx

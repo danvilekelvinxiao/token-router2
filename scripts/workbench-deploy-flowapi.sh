@@ -63,7 +63,7 @@ if [ -n "$PORT_PIDS" ]; then
   kill $PORT_PIDS 2>/dev/null || true
   sleep 1
 fi
-pm2 start node_modules/next/dist/bin/next --name flowapi -- start -p 3000
+pm2 start node_modules/next/dist/bin/next --cwd "$APP" --name flowapi -- start -p 3000
 pm2 save >/dev/null || true
 
 echo "==> 7. Reload nginx"
