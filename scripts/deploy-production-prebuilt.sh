@@ -4,6 +4,19 @@ set -euo pipefail
 SERVER="${FLOWAPI_SERVER:-root@8.209.211.209}"
 APP_DIR="${FLOWAPI_APP_DIR:-/var/www/flowapi}"
 SSH_OPTS="${FLOWAPI_SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o StrictHostKeyChecking=no}"
+DEPLOY_COMMIT="${FLOWAPI_DEPLOY_COMMIT:-}"
+DEPLOY_BRANCH="${FLOWAPI_DEPLOY_BRANCH:-}"
+
+if [ -z "$DEPLOY_COMMIT" ]; then
+  DEPLOY_COMMIT="$(git rev-parse HEAD)"
+fi
+
+if [ -z "$DEPLOY_BRANCH" ]; then
+  DEPLOY_BRANCH="$(git branch --show-current)"
+fi
+
+export FLOWAPI_DEPLOY_COMMIT="$DEPLOY_COMMIT"
+export FLOWAPI_DEPLOY_BRANCH="$DEPLOY_BRANCH"
 
 # 本地构建，避免在 1GB 服务器上 build 导致整机卡死、521
 npm run lint -- --max-warnings 10
@@ -43,6 +56,22 @@ ssh $SSH_OPTS "$SERVER" "
   swapon /swapfile 2>/dev/null || true
   grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
   cd '$APP_DIR'
+  for ENV_FILE in .env.production .env.local; do
+    if [ \"\$ENV_FILE\" = \".env.local\" ] && [ ! -f \"\$ENV_FILE\" ]; then
+      continue
+    fi
+    touch \"\$ENV_FILE\"
+    TMP_ENV=\"\$(mktemp)\"
+    grep -vE '^FLOWAPI_DEPLOY_(COMMIT|BRANCH)=' \"\$ENV_FILE\" > \"\$TMP_ENV\" || true
+    {
+      cat \"\$TMP_ENV\"
+      echo 'FLOWAPI_DEPLOY_COMMIT=$DEPLOY_COMMIT'
+      echo 'FLOWAPI_DEPLOY_BRANCH=$DEPLOY_BRANCH'
+    } > \"\$ENV_FILE\"
+    rm -f \"\$TMP_ENV\"
+  done
+  export FLOWAPI_DEPLOY_COMMIT='$DEPLOY_COMMIT'
+  export FLOWAPI_DEPLOY_BRANCH='$DEPLOY_BRANCH'
   FLOWAPI_REQUIRE_DATABASE=\"\${FLOWAPI_REQUIRE_DATABASE:-true}\" node scripts/run-production-migrations.mjs
   export NODE_OPTIONS=--max-old-space-size=512
   npm install --omit=dev --no-audit --no-fund
