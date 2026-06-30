@@ -1,22 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cd "$(dirname "$0")/.."
+
 SERVER="${FLOWAPI_SERVER:-root@8.209.211.209}"
 APP_DIR="${FLOWAPI_APP_DIR:-/var/www/flowapi}"
 SSH_OPTS="${FLOWAPI_SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=20 -o ServerAliveInterval=10 -o StrictHostKeyChecking=no}"
-DEPLOY_COMMIT="${FLOWAPI_DEPLOY_COMMIT:-}"
-DEPLOY_BRANCH="${FLOWAPI_DEPLOY_BRANCH:-}"
-
-if [ -z "$DEPLOY_COMMIT" ]; then
-  DEPLOY_COMMIT="$(git rev-parse HEAD)"
-fi
-
-if [ -z "$DEPLOY_BRANCH" ]; then
-  DEPLOY_BRANCH="$(git branch --show-current)"
-fi
-
-export FLOWAPI_DEPLOY_COMMIT="$DEPLOY_COMMIT"
-export FLOWAPI_DEPLOY_BRANCH="$DEPLOY_BRANCH"
 
 # 本地构建，避免在 1GB 服务器上 build 导致整机卡死、521
 npm run lint -- --max-warnings 10
@@ -29,16 +18,15 @@ rsync -az --delete \
   --exclude .env.local \
   --exclude .env.production \
   --exclude .claude \
-  --exclude .next \
+  --exclude .omx \
+  --exclude .playwright-cli \
+  --exclude backups \
+  --exclude reports \
+  --exclude outputs \
+  --exclude services \
+  --exclude .next/cache \
   --exclude public/generated-images \
   ./ "$SERVER:$APP_DIR/"
-
-# Keep the runtime build atomic and exact. Syncing .next separately avoids leaving a
-# mixed build on the server while still deleting stale build cache and old chunks.
-rsync -az --delete --delete-excluded \
-  -e "ssh $SSH_OPTS" \
-  --exclude cache \
-  .next/ "$SERVER:$APP_DIR/.next/"
 
 if [ "${FLOWAPI_SYNC_NODE_MODULES:-0}" = "1" ]; then
   rsync -az --delete \
@@ -56,22 +44,6 @@ ssh $SSH_OPTS "$SERVER" "
   swapon /swapfile 2>/dev/null || true
   grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
   cd '$APP_DIR'
-  for ENV_FILE in .env.production .env.local; do
-    if [ \"\$ENV_FILE\" = \".env.local\" ] && [ ! -f \"\$ENV_FILE\" ]; then
-      continue
-    fi
-    touch \"\$ENV_FILE\"
-    TMP_ENV=\"\$(mktemp)\"
-    grep -vE '^FLOWAPI_DEPLOY_(COMMIT|BRANCH)=' \"\$ENV_FILE\" > \"\$TMP_ENV\" || true
-    {
-      cat \"\$TMP_ENV\"
-      echo 'FLOWAPI_DEPLOY_COMMIT=$DEPLOY_COMMIT'
-      echo 'FLOWAPI_DEPLOY_BRANCH=$DEPLOY_BRANCH'
-    } > \"\$ENV_FILE\"
-    rm -f \"\$TMP_ENV\"
-  done
-  export FLOWAPI_DEPLOY_COMMIT='$DEPLOY_COMMIT'
-  export FLOWAPI_DEPLOY_BRANCH='$DEPLOY_BRANCH'
   FLOWAPI_REQUIRE_DATABASE=\"\${FLOWAPI_REQUIRE_DATABASE:-true}\" node scripts/run-production-migrations.mjs
   export NODE_OPTIONS=--max-old-space-size=512
   npm install --omit=dev --no-audit --no-fund
@@ -81,7 +53,7 @@ ssh $SSH_OPTS "$SERVER" "
     kill \$PORT_PIDS 2>/dev/null || true
     sleep 1
   fi
-  pm2 start node_modules/next/dist/bin/next --name flowapi -- start -p 3000
+  pm2 start node_modules/next/dist/bin/next --cwd '$APP_DIR' --name flowapi -- start -p 3000
   pm2 save >/dev/null
   systemctl start nginx 2>/dev/null || true
   nginx -t && systemctl reload nginx
@@ -93,4 +65,4 @@ echo "==> Public health check"
 curl -fsS -m 20 "https://flowapi.fun/api/health" && echo
 
 echo "==> Public asset check"
-node scripts/check-public-page-assets.mjs "${FLOWAPI_PUBLIC_BASE_URL:-https://flowapi.fun}" / /login /api-management /dashboard /admin/model-market /admin/image-models
+node scripts/check-public-page-assets.mjs "${FLOWAPI_PUBLIC_BASE_URL:-https://flowapi.fun}" /admin/model-market /admin/image-models

@@ -46,30 +46,6 @@ if [ -n "$COMMIT" ]; then
 else
   git reset --hard "origin/$BRANCH"
 fi
-DEPLOY_COMMIT="$(git rev-parse HEAD)"
-DEPLOY_BRANCH="$(git branch --show-current 2>/dev/null || true)"
-[ -n "$DEPLOY_BRANCH" ] || DEPLOY_BRANCH="$BRANCH"
-echo "resolved-commit=$DEPLOY_COMMIT"
-echo "resolved-branch=$DEPLOY_BRANCH"
-
-echo "==> 3.1 Persist deploy metadata"
-for ENV_FILE in .env.production .env.local; do
-  if [ "$ENV_FILE" = ".env.local" ] && [ ! -f "$ENV_FILE" ]; then
-    continue
-  fi
-  touch "$ENV_FILE"
-  TMP_ENV="$(mktemp)"
-  grep -vE '^FLOWAPI_DEPLOY_(COMMIT|BRANCH)=' "$ENV_FILE" > "$TMP_ENV" || true
-  {
-    cat "$TMP_ENV"
-    echo "FLOWAPI_DEPLOY_COMMIT=$DEPLOY_COMMIT"
-    echo "FLOWAPI_DEPLOY_BRANCH=$DEPLOY_BRANCH"
-  } > "$ENV_FILE"
-  rm -f "$TMP_ENV"
-done
-
-export FLOWAPI_DEPLOY_COMMIT="$DEPLOY_COMMIT"
-export FLOWAPI_DEPLOY_BRANCH="$DEPLOY_BRANCH"
 
 echo "==> 4. Install dependencies and migrate database"
 npm install --no-audit --no-fund
