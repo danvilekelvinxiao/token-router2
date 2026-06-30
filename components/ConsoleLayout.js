@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ThemeToggle from "@/components/ThemeToggle";
 import LanguageSwitcher from "@/components/common/language-switcher";
+import AnnouncementCenter from "@/components/announcements/announcement-center";
 
 function IconDashboard() {
   return (
@@ -374,6 +375,7 @@ export default function ConsoleLayout({ customer, currentPath, children, content
           </Link>
           <div className="flow-console-nav-actions">
             <SpaceSwitcher />
+            <AnnouncementCenter customerId={customer?.id || ""} currentPath={currentPath} />
             <ThemeToggle />
             <LanguageSwitcher />
             <AccountMenu customer={customer} />

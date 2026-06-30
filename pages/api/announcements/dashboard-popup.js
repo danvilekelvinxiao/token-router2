@@ -1,5 +1,4 @@
 import { getDashboardAnnouncementPayload } from "@/lib/announcement-utils";
-import { hasUserSeenAnnouncementVersion } from "@/lib/announcement-read-store";
 import { getSessionPayload } from "@/lib/session";
 
 export default function handler(req, res) {
@@ -8,30 +7,27 @@ export default function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const payload = getDashboardAnnouncementPayload();
-  if (!payload.announcements.length) {
+  const session = getSessionPayload(req);
+  const userId = session?.customerId || "";
+  const payload = getDashboardAnnouncementPayload({ userId });
+
+  if (!payload.announcementVersion && !payload.unreadCount && !payload.announcements.length) {
     return res.status(200).json({
       success: true,
       source: "empty",
       shouldShow: false,
       shouldPopup: false,
+      unreadCount: 0,
       announcementVersion: "",
       announcements: [],
+      recentAnnouncements: [],
       qqGroup: payload.qqGroup,
     });
   }
 
-  const session = getSessionPayload(req);
-  const userId = session?.customerId || "";
-  const seen = userId ? hasUserSeenAnnouncementVersion(userId, payload.announcementVersion) : false;
-
   return res.status(200).json({
     success: true,
-    source: "real",
-    announcementVersion: payload.announcementVersion,
-    shouldShow: !seen,
-    shouldPopup: !seen,
-    announcements: payload.announcements,
-    qqGroup: payload.qqGroup,
+    source: payload.announcements.length ? "real" : "unread-only",
+    ...payload,
   });
 }

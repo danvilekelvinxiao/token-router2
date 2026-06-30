@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/admin-auth";
 import { adminGetContent, adminUpdateContent, adminCreateContent, adminDeleteContent, adminToggleContent, adminSaveConfig } from "@/lib/content-cms";
+import { normalizeAnnouncementAdminInput } from "@/lib/announcement-utils";
 
 export default async function handler(req, res) {
   if (!(await requireAdmin(req, res))) return;
@@ -23,7 +24,7 @@ export default async function handler(req, res) {
       const saved = adminSaveConfig(type, body.data || {});
       return res.status(200).json({ ok: true, type, data: saved });
     }
-    const created = adminCreateContent(type, body || {});
+    const created = adminCreateContent(type, type === "announcements" ? normalizeAnnouncementAdminInput(body || {}) : (body || {}));
     return res.status(200).json({ ok: true, type, data: created });
   }
 
@@ -39,7 +40,7 @@ export default async function handler(req, res) {
       const item = adminToggleContent(type, id, data.toggle);
       return item ? res.status(200).json({ ok: true, data: item }) : res.status(404).json({ error: "未找到" });
     }
-    const updated = adminUpdateContent(type, id, data);
+    const updated = adminUpdateContent(type, id, type === "announcements" ? normalizeAnnouncementAdminInput({ ...data, id }) : data);
     return updated ? res.status(200).json({ ok: true, data: updated }) : res.status(404).json({ error: "未找到" });
   }
 

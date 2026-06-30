@@ -1,4 +1,5 @@
-import { markUserSeenAnnouncementVersion } from "@/lib/announcement-read-store";
+import { getAnnouncementListPayload } from "@/lib/announcement-utils";
+import { markUserAcknowledgedAnnouncements } from "@/lib/announcement-read-store";
 import { requireCustomerSession } from "@/lib/session";
 
 export default function handler(req, res) {
@@ -11,13 +12,20 @@ export default function handler(req, res) {
   if (!session) return;
 
   const announcementVersion = String(req.body?.announcementVersion || "").trim();
-  if (!announcementVersion) {
-    return res.status(400).json({ success: false, error: "缺少 announcementVersion" });
+  const announcementIds = Array.isArray(req.body?.announcementIds)
+    ? req.body.announcementIds.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+
+  if (!announcementIds.length && !announcementVersion) {
+    return res.status(400).json({ success: false, error: "缺少 announcementIds 或 announcementVersion" });
   }
 
-  markUserSeenAnnouncementVersion(session.customerId, announcementVersion);
+  markUserAcknowledgedAnnouncements(session.customerId, announcementIds, announcementVersion);
+  const payload = getAnnouncementListPayload({ userId: session.customerId, page: 1, pageSize: 50 });
+
   return res.status(200).json({
     success: true,
-    message: "已记录公告已读状态",
+    unreadCount: payload.unreadCount,
+    message: "已记录公告确认状态",
   });
 }

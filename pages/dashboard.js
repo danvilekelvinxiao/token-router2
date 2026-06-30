@@ -17,7 +17,6 @@ import ActivityHeatmapCard from "@/components/dashboard/activity-heatmap-card";
 import SavingsCard from "@/components/analytics/savings-card";
 import SavingsDetailDrawer from "@/components/analytics/savings-detail-drawer";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
-import DashboardAnnouncementPopup from "@/components/announcements/dashboard-announcement-popup";
 import { getClampedTooltipPosition, getNearestChartIndex } from "@/components/charts/flowapi-chart-interaction";
 import { generateTokenForecast } from "@/lib/analytics/token-forecast";
 import { useLocale } from "@/components/providers/locale-provider";
@@ -4009,9 +4008,6 @@ export default function DashboardPage() {
   const [walletData, setWalletData] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
   const [imageSummary, setImageSummary] = useState(null);
-  const [announcementPopupData, setAnnouncementPopupData] = useState(null);
-  const [announcementPopupOpen, setAnnouncementPopupOpen] = useState(false);
-  const [announcementMarkingSeen, setAnnouncementMarkingSeen] = useState(false);
   const localDemoMode = useSyncExternalStore(subscribeClientSnapshot, getClientLocalDemoMode, () => false);
   const [heatmapYear, setHeatmapYear] = useState(() => new Date().getFullYear());
   const [heatmapMonth, setHeatmapMonth] = useState(() => new Date().getMonth());
@@ -4268,52 +4264,6 @@ export default function DashboardPage() {
       });
     return () => { cancelled = true; };
   }, [customer?.id, localDemoMode]);
-
-  useEffect(() => {
-    if (!customer?.id) return;
-    let cancelled = false;
-    fetch("/api/announcements/dashboard-popup")
-      .then((res) => res.json())
-      .then((data) => {
-        if (cancelled || !data?.success || !data?.announcementVersion || !Array.isArray(data?.announcements) || data.announcements.length === 0) return;
-        setAnnouncementPopupData(data);
-        const localSeenKey = `flowapi_seen_announcement_version:${customer.id}`;
-        const localSeenVersion = typeof window !== "undefined" ? window.localStorage.getItem(localSeenKey) : "";
-        if ((data.shouldShow !== true && data.shouldPopup !== true) || localSeenVersion === data.announcementVersion) return;
-        window.setTimeout(() => {
-          if (!cancelled) setAnnouncementPopupOpen(true);
-        }, 300);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [customer?.id]);
-
-  const handleAnnouncementSeen = useCallback(async () => {
-    if (!announcementPopupData?.announcementVersion) {
-      setAnnouncementPopupOpen(false);
-      return;
-    }
-    const version = announcementPopupData.announcementVersion;
-    const localSeenKey = `flowapi_seen_announcement_version:${customer?.id || "anon"}`;
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(localSeenKey, version);
-      }
-      setAnnouncementMarkingSeen(true);
-      await fetch("/api/announcements/mark-seen", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ announcementVersion: version }),
-      });
-    } catch {
-      // fallback only with local storage
-    } finally {
-      setAnnouncementMarkingSeen(false);
-      setAnnouncementPopupOpen(false);
-    }
-  }, [announcementPopupData, customer?.id]);
 
   /* Computed */
   const rawUser = customer || { name: "用户", email: "", balance: 0, totalSpend: 0, apiKeys: [], calls: [] };
@@ -6137,13 +6087,6 @@ export default function DashboardPage() {
         onClose={() => setDetailModal(null)}
         {...(detailModal || {})}
         actions={<Link href="/api-management">去 API 管理</Link>}
-      />
-      <DashboardAnnouncementPopup
-        open={announcementPopupOpen}
-        data={announcementPopupData}
-        onClose={handleAnnouncementSeen}
-        onConfirm={handleAnnouncementSeen}
-        loading={announcementMarkingSeen}
       />
     </>
   );
