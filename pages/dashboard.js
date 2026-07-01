@@ -5963,7 +5963,8 @@ export default function DashboardPage() {
           }
 
           .dashboard-part1 .dash3-companion-head {
-            grid-template-columns: 1fr !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
           }
 
           .dashboard-part1 .dash3-companion-target {
