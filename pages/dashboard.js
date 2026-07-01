@@ -4624,16 +4624,8 @@ export default function DashboardPage() {
 
         .dashboard-part1 .dash3-companion-copy {
           display: grid !important;
-          gap: 10px !important;
+          gap: 6px !important;
           min-width: 0 !important;
-        }
-
-        .dashboard-part1 .dash3-companion-copy-label {
-          font-size: 12px !important;
-          font-weight: 800 !important;
-          letter-spacing: 0.08em !important;
-          color: var(--dash-sub) !important;
-          text-transform: uppercase !important;
         }
 
         .dashboard-part1 .dash3-companion-title {
@@ -4719,23 +4711,35 @@ export default function DashboardPage() {
         }
 
         .dashboard-part1 .dash3-login-reward-track i {
+          position: relative !important;
           display: block !important;
           height: 100% !important;
           border-radius: inherit !important;
           background: linear-gradient(90deg, #60a5fa 0%, #7c3aed 60%, #a855f7 100%) !important;
           box-shadow: 0 8px 18px rgba(124, 58, 237, 0.18) !important;
+          overflow: hidden !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-track i::after {
+          content: "" !important;
+          position: absolute !important;
+          inset: 0 !important;
+          background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0) 18%, rgba(255,255,255,0.48) 50%, rgba(255,255,255,0) 82%, transparent 100%) !important;
+          transform: translateX(-120%) skewX(-18deg) !important;
+          animation: dash3-shimmer 2.6s linear infinite !important;
+          pointer-events: none !important;
         }
 
         .dashboard-part1 .dash3-login-reward-glow {
           position: absolute !important;
           top: 50% !important;
-          width: 20px !important;
-          height: 20px !important;
+          width: 18px !important;
+          height: 18px !important;
           border-radius: 999px !important;
           transform: translateY(-50%) !important;
-          background: radial-gradient(circle, rgba(255,255,255,0.98) 0%, rgba(196,181,253,0.96) 34%, rgba(168,85,247,0.88) 58%, rgba(124,58,237,0.2) 100%) !important;
+          background: radial-gradient(circle, rgba(255,255,255,0.98) 0%, rgba(196,181,253,0.96) 34%, rgba(168,85,247,0.88) 58%, rgba(124,58,237,0.24) 100%) !important;
           box-shadow: 0 0 15px 5px rgba(168, 85, 247, 0.6) !important;
-          animation: dash3-pulse 1.5s infinite !important;
+          animation: dash3-bounce 1.4s ease-in-out infinite !important;
           pointer-events: none !important;
         }
 
@@ -4787,15 +4791,24 @@ export default function DashboardPage() {
           border-style: dashed !important;
         }
 
-        @keyframes dash3-pulse {
+        @keyframes dash3-bounce {
           0%,
           100% {
-            transform: translateY(-50%) scale(0.94) !important;
+            transform: translateY(-50%) translateY(0) scale(0.96) !important;
             box-shadow: 0 0 10px 3px rgba(168, 85, 247, 0.42) !important;
           }
           50% {
-            transform: translateY(-50%) scale(1.08) !important;
+            transform: translateY(-50%) translateY(-6px) scale(1.04) !important;
             box-shadow: 0 0 18px 7px rgba(168, 85, 247, 0.7) !important;
+          }
+        }
+
+        @keyframes dash3-shimmer {
+          0% {
+            transform: translateX(-120%) skewX(-18deg) !important;
+          }
+          100% {
+            transform: translateX(140%) skewX(-18deg) !important;
           }
         }
 
@@ -6109,7 +6122,6 @@ export default function DashboardPage() {
               <div className="dash3-header-center" aria-label="里程碑与登录进度卡片">
                 <div className="dash3-companion-head">
                   <div className="dash3-companion-copy">
-                    <span className="dash3-companion-copy-label">连续陪伴</span>
                     <p className="dash3-companion-title">
                       <FlowApiBrandText size="sm" animated={false} />
                       <span>已陪伴您</span>
@@ -6141,7 +6153,7 @@ export default function DashboardPage() {
                           tier.recurring ? "recurring" : "",
                         ].filter(Boolean).join(" ")}
                       >
-                        <span>{tier.next ? "🎁 " : tier.unlocked ? "✓ " : ""}{tier.label}</span>
+                        <span>{tier.label}</span>
                         {tier.subLabel ? <small>{tier.subLabel}</small> : null}
                       </span>
                     ))}
