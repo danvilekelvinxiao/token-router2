@@ -839,11 +839,42 @@ function percentFormatter(value) {
 }
 
 const LOGIN_REWARD_TIERS = [
-  { days: 7, reward: 1 },
-  { days: 14, reward: 3 },
-  { days: 30, reward: 8 },
-  { days: 60, reward: 18 },
+  { days: 7, reward: 10 },
+  { days: 15, reward: 15 },
+  { days: 20, reward: 20 },
+  { days: 30, reward: 50 },
 ];
+
+const LOGIN_REWARD_RECURRING = {
+  startDays: 30,
+  intervalDays: 10,
+  reward: 10,
+};
+
+function buildCompanionMilestones(days, nextTierDays) {
+  const unlockedDays = Number(days || 0);
+  const milestones = LOGIN_REWARD_TIERS.map((tier) => ({
+    key: `tier-${tier.days}`,
+    label: `${tier.days}天 $${tier.reward}`,
+    unlocked: unlockedDays >= tier.days,
+    next: nextTierDays === tier.days,
+    recurring: false,
+    subLabel: "",
+  }));
+
+  milestones.push({
+    key: "tier-recurring",
+    label: nextTierDays > LOGIN_REWARD_RECURRING.startDays
+      ? `${nextTierDays}天 $${LOGIN_REWARD_RECURRING.reward}`
+      : `每10天 $${LOGIN_REWARD_RECURRING.reward}`,
+    unlocked: false,
+    next: nextTierDays > LOGIN_REWARD_RECURRING.startDays,
+    recurring: true,
+    subLabel: nextTierDays > LOGIN_REWARD_RECURRING.startDays ? "循环奖励" : "30天后",
+  });
+
+  return milestones;
+}
 
 function buildCompanionReward(createdAt) {
   const joinedAt = createdAt ? new Date(createdAt) : null;
@@ -851,28 +882,54 @@ function buildCompanionReward(createdAt) {
     return {
       days: null,
       nextTier: LOGIN_REWARD_TIERS[0],
+      previousTier: null,
       progress: 0,
-      label: "陪伴天数同步中",
+      glowPosition: 2,
+      remainingDays: LOGIN_REWARD_TIERS[0].days,
+      milestones: buildCompanionMilestones(0, LOGIN_REWARD_TIERS[0].days),
     };
   }
+
   const today = new Date();
   const start = new Date(joinedAt);
   start.setHours(0, 0, 0, 0);
   today.setHours(0, 0, 0, 0);
+
   const days = Math.max(1, Math.floor((today.getTime() - start.getTime()) / 86400000) + 1);
-  const nextTier = LOGIN_REWARD_TIERS.find((tier) => days < tier.days) || LOGIN_REWARD_TIERS[LOGIN_REWARD_TIERS.length - 1];
-  const previousTier = [...LOGIN_REWARD_TIERS].reverse().find((tier) => days >= tier.days);
-  const previousDays = previousTier ? previousTier.days : 0;
+  const nextTier = LOGIN_REWARD_TIERS.find((tier) => days < tier.days) || {
+    days:
+      LOGIN_REWARD_RECURRING.startDays
+      + (Math.floor(Math.max(0, days - LOGIN_REWARD_RECURRING.startDays) / LOGIN_REWARD_RECURRING.intervalDays) + 1)
+        * LOGIN_REWARD_RECURRING.intervalDays,
+    reward: LOGIN_REWARD_RECURRING.reward,
+    recurring: true,
+  };
+
+  let previousTier = [...LOGIN_REWARD_TIERS].reverse().find((tier) => days >= tier.days) || { days: 0, reward: 0 };
+  if (days > LOGIN_REWARD_RECURRING.startDays) {
+    const completedRecurring = Math.floor((days - LOGIN_REWARD_RECURRING.startDays) / LOGIN_REWARD_RECURRING.intervalDays);
+    if (completedRecurring > 0) {
+      previousTier = {
+        days: LOGIN_REWARD_RECURRING.startDays + completedRecurring * LOGIN_REWARD_RECURRING.intervalDays,
+        reward: LOGIN_REWARD_RECURRING.reward,
+        recurring: true,
+      };
+    }
+  }
+
+  const previousDays = previousTier?.days || 0;
   const span = Math.max(1, nextTier.days - previousDays);
-  const progress = nextTier.days === previousDays ? 100 : Math.min(100, Math.max(0, ((days - previousDays) / span) * 100));
+  const progress = Math.min(100, Math.max(0, ((days - previousDays) / span) * 100));
+  const remainingDays = Math.max(0, nextTier.days - days);
+
   return {
     days,
     nextTier,
     previousTier,
     progress,
-    label: days >= nextTier.days
-      ? `已达成 ${nextTier.days} 天奖励`
-      : `距离 ${nextTier.days} 天奖励还差 ${Math.max(0, nextTier.days - days)} 天`,
+    glowPosition: progress <= 0 ? 2 : progress >= 100 ? 98 : progress,
+    remainingDays,
+    milestones: buildCompanionMilestones(days, nextTier.days),
   };
 }
 
@@ -4554,8 +4611,29 @@ export default function DashboardPage() {
         .dashboard-part1 .dash3-header-center {
           display: grid !important;
           align-content: center !important;
-          gap: 14px !important;
+          gap: 18px !important;
           padding: 22px !important;
+        }
+
+        .dashboard-part1 .dash3-companion-head {
+          display: flex !important;
+          align-items: flex-start !important;
+          justify-content: space-between !important;
+          gap: 16px !important;
+        }
+
+        .dashboard-part1 .dash3-companion-copy {
+          display: grid !important;
+          gap: 10px !important;
+          min-width: 0 !important;
+        }
+
+        .dashboard-part1 .dash3-companion-copy-label {
+          font-size: 12px !important;
+          font-weight: 800 !important;
+          letter-spacing: 0.08em !important;
+          color: var(--dash-sub) !important;
+          text-transform: uppercase !important;
         }
 
         .dashboard-part1 .dash3-companion-title {
@@ -4564,50 +4642,161 @@ export default function DashboardPage() {
           align-items: baseline !important;
           gap: 7px !important;
           margin: 0 !important;
-          color: var(--dash-sub) !important;
-          font-size: 15px !important;
+          color: var(--dash-readable-number, var(--dash-text)) !important;
+          font-size: 16px !important;
           font-weight: 850 !important;
-          line-height: 1.2 !important;
+          line-height: 1.15 !important;
         }
 
         .dashboard-part1 .dash3-companion-days {
           margin: 0 !important;
           color: var(--dash-readable-number, var(--dash-text)) !important;
-          font-size: clamp(34px, 3vw, 44px) !important;
+          font-size: clamp(38px, 3.4vw, 52px) !important;
           font-weight: 950 !important;
-          line-height: 0.95 !important;
+          line-height: 0.92 !important;
+          letter-spacing: -0.04em !important;
         }
 
-        .dashboard-part1 .dash3-companion-lines {
-          gap: 5px !important;
+        .dashboard-part1 .dash3-companion-target {
+          display: grid !important;
+          justify-items: end !important;
+          gap: 6px !important;
+          min-width: 132px !important;
+          padding: 12px 14px !important;
+          border: 1px solid rgba(99, 102, 241, 0.16) !important;
+          border-radius: 16px !important;
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(168, 85, 247, 0.12)) !important;
           color: var(--dash-sub) !important;
-          font-size: 13px !important;
-          line-height: 1.45 !important;
+          font-size: 12px !important;
+          line-height: 1.4 !important;
+          text-align: right !important;
         }
 
-        .dashboard-part1 .dash3-companion-lines b {
-          color: var(--dash-readable-number, var(--dash-text)) !important;
+        .dashboard-part1 .dash3-companion-target b {
+          color: #6366f1 !important;
           font-weight: 900 !important;
         }
 
+        .dashboard-part1 .dash3-companion-target strong {
+          color: var(--dash-readable-number, var(--dash-text)) !important;
+          font-size: 16px !important;
+          font-weight: 900 !important;
+        }
+
+        .dashboard-part1 .dash3-companion-target em {
+          color: #f59e0b !important;
+          font-style: normal !important;
+        }
+
         .dashboard-part1 .dash3-login-reward {
-          gap: 10px !important;
+          display: grid !important;
+          gap: 12px !important;
           margin-top: 2px !important;
         }
 
+        .dashboard-part1 .dash3-login-reward-head {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          gap: 12px !important;
+          color: var(--dash-sub) !important;
+          font-size: 13px !important;
+          font-weight: 800 !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-head strong {
+          color: var(--dash-readable-number, var(--dash-text)) !important;
+          font-size: 14px !important;
+          font-weight: 900 !important;
+        }
+
         .dashboard-part1 .dash3-login-reward-track {
-          height: 10px !important;
-          background: rgba(15, 23, 42, 0.08) !important;
+          position: relative !important;
+          overflow: visible !important;
+          height: 8px !important;
+          border-radius: 999px !important;
+          background: rgba(148, 163, 184, 0.24) !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-track i {
+          display: block !important;
+          height: 100% !important;
+          border-radius: inherit !important;
+          background: linear-gradient(90deg, #60a5fa 0%, #7c3aed 60%, #a855f7 100%) !important;
+          box-shadow: 0 8px 18px rgba(124, 58, 237, 0.18) !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-glow {
+          position: absolute !important;
+          top: 50% !important;
+          width: 20px !important;
+          height: 20px !important;
+          border-radius: 999px !important;
+          transform: translateY(-50%) !important;
+          background: radial-gradient(circle, rgba(255,255,255,0.98) 0%, rgba(196,181,253,0.96) 34%, rgba(168,85,247,0.88) 58%, rgba(124,58,237,0.2) 100%) !important;
+          box-shadow: 0 0 15px 5px rgba(168, 85, 247, 0.6) !important;
+          animation: dash3-pulse 1.5s infinite !important;
+          pointer-events: none !important;
         }
 
         .dashboard-part1 .dash3-login-reward-tiers {
+          display: flex !important;
+          flex-wrap: wrap !important;
           gap: 8px !important;
         }
 
         .dashboard-part1 .dash3-login-reward-tiers span {
-          min-height: 32px !important;
-          padding: 0 10px !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 6px !important;
+          min-height: 34px !important;
+          padding: 0 12px !important;
+          border-radius: 999px !important;
+          border: 1px solid transparent !important;
           background: rgba(99, 102, 241, 0.08) !important;
+          color: var(--dash-sub) !important;
+          font-size: 12px !important;
+          font-weight: 800 !important;
+          line-height: 1 !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-tiers span small {
+          font-size: 11px !important;
+          font-weight: 700 !important;
+          color: rgba(100, 116, 139, 0.92) !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-tiers span.active {
+          background: linear-gradient(135deg, rgba(15, 23, 42, 0.96), rgba(51, 65, 85, 0.9)) !important;
+          color: #f8fafc !important;
+          box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14) !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-tiers span.active small {
+          color: rgba(226, 232, 240, 0.78) !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-tiers span.next {
+          border-color: rgba(168, 85, 247, 0.45) !important;
+          background: rgba(168, 85, 247, 0.08) !important;
+          color: #6d28d9 !important;
+          box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.08) inset !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-tiers span.recurring {
+          border-style: dashed !important;
+        }
+
+        @keyframes dash3-pulse {
+          0%,
+          100% {
+            transform: translateY(-50%) scale(0.94) !important;
+            box-shadow: 0 0 10px 3px rgba(168, 85, 247, 0.42) !important;
+          }
+          50% {
+            transform: translateY(-50%) scale(1.08) !important;
+            box-shadow: 0 0 18px 7px rgba(168, 85, 247, 0.7) !important;
+          }
         }
 
         .dashboard-part1-heatmap {
@@ -5773,8 +5962,18 @@ export default function DashboardPage() {
             font-size: 34px !important;
           }
 
+          .dashboard-part1 .dash3-companion-head {
+            grid-template-columns: 1fr !important;
+          }
+
+          .dashboard-part1 .dash3-companion-target {
+            justify-items: start !important;
+            text-align: left !important;
+          }
+
           .dashboard-part1 .dash3-login-reward-tiers {
-            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+            display: flex !important;
+            flex-wrap: wrap !important;
           }
 
           .dashboard-part1-heatmap .activity-heatmap-card {
@@ -5906,29 +6105,43 @@ export default function DashboardPage() {
                 <p className="dash3-welcome-copy">AI Token 在流动，FlowAPI 在守护</p>
                 <p className="dash3-welcome-meta">统一接入全球先进模型·Token 消耗可视化·企业级稳定性</p>
               </div>
-              <div className="dash3-header-center" aria-label="登录陪伴进度">
-                <p className="dash3-companion-title">
-                  <span>已陪伴</span>
-                  <FlowApiBrandText size="sm" />
-                  <span className="dash3-companion-days">{companionReward.days ?? "--"}</span>
-                  <span>天</span>
-                </p>
-                <div className="dash3-companion-lines">
-                  <span>{companionReward.label}</span>
-                  <span>下一档奖励：<b>${companionReward.nextTier?.reward ?? 0}</b> Token 余额</span>
+              <div className="dash3-header-center" aria-label="里程碑与登录进度卡片">
+                <div className="dash3-companion-head">
+                  <div className="dash3-companion-copy">
+                    <span className="dash3-companion-copy-label">连续陪伴</span>
+                    <p className="dash3-companion-title">
+                      <FlowApiBrandText size="sm" animated={false} />
+                      <span>已陪伴您</span>
+                      <span className="dash3-companion-days">{companionReward.days ?? "--"}</span>
+                      <span>天</span>
+                    </p>
+                  </div>
+                  <div className="dash3-companion-target">
+                    <span>距离 <b>{companionReward.nextTier?.days ?? 30}</b> 天奖励</span>
+                    <strong>还差 <em>{companionReward.remainingDays ?? 0}</em> 天</strong>
+                  </div>
                 </div>
                 <div className="dash3-login-reward">
                   <div className="dash3-login-reward-head">
                     <span>登录奖励进度</span>
                     <strong>{Math.round(companionReward.progress || 0)}%</strong>
                   </div>
-                  <div className="dash3-login-reward-track">
+                  <div className="dash3-login-reward-track" aria-hidden="true">
                     <i style={{ width: `${Math.max(0, Math.min(100, companionReward.progress || 0))}%` }} />
+                    <span className="dash3-login-reward-glow" style={{ left: `calc(${Math.max(2, Math.min(98, companionReward.glowPosition || 0))}% - 10px)` }} />
                   </div>
-                  <div className="dash3-login-reward-tiers">
-                    {LOGIN_REWARD_TIERS.map((tier) => (
-                      <span key={tier.days} className={Number(companionReward.days || 0) >= tier.days ? "active" : ""}>
-                        {tier.days} 天 <b>${tier.reward}</b>
+                  <div className="dash3-login-reward-tiers" aria-label="里程碑奖励节点">
+                    {companionReward.milestones.map((tier) => (
+                      <span
+                        key={tier.key}
+                        className={[
+                          tier.unlocked ? "active" : "",
+                          tier.next ? "next" : "",
+                          tier.recurring ? "recurring" : "",
+                        ].filter(Boolean).join(" ")}
+                      >
+                        <span>{tier.next ? "🎁 " : tier.unlocked ? "✓ " : ""}{tier.label}</span>
+                        {tier.subLabel ? <small>{tier.subLabel}</small> : null}
                       </span>
                     ))}
                   </div>
