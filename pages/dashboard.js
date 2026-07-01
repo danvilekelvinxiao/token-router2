@@ -4703,6 +4703,7 @@ export default function DashboardPage() {
         }
 
         .dashboard-part1 .dash3-login-reward-track {
+          --reward-progress: 2%;
           position: relative !important;
           overflow: visible !important;
           height: 8px !important;
@@ -4710,7 +4711,7 @@ export default function DashboardPage() {
           background: rgba(148, 163, 184, 0.24) !important;
         }
 
-        .dashboard-part1 .dash3-login-reward-track i {
+        .dashboard-part1 .dash3-login-reward-fill {
           position: relative !important;
           display: block !important;
           height: 100% !important;
@@ -4720,27 +4721,29 @@ export default function DashboardPage() {
           overflow: hidden !important;
         }
 
-        .dashboard-part1 .dash3-login-reward-track i::after {
-          content: "" !important;
+        .dashboard-part1 .dash3-login-reward-shimmer {
           position: absolute !important;
           inset: 0 !important;
-          background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0) 18%, rgba(255,255,255,0.48) 50%, rgba(255,255,255,0) 82%, transparent 100%) !important;
-          transform: translateX(-120%) skewX(-18deg) !important;
-          animation: dash3-shimmer 2.6s linear infinite !important;
+          display: block !important;
+          background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0) 22%, rgba(255,255,255,0.52) 50%, rgba(255,255,255,0) 78%, transparent 100%) !important;
+          transform: translateX(-140%) skewX(-18deg) !important;
+          animation: dash3-shimmer 2.2s linear infinite !important;
           pointer-events: none !important;
         }
 
         .dashboard-part1 .dash3-login-reward-glow {
           position: absolute !important;
+          left: var(--reward-progress) !important;
           top: 50% !important;
           width: 18px !important;
           height: 18px !important;
           border-radius: 999px !important;
-          transform: translateY(-50%) !important;
+          transform: translate(-50%, -50%) !important;
           background: radial-gradient(circle, rgba(255,255,255,0.98) 0%, rgba(196,181,253,0.96) 34%, rgba(168,85,247,0.88) 58%, rgba(124,58,237,0.24) 100%) !important;
           box-shadow: 0 0 15px 5px rgba(168, 85, 247, 0.6) !important;
-          animation: dash3-bounce 1.4s ease-in-out infinite !important;
+          animation: dash3-bounce 1.15s ease-in-out infinite !important;
           pointer-events: none !important;
+          z-index: 2 !important;
         }
 
         .dashboard-part1 .dash3-login-reward-tiers {
@@ -4794,11 +4797,11 @@ export default function DashboardPage() {
         @keyframes dash3-bounce {
           0%,
           100% {
-            transform: translateY(-50%) translateY(0) scale(0.96) !important;
+            transform: translate(-50%, -50%) translateY(0) scale(0.96) !important;
             box-shadow: 0 0 10px 3px rgba(168, 85, 247, 0.42) !important;
           }
           50% {
-            transform: translateY(-50%) translateY(-6px) scale(1.04) !important;
+            transform: translate(-50%, -50%) translateY(-7px) scale(1.04) !important;
             box-shadow: 0 0 18px 7px rgba(168, 85, 247, 0.7) !important;
           }
         }
@@ -6139,9 +6142,15 @@ export default function DashboardPage() {
                     <span>登录奖励进度</span>
                     <strong>{Math.round(companionReward.progress || 0)}%</strong>
                   </div>
-                  <div className="dash3-login-reward-track" aria-hidden="true">
-                    <i style={{ width: `${Math.max(0, Math.min(100, companionReward.progress || 0))}%` }} />
-                    <span className="dash3-login-reward-glow" style={{ left: `calc(${Math.max(2, Math.min(98, companionReward.glowPosition || 0))}% - 10px)` }} />
+                  <div
+                    className="dash3-login-reward-track"
+                    aria-hidden="true"
+                    style={{ "--reward-progress": `${Math.max(2, Math.min(98, companionReward.glowPosition || 0))}%` }}
+                  >
+                    <span className="dash3-login-reward-fill" style={{ width: `${Math.max(0, Math.min(100, companionReward.progress || 0))}%` }}>
+                      <span className="dash3-login-reward-shimmer" />
+                    </span>
+                    <span className="dash3-login-reward-glow" />
                   </div>
                   <div className="dash3-login-reward-tiers" aria-label="里程碑奖励节点">
                     {companionReward.milestones.map((tier) => (
