@@ -272,13 +272,12 @@ export default function ApiManagementPage() {
   const [customer, setCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState([]);
-  const [apiGroups, setApiGroups] = useState([]);
   const [membership, setMembership] = useState(null);
   const [query, setQuery] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("");
   const [creating, setCreating] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({ label: "", modelId: "", groupId: "", expiresAt: "never", customDate: "", limit: defaultLimitForm() });
+  const [createForm, setCreateForm] = useState({ label: "", modelId: "", expiresAt: "never", customDate: "", limit: defaultLimitForm() });
   const [createdKey, setCreatedKey] = useState(null);
   const [toast, setToast] = useState("");
   const [detail, setDetail] = useState(null);
@@ -305,25 +304,20 @@ export default function ApiManagementPage() {
     Promise.all([
       fetch(`/api/customer?customerId=${localCustomer.id}`).then((res) => res.ok ? res.json() : localCustomer),
       fetch("/api/models/api-key-options").then((res) => res.ok ? res.json() : { data: [] }),
-      fetch("/api/groups/available").then((res) => res.ok ? res.json() : { groups: [] }),
       fetch("/api/user/wallet-summary").then((res) => res.ok ? res.json() : null).catch(() => null),
-    ]).then(([freshCustomer, modelJson, groupJson, walletJson]) => {
+    ]).then(([freshCustomer, modelJson, walletJson]) => {
       if (cancelled) return;
       setCustomer(freshCustomer);
       localStorage.setItem("flowapi_customer", JSON.stringify(freshCustomer));
       const list = (modelJson.data || modelJson.models || []).map(normalizeModel).filter((model) => model.enabled);
-      const groups = groupJson.groups || [];
       const requestedModel = findRequestedModel(list, readRequestedModelId());
       const defaultModelId = requestedModel?.modelId || list[0]?.modelId || "";
-      const defaultGroupId = groups.find((group) => group.recommended && group.available)?.id || groups.find((group) => group.available)?.id || groups[0]?.id || "";
       setModels(list);
-      setApiGroups(groups);
       setSelectedModelId((current) => current || defaultModelId);
       setCreateForm((current) => ({
         ...current,
         modelId: current.modelId || defaultModelId,
         label: current.label || (requestedModel ? `${requestedModel.displayName} Key` : ""),
-        groupId: current.groupId || defaultGroupId,
       }));
       setMembership(walletJson?.membership || null);
       if (requestedModel) {
@@ -342,8 +336,6 @@ export default function ApiManagementPage() {
 
   const apiKeys = useMemo(() => customer?.apiKeys || [], [customer?.apiKeys]);
   const selectedModel = useMemo(() => models.find((model) => model.modelId === selectedModelId) || models[0] || null, [models, selectedModelId]);
-  const groupMap = useMemo(() => new Map(apiGroups.map((group) => [group.id, group])), [apiGroups]);
-  const selectedCreateGroup = useMemo(() => groupMap.get(createForm.groupId) || apiGroups.find((group) => group.recommended && group.available) || apiGroups[0] || null, [apiGroups, createForm.groupId, groupMap]);
   const isBlackGoldMember = membership?.status === "active" && membership?.level === "black_gold";
   const filteredKeys = useMemo(() => {
     const text = query.trim().toLowerCase();
@@ -531,20 +523,8 @@ export default function ApiManagementPage() {
     const model = models.find((item) => item.modelId === createForm.modelId) || selectedModel;
     if (!model?.modelId) return "模型配置同步中，请稍后再创建";
     if (!canSelectModel(model)) return "当前模型需要黑金会员权限";
-    if (!selectedCreateGroup?.id) return "请选择 API 线路后创建 API Key";
-    if (!selectedCreateGroup.available) return "当前 API 线路已停用，请选择其他线路";
-    if (!groupSupportsModel(selectedCreateGroup, model)) return "当前线路不支持所选模型，请更换线路或模型";
     if (createForm.expiresAt === "custom" && !createForm.customDate) return "请选择自定义过期日期";
     return getLimitValidationMessage(createForm.limit);
-  }
-
-  function groupSupportsModel(group, model) {
-    const supported = Array.isArray(group?.supportedModels) ? group.supportedModels : [];
-    if (!supported.length) return true;
-    const aliases = [model?.id, model?.modelId, model?.displayName]
-      .map((item) => String(item || "").toLowerCase())
-      .filter(Boolean);
-    return supported.some((item) => aliases.includes(String(item || "").toLowerCase()));
   }
 
   function selectCreateModel(model) {
@@ -598,7 +578,6 @@ export default function ApiManagementPage() {
           expiresAt: resolveCreateExpiresAt(),
           locale,
           limit: buildLimitPayload(createForm.limit),
-          groupId: createForm.groupId,
         }),
       });
       const data = await res.json();
@@ -764,7 +743,7 @@ export default function ApiManagementPage() {
       const rows = [
         { label: "API Key", value: data.key?.maskedKey || maskToken(key.token) },
         { label: "绑定模型", value: key.modelDisplayName || key.publicModelId || "未绑定模型" },
-        { label: "线路", value: `${groupMap.get(key.modelGroup)?.displayName || key.modelGroup || "默认"} · ${Number(key.priceMultiplier || groupMap.get(key.modelGroup)?.billingMultiplier || 1)}x` },
+        { label: "路由", value: "平台自动路由（sub2api 优先，失败后自动切换备用中转，最后才走 OpenRouter）" },
         { label: "Base URL", value: API_BASE_URL },
         { label: "创建时间", value: formatDate(key.createdAt) },
         { label: "最近调用", value: formatDate(data.key?.lastUsedAt || key.lastUsedAt) },
@@ -926,7 +905,7 @@ export default function ApiManagementPage() {
                     </div>
                     <code>{maskToken(key.token)}</code>
                     <div className="api-key-card-meta">
-                      <span>线路：{groupMap.get(key.modelGroup)?.displayName || key.modelGroup || "默认"} · {Number(key.priceMultiplier || groupMap.get(key.modelGroup)?.billingMultiplier || 1)}x</span>
+                      <span>路由：平台自动路由（sub2api 优先）</span>
                       <span>今日使用：{formatToken(key.quotaLimit?.todayUsedTokens || 0)}</span>
                       <span>本月使用：{formatToken(key.quotaLimit?.monthUsedTokens || key.quotaLimit?.totalUsedTokens || 0)}</span>
                       <span>最后调用：{formatDate(key.lastUsedAt)}</span>
@@ -1034,35 +1013,9 @@ export default function ApiManagementPage() {
                   </div>
 
                   <div className="api-expiry-field api-group-choice-field">
-                    <span>选择线路</span>
-                    <div className="api-group-choice-grid">
-                      {apiGroups.map((group) => {
-                        const model = models.find((item) => item.modelId === createForm.modelId) || selectedModel;
-                        const disabled = !group.available || !groupSupportsModel(group, model);
-                        return (
-                          <button
-                            key={group.id}
-                            type="button"
-                            className={`${createForm.groupId === group.id ? "active" : ""} ${disabled ? "disabled" : ""}`}
-                            aria-disabled={disabled}
-                            onClick={() => {
-                              if (disabled) {
-                                showToast(group.available ? "该线路不支持当前模型" : "该线路已停用");
-                                return;
-                              }
-                              setCreateForm((current) => ({ ...current, groupId: group.id }));
-                            }}
-                          >
-                            <span>
-                              <strong>{group.displayName}</strong>
-                              <em>{group.billingMultiplier}x</em>
-                            </span>
-                            <small>{group.recommended ? "系统推荐 · " : ""}{group.description || "自动调度线路"}</small>
-                            <code>{group.supportedModels?.length ? `${group.modelCount || group.supportedModels.length} 个模型` : "全部模型"}</code>
-                          </button>
-                        );
-                      })}
-                      {!apiGroups.length ? <div className="api-management-empty-text">线路配置同步中，请稍后刷新。</div> : null}
+                    <span>默认路由</span>
+                    <div className="api-management-empty-text">
+                      API Key 创建后默认使用平台自动路由：优先走 sub2api，失败后自动切换 sub2api 备用线路和其他中转站，最后才走 OpenRouter。
                     </div>
                   </div>
 

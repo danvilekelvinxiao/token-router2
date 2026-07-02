@@ -400,27 +400,13 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   const [modal, setModal] = useState(null);
   const [openMoreKeyId, setOpenMoreKeyId] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ label: "", expiresAt: "never", customDate: "", modelId: "", groupId: "" });
-  const [apiGroups, setApiGroups] = useState([]);
+  const [form, setForm] = useState({ label: "", expiresAt: "never", customDate: "", modelId: "" });
   const [detailKey, setDetailKey] = useState(null);
   const [detailData, setDetailData] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => setApiBaseUrl(getPublicApiBaseUrl()));
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/groups/available")
-      .then((res) => res.ok ? res.json() : { groups: [] })
-      .then((data) => {
-        if (!cancelled) setApiGroups(data.groups || []);
-      })
-      .catch(() => {
-        if (!cancelled) setApiGroups([]);
-      });
-    return () => { cancelled = true; };
   }, []);
 
   const apiKeys = useMemo(() => customer?.apiKeys || [], [customer]);
@@ -498,10 +484,9 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   }
 
   const openCreateModal = useCallback(() => {
-    const defaultGroupId = apiGroups.find((group) => group.recommended && group.available)?.id || apiGroups.find((group) => group.available)?.id || apiGroups[0]?.id || "";
-    setForm({ label: `API Key ${apiKeys.length + 1}`, expiresAt: "never", customDate: "", modelId: "", groupId: defaultGroupId });
+    setForm({ label: `API Key ${apiKeys.length + 1}`, expiresAt: "never", customDate: "", modelId: "" });
     setModal({ type: "create" });
-  }, [apiGroups, apiKeys.length]);
+  }, [apiKeys.length]);
 
   useEffect(() => {
     if (createSignal <= 0 || !customer) return;
@@ -537,7 +522,6 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       customerId: customer.id, label: form.label.trim() || fallbackLabel,
       expiresAt: computeExpiry(form.expiresAt, form.customDate),
       modelId: form.modelId,
-      groupId: form.groupId,
     };
     try {
       const res = await fetch("/api/keys", {
@@ -601,18 +585,8 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
     if (!customer) return "请先登录后创建 API Key";
     if (saving) return "";
     if (modal.type !== "edit" && !form.modelId) return "请选择默认模型后创建 API Key";
-    if (modal.type !== "edit" && !form.groupId) return "请选择 API 线路后创建 API Key";
     if (form.expiresAt === "custom" && !form.customDate) return "请选择自定义过期日期";
     return "";
-  }
-
-  function groupSupportsProduct(group, product) {
-    const supported = Array.isArray(group?.supportedModels) ? group.supportedModels : [];
-    if (!supported.length) return true;
-    const aliases = [product?.id, product?.publicModelId, product?.displayName]
-      .map((item) => String(item || "").toLowerCase())
-      .filter(Boolean);
-    return supported.some((item) => aliases.includes(String(item || "").toLowerCase()));
   }
 
   function toggleSelected(keyId) {
@@ -872,31 +846,9 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
               ) : null}
               {modal.type !== "edit" ? (
                 <div className="api-expiry-field api-group-choice-field">
-                  <span>选择线路</span>
-                  <div className="api-group-choice-grid">
-                    {apiGroups.map((group) => {
-                      const product = MODEL_PRODUCT_OPTIONS.find((item) => item.id === form.modelId || item.publicModelId === form.modelId);
-                      const disabled = !group.available || !groupSupportsProduct(group, product);
-                      return (
-                        <button
-                          key={group.id}
-                          type="button"
-                          className={`${form.groupId === group.id ? "active" : ""} ${disabled ? "disabled" : ""}`}
-                          aria-disabled={disabled}
-                          onClick={() => {
-                            if (disabled) {
-                              showMessage(group.available ? "该线路不支持当前模型" : "该线路已停用");
-                              return;
-                            }
-                            setForm((current) => ({ ...current, groupId: group.id }));
-                          }}
-                        >
-                          <span><strong>{group.displayName}</strong><em>{group.billingMultiplier}x</em></span>
-                          <small>{group.recommended ? "系统推荐 · " : ""}{group.description || "自动调度线路"}</small>
-                        </button>
-                      );
-                    })}
-                    {!apiGroups.length ? <div className="api-management-empty-text">线路配置同步中，请稍后刷新。</div> : null}
+                  <span>默认路由</span>
+                  <div className="api-management-empty-text">
+                    API Key 创建后默认使用平台自动路由：优先走 sub2api，失败后自动切换 sub2api 备用线路和其他中转站，最后才走 OpenRouter。
                   </div>
                 </div>
               ) : null}
