@@ -20,8 +20,12 @@ function normalizeTarget(target) {
   return String(target).replace(/^\/+/, "").trim();
 }
 
+function normalizeUpstreamBaseUrl(value = "") {
+  return String(value || "").trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
+}
+
 function getUpstreamConfig() {
-  const sub2ApiBase = process.env.SUB2API_BASE_URL || process.env.SUB2API_INTERNAL_URL;
+  const sub2ApiBase = normalizeUpstreamBaseUrl(process.env.SUB2API_BASE_URL || process.env.SUB2API_INTERNAL_URL);
   const sub2ApiKey = process.env.SUB2API_API_KEY || process.env.SUB2API_API_KEY_SECONDARY;
   const newApiBase = process.env.NEW_API_BASE_URL;
   const newApiKey = process.env.NEW_API_KEY;
@@ -32,7 +36,7 @@ function getUpstreamConfig() {
   if (sub2ApiBase && sub2ApiKey) {
     return {
       name: "sub2api",
-      baseUrl: sub2ApiBase.replace(/\/+$/, ""),
+      baseUrl: sub2ApiBase,
       apiKey: sub2ApiKey,
     };
   }

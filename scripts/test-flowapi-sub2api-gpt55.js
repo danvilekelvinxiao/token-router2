@@ -28,7 +28,7 @@ loadEnvFile(path.join(repoRoot, ".env.production"));
 loadEnvFile(path.join(repoRoot, ".env.local"));
 
 const PUBLIC_API_BASE_URL = (process.env.FLOWAPI_E2E_PUBLIC_API_BASE_URL || process.env.PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_FLOWAPI_BASE_URL || "https://flowapi.fun/v1").replace(/\/+$/, "");
-const SUB2API_BASE_URL = (process.env.FLOWAPI_E2E_SUB2API_BASE_URL || process.env.SUB2API_BASE_URL || process.env.SUB2API_INTERNAL_URL || "http://127.0.0.1:8080").replace(/\/+$/, "");
+const SUB2API_BASE_URL = normalizeUpstreamBaseUrl(process.env.FLOWAPI_E2E_SUB2API_BASE_URL || process.env.SUB2API_BASE_URL || process.env.SUB2API_INTERNAL_URL || "http://127.0.0.1:8080");
 const SUB2API_API_KEY = process.env.FLOWAPI_E2E_SUB2API_API_KEY || process.env.SUB2API_API_KEY || process.env.SUB2API_API_KEY_SECONDARY || "";
 const ADMIN_SECRET = process.env.FLOWAPI_ADMIN_SECRET || process.env.ADMIN_SECRET || process.env.E2E_ADMIN_SECRET || "";
 const ADMIN_LOGIN_EMAIL = process.env.FLOWAPI_E2E_LOGIN_EMAIL || process.env.E2E_LOGIN_EMAIL || "xiaoyijie@flowapi.fun";
@@ -62,6 +62,10 @@ function normalizeSiteBaseUrl(value = "") {
   if (!base) return "";
   if (/\/v1$/i.test(base)) return base.replace(/\/v1$/i, "");
   return base;
+}
+
+function normalizeUpstreamBaseUrl(value = "") {
+  return String(value || "").trim().replace(/\/+$/, "").replace(/\/v1$/i, "");
 }
 
 async function probeSiteBaseUrl(baseUrl) {
