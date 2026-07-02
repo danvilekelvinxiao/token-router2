@@ -6,9 +6,12 @@
 import { requireAdmin } from "@/lib/admin-auth";
 
 const NEW_API_ADMIN_URL =
-  process.env.NEW_API_ADMIN_URL ||
-  process.env.NEW_API_BASE_URL ||
-  "http://127.0.0.1:8080";
+  String(process.env.NEW_API_ADMIN_URL || "").trim();
+const ENABLE_PROXY = String(process.env.FLOWAPI_ENABLE_NEWAPI_ADMIN_PROXY || "false").trim() === "true";
+const NEW_API_PROXY_TARGET =
+  ENABLE_PROXY
+    ? String(process.env.NEW_API_ADMIN_URL || process.env.NEW_API_BASE_URL || "").trim()
+    : NEW_API_ADMIN_URL;
 const NEW_API_RUNTIME_KEY =
   process.env.NEW_API_KEY ||
   process.env.NEW_API_KEY_ALL_MODELS ||
@@ -20,7 +23,15 @@ export default async function handler(req, res) {
   }
   if (!(await requireAdmin(req, res))) return;
 
-  const url = NEW_API_ADMIN_URL.replace(/\/+$/, "");
+  const url = String(NEW_API_PROXY_TARGET || "").replace(/\/+$/, "");
+
+  if (!url) {
+    return res.status(200).json({
+      status: "error",
+      message: "未配置 NEW_API_ADMIN_URL",
+      proxyEnabled: ENABLE_PROXY,
+    });
+  }
 
   try {
     const start = Date.now();
@@ -29,6 +40,7 @@ export default async function handler(req, res) {
         status: "error",
         url,
         message: "NEW_API_KEY 未配置",
+        proxyEnabled: ENABLE_PROXY,
       });
     }
     const upstream = await fetch(`${url}/v1/models`, {
@@ -46,6 +58,7 @@ export default async function handler(req, res) {
         url,
         latencyMs,
         message: `New API 返回 ${upstream.status}`,
+        proxyEnabled: ENABLE_PROXY,
       });
     }
 
@@ -55,12 +68,14 @@ export default async function handler(req, res) {
       url,
       latencyMs,
       modelCount: Array.isArray(body?.data) ? body.data.length : null,
+      proxyEnabled: ENABLE_PROXY,
     });
   } catch {
     return res.status(200).json({
       status: "error",
       url,
       message: "无法连接 New API",
+      proxyEnabled: ENABLE_PROXY,
     });
   }
 }

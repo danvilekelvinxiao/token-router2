@@ -67,45 +67,26 @@ export default function ThemeToggle() {
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button
+        type="button"
         onClick={() => setOpen(!open)}
         aria-label="切换主题"
-        style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          width: 34, height: 34, borderRadius: 8,
-          border: "1px solid var(--console-account-border)",
-          background: "var(--console-account-bg)",
-          color: "var(--console-account-text)",
-          cursor: "pointer",
-          transition: "all 0.15s ease",
-        }}
+        aria-expanded={open}
+        className="flow-toolbar-control"
       >
         <CurrentIcon />
       </button>
 
       {open && (
-        <div style={{
-          position: "absolute", top: "calc(100% + 6px)", right: 0,
-          minWidth: 150, zIndex: 140,
-          background: "var(--console-dropdown-bg)",
-          border: "1px solid var(--console-dropdown-border)",
-          borderRadius: 10, padding: 4,
-          boxShadow: "var(--console-dropdown-shadow)",
-        }}>
+        <div className="flow-toolbar-popover">
           {themes.map((t) => {
             const Icon = t.icon;
             const isActive = theme === t.key;
             return (
               <button
                 key={t.key}
+                type="button"
                 onClick={() => { setTheme(t.key); setOpen(false); }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  width: "100%", padding: "8px 10px", borderRadius: 6,
-                  border: "none", background: isActive ? "var(--console-sidebar-active-bg)" : "transparent",
-                  color: isActive ? "var(--console-sidebar-active-text)" : "var(--console-dropdown-text)",
-                  fontWeight: isActive ? 700 : 500,
-                  fontSize: 13, cursor: "pointer", fontFamily: "inherit",
-                }}
+                className={`flow-toolbar-popover-item${isActive ? " is-active" : ""}`}
               >
                 <span style={{ display: "flex", color: isActive ? "var(--console-sidebar-active-text)" : "var(--console-dropdown-desc)" }}>
                   <Icon />

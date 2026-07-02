@@ -1,8 +1,23 @@
 import { hasDatabase, query } from "@/lib/db";
+import { getModelProductWithConfig } from "@/lib/model-products-server";
 import { requireAdmin } from "@/lib/admin-auth";
+import { assertCanCreateTeamApiKey, linkTeamApiKey } from "@/lib/team-management";
 
 function makeId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function inferDefaultModelGroup(modelId = "", explicitGroup = "") {
+  const value = String(explicitGroup || "").trim();
+  if (value) return value;
+  const text = String(modelId || "").trim().toLowerCase();
+  if (!text) return "default";
+  if (text.includes("gpt-5.5") || text.includes("gpt55") || text.includes("gpt-5.4") || text.includes("gpt4o")) return "gpt-premium";
+  if (text.includes("codex")) return "codex-plus";
+  if (text.includes("claude")) return "claude-premium";
+  if (text.includes("gemini")) return "gemini-premium";
+  if (text.includes("deepseek")) return "deepseek-basic";
+  return "default";
 }
 
 export default async function handler(req, res) {
@@ -17,6 +32,7 @@ export default async function handler(req, res) {
   const {
     token, name, customerId, publicModelId, actualModelId,
     modelDisplayName, modelGroup, allowedModels, quotaLimit, expiresAt,
+    teamId = "", shared = false, usageScope = "",
   } = req.body || {};
 
   if (!token?.trim() || !name?.trim() || !customerId?.trim()) {
@@ -45,14 +61,30 @@ export default async function handler(req, res) {
   const id = makeId("key_import");
   const models = Array.isArray(allowedModels) ? allowedModels : (allowedModels ? String(allowedModels).split(",").map((s) => s.trim()).filter(Boolean) : []);
   const now = new Date().toISOString();
+  const defaultModelId = (publicModelId || actualModelId || "gpt-5.5").trim();
+  const modelProduct = await getModelProductWithConfig(defaultModelId).catch(() => null);
+  const resolvedModelGroup = inferDefaultModelGroup(defaultModelId, modelGroup || modelProduct?.group || "");
+  const resolvedModelDisplayName = (modelDisplayName || modelProduct?.displayName || defaultModelId || "导入的 Token").trim();
+  const resolvedTeamId = String(teamId || "").trim();
+  const resolvedShared = shared === true || usageScope === "team_shared";
+
+  if (resolvedTeamId) {
+    const teamPermission = await assertCanCreateTeamApiKey(customerId.trim(), resolvedTeamId, { shared: resolvedShared });
+    if (!teamPermission.ok) {
+      return res.status(403).json({
+        success: false,
+        error: teamPermission.error || "你没有权限把这个 Token 绑定到该团队。",
+      });
+    }
+  }
 
   try {
     await query(
       `INSERT INTO api_keys
         (id, customer_id, token, label, new_api_token_id, new_api_sync_status, new_api_synced_at,
-         public_model_id, actual_model_id, model_display_name, model_group, allowed_models,
+         public_model_id, actual_model_id, model_display_name, model_group, allowed_models, team_id,
          expires_at, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
       [
         id,
         customerId.trim(),
@@ -61,15 +93,26 @@ export default async function handler(req, res) {
         "imported",
         "imported",
         now,
-        (publicModelId || "gpt-5.5").trim(),
-        (actualModelId || publicModelId || "gpt-5.5").trim(),
-        (modelDisplayName || publicModelId || "导入的 Token").trim(),
-        (modelGroup || "default").trim(),
-        models.length ? models.join(",") : "gpt-5.5",
+        defaultModelId,
+        (actualModelId || defaultModelId).trim(),
+        resolvedModelDisplayName,
+        resolvedModelGroup,
+        models.length ? models.join(",") : defaultModelId,
+        resolvedTeamId,
         expiresAt ? new Date(expiresAt).toISOString() : null,
         now,
       ],
     );
+
+    if (resolvedTeamId) {
+      await linkTeamApiKey({
+        teamId: resolvedTeamId,
+        userId: customerId.trim(),
+        apiKeyId: id,
+        scope: resolvedShared ? "team_shared" : "member",
+        shared: resolvedShared,
+      });
+    }
 
     return res.status(200).json({
       success: true,
@@ -78,9 +121,12 @@ export default async function handler(req, res) {
         name: name.trim(),
         token: rawToken,
         customerId: customerId.trim(),
-        publicModelId: (publicModelId || "gpt-5.5").trim(),
-        modelGroup: (modelGroup || "default").trim(),
-        allowedModels: models.length ? models : ["gpt-5.5"],
+        publicModelId: defaultModelId,
+        modelDisplayName: resolvedModelDisplayName,
+        modelGroup: resolvedModelGroup,
+        teamId: resolvedTeamId,
+        shared: resolvedShared,
+        allowedModels: models.length ? models : [defaultModelId],
         createdAt: now,
       },
     });

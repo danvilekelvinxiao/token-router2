@@ -215,7 +215,6 @@ export default function RechargePage() {
   const [redeemResult, setRedeemResult] = useState(null);
   const [packageDetail, setPackageDetail] = useState(null);
   const [selectedAddOns, setSelectedAddOns] = useState([]);
-  const [showMoreRechargeOptions, setShowMoreRechargeOptions] = useState(false);
   const [openrouterCredits, setOpenrouterCredits] = useState(5);
   const [referral, setReferral] = useState(null);
   const [commissionModal, setCommissionModal] = useState("");
@@ -415,10 +414,6 @@ export default function RechargePage() {
     const matched = cryptoChoices.find((item) => item.token === nextToken);
     setCryptoToken(nextToken);
     if (matched) setCryptoNetwork(matched.network);
-  }
-
-  function toggleAddOn(id) {
-    setSelectedAddOns((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   }
 
   async function handleSubmit() {
@@ -751,92 +746,78 @@ export default function RechargePage() {
                 </label>
               </div>
 
-              <div className="recharge-more-options-bar">
-                <div>
-                  <strong>更多套餐与人工服务</strong>
-                  <span>周包、月卡和附加服务默认收起，新用户先完成 Token 充值即可。</span>
+              {/* 2. Add-on services */}
+              <div className="recharge-section-card">
+                <div className="section-heading-row">
+                  <div>
+                    <h2>{L("附加服务", "Add-on Services")}</h2>
+                    <p>{L("可选增值服务，适合需要人工协助、订阅支持、额度代充或接入配置的用户。", "Optional value-added services for setup, subscriptions, and credits support.")}</p>
+                  </div>
                 </div>
-                <button type="button" onClick={() => setShowMoreRechargeOptions((value) => !value)}>
-                  {showMoreRechargeOptions ? "收起" : "展开更多"}
-                </button>
+                <div className="addon-services-grid">
+                  {addOnServices.map((svc) => {
+                    const isSelected = selectedAddOns.includes(svc.id);
+                    const isQuantity = svc.type === "quantity" && svc.id === "openrouter_credits";
+                    return (
+                      <button
+                        key={svc.id}
+                        type="button"
+                        className={`addon-service-card ${isSelected ? "selected" : ""}`}
+                        onClick={() => setSelectedAddOns((prev) => prev.includes(svc.id) ? prev.filter((x) => x !== svc.id) : [...prev, svc.id])}
+                      >
+                        <div className="addon-service-head">
+                          <strong>{svc.title}</strong>
+                          <span className="addon-service-price">¥{svc.priceCny}{svc.type === "quantity" ? ` / ${svc.unit}` : ` / ${svc.unit}`}</span>
+                        </div>
+                        <p>{svc.description}</p>
+                        <div className="addon-service-tags">
+                          {svc.tags.map((tag) => <span key={tag}>{tag}</span>)}
+                        </div>
+                        {isSelected && isQuantity && (
+                          <div className="addon-service-quantity" onClick={(e) => e.stopPropagation()}>
+                            <span>官方额度数量</span>
+                            <div className="addon-quantity-control">
+                              <button type="button" onClick={() => setOpenrouterCredits((v) => Math.max(5, v - 1))} disabled={openrouterCredits <= 5}>−</button>
+                              <strong>{openrouterCredits}</strong>
+                              <button type="button" onClick={() => setOpenrouterCredits((v) => v + 1)}>+</button>
+                            </div>
+                            <span className="addon-quantity-total">合计 ¥{svc.priceCny * openrouterCredits}</span>
+                          </div>
+                        )}
+                        <span className={`addon-service-action ${isSelected ? "selected" : ""}`}>
+                          {isSelected ? L("已选择", "Selected") : L("选择服务", "Select")}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
-              {showMoreRechargeOptions && (
-                <>
-                  {/* 2. Add-on services */}
-                  <div className="recharge-section-card">
-                    <div className="section-heading-row">
-                      <div>
-                        <h2>{L("附加服务", "Add-on Services")}</h2>
-                        <p>{L("可选增值服务，适合需要人工协助、订阅支持、额度代充或接入配置的用户。", "Optional value-added services for setup, subscriptions, and credits support.")}</p>
-                      </div>
-                    </div>
-                    <div className="addon-services-grid">
-                      {addOnServices.map((svc) => {
-                        const isSelected = selectedAddOns.includes(svc.id);
-                        const isQuantity = svc.type === "quantity" && svc.id === "openrouter_credits";
-                        return (
-                          <button
-                            key={svc.id}
-                            type="button"
-                            className={`addon-service-card ${isSelected ? "selected" : ""}`}
-                            onClick={() => toggleAddOn(svc.id)}
-                          >
-                            <div className="addon-service-head">
-                              <strong>{svc.title}</strong>
-                              <span className="addon-service-price">¥{svc.priceCny}{svc.type === "quantity" ? ` / ${svc.unit}` : ` / ${svc.unit}`}</span>
-                            </div>
-                            <p>{svc.description}</p>
-                            <div className="addon-service-tags">
-                              {svc.tags.map((tag) => <span key={tag}>{tag}</span>)}
-                            </div>
-                            {isSelected && isQuantity && (
-                              <div className="addon-service-quantity" onClick={(e) => e.stopPropagation()}>
-                                <span>官方额度数量</span>
-                                <div className="addon-quantity-control">
-                                  <button type="button" onClick={() => setOpenrouterCredits((v) => Math.max(5, v - 1))} disabled={openrouterCredits <= 5}>−</button>
-                                  <strong>{openrouterCredits}</strong>
-                                  <button type="button" onClick={() => setOpenrouterCredits((v) => v + 1)}>+</button>
-                                </div>
-                                <span className="addon-quantity-total">合计 ¥{svc.priceCny * openrouterCredits}</span>
-                              </div>
-                            )}
-                            <span className={`addon-service-action ${isSelected ? "selected" : ""}`}>
-                              {isSelected ? L("已选择", "Selected") : L("选择服务", "Select")}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+              {/* 3. Codex API weekly packages */}
+              <div className="recharge-section-card">
+                <div className="section-heading-row">
+                  <div><h2>Codex API — 周畅用包</h2><p>点击档位后生成订单，支付后自动或人工确认开通对应额度包。</p></div>
+                  <span>支付宝直购 · 一周畅用</span>
+                </div>
+                <div className="recharge-package-grid weekly">
+                  {weeklyPackages.map((pkg) => (
+                    <PackageCard key={pkg.id} pkg={pkg} type="weekly_package" selected={purchaseType === "weekly_package" && selectedPackageId === pkg.id} onSelect={() => selectPackage("weekly_package", pkg.id)} onDetail={() => setPackageDetail(buildPackageDetail(pkg, "weekly_package"))} />
+                  ))}
+                </div>
+              </div>
 
-                  {/* 3. Codex API weekly packages */}
-                  <div className="recharge-section-card">
-                    <div className="section-heading-row">
-                      <div><h2>Codex API — 周畅用包</h2><p>点击档位后生成订单，支付后自动或人工确认开通对应额度包。</p></div>
-                      <span>支付宝直购 · 一周畅用</span>
-                    </div>
-                    <div className="recharge-package-grid weekly">
-                      {weeklyPackages.map((pkg) => (
-                        <PackageCard key={pkg.id} pkg={pkg} type="weekly_package" selected={purchaseType === "weekly_package" && selectedPackageId === pkg.id} onSelect={() => selectPackage("weekly_package", pkg.id)} onDetail={() => setPackageDetail(buildPackageDetail(pkg, "weekly_package"))} />
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* 4. Monthly packages */}
-                  <div className="recharge-section-card">
-                    <div className="section-heading-row">
-                      <div><h2>月卡套餐</h2><p>购买区独立展示，已购权益以上方“我的订阅”为准。</p></div>
-                      <span>每日额度 · 月度资源包</span>
-                    </div>
-                    <div className="recharge-package-grid monthly">
-                      {monthlyPackages.map((pkg) => (
-                        <PackageCard key={pkg.id} pkg={pkg} type="monthly_subscription" selected={purchaseType === "monthly_subscription" && selectedPackageId === pkg.id} onSelect={() => selectPackage("monthly_subscription", pkg.id)} onDetail={() => setPackageDetail(buildPackageDetail(pkg, "monthly_subscription"))} />
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
+              {/* 4. Monthly packages */}
+              <div className="recharge-section-card">
+                <div className="section-heading-row">
+                  <div><h2>月卡套餐</h2><p>购买区独立展示，已购权益以上方“我的订阅”为准。</p></div>
+                  <span>每日额度 · 月度资源包</span>
+                </div>
+                <div className="recharge-package-grid monthly">
+                  {monthlyPackages.map((pkg) => (
+                    <PackageCard key={pkg.id} pkg={pkg} type="monthly_subscription" selected={purchaseType === "monthly_subscription" && selectedPackageId === pkg.id} onSelect={() => selectPackage("monthly_subscription", pkg.id)} onDetail={() => setPackageDetail(buildPackageDetail(pkg, "monthly_subscription"))} />
+                  ))}
+                </div>
+              </div>
 
             </section>
 

@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     await grantTemporaryCredit(session.customerId, {
       amount: Number((Number(result.tokenAmount || 0) / 10000).toFixed(6)),
       reason: `redeem_token_code:${result.record?.codeId || code.trim()}`,
-      detail: `激活码兑换 ${Number(result.tokenAmount || 0).toLocaleString()} Token 额度`,
+      detail: `激活码兑换 ${Number(result.tokenAmount || 0).toLocaleString()} $ API 余额`,
     });
   }
   if (result.packageId) {
@@ -71,7 +71,7 @@ export default async function handler(req, res) {
   const redeemDetail = result.packageId
     ? `激活码兑换成功: ${code.trim()}，套餐/服务 ${result.packageId}`
     : result.tokenAmount > 0
-      ? `激活码兑换成功: ${code.trim()}，到账 ${Number(result.tokenAmount).toLocaleString()} Token`
+      ? `激活码兑换成功: ${code.trim()}，到账 $${Number(result.tokenAmount).toLocaleString()} API`
       : `激活码兑换成功: ${code.trim()}，到账 ¥${Number(result.amountCny).toFixed(2)}`;
 
   await logActivity({

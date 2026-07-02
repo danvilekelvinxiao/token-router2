@@ -3,11 +3,11 @@ import { listModelPricing, listPublishedModels } from "@/lib/admin-commercial-co
 import { getContent } from "@/lib/content-cms";
 import { dedupePublicModelList, sanitizePublicModelForClient } from "@/lib/public-model-provider";
 import { listImageModels, mapPublicImageModel } from "@/lib/image-studio";
+import { getPublicModelDisplayName, getPublicModelRequestId } from "@/lib/models";
 
 const CATEGORY_META = {
   chatgpt: { providerId: "openai", providerName: "ChatGPT" },
   codex: { providerId: "codex", providerName: "Codex" },
-  deepseek: { providerId: "deepseek", providerName: "DeepSeek" },
   claude: { providerId: "anthropic", providerName: "Claude" },
   gemini: { providerId: "google", providerName: "Gemini" },
   image: { providerId: "image", providerName: "图片生成" },
@@ -29,8 +29,8 @@ export default async function handler(req, res) {
         .filter((p) => p.isAvailable && p.showInModelSquare !== false)
         .map((p) => sanitizePublicModelForClient(normalizeMarketModel({
           id: p.id,
-          modelId: p.publicModelId || p.id,
-          displayName: p.displayName,
+          modelId: getPublicModelRequestId(p.requestModelId || p.publicModelId || p.id || ""),
+          displayName: getPublicModelDisplayName(p.displayName || p.name || p.requestModelId || p.publicModelId || p.id || "", p.displayName || p.name || p.requestModelId || p.publicModelId || p.id || ""),
           provider: p.provider || "FlowAPI",
           description: p.description || "",
           tags: p.useCases || [],
@@ -40,21 +40,30 @@ export default async function handler(req, res) {
           pricing: p.pricing,
         }))),
     );
-    const existing = new Set(staticModels.map((model) => model.requestModelId || model.modelId || model.publicModelId || model.id));
+    const modelKeys = (model = {}) => [
+      model.requestModelId,
+      model.modelId,
+      model.publicModelId,
+      model.id,
+      model.displayName,
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).trim().toLowerCase());
+    const existing = new Set(staticModels.flatMap((model) => modelKeys(model)));
     const adminModels = dedupePublicModelList(
       publishedModels
-        .filter((model) => model.enabled && model.showInModelSquare && !existing.has(model.modelId))
+        .filter((model) => model.enabled && model.showInModelSquare && !modelKeys(model).some((key) => existing.has(key)))
         .map((model) => sanitizePublicModelForClient(normalizeMarketModel({ ...model, pricing: pricingMap.get(model.modelId) }))),
     );
-    adminModels.forEach((model) => existing.add(model.requestModelId || model.modelId || model.publicModelId || model.id));
+    adminModels.forEach((model) => modelKeys(model).forEach((key) => existing.add(key)));
     const publicImageModels = dedupePublicModelList(
       imageModels
-        .filter((model) => model.enabled && !existing.has(model.modelId || model.publicModelId || model.id))
+        .filter((model) => model.enabled && !modelKeys(model).some((key) => existing.has(key)))
         .map((model) => sanitizePublicModelForClient(normalizeMarketModel({
           id: model.id,
-          modelId: model.modelId || model.publicModelId || model.id,
-          publicModelId: model.publicModelId || model.modelId || model.id,
-          displayName: model.displayName,
+          modelId: getPublicModelRequestId(model.requestModelId || model.publicModelId || model.modelId || model.id || ""),
+          publicModelId: getPublicModelRequestId(model.requestModelId || model.publicModelId || model.modelId || model.id || ""),
+          displayName: getPublicModelDisplayName(model.displayName || model.name || model.requestModelId || model.publicModelId || model.modelId || model.id || "", model.displayName || model.name || model.requestModelId || model.publicModelId || model.modelId || model.id || ""),
           provider: "FlowAPI",
           modelType: "image",
           description: model.sceneDescription || "",
@@ -152,7 +161,6 @@ function mapCategory(model) {
   const type = String(model.modelType || "").toLowerCase();
   if (type.includes("image")) return "image";
   if (publicId.includes("codex") || provider.includes("codex")) return "codex";
-  if (publicId.includes("deepseek") || provider.includes("deepseek")) return "deepseek";
   if (publicId.includes("claude") || provider.includes("anthropic")) return "claude";
   if (publicId.includes("gemini") || provider.includes("google")) return "gemini";
   return "chatgpt";
@@ -163,7 +171,6 @@ function getCategoryCounts(models) {
     { id: "all", name: "全部模型", count: models.length },
     { id: "chatgpt", name: "ChatGPT", count: models.filter((m) => m.category === "chatgpt").length },
     { id: "codex", name: "Codex", count: models.filter((m) => m.category === "codex").length },
-    { id: "deepseek", name: "DeepSeek", count: models.filter((m) => m.category === "deepseek").length },
     { id: "claude", name: "Claude", count: models.filter((m) => m.category === "claude").length },
     { id: "gemini", name: "Gemini", count: models.filter((m) => m.category === "gemini").length },
     { id: "image", name: "图片生成", count: models.filter((m) => m.category === "image").length },

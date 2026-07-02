@@ -31,6 +31,22 @@ export function formatWalletTokens(value?: number | null) {
   return `${num.toLocaleString()} Token`;
 }
 
+export function formatApiCredit(value?: number | null) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "暂无数据";
+  return `$ API ${Number(value).toLocaleString("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+export function formatRmb(value?: number | null) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return "暂无数据";
+  return `¥${Number(value).toLocaleString("zh-CN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 export function clampWalletProgress(value?: number | null) {
   const num = Number(value || 0);
   if (!Number.isFinite(num)) return 0;

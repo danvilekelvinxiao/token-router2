@@ -2,6 +2,7 @@ import { findCustomerByToken } from "@/lib/customer-store";
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { CACHE_TTLS, getCacheManager } from "@/lib/cache-manager";
 import { dedupePublicModelList } from "@/lib/public-model-provider";
+import { getPublicModelDisplayName, getPublicModelRequestId } from "@/lib/models";
 
 function setCors(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -63,12 +64,12 @@ export default async function handler(req, res) {
     ...products
       .filter((model) => model.canCreateKey !== false)
       .map((model) => ({
-        id: model.publicModelId || model.id,
-        requestModelId: model.requestModelId || model.publicModelId || model.id,
+        id: getPublicModelRequestId(model.requestModelId || model.publicModelId || model.id || ""),
+        requestModelId: getPublicModelRequestId(model.requestModelId || model.publicModelId || model.id || ""),
         object: "model",
         created,
         owned_by: "flowapi",
-        name: model.displayName || model.publicModelId || model.id,
+        name: getPublicModelDisplayName(model.displayName || model.publicModelId || model.id || "", model.displayName || model.publicModelId || model.id || ""),
       })),
   ]);
 

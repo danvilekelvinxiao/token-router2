@@ -224,7 +224,7 @@ export default function AdminAicardsProviderPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.ok) throw new Error(data.error || "审核保存失败");
-      setMessage(data.message || "审核配置已保存");
+      setMessage(data.message || `审核配置已保存：${data.publicModelId || review.publicModelId || "模型"}`);
       await load();
     } catch (error) {
       setMessage(error.message || "审核保存失败");

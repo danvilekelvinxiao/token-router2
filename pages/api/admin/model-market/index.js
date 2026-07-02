@@ -9,6 +9,7 @@ import {
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { getAllModelConfigs } from "@/lib/model-store";
 import { invalidateModelCaches } from "@/lib/cache-manager";
+import { getPublicModelRequestId } from "@/lib/models";
 
 function modelTypeFromProduct(product = {}) {
   const id = String(product.publicModelId || product.id || "").toLowerCase();
@@ -20,7 +21,7 @@ function modelTypeFromProduct(product = {}) {
 }
 
 function mapSystemProductForAdmin(product = {}, pricing = null, configs = {}) {
-  const modelId = product.publicModelId || product.id;
+  const modelId = getPublicModelRequestId(product.requestModelId || product.publicModelId || product.id || "");
   const config = configs?.[modelId] || configs?.[product.id] || {};
   const enabled = config.isAvailable !== undefined ? Boolean(config.isAvailable) : Boolean(product.isAvailable);
   return {
@@ -69,17 +70,18 @@ export default async function handler(req, res) {
       const publishedIds = new Set(models.map((model) => model.modelId));
       const systemModels = products
         .filter((product) => product.publicModelId || product.id)
-        .filter((product) => !publishedIds.has(product.publicModelId || product.id))
+        .filter((product) => !publishedIds.has(getPublicModelRequestId(product.requestModelId || product.publicModelId || product.id || "")))
         .map((product) => {
-          const modelId = product.publicModelId || product.id;
+          const modelId = getPublicModelRequestId(product.requestModelId || product.publicModelId || product.id || "");
           return mapSystemProductForAdmin(product, priceMap.get(modelId), configs);
         });
       const mergedModels = [
         ...models.map((model) => ({
           ...model,
           source: "published",
+          modelId: getPublicModelRequestId(model.modelId || model.id || ""),
           actualModelId: configs?.[model.modelId]?.actualModelId || model.upstreamModelId || model.modelId,
-          pricing: priceMap.get(model.modelId) || null,
+          pricing: priceMap.get(getPublicModelRequestId(model.modelId || model.id || "")) || null,
         })),
         ...systemModels,
       ].sort((a, b) => Number(a.sortOrder || 999) - Number(b.sortOrder || 999));

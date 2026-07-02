@@ -167,7 +167,6 @@ export default function AdminUsers() {
 
   function handleSecretSave() {
     const s = secret.trim();
-    if (!s) { setMsgTone("error"); return setMsg("请输入管理密钥"); }
     sessionStorage.setItem("flowapi_admin_secret", s);
     setMsg("");
     fetchUsers(s);

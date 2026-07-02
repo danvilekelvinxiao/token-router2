@@ -1,6 +1,7 @@
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { getContent } from "@/lib/content-cms";
 import { dedupePublicModelList, sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { getPublicModelDisplayName, getPublicModelRequestId } from "@/lib/models";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ ok: false, error: "Method not allowed" });
@@ -13,11 +14,13 @@ export default async function handler(req, res) {
         const fallbackPrice = findContentPrice(model);
         const inputSellPrice = model.pricing?.inputSellPricePerMTokens ?? fallbackPrice.inputPricePerM ?? null;
         const outputSellPrice = model.pricing?.outputSellPricePerMTokens ?? fallbackPrice.outputPricePerM ?? null;
+        const requestModelId = getPublicModelRequestId(model.requestModelId || model.publicModelId || model.modelId || model.id || "");
         return sanitizePublicModelForClient({
           id: model.id,
-          modelId: model.publicModelId || model.id,
-          publicModelId: model.publicModelId || model.id,
-          displayName: model.displayName,
+          modelId: requestModelId,
+          publicModelId: requestModelId,
+          requestModelId,
+          displayName: getPublicModelDisplayName(model.displayName || model.name || requestModelId, model.displayName || model.name || requestModelId),
           provider: model.provider || "FlowAPI",
           description: model.description || "",
           tags: model.useCases || model.tags || [],

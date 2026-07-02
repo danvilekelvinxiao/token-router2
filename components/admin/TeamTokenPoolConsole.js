@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-const TOKEN_TYPES = ["OpenAI", "Claude", "DeepSeek", "Gemini", "Qwen", "文心一言", "讯飞星火", "通义千问", "Telegram Bot Token", "OpenRouter", "自定义 OpenAI Compatible", "本地模型", "其他"];
+const TOKEN_TYPES = ["OpenAI", "Claude", "Gemini", "Qwen", "文心一言", "讯飞星火", "通义千问", "Telegram Bot Token", "OpenRouter", "自定义 OpenAI Compatible", "本地模型", "其他"];
 const PURPOSES = ["文案生成", "模型测试", "原型验证", "代码生成", "图片生成", "客服问答", "数据分析", "自动化任务", "测试调用"];
 
 const statusMap = {
@@ -262,10 +262,10 @@ export default function TeamTokenPoolConsole({ initialTab = "tokens" }) {
             <div style={formGrid}>
               <Field label="Token 名称" value={tokenForm.name} onChange={(v) => setTokenField("name", v)} placeholder="OpenAI Token - 产品部 - 原型验证" />
               <Field label="Token 类型" type="select" options={TOKEN_TYPES} value={tokenForm.tokenType} onChange={(v) => setTokenField("tokenType", v)} />
-              <Field label="所属平台" value={tokenForm.provider} onChange={(v) => setTokenField("provider", v)} placeholder="OpenAI / DeepSeek / OpenRouter" />
+              <Field label="所属平台" value={tokenForm.provider} onChange={(v) => setTokenField("provider", v)} placeholder="OpenAI / Gemini / OpenRouter" />
               <Field label="所属团队" type="select" options={teams.map((item) => ({ label: item.name, value: item.id })).map((item) => item.value)} value={tokenForm.teamId} onChange={(v) => setTokenField("teamId", v)} />
               <Field label="模型类型" value={tokenForm.modelType} onChange={(v) => setTokenField("modelType", v)} placeholder="chat / image / embedding" />
-              <Field label="Base URL" value={tokenForm.baseUrl} onChange={(v) => setTokenField("baseUrl", v)} placeholder="https://api.example.com/v1" />
+              <Field label="Base URL" value={tokenForm.baseUrl} onChange={(v) => setTokenField("baseUrl", v)} placeholder="https://api.example.com" />
               <Field label="API Path" value={tokenForm.apiPath} onChange={(v) => setTokenField("apiPath", v)} placeholder="/v1/chat/completions" />
               <Field label="上游 Token" type="password" value={tokenForm.secret} onChange={(v) => setTokenField("secret", v)} placeholder={tokenForm.id ? "留空则不更换" : "sk-..."} />
               <Field label="额度" type="number" value={tokenForm.quotaTotal} onChange={(v) => setTokenField("quotaTotal", v)} />
@@ -273,7 +273,7 @@ export default function TeamTokenPoolConsole({ initialTab = "tokens" }) {
               <Field label="有效期" type="date" value={tokenForm.expiresAt?.slice(0, 10) || ""} onChange={(v) => setTokenField("expiresAt", v)} />
               <Field label="优先级" type="number" value={tokenForm.priority} onChange={(v) => setTokenField("priority", v)} />
               <Field label="权重" type="number" value={tokenForm.weight} onChange={(v) => setTokenField("weight", v)} />
-              <Field label="允许模型" value={tokenForm.allowedModels} onChange={(v) => setTokenField("allowedModels", v)} placeholder="deepseek-chat,gpt-4o-mini" />
+              <Field label="允许模型" value={tokenForm.allowedModels} onChange={(v) => setTokenField("allowedModels", v)} placeholder="gpt-5.5,gpt-4o-mini" />
               <Field label="允许用途" value={tokenForm.allowedPurposes} onChange={(v) => setTokenField("allowedPurposes", v)} placeholder="文案生成,模型测试" />
               <Field label="备注" type="textarea" value={tokenForm.notes} onChange={(v) => setTokenField("notes", v)} />
             </div>

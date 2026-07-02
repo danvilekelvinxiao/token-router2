@@ -136,8 +136,126 @@ try {
   await exec(`
     ALTER TABLE calls ADD COLUMN IF NOT EXISTS error_message TEXT DEFAULT '';
   `);
-	  await exec(`
-	    CREATE TABLE IF NOT EXISTS upstream_channels (
+  await exec(`
+    CREATE TABLE IF NOT EXISTS wallets (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE REFERENCES customers(id) ON DELETE CASCADE,
+      api_balance NUMERIC(20, 6) NOT NULL DEFAULT 0,
+      frozen_api_balance NUMERIC(20, 6) NOT NULL DEFAULT 0,
+      total_recharged_rmb NUMERIC(20, 2) NOT NULL DEFAULT 0,
+      total_granted_api NUMERIC(20, 6) NOT NULL DEFAULT 0,
+      total_consumed_api NUMERIC(20, 6) NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await exec(`
+    CREATE TABLE IF NOT EXISTS wallet_transactions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      wallet_id TEXT NOT NULL REFERENCES wallets(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      amount_api NUMERIC(20, 6) NOT NULL DEFAULT 0,
+      balance_before_api NUMERIC(20, 6) NOT NULL DEFAULT 0,
+      balance_after_api NUMERIC(20, 6) NOT NULL DEFAULT 0,
+      related_order_id TEXT DEFAULT '',
+      related_request_id TEXT DEFAULT '',
+      model_name TEXT DEFAULT '',
+      description TEXT DEFAULT '',
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      created_by TEXT DEFAULT ''
+    );
+  `);
+  await exec(`
+    ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS user_id TEXT;
+    ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS wallet_id TEXT;
+    ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS type TEXT NOT NULL DEFAULT '';
+    ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS amount_api NUMERIC(20, 6) NOT NULL DEFAULT 0;
+    ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS balance_before_api NUMERIC(20, 6) NOT NULL DEFAULT 0;
+    ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS balance_after_api NUMERIC(20, 6) NOT NULL DEFAULT 0;
+    ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS related_order_id TEXT DEFAULT '';
+    ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS related_request_id TEXT DEFAULT '';
+    ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS model_name TEXT DEFAULT '';
+    ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';
+    ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;
+    ALTER TABLE wallet_transactions ADD COLUMN IF NOT EXISTS created_by TEXT DEFAULT '';
+  `);
+  await exec(`
+    DELETE FROM wallet_transactions a
+    USING wallet_transactions b
+    WHERE a.related_order_id <> ''
+      AND b.related_order_id <> ''
+      AND a.related_order_id = b.related_order_id
+      AND a.ctid < b.ctid;
+  `);
+  await exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_transactions_request_unique ON wallet_transactions(user_id, related_request_id) WHERE related_request_id <> '';
+  `);
+  await exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_wallet_transactions_order_unique ON wallet_transactions(related_order_id) WHERE related_order_id <> '';
+  `);
+  await exec(`
+    CREATE INDEX IF NOT EXISTS idx_wallet_transactions_user_created ON wallet_transactions(user_id, created_at DESC);
+  `);
+  await exec(`
+    CREATE TABLE IF NOT EXISTS recharge_orders (
+      id TEXT PRIMARY KEY,
+      order_no TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+      amount_rmb NUMERIC(20, 2) NOT NULL DEFAULT 0,
+      amount_api NUMERIC(20, 6) NOT NULL DEFAULT 0,
+      exchange_rate NUMERIC(20, 6) NOT NULL DEFAULT 5,
+      status TEXT NOT NULL DEFAULT 'pending',
+      payment_method TEXT NOT NULL DEFAULT 'manual',
+      payment_proof TEXT DEFAULT '',
+      remark TEXT DEFAULT '',
+      reject_reason TEXT DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      paid_at TIMESTAMPTZ,
+      reviewed_at TIMESTAMPTZ,
+      reviewed_by TEXT DEFAULT ''
+    );
+  `);
+  await exec(`
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS order_no TEXT;
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS user_id TEXT;
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS amount_rmb NUMERIC(20, 2) NOT NULL DEFAULT 0;
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS amount_api NUMERIC(20, 6) NOT NULL DEFAULT 0;
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS exchange_rate NUMERIC(20, 6) NOT NULL DEFAULT 5;
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending';
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT 'manual';
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS payment_proof TEXT DEFAULT '';
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS remark TEXT DEFAULT '';
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS reject_reason TEXT DEFAULT '';
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
+    ALTER TABLE recharge_orders ADD COLUMN IF NOT EXISTS reviewed_by TEXT DEFAULT '';
+  `);
+  await exec(`
+    CREATE TABLE IF NOT EXISTS wallet_configs (
+      id TEXT PRIMARY KEY,
+      key TEXT NOT NULL UNIQUE,
+      value TEXT NOT NULL DEFAULT '',
+      description TEXT DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+  await exec(`
+    INSERT INTO wallet_configs (id, key, value, description)
+    VALUES
+      ('cfg_recharge_rate', 'recharge_rate', '5', '人民币与 $ API 的充值比例'),
+      ('cfg_min_recharge', 'min_recharge_amount_rmb', '1', '最低充值金额'),
+      ('cfg_max_recharge', 'max_recharge_amount_rmb', '100000', '单次最高充值金额'),
+      ('cfg_recharge_enabled', 'recharge_enabled', 'true', '是否开启充值'),
+      ('cfg_manual_review', 'manual_review_enabled', 'true', '是否开启人工审核'),
+      ('cfg_new_user_bonus', 'new_user_bonus_api', '0', '新用户赠送 $ API'),
+      ('cfg_low_balance', 'low_balance_threshold_api', '1', '低余额提醒阈值')
+    ON CONFLICT (key) DO NOTHING;
+  `);
+  await exec(`
+    CREATE TABLE IF NOT EXISTS upstream_channels (
       id TEXT PRIMARY KEY,
       provider_name TEXT NOT NULL DEFAULT '',
       channel_name TEXT NOT NULL DEFAULT '',
@@ -202,8 +320,16 @@ try {
 	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS output_cost_per_million NUMERIC(14, 6) NOT NULL DEFAULT 0;
 	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'CNY';
 	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS is_available BOOLEAN NOT NULL DEFAULT false;
-	    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS requires_admin_review BOOLEAN NOT NULL DEFAULT true;
-	  `);
+    ALTER TABLE upstream_models ADD COLUMN IF NOT EXISTS requires_admin_review BOOLEAN NOT NULL DEFAULT true;
+  `);
+  await exec(`
+    ALTER TABLE upstream_providers ADD COLUMN IF NOT EXISTS last_error_request_id TEXT DEFAULT '';
+    ALTER TABLE upstream_providers ADD COLUMN IF NOT EXISTS last_error_status_code INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE upstream_providers ADD COLUMN IF NOT EXISTS last_error_at TIMESTAMPTZ;
+    ALTER TABLE upstream_providers ADD COLUMN IF NOT EXISTS last_payment_required BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE upstream_providers ADD COLUMN IF NOT EXISTS last_upstream_url TEXT DEFAULT '';
+    ALTER TABLE upstream_providers ADD COLUMN IF NOT EXISTS last_api_key_preview TEXT DEFAULT '';
+  `);
 	  await exec(`
 	    CREATE TABLE IF NOT EXISTS model_routes (
 	      id TEXT PRIMARY KEY,

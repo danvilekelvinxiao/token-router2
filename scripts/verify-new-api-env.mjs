@@ -32,6 +32,8 @@ function loadEnv(file) {
 
 loadEnv(envPath);
 
+const sub2ApiBase = (process.env.SUB2API_BASE_URL || process.env.SUB2API_INTERNAL_URL || "").replace(/\/+$/, "");
+const sub2ApiKey = String(process.env.SUB2API_API_KEY || process.env.SUB2API_API_KEY_SECONDARY || "").trim();
 const base = (process.env.NEW_API_BASE_URL || "").replace(/\/+$/, "");
 const defaultGroup = String(process.env.NEW_API_DEFAULT_GROUP || "default").trim();
 const runtimeKeyCandidates = [
@@ -45,6 +47,8 @@ const adminToken = process.env.NEW_API_ADMIN_TOKEN || "";
 const adminUserId = process.env.NEW_API_ADMIN_USER_ID || "1";
 
 console.log("=== 环境变量 ===");
+console.log("SUB2API_BASE_URL:", sub2ApiBase || "(未设置)");
+console.log("SUB2API_API_KEY:", sub2ApiKey ? `${sub2ApiKey.slice(0, 4)}****${sub2ApiKey.slice(-4)}` : "(未设置)");
 console.log("NEW_API_BASE_URL:", base || "(未设置)");
 console.log("NEW_API_RUNTIME_KEY:", relayKey ? `${relayKey.slice(0, 12)}...` : "(未设置)");
 console.log("NEW_API_ADMIN_TOKEN:", adminToken ? `${adminToken.slice(0, 12)}...` : "(未设置)");

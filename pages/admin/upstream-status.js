@@ -1,6 +1,7 @@
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
+import Link from "next/link";
 
 function statusText(item) {
   if (item?.ok || item?.status === "ok" || item?.status === "healthy") return "正常";
@@ -70,6 +71,10 @@ export default function UpstreamStatusPage() {
               <span>检查数量</span>
               <strong>{upstreams.length}</strong>
             </article>
+            <article>
+              <span>最近 402</span>
+              <strong>{data?.last402At || data?.latest402At || "未返回"}</strong>
+            </article>
           </section>
 
           <section className="list">
@@ -82,13 +87,26 @@ export default function UpstreamStatusPage() {
                   <div>
                     <strong>{item.upstream || item.name || item.label || `上游 ${index + 1}`}</strong>
                     <p>{item.message || item.suggestion || item.error || "暂无说明"}</p>
+                      {(item.upstreamUrl || item.apiKeyPreview || item.errorKind || item.requestId || item.lastErrorRequestId) && (
+                      <p style={{ marginTop: 6 }}>
+                        {item.upstreamUrl || "-"} · {item.apiKeyPreview || "-"} · {item.errorKind || "-"} · {item.requestId || item.lastErrorRequestId || "-"}
+                      </p>
+                    )}
+                    {(item.lastErrorAt || item.lastErrorStatusCode || item.lastPaymentRequired) && (
+                      <p style={{ marginTop: 6 }}>
+                        {item.lastErrorStatusCode || item.statusCode || "-"} · {item.lastErrorAt || "-"} · {item.lastPaymentRequired ? "402" : "ok"}
+                      </p>
+                    )}
                   </div>
                   <span>{state}</span>
-                  <code>{item.statusCode || item.latencyMs || item.latency || "-"}</code>
+                  <code>{item.statusCode || item.lastErrorStatusCode || item.latencyMs || item.latency || "-"}</code>
                 </article>
               );
             })}
             {!loading && upstreams.length === 0 ? <p>暂无上游状态数据，请先在上游渠道中配置并保存。</p> : null}
+          </section>
+          <section style={{ border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", borderRadius: 14, padding: 16, color: "var(--dash-sub)" }}>
+            <Link href="/admin/upstreams">打开真实上游管理页</Link>
           </section>
         </main>
       </AdminLayout>

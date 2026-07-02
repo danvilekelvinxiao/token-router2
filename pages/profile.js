@@ -10,6 +10,7 @@ import ProfileAiCard from "@/components/dashboard/profile-ai-card";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
 import LiveNumber from "@/components/ui/live-number";
 import { useSafePolling } from "@/hooks/useSafePolling";
+import { getPublicApiBaseUrl } from "@/lib/public-api";
 
 const ANNOUNCEMENTS = [
   {
@@ -23,23 +24,13 @@ const ANNOUNCEMENTS = [
     publishedAt: "2026-05-22T09:00:00+08:00",
   },
   {
-    id: "ann-deepseek-online",
-    type: "模型变更",
-    status: "已发布",
-    tone: "success",
-    pinned: false,
-    title: "FlowAPI DeepSeek 稳定线路已上线",
-    content: "当前已支持 deepseek-chat、deepseek-reasoner、gpt-5.5、gpt-5.4-pro。用户可在 API 管理页创建 API Key 后，通过 CC-Switch、Cherry Studio、Chatbox 等工具接入。",
-    publishedAt: "2026-05-21T16:00:00+08:00",
-  },
-  {
     id: "ann-ccswitch-progress",
     type: "系统更新",
     status: "进行中",
     tone: "progress",
     pinned: false,
     title: "CC-Switch 自动配置持续优化",
-    content: "正在优化 API Key 同步、/v1/responses 兼容和自动配置体验。建议优先使用自定义接入 + https://api.flowapi.fun/v1 手动配置。",
+    content: `正在优化 API Key 同步、/v1/responses 兼容和自动配置体验。建议优先使用自定义接入 + ${getPublicApiBaseUrl()} 手动配置。`,
     publishedAt: "2026-05-20T14:30:00+08:00",
   },
   {

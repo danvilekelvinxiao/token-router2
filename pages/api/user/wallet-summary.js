@@ -17,7 +17,7 @@ function parsePackageRef(ref = "") {
     purchaseType: lineValue("购买类型"),
     packageId: lineValue("套餐ID"),
     planName: lineValue("套餐名称") || "FlowAPI 套餐",
-    quotaText: lineValue("额度"),
+    quotaText: lineValue("套餐"),
     validDays: validDaysRaw ? Number(validDaysRaw) : null,
   };
 }
@@ -106,7 +106,6 @@ function getCallModelName(call) {
 function getModelColor(modelName, index = 0) {
   const name = String(modelName || "").toLowerCase();
   if (name.includes("gpt") || name.includes("openai")) return "#3b82f6";
-  if (name.includes("deepseek")) return "#2563eb";
   if (name.includes("claude") || name.includes("anthropic")) return "#8b5cf6";
   if (name.includes("gemini") || name.includes("google")) return "#f59e0b";
   if (name.includes("qwen") || name.includes("通义")) return "#f97316";
@@ -322,7 +321,7 @@ export default async function handler(req, res) {
     ...getMemberWallets(session.customerId),
     ...(plan ? [{
       type: "package_quota",
-      name: plan.planName || "套餐额度",
+      name: plan.planName || "套餐余额",
       balanceTokens: totalTokens,
       balanceCnyEquivalent: remainingQuotaCny,
       expiresAt: plan.expiresAt,

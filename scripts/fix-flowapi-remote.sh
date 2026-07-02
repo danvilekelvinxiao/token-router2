@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SERVER="${FLOWAPI_SERVER:-root@47.238.81.210}"
+SERVER="${FLOWAPI_SERVER:-root@8.209.211.209}"
 SSH_OPTS="${FLOWAPI_SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=30 -o ServerAliveInterval=10 -o StrictHostKeyChecking=no}"
 SSH_ID="${FLOWAPI_SSH_ID:-$HOME/.ssh/id_ed25519}"
 SSH_CMD=(ssh)
@@ -15,7 +15,7 @@ if ! "${SSH_CMD[@]}" ${SSH_OPTS} "${SERVER}" "echo ok" 2>/tmp/flowapi-ssh-test.l
   cat /tmp/flowapi-ssh-test.log
   echo ""
   echo "522 常见原因：阿里云 ECS 已关机、安全组未放行 22/80/443、或 IP 已变。"
-  echo "请登录阿里云控制台确认实例 47.238.81.210 为「运行中」，安全组放行 TCP 22/80/443。"
+  echo "请登录阿里云控制台确认实例 8.209.211.209 为「运行中」，安全组放行 TCP 22/80/443。"
   exit 1
 fi
 

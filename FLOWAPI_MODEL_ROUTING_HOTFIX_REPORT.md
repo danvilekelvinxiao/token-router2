@@ -66,7 +66,7 @@
    - `/v1/models`
    - `model:auto`
    - `flowapi-codex-plus`
-   - `flowapi-gpt55-pro`
+   - `gpt-5.5`
 4. 核对每次调用是否产生：
    - usage
    - 扣费

@@ -126,6 +126,7 @@ export default function AdminRoutesPage() {
                 ["路由切换", `${performance?.routeSwitchCount || 0} 次`],
                 ["上游失败率", `${Math.round(Number(performance?.upstreamFailureRate || 0) * 100)}%`],
                 ["上游 429", `${performance?.upstream429Count || 0} 次`],
+                ["上游 402", `${performance?.upstream402Count || 0} 次`],
                 ["最快模型数", `${performance?.fastestByModel?.length || 0}`],
                 ["最稳模型数", `${performance?.stableByModel?.length || 0}`],
               ].map(([label, value]) => (
@@ -160,6 +161,9 @@ export default function AdminRoutesPage() {
                         <div style={{ fontSize: 12, color: "var(--dash-sub)", fontWeight: 800 }}>Public Model</div>
                         <h3 style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 950 }}>{route.displayName}</h3>
                         <code style={{ display: "block", marginTop: 6, color: "var(--dash-accent)", fontSize: 12 }}>{route.publicModelId}</code>
+                        <div style={{ marginTop: 8, fontSize: 12, color: "var(--dash-text)", fontWeight: 700 }}>
+                          {route.displayName} → {route.selectedChannel || "未命中"} → {route.actualModelId || "未配置"} → {route.routeStrategy}
+                        </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontSize: 12, color: "var(--dash-sub)" }}>当前选择</div>
@@ -172,7 +176,7 @@ export default function AdminRoutesPage() {
                       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
                         <thead>
                           <tr>
-                            {["渠道", "成本/1M", "首字", "总耗时", "成功率", "质量分", "评分", "操作"].map((item) => (
+                            {["渠道", "成本/1M", "首字", "总耗时", "成功率", "质量分", "最近状态", "最近 402", "评分", "操作"].map((item) => (
                               <th key={item} style={thStyle}>{item}</th>
                             ))}
                           </tr>
@@ -183,6 +187,7 @@ export default function AdminRoutesPage() {
                               <td style={tdStyle}>
                                 <strong>{candidate.channelName}</strong>
                                 <span style={mutedBlock}>{candidate.providerName}</span>
+                                <span style={mutedBlock}>{candidate.latestUpstreamUrl || candidate.latestApiKeyPreview ? `${candidate.latestUpstreamUrl || "-"} · ${candidate.latestApiKeyPreview || "-"}` : ""}</span>
                               </td>
                               <td style={tdStyle}>
                                 <span>入 ¥{Number(candidate.inputCostPerMillion || 0).toFixed(3)}</span>
@@ -200,6 +205,25 @@ export default function AdminRoutesPage() {
                                   onBlur={(event) => updateChannel(candidate, { qualityScore: Number(event.target.value || 80) })}
                                   style={numberInputStyle}
                                 />
+                              </td>
+                              <td style={tdStyle}>
+                                <div style={{ display: "grid", gap: 2 }}>
+                                  <span>
+                                    {candidate.paymentCooldownActive
+                                      ? "余额不足（冷却中）"
+                                      : candidate.latestPaymentRequired
+                                        ? "余额不足"
+                                        : (candidate.latestStatusCode || "-")}
+                                  </span>
+                                  <span style={mutedBlock}>{candidate.latestErrorKind || candidate.latestErrorCode || "暂无"}</span>
+                                </div>
+                              </td>
+                              <td style={tdStyle}>
+                                <div style={{ display: "grid", gap: 2 }}>
+                                  <span>{candidate.last402At ? new Date(candidate.last402At).toISOString().replace("T", " ").slice(0, 19) : "-"}</span>
+                                  <span style={mutedBlock}>{candidate.last402RequestId || "-"}</span>
+                                  <span style={mutedBlock}>{candidate.paymentCooldownActive ? `冷却 ${Math.max(1, Math.ceil(Number(candidate.paymentCooldownRemainingMs || 0) / 60000))} 分钟` : "可立即重试"}</span>
+                                </div>
                               </td>
                               <td style={tdStyle}><strong>{Number(candidate.score || 0).toFixed(1)}</strong></td>
                               <td style={tdStyle}>
@@ -259,10 +283,11 @@ export default function AdminRoutesPage() {
               {failures.map((item) => (
                 <div key={`${item.requestId}-${item.attemptIndex}-${item.createdAt}`} style={failureRowStyle}>
                   <code>{item.requestId}</code>
-                  <span>{item.publicModelId}</span>
+                  <span>{item.requestedModelName || item.publicModelId}</span>
                   <span>{item.upstreamProvider || item.upstreamChannel}</span>
+                  <span>{item.upstreamUrl || "-"}</span>
                   <span>{item.statusCode || item.errorCode}</span>
-                  <span style={{ color: "var(--dash-sub)" }}>{item.errorMessage || "失败，无扣费"}</span>
+                  <span style={{ color: "var(--dash-sub)" }}>{item.errorKind || item.errorMessage || "失败，无扣费"}</span>
                 </div>
               ))}
               {!failures.length && <div style={{ color: "var(--dash-sub)", padding: 14 }}>暂无失败链路。</div>}
@@ -298,4 +323,4 @@ const selectStyle = { ...inputStyle, minWidth: 180 };
 const smallSelectStyle = { ...inputStyle, minWidth: 96, minHeight: 32, fontSize: 12 };
 const numberInputStyle = { ...inputStyle, width: 70, minHeight: 32 };
 const noticeStyle = { marginBottom: 14, borderRadius: 10, padding: "10px 14px", background: "rgba(99,102,241,.12)", color: "var(--dash-accent)", fontSize: 13, fontWeight: 750 };
-const failureRowStyle = { display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr .5fr 2fr", gap: 10, alignItems: "center", padding: "10px 12px", border: "1px solid var(--dash-border)", borderRadius: 10, fontSize: 12 };
+const failureRowStyle = { display: "grid", gridTemplateColumns: "1.2fr 1fr 1fr 1.6fr .6fr 1.7fr", gap: 10, alignItems: "center", padding: "10px 12px", border: "1px solid var(--dash-border)", borderRadius: 10, fontSize: 12 };

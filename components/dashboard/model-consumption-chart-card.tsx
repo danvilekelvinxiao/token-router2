@@ -51,8 +51,29 @@ type Props = {
   data?: ModelConsumptionChart | null;
 };
 
+const MODEL_COLOR_PALETTE = [
+  "#2563eb",
+  "#16a34a",
+  "#f97316",
+  "#9333ea",
+  "#dc2626",
+  "#0891b2",
+  "#ca8a04",
+  "#4f46e5",
+  "#db2777",
+  "#059669",
+];
+
 function modelKey(model: ModelConsumptionPoint) {
   return model.modelId || model.displayName || "unknown";
+}
+
+function hashString(value?: string) {
+  return String(value || "").split("").reduce((hash, char) => (((hash << 5) - hash) + char.charCodeAt(0)) >>> 0, 0);
+}
+
+function getStableColor(model: ModelConsumptionPoint) {
+  return model.color || MODEL_COLOR_PALETTE[hashString(modelKey(model)) % MODEL_COLOR_PALETTE.length];
 }
 
 function formatCny(value?: number) {
@@ -95,7 +116,7 @@ function ConsumptionTooltip({ tooltip }: { tooltip: TooltipState }) {
         {rows.slice(0, 8).map((item) => (
           <div key={modelKey(item)} className="model-consumption-tooltip-row">
             <span>
-              <i style={{ background: item.color || "#8b5cf6" }} />
+              <i style={{ background: getStableColor(item) }} />
               <em>{item.displayName || item.modelId || "未知模型"}</em>
             </span>
             <b>{formatCny(item.costCny)}</b>
@@ -134,7 +155,7 @@ export default function ModelConsumptionChartCard({ data }: Props) {
           displayName: model.displayName || key,
           provider: model.provider || "FlowAPI",
           logo: model.logo,
-          color: model.color || "#8b5cf6",
+          color: getStableColor(model),
           costCny: 0,
           tokens: 0,
           requests: 0,
@@ -316,7 +337,7 @@ export default function ModelConsumptionChartCard({ data }: Props) {
                           width={barW}
                           height={segmentH}
                           rx={Math.min(7, segmentH / 2)}
-                          fill={model.color || "#8b5cf6"}
+                          fill={getStableColor(model)}
                           className="model-consumption-bar-segment"
                           opacity={activeIndex === null || isActive ? 0.96 : 0.46}
                         />
@@ -357,7 +378,7 @@ export default function ModelConsumptionChartCard({ data }: Props) {
                   onClick={() => toggleModel(key)}
                   title={active ? "点击隐藏该模型" : "点击显示该模型"}
                 >
-                  <i style={{ background: model.color || "#8b5cf6" }} />
+                  <i style={{ background: getStableColor(model) }} />
                   <ModelLogo model={model.displayName || model.modelId} provider={model.provider} size={20} />
                   <span>{model.displayName || model.modelId}</span>
                 </button>

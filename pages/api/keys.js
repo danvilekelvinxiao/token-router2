@@ -5,6 +5,7 @@ import { getLocalePriceMultiplier, normalizeLocale } from "@/lib/pricing/locale-
 import { getPublicApiBaseUrl } from "@/lib/public-api";
 import { assertCanCreateTeamApiKey, linkTeamApiKey } from "@/lib/team-management";
 import { sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { normalizeModelLookup } from "@/lib/models";
 
 function parseBody(body) {
   if (!body) return {};
@@ -80,11 +81,19 @@ export default async function handler(req, res) {
       }
 
       const modelProducts = await listModelProductsWithConfig({ includeUnavailable: true });
-      const modelProduct = modelProducts.find((item) => (
-        item.id === modelId ||
-        item.publicModelId === modelId ||
-        item.modelId === modelId
-      ));
+      const requestedModelId = normalizeModelLookup(modelId);
+      const modelProduct = modelProducts.find((item) => {
+        const aliases = [
+          item.id,
+          item.publicModelId,
+          item.requestModelId,
+          item.modelId,
+          item.actualModelId,
+        ]
+          .filter(Boolean)
+          .map((value) => normalizeModelLookup(value));
+        return aliases.includes(requestedModelId);
+      });
       if (!modelProduct) {
         return res.status(404).json({
           error: {

@@ -95,10 +95,6 @@ export default function AdminRechargesPage() {
   }
 
   async function loadOrders(nextSecret = secret, nextStatus = status) {
-    if (!nextSecret) {
-      setMessage("请输入管理密钥");
-      return;
-    }
     setLoading(true);
     setMessage("");
     sessionStorage.setItem("flowapi_admin_secret", nextSecret);
@@ -121,10 +117,6 @@ export default function AdminRechargesPage() {
   }
 
   async function loadCodes(nextSecret = secret, nextStatus = codeStatus) {
-    if (!nextSecret) {
-      setMessage("请输入管理密钥");
-      return;
-    }
     setLoading(true);
     setMessage("");
     sessionStorage.setItem("flowapi_admin_secret", nextSecret);
@@ -172,10 +164,6 @@ export default function AdminRechargesPage() {
   }
 
   async function loadLogs(nextSecret = secret, category = logCategory, action = logAction, page = logPage) {
-    if (!nextSecret) {
-      setMessage("请输入管理密钥");
-      return;
-    }
     setLoading(true);
     setMessage("");
     sessionStorage.setItem("flowapi_admin_secret", nextSecret);

@@ -11,12 +11,12 @@ export type BillingPriorityMode = "package_first" | "balance_first";
 export const LOCKED_WALLET_PRIORITY: WalletType[] = ["member_bonus", "member_quota"];
 
 export const WALLET_TYPE_LABELS: Record<WalletType, string> = {
-  member_bonus: "会员赠送额度",
-  member_quota: "黑金会员额度",
-  package_quota: "套餐额度",
+  member_bonus: "会员赠送余额",
+  member_quota: "黑金会员余额",
+  package_quota: "套餐余额",
   balance_credit: "充值余额",
-  referral_credit: "邀请奖励额度",
-  admin_grant: "管理员赠送额度",
+  referral_credit: "邀请奖励余额",
+  admin_grant: "管理员赠送余额",
 };
 
 const fallbackStore = globalThis.__FLOWAPI_BILLING_PREFERENCES__ || {};

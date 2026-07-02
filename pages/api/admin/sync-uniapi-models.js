@@ -5,6 +5,7 @@
  */
 import { requireAdmin } from "@/lib/admin-auth";
 import { saveUpstreamModels, clearUpstreamModels, listUpstreamModels } from "@/lib/model-store";
+import { invalidateModelCaches } from "@/lib/cache-manager";
 
 const UNIAPI_API_KEY = process.env.UNIAPI_API_KEY || "";
 const UNIAPI_BASE_URL = "https://api.uniapi.io";
@@ -93,6 +94,7 @@ export default async function handler(req, res) {
 
     await clearUpstreamModels("uniapi");
     await saveUpstreamModels(models);
+    invalidateModelCaches();
 
     const saved = await listUpstreamModels({ channel: "uniapi" });
 

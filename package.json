@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "cleanup:production": "node scripts/cleanup-production.js .env.production",
+    "reset:wallet-system": "node scripts/reset-to-new-wallet-system.mjs",
     "fix:remote": "bash scripts/fix-flowapi-remote.sh",
     "deploy": "bash scripts/deploy-production-prebuilt.sh",
     "deploy:legacy": "bash scripts/一键部署.sh",
@@ -29,6 +30,7 @@
   "dependencies": {
     "@lobehub/icons": "^5.8.0",
     "bcryptjs": "^3.0.3",
+    "decimal.js": "^10.4.3",
     "exceljs": "^4.4.0",
     "next": "^16.2.6",
     "next-themes": "^0.4.6",
@@ -42,8 +44,14 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "bluebird": "^3.7.2",
+    "debug": "^4.4.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
-    "tailwindcss": "^4"
+    "fstream": "^1.0.12",
+    "lightningcss": "^1.32.0",
+    "prelude-ls": "^1.2.1",
+    "tailwindcss": "^4",
+    "unzipper": "^0.12.5"
   }
 }

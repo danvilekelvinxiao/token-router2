@@ -12,6 +12,7 @@ import { hasDatabase, query } from "@/lib/db";
 import { assertSafeUpstreamUrl, sanitizeSecretText } from "@/lib/safe-upstream-url";
 import { normalizeUpstreamIdentity, orderUpstreamCandidates, shouldRetryUpstreamStatus } from "@/lib/upstream-route-utils.mjs";
 import { buildResponseCacheKey, CACHE_TTLS, getCacheManager, shouldUseResponseCache } from "@/lib/cache-manager";
+import { appendRouteCodeToRequestId, getRouteCodeFromTier } from "@/lib/route-code";
 import {
   buildRequestCacheKey,
   enforceTeamRateLimits,
@@ -1174,8 +1175,10 @@ export default async function handler(req, res) {
       });
 
       releaseConcurrency(concurrencyKey);
+      const routeCode = resolveRouteCode(routeDecision, teamToken || selected);
+      const routedRequestId = appendRouteCodeToRequestId(requestId, routeCode);
       return res.status(200).json({
-        ...sanitizeOpenAiResponseForClient(cachedTeamResponse.response, { publicModelId, requestId }),
+        ...sanitizeOpenAiResponseForClient(cachedTeamResponse.response, { publicModelId, requestId: routedRequestId }),
         token_router: {
           routed_model: selected.name,
           routed_model_id: selected.modelId,
@@ -1186,7 +1189,7 @@ export default async function handler(req, res) {
           cache_saved_cny: cachedTeamResponse.savedCny || 0,
           estimated_cost_cny: billing.sellPriceCny,
           balance_cny: customer?.balance,
-          request_id: requestId,
+          request_id: routedRequestId,
           team_id: requestedTeamId || undefined,
         },
       });
@@ -1292,16 +1295,18 @@ export default async function handler(req, res) {
 	        }
 	      }
 	      releaseConcurrency(concurrencyKey);
-	      return res.status(200).json({
-	        ...sanitizeOpenAiResponseForClient(cachedResponse.data, { publicModelId, requestId }),
+      const routeCode = resolveRouteCode(routeDecision, upstream);
+      const routedRequestId = appendRouteCodeToRequestId(requestId, routeCode);
+      return res.status(200).json({
+        ...sanitizeOpenAiResponseForClient(cachedResponse.data, { publicModelId, requestId: routedRequestId }),
         token_router: {
           routed_model: selected.name,
           routed_model_id: selected.modelId,
-	          flowapi_route: "cache",
-	          service_provider: "FlowAPI",
+		          flowapi_route: "cache",
+		          service_provider: "FlowAPI",
           estimated_cost_cny: billing.sellPriceCny,
           balance_cny: customer?.balance,
-          request_id: requestId,
+          request_id: routedRequestId,
           cache_hit: true,
         },
       });
@@ -1717,8 +1722,10 @@ export default async function handler(req, res) {
     settlementFinalized = true;
 
     releaseConcurrency(concurrencyKey);
+    const routeCode = resolveRouteCode(routeDecision, upstream);
+    const routedRequestId = appendRouteCodeToRequestId(requestId, routeCode);
     const responsePayload = {
-      ...sanitizeOpenAiResponseForClient(data, { publicModelId, requestId }),
+      ...sanitizeOpenAiResponseForClient(data, { publicModelId, requestId: routedRequestId }),
       token_router: {
         routed_model: selected.name,
         routed_model_id: selected.modelId,
@@ -1728,7 +1735,7 @@ export default async function handler(req, res) {
         latency_ms: totalLatencyMs,
         estimated_cost_cny: billing.sellPriceCny,
         balance_cny: customer?.balance,
-        request_id: requestId,
+        request_id: routedRequestId,
         team_id: requestedTeamId || undefined,
         cache_hit: false,
       },
@@ -1871,11 +1878,28 @@ export default async function handler(req, res) {
       error.message === "TEAM_TOKEN_POOL_EMPTY" ? "当前团队可用 Token 不足，请联系管理员。" : "模型服务暂时不可用",
       error.message === "TEAM_TOKEN_POOL_EMPTY" ? "该团队没有匹配当前模型/用途的可用 Token，请管理员到团队 Token 池录入或启用 Token。" : "模型服务暂时无法连接，请稍后重试；如果持续失败，请切换其他模型或联系 FlowAPI 客服。",
       {
-        request_id: requestId,
+        request_id: appendRouteCodeToRequestId(requestId, resolveRouteCode(routeDecision, upstream)),
       });
   }
 }
 
 function makeRequestId(prefix = "req") {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function resolveRouteCode(routeDecision = {}, upstream = null) {
+  const raw = String(
+    routeDecision?.routeCode
+    || routeDecision?.route_code
+    || routeDecision?.selectedRouteCode
+    || routeDecision?.selected_route_code
+    || routeDecision?.channelCode
+    || routeDecision?.channel_code
+    || upstream?.routeCode
+    || upstream?.route_code
+    || upstream?.tier
+    || upstream?.name
+    || ""
+  ).trim();
+  return getRouteCodeFromTier(raw || "openrouter");
 }

@@ -13,7 +13,7 @@ export default function TokenPoolMaintenanceCenter({ initialTab = "check" }) {
   const [data, setData] = useState({ checkLogs: [], testLogs: [], analysis: null, alerts: [], tasks: [], rateRuns: [], logRuns: [] });
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
-  const [pressureForm, setPressureForm] = useState({ concurrency: 5, requestCount: 60, requestsPerSecond: 10, limitPerMinute: 60, model: "deepseek-chat" });
+  const [pressureForm, setPressureForm] = useState({ concurrency: 5, requestCount: 60, requestsPerSecond: 10, limitPerMinute: 60, model: "gpt-5.5" });
 
   const load = useCallback(async () => {
     setLoading(true);

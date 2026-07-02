@@ -3,15 +3,15 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useMemo, useState } from "react";
 import { getPublicModelDisplayName, getPublicModelRequestId } from "@/lib/models";
+import { getPublicApiBaseUrl } from "@/lib/public-api";
 
-const apiBaseUrl = "https://api.flowapi.fun/v1";
+const apiBaseUrl = getPublicApiBaseUrl();
 
 const modelDirectory = [
-  { name: "GPT5.5", modelId: "gpt-5.5", provider: "FlowAPI", bestFor: "复杂分析、结构化总结、代码辅助" },
-  { name: "GPT5.4 Pro", modelId: "gpt-5.4-pro", provider: "FlowAPI", bestFor: "高质量推理、代码审查、专业办公" },
-  { name: "GPT5.3-Codex", modelId: "gpt-5.3-codex", provider: "FlowAPI", bestFor: "代码生成、代码修复、Agent 编程任务" },
-  { name: "GPT4o mini", modelId: "gpt-4o-mini", provider: "FlowAPI", bestFor: "轻量推理、日常问答、文本处理" },
-  { name: "DeepSeek V4 Flash", modelId: "deepseek-chat", provider: "FlowAPI", bestFor: "中文内容、客服、批量文案" },
+  { name: "GPT-5.5", modelId: "gpt-5.5", provider: "FlowAPI", bestFor: "复杂分析、结构化总结、代码辅助" },
+  { name: "GPT-5.4 Pro", modelId: "gpt-5.4-pro", provider: "FlowAPI", bestFor: "高质量推理、代码审查、专业办公" },
+  { name: "GPT-5.3-Codex", modelId: "gpt-5.3-codex", provider: "FlowAPI", bestFor: "代码生成、代码修复、Agent 编程任务" },
+  { name: "GPT-4o mini", modelId: "gpt-4o-mini", provider: "FlowAPI", bestFor: "轻量推理、日常问答、文本处理" },
   { name: "Qwen3-32B", modelId: "qwen/qwen3-32b", provider: "FlowAPI", bestFor: "外贸邮件、商务沟通、中文办公" },
 ];
 

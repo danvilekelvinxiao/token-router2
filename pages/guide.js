@@ -133,7 +133,7 @@ function TutorialSteps({ apiBaseUrl }) {
   const steps = [
     ["01", "下载 CC-Switch 自动配置", "先下载并安装 CC-Switch，准备好本地调用环境。"],
     ["02", "进入模型广场", "先选择你要使用的模型或套餐，再创建对应的 API Key。"],
-    ["03", "创建该模型 API Key", "在模型卡片或下方弹窗中确认模型后创建，避免把 Codex / GPT 任务误绑定到 DeepSeek。"],
+    ["03", "创建该模型 API Key", "在模型卡片或下方弹窗中确认模型后创建，避免把 Codex / GPT 任务误绑定到其他模型。"],
     ["04", "填写配置", <>名称：<b>FlowAPI</b><br />API 请求地址：<code>{apiBaseUrl}</code><br />API Key：填写刚创建的 API Key<br />模型名称：填写你选择的 Model ID，例如 <code>{defaultModel}</code></>],
     ["05", "点击测试", "测试成功后，即可在支持 OpenAI-Compatible API 的工具中使用 FlowAPI。"],
   ];
@@ -395,27 +395,13 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   const [modal, setModal] = useState(null);
   const [openMoreKeyId, setOpenMoreKeyId] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ label: "", expiresAt: "never", customDate: "", modelId: "", groupId: "" });
-  const [apiGroups, setApiGroups] = useState([]);
+  const [form, setForm] = useState({ label: "", expiresAt: "never", customDate: "", modelId: "" });
   const [detailKey, setDetailKey] = useState(null);
   const [detailData, setDetailData] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => setApiBaseUrl(getPublicApiBaseUrl()));
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/groups/available")
-      .then((res) => res.ok ? res.json() : { groups: [] })
-      .then((data) => {
-        if (!cancelled) setApiGroups(data.groups || []);
-      })
-      .catch(() => {
-        if (!cancelled) setApiGroups([]);
-      });
-    return () => { cancelled = true; };
   }, []);
 
   const apiKeys = useMemo(() => customer?.apiKeys || [], [customer]);
@@ -493,10 +479,9 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
   }
 
   const openCreateModal = useCallback(() => {
-    const defaultGroupId = apiGroups.find((group) => group.recommended && group.available)?.id || apiGroups.find((group) => group.available)?.id || apiGroups[0]?.id || "";
-    setForm({ label: `API Key ${apiKeys.length + 1}`, expiresAt: "never", customDate: "", modelId: "", groupId: defaultGroupId });
+    setForm({ label: `API Key ${apiKeys.length + 1}`, expiresAt: "never", customDate: "", modelId: "" });
     setModal({ type: "create" });
-  }, [apiGroups, apiKeys.length]);
+  }, [apiKeys.length]);
 
   useEffect(() => {
     if (createSignal <= 0 || !customer) return;
@@ -532,7 +517,6 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       customerId: customer.id, label: form.label.trim() || fallbackLabel,
       expiresAt: computeExpiry(form.expiresAt, form.customDate),
       modelId: form.modelId,
-      groupId: form.groupId,
     };
     try {
       const res = await fetch("/api/keys", {
@@ -596,18 +580,8 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
     if (!customer) return "请先登录后创建 API Key";
     if (saving) return "";
     if (modal.type !== "edit" && !form.modelId) return "请选择默认模型后创建 API Key";
-    if (modal.type !== "edit" && !form.groupId) return "请选择 API 线路后创建 API Key";
     if (form.expiresAt === "custom" && !form.customDate) return "请选择自定义过期日期";
     return "";
-  }
-
-  function groupSupportsProduct(group, product) {
-    const supported = Array.isArray(group?.supportedModels) ? group.supportedModels : [];
-    if (!supported.length) return true;
-    const aliases = [product?.id, product?.publicModelId, product?.displayName]
-      .map((item) => String(item || "").toLowerCase())
-      .filter(Boolean);
-    return supported.some((item) => aliases.includes(String(item || "").toLowerCase()));
   }
 
   function toggleSelected(keyId) {
@@ -664,7 +638,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
       <div className="api-flow-steps">
         {[
           ["01", "下载 CC-Switch 自动配置", "先安装配置工具"],
-          ["02", "选择模型", "到模型广场选 DeepSeek / Codex / GPT"],
+          ["02", "选择模型", "到模型广场选 GPT / Codex / Claude"],
           ["03", "创建该模型 Key", "不同模型独立管理"],
           ["04", "导入并测试", "自动写入 CC-Switch"],
         ].map(([num, title, desc]) => (
@@ -700,7 +674,7 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
           <p>如果你需要完整操作教程，可以查看帮助指南中的「API 接入教程」或点击「手动配置」查看详细步骤。</p>
         </div>
         <div className="api-help-hint-actions">
-          <Link href="/help#deepseek-guide">查看帮助指南</Link>
+          <Link href="/help#chatgpt-guide">查看帮助指南</Link>
           <Link href="/help#manual-config">手动配置</Link>
         </div>
       </div>
@@ -835,36 +809,6 @@ function ApiKeyManager({ customer, setCustomer, createSignal = 0 }) {
                         </small>
                       </button>
                     ))}
-                  </div>
-                </div>
-              ) : null}
-              {modal.type !== "edit" ? (
-                <div className="api-expiry-field api-group-choice-field">
-                  <span>选择线路</span>
-                  <div className="api-group-choice-grid">
-                    {apiGroups.map((group) => {
-                      const product = MODEL_PRODUCT_OPTIONS.find((item) => item.id === form.modelId || item.publicModelId === form.modelId);
-                      const disabled = !group.available || !groupSupportsProduct(group, product);
-                      return (
-                        <button
-                          key={group.id}
-                          type="button"
-                          className={`${form.groupId === group.id ? "active" : ""} ${disabled ? "disabled" : ""}`}
-                          aria-disabled={disabled}
-                          onClick={() => {
-                            if (disabled) {
-                              showMessage(group.available ? "该线路不支持当前模型" : "该线路已停用");
-                              return;
-                            }
-                            setForm((current) => ({ ...current, groupId: group.id }));
-                          }}
-                        >
-                          <span><strong>{group.displayName}</strong><em>{group.billingMultiplier}x</em></span>
-                          <small>{group.recommended ? "系统推荐 · " : ""}{group.description || "自动调度线路"}</small>
-                        </button>
-                      );
-                    })}
-                    {!apiGroups.length ? <div className="api-management-empty-text">线路配置同步中，请稍后刷新。</div> : null}
                   </div>
                 </div>
               ) : null}

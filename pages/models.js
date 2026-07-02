@@ -14,7 +14,6 @@ import { useSafePolling } from "@/hooks/useSafePolling";
 const DEFAULT_CATEGORIES = [
   { id: "all", name: "全部" },
   { id: "recommended", name: "推荐" },
-  { id: "deepseek", name: "DeepSeek" },
   { id: "gpt", name: "GPT" },
   { id: "claude", name: "Claude" },
   { id: "gemini", name: "Gemini" },
@@ -39,7 +38,6 @@ function normalizeModel(model) {
   categories.add("all");
   if (model.category) categories.add(model.category);
   if (model.recommended || model.hot || Number(model.sortOrder || 999) <= 20) categories.add("recommended");
-  if (String(model.modelId || model.publicModelId || "").toLowerCase().includes("deepseek")) categories.add("deepseek");
   if (String(model.modelId || model.publicModelId || "").toLowerCase().includes("qwen")) categories.add("qwen");
   return {
     ...model,
@@ -165,7 +163,7 @@ function generateCurl(model, apiBaseUrl) {
   return `curl ${apiBaseUrl}/chat/completions \\
   -H "Authorization: Bearer 你的 API Key" \\
   -H "Content-Type: application/json" \\
-  -d '{"model":"${model?.requestModelId || model?.modelId || "gpt-5.5"}","messages":[{"role":"user","content":"你好"}]}'`;
+      -d '{"model":"${model?.requestModelId || model?.modelId || "gpt-5.5"}","messages":[{"role":"user","content":"你好"}]}'`;
 }
 
 function generatePython(model, apiBaseUrl) {

@@ -40,7 +40,6 @@ export default function AdminLogs() {
 
   function handleSearch() {
     const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
     sessionStorage.setItem("flowapi_admin_secret", s);
     setAppliedFilters({ ...filters });
     setPage(0);
@@ -55,7 +54,6 @@ export default function AdminLogs() {
 
   function handleSecretSave() {
     const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
     sessionStorage.setItem("flowapi_admin_secret", s);
     setMsg("");
     setAppliedFilters({ user: "", model: "", status: "", channel: "" });
@@ -104,16 +102,17 @@ export default function AdminLogs() {
                 <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1100 }}>
                   <thead>
                     <tr style={{ background: "var(--dash-card-hover)" }}>
-                      <th style={thS}>时间</th><th style={thS}>用户</th><th style={thS}>模型</th><th style={thS}>渠道</th><th style={thS}>输入 Token</th><th style={thS}>输出 Token</th><th style={thS}>扣费</th><th style={thS}>状态</th>
+                      <th style={thS}>时间</th><th style={thS}>请求 ID</th><th style={thS}>模型</th><th style={thS}>渠道</th><th style={thS}>上游</th><th style={thS}>输入 Token</th><th style={thS}>输出 Token</th><th style={thS}>扣费</th><th style={thS}>状态</th>
                     </tr>
                   </thead>
                   <tbody>
                     {logs.map((l) => (
                       <tr key={l.id} style={{ borderTop: "1px solid var(--dash-border)" }}>
                         <td style={{ ...tdS, fontSize: 11, fontFamily: "'SF Mono', monospace", color: "var(--dash-sub)" }}>{l.time}</td>
-                        <td style={tdS}>{l.user}</td>
+                        <td style={{ ...tdS, fontFamily: "'SF Mono', monospace", fontSize: 11 }}>{l.requestId || "-"}</td>
                         <td style={tdS}>{l.model}</td>
                         <td style={tdS}>{l.channel}</td>
+                        <td style={tdS}>{l.upstreamProvider || l.upstreamChannel || "-"}</td>
                         <td style={{ ...tdS, fontFamily: "'SF Mono', monospace" }}>{(l.inputTokens || 0).toLocaleString()}</td>
                         <td style={{ ...tdS, fontFamily: "'SF Mono', monospace" }}>{(l.outputTokens || 0).toLocaleString()}</td>
                         <td style={{ ...tdS, fontFamily: "'SF Mono', monospace", fontWeight: 600 }}>¥{Number(l.cost || 0).toFixed(4)}</td>
@@ -121,13 +120,13 @@ export default function AdminLogs() {
                           {l.status === "success" ? (
                             <span style={{ padding: "3px 10px", borderRadius: 999, background: "rgba(34,197,94,0.1)", color: "#22c55e", fontSize: 11, fontWeight: 700 }}>{l.statusCode || 200}</span>
                           ) : (
-                            <span style={{ padding: "3px 10px", borderRadius: 999, background: "rgba(239,68,68,0.1)", color: "#ef4444", fontSize: 11, fontWeight: 700 }}>{l.statusCode || "err"}</span>
+                            <span title={l.errorMessage || l.errorCode || ""} style={{ padding: "3px 10px", borderRadius: 999, background: "rgba(239,68,68,0.1)", color: "#ef4444", fontSize: 11, fontWeight: 700 }}>{l.statusCode || "err"}</span>
                           )}
                         </td>
                       </tr>
                     ))}
                     {logs.length === 0 && (
-                      <tr><td colSpan={8} style={{ padding: 40, textAlign: "center", color: "var(--dash-sub)" }}>暂无日志记录</td></tr>
+                      <tr><td colSpan={9} style={{ padding: 40, textAlign: "center", color: "var(--dash-sub)" }}>暂无日志记录</td></tr>
                     )}
                   </tbody>
                 </table>

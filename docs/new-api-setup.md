@@ -6,12 +6,12 @@ FlowAPI 把用户请求转发到 **New API（One API）**，由 New API 再调�
 
 ```
 用户 / Cursor / Claude Code
-    → https://api.flowapi.fun/v1  （FlowAPI，计费与风控）
+    → https://pincc.flowapi.fun/v1  （FlowAPI，计费与风控）
         → NEW_API_BASE_URL/v1     （New API，模型渠道）
             → OpenAI / Claude / DeepSeek …
 ```
 
-管理后台 **New API 中转内核**（`/admin/new-api`）用 `NEW_API_ADMIN_TOKEN` 检测状态、同步额度。
+`/admin/new-api` 现在是 FlowAPI 的说明页和原生后台跳转入口。它不接管 New API 自己的配置页面，只负责打开 `NEW_API_ADMIN_URL` 对应的原生后台。
 
 ---
 
@@ -55,7 +55,7 @@ NEW_API_DEFAULT_QUOTA=500000
 
 - **`NEW_API_BASE_URL`**：不要带末尾 `/`；代码会拼 `/v1/chat/completions`。
 - **`NEW_API_KEY`**：所有 FlowAPI 注册用户调用时，**统一用这把钥匙** 向 New API 转发（用户在 FlowAPI 充人民币，不直接用 New API 余额）。
-- **`NEW_API_ADMIN_TOKEN`**：仅服务端管理用；未配置时后台显示 Mock，用量/同步额度不可用。
+- **`NEW_API_ADMIN_TOKEN`**：仅服务端管理用；未配置时，New API 的原生后台能力不可用。
 - 若只配 `NEW_API_ADMIN_TOKEN` 不配 `NEW_API_KEY`，`lib/upstream.js` 会临时用 Admin Token 转发，**不推荐**，请分开配置。
 
 配置后重启：
@@ -77,11 +77,11 @@ curl -sS http://127.0.0.1:3000/api/newapi/health | jq .
 
 `upstream.ok` 与 `newapi.ok` 应为 `true`。
 
-2. 浏览器登录管理后台 → **New API 中转内核** → **测试连接**。
+2. 浏览器登录 FlowAPI 管理后台 → **New API 原生后台** → **测试连接**。
 
-3. 用户侧 Base URL 仍为：
+3. 用户侧 Base URL 固定为：
 
-- `https://api.flowapi.fun/v1`（或你绑定的域名）
+- `https://pincc.flowapi.fun/v1`
 
 ---
 
@@ -89,7 +89,7 @@ curl -sS http://127.0.0.1:3000/api/newapi/health | jq .
 
 | 现象 | 处理 |
 |------|------|
-| 后台显示「管理员 Token 未配置」 | 设置 `NEW_API_ADMIN_TOKEN` 并 `pm2 restart flowapi --update-env` |
+| 原生后台连接失败 | 检查 `NEW_API_ADMIN_URL`、`NEW_API_KEY`，以及服务器能否访问 New API |
 | `/api/health` 里 upstream 失败 | 检查 `NEW_API_BASE_URL`、`NEW_API_KEY`，以及服务器能否访问 New API |
 | 用户 401 | 用的是 FlowAPI 控制台里的 API Key，不是 New API 的 sk（除非走直通逻辑） |
 | 模型不存在 | 在 New API 渠道里启用对应模型，并与 FlowAPI 模型广场 ID 一致 |

@@ -26,7 +26,6 @@ function CopyButton({ value, label }) {
 /* ==================== TOC ==================== */
 
 const tocSections = [
-  { id: "deepseek-guide", label: "DeepSeek 接入教程" },
   { id: "chatgpt-guide", label: "ChatGPT 接入教程" },
   { id: "manual-config", label: "API 接入说明" },
   { id: "preflight-check", label: "接入前检查" },
@@ -55,50 +54,6 @@ function ParamsCard({ title, value, copyLabel, isKey, placeholder }) {
         )}
       </div>
     </div>
-  );
-}
-
-/* ==================== Section: DeepSeek Guide ==================== */
-
-function DeepSeekGuideSection({ customer }) {
-  const primaryKey = customer?.apiKeys?.[0];
-
-  return (
-    <section id="deepseek-guide" className="help-section">
-      <h2>DeepSeek 接入教程</h2>
-      <p className="help-section-desc">
-        使用 FlowAPI 的 OpenAI 兼容接口，几分钟即可接入 DeepSeek 模型。
-      </p>
-
-      <div className="help-model-card">
-        <h4>推荐模型</h4>
-        <code>deepseek-chat</code>
-        <p>适合中文问答、日常对话、轻量代码和高性价比任务。</p>
-        <CopyButton value="deepseek-chat" label="复制模型名" />
-      </div>
-
-      <h4 className="help-params-title">接入参数</h4>
-      <div className="help-params">
-        <ParamsCard title="Base URL" value={API_BASE_URL} copyLabel="复制" />
-        <ParamsCard title="API Key" value={primaryKey?.token || ""} copyLabel="复制 API Key" isKey />
-        <ParamsCard title="Model" value="deepseek-chat" copyLabel="复制模型名" />
-      </div>
-
-      <div className="help-tips-box">
-        <h4>使用提示</h4>
-        <ul>
-          <li>Base URL 固定填写：<code>{API_BASE_URL}</code></li>
-          <li>API Key 使用你在 FlowAPI 创建的 Key</li>
-          <li>模型名填写：<code>deepseek-chat</code></li>
-          <li>如果连接失败，先检查 API Key 是否复制完整，再检查模型名是否填错</li>
-        </ul>
-      </div>
-
-      <div className="help-guide-btns">
-        <Link href="/api-management" className="help-plaza-btn">去 API 管理创建 Key</Link>
-        <Link href="/help#preflight-check" className="help-ghost-btn">查看接入前检查</Link>
-      </div>
-    </section>
   );
 }
 
@@ -359,7 +314,7 @@ function ErrorCodesSection() {
 
 export default function HelpPage() {
   const [customer, setCustomer] = useState(null);
-  const [activeSection, setActiveSection] = useState("deepseek-guide");
+  const [activeSection, setActiveSection] = useState("chatgpt-guide");
   const [mobileTocOpen, setMobileTocOpen] = useState(false);
 
   useEffect(() => {
@@ -409,7 +364,7 @@ export default function HelpPage() {
     <>
       <Head>
         <title>帮助指南 - FlowAPI</title>
-        <meta name="description" content="FlowAPI 帮助指南，包含 DeepSeek / ChatGPT 接入教程、配置参数、错误码排障等。" />
+        <meta name="description" content="FlowAPI 帮助指南，包含 ChatGPT 接入教程、配置参数、错误码排障等。" />
       </Head>
 
       <ConsoleLayout
@@ -438,7 +393,6 @@ export default function HelpPage() {
           </aside>
 
           <div className="help-content">
-            <DeepSeekGuideSection customer={customer} />
             <ChatGPTGuideSection customer={customer} />
             <ManualConfigSection customer={customer} />
             <PreflightCheckSection />

@@ -3,10 +3,10 @@
  * PUT /api/admin/models-config — update a model product config (enable/disable, set actualModelId, etc.)
  */
 import { requireAdmin } from "@/lib/admin-auth";
-import { getModelProduct } from "@/lib/model-products";
-import { listModelProductsWithConfig } from "@/lib/model-products-server";
+import { getModelProductWithConfig, listModelProductsWithConfig } from "@/lib/model-products-server";
 import { getAllModelConfigs, updateModelConfig } from "@/lib/model-store";
 import { listUpstreamModels } from "@/lib/model-store";
+import { invalidateModelCaches } from "@/lib/cache-manager";
 
 async function updateModelConfigAliases(product, updates) {
   const aliases = [
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ ok: false, error: "缺少 updates 参数" });
     }
 
-    const product = getModelProduct(productId);
+    const product = await getModelProductWithConfig(productId);
     if (!product) {
       return res.status(404).json({ ok: false, error: "模型产品不存在" });
     }
@@ -108,6 +108,7 @@ export default async function handler(req, res) {
 
     try {
       await updateModelConfigAliases(product, filtered);
+      invalidateModelCaches();
       return res.status(200).json({
         ok: true,
         productId: product.id,

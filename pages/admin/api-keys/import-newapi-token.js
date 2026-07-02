@@ -4,7 +4,7 @@ import AdminLayout from "@/components/AdminLayout";
 export default function ImportNewApiTokenPage() {
   const [form, setForm] = useState({
     token: "", name: "", customerId: "", publicModelId: "gpt-5.5",
-    actualModelId: "", modelDisplayName: "", modelGroup: "default",
+    actualModelId: "", modelDisplayName: "", modelGroup: "",
     allowedModels: "", expiresAt: "",
   });
   const [submitting, setSubmitting] = useState(false);
@@ -38,17 +38,17 @@ export default function ImportNewApiTokenPage() {
       const res = await fetch("/api/admin/import-newapi-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token: form.token.trim(),
-          name: form.name.trim(),
-          customerId: form.customerId.trim(),
-          publicModelId: form.publicModelId.trim() || "gpt-5.5",
-          actualModelId: form.actualModelId.trim() || form.publicModelId.trim(),
-          modelDisplayName: form.modelDisplayName.trim() || form.publicModelId.trim(),
-          modelGroup: form.modelGroup.trim() || "default",
-          allowedModels: form.allowedModels.trim(),
-          expiresAt: form.expiresAt || null,
-        }),
+          body: JSON.stringify({
+            token: form.token.trim(),
+            name: form.name.trim(),
+            customerId: form.customerId.trim(),
+            publicModelId: form.publicModelId.trim() || "gpt-5.5",
+            actualModelId: form.actualModelId.trim() || form.publicModelId.trim(),
+            modelDisplayName: form.modelDisplayName.trim() || form.publicModelId.trim() || form.actualModelId.trim() || "导入的 Token",
+            modelGroup: form.modelGroup.trim(),
+            allowedModels: form.allowedModels.trim() || form.publicModelId.trim() || form.actualModelId.trim() || "gpt-5.5",
+            expiresAt: form.expiresAt || null,
+          }),
       });
       const data = await res.json();
       if (data.success) {
@@ -114,7 +114,7 @@ export default function ImportNewApiTokenPage() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
             <label className="admin-field-label">
               分组
-              <input value={form.modelGroup} onChange={update("modelGroup")} placeholder="default" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--page-input-border)", background: "var(--page-input-bg)", color: "var(--page-text)", width: "100%" }} />
+              <input value={form.modelGroup} onChange={update("modelGroup")} placeholder="留空自动识别" style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid var(--page-input-border)", background: "var(--page-input-bg)", color: "var(--page-text)", width: "100%" }} />
             </label>
             <label className="admin-field-label">
               允许模型（逗号分隔）

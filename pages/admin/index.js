@@ -9,8 +9,10 @@ function StatusDot({ status }) {
   return <span style={{ width: 7, height: 7, borderRadius: "50%", background: c, display: "inline-block", marginRight: 6 }} />;
 }
 
+const SUB2API_ADMIN_URL = String(process.env.SUB2API_ADMIN_URL || "").trim();
+const NEW_API_ADMIN_URL = String(process.env.NEW_API_ADMIN_URL || "").trim();
+
 export default function AdminOverview() {
-  const [secret, setSecret] = useState(() => (typeof window === "undefined" ? "" : sessionStorage.getItem("flowapi_admin_secret") || ""));
   const [stats, setStats] = useState([
     { label: "今日调用", value: "-" },
     { label: "今日 Token", value: "-" },
@@ -21,8 +23,7 @@ export default function AdminOverview() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const s = sessionStorage.getItem("flowapi_admin_secret") || "";
-    fetchOverview(s);
+    fetchOverview("");
   }, []);
 
   async function fetchOverview(sec) {
@@ -80,6 +81,11 @@ export default function AdminOverview() {
     { label: "系统设置", href: "/admin/settings", color: "#ef4444" },
   ];
 
+  const rawAdminEntries = [
+    { label: "打开 sub2api 原生后台", href: SUB2API_ADMIN_URL, color: "#22c55e", empty: "未配置 SUB2API_ADMIN_URL" },
+    { label: "打开 New API 原生后台", href: NEW_API_ADMIN_URL, color: "#14b8a6", empty: "未配置 NEW_API_ADMIN_URL" },
+  ];
+
   return (
     <>
       <Head><title>管理概览 - FlowAPI</title></Head>
@@ -91,8 +97,7 @@ export default function AdminOverview() {
               <p style={{ fontSize: 13, color: "var(--dash-sub)", margin: "4px 0 0" }}>FlowAPI 平台运行状态与关键指标</p>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <input value={secret} onChange={(e) => setSecret(e.target.value)} placeholder="管理密钥" type="password" style={{ padding: "8px 12px", borderRadius: 7, border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)", color: "var(--dash-text)", fontSize: 12, fontFamily: "inherit", width: 140 }} />
-              <button onClick={() => { const s = secret.trim(); if (s) { sessionStorage.setItem("flowapi_admin_secret", s); fetchOverview(s); } }} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
+              <button onClick={() => fetchOverview("")} style={{ padding: "8px 14px", borderRadius: 7, border: "1px solid var(--dash-accent)", background: "transparent", color: "var(--dash-accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>刷新</button>
             </div>
           </header>
 
@@ -148,6 +153,28 @@ export default function AdminOverview() {
                         <span style={{ width: 8, height: 8, borderRadius: "50%", background: e.color, flex: "none" }} />
                         {e.label}
                       </Link>
+                    ))}
+                  </div>
+                  <h3 style={{ fontSize: 13, fontWeight: 800, margin: "16px 0 10px", color: "var(--dash-sub)" }}>原生后台快捷入口</h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    {rawAdminEntries.map((entry) => entry.href ? (
+                      <a key={entry.label} href={entry.href} target="_blank" rel="noopener noreferrer" style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", borderRadius: 8,
+                        border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)",
+                        textDecoration: "none", color: "var(--dash-text)", fontSize: 14, fontWeight: 700,
+                      }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: entry.color, flex: "none" }} />
+                        {entry.label}
+                      </a>
+                    ) : (
+                      <div key={entry.label} style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "14px 16px", borderRadius: 8,
+                        border: "1px solid var(--dash-border)", background: "var(--dash-card-bg)",
+                        color: "var(--dash-sub)", fontSize: 14, fontWeight: 700,
+                      }}>
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: entry.color, flex: "none" }} />
+                        {entry.empty}
+                      </div>
                     ))}
                   </div>
                 </div>

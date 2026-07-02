@@ -37,6 +37,9 @@ export default function LoginPage() {
       }
 
       localStorage.setItem("flowapi_customer", JSON.stringify(data.customer));
+      if (data.customer?.sessionToken) {
+        localStorage.setItem("flowapi_session_token", data.customer.sessionToken);
+      }
       router.push("/api-management?source=login");
     } catch {
       setError("登录请求失败，请检查网络后重试");

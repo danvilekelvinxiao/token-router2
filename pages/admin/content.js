@@ -1,6 +1,7 @@
 import Head from "next/head";
 import { useEffect, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
+import { getPublicApiBaseUrl } from "@/lib/public-api";
 
 const TABS = [
   { key: "models", label: "大模型配置" },
@@ -129,7 +130,7 @@ export default function AdminContentPage() {
       memberLevelRequired: "",
       memberDailyFreeLimitTokens: "",
       nonMemberPrompt: "该模型为 FLOWAPI 黑金会员专属模型，开通会员后即可使用。",
-      baseUrl: "https://api.flowapi.fun/v1",
+      baseUrl: getPublicApiBaseUrl(),
       primaryButtonText: "立即接入",
       primaryButtonHref: "",
       secondaryButtonText: "复制 Model ID",

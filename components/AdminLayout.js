@@ -257,23 +257,23 @@ export default function AdminLayout({ currentPath, children }) {
   }
 
   return (
-    <main className="landing-shell" style={{ minHeight: "100vh", paddingTop: 65 }}>
+    <main className="landing-shell admin-shell" style={{ minHeight: "100vh", paddingTop: 65 }}>
       <nav className="landing-nav" style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 120 }}>
         <div className="landing-nav-inner">
           <Link className="landing-logo" href="/" aria-label="FlowAPI">
             <FlowApiBrandText />
           </Link>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--dash-accent)", background: "var(--dash-card-bg)", border: "1px solid var(--dash-border)", padding: "4px 10px", borderRadius: 6 }}>管理员</span>
+            <span className="flow-toolbar-control" style={{ minHeight: 30, padding: "0 10px", fontSize: 12, fontWeight: 700, cursor: "default" }}>管理员</span>
             <ThemeToggle />
             <Link href="/dashboard" style={{ fontSize: 13, fontWeight: 600, color: "var(--dash-sub)", textDecoration: "none" }}>返回控制台 →</Link>
           </div>
         </div>
       </nav>
 
-      <aside style={{ position: "fixed", top: 65, left: 0, bottom: 0, width: 236, background: "var(--dash-card-bg)", borderRight: "1px solid var(--dash-border)", padding: "18px 12px 16px", zIndex: 80, overflowY: "auto" }}>
+      <aside className="admin-shell-sidebar" style={{ position: "fixed", top: 65, left: 0, bottom: 0, width: 236, zIndex: 80, overflowY: "auto" }}>
         {adminMenuGroups.map((group) => (
-          <section key={group.key} style={{ marginBottom: 14 }}>
+          <section key={group.key} className="admin-shell-group" style={{ marginBottom: 14 }}>
             <div style={{ padding: "6px 10px 7px" }}>
               <strong style={{ display: "block", fontSize: 12, fontWeight: 900, color: "var(--dash-text)" }}>{group.label}</strong>
               <span style={{ display: "block", marginTop: 2, fontSize: 10, lineHeight: 1.4, color: "var(--dash-sub)" }}>{group.helper}</span>
@@ -283,7 +283,7 @@ export default function AdminLayout({ currentPath, children }) {
               const paths = [item.href, ...(item.aliases || [])];
               const active = paths.some((path) => currentPath === path || (path !== "/admin" && currentPath.startsWith(path)));
               return (
-                <Link key={item.key} href={item.href} style={{
+                <Link key={item.key} href={item.href} className={`admin-shell-link${active ? " active" : ""}`} style={{
                   display: "flex", alignItems: "center", gap: 10, padding: "9px 10px", borderRadius: 8, marginBottom: 2,
                   color: active ? "var(--dash-accent)" : "var(--dash-sub)", background: active ? "var(--dash-card-hover)" : "transparent",
                   fontWeight: active ? 800 : 600, fontSize: 12, textDecoration: "none", transition: "transform .15s ease, background .15s ease, color .15s ease",
@@ -297,7 +297,7 @@ export default function AdminLayout({ currentPath, children }) {
         ))}
       </aside>
 
-      <div style={{ padding: "24px 28px 32px 268px" }}>
+      <div className="admin-shell-content" style={{ padding: "24px 28px 32px 268px" }}>
         {children}
       </div>
     </main>

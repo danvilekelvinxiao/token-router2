@@ -1,37 +1,15 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import Head from "next/head";
+import Link from "next/link";
 import AdminLayout from "@/components/AdminLayout";
 
-// New API admin pages are proxied via /newapi-admin/* → 127.0.0.1:8080/*
+const NEW_API_ADMIN_URL = String(process.env.NEW_API_ADMIN_URL || "").trim();
+const FLOWAPI_ENABLE_NEWAPI_ADMIN_PROXY = String(process.env.FLOWAPI_ENABLE_NEWAPI_ADMIN_PROXY || "false").trim() === "true";
 
-const NAV_CARDS = [
-  {
-    key: "dashboard",
-    title: "New API 后台",
-    desc: "打开 New API 主管理后台，查看概览与系统状态。",
-    href: "/newapi-admin",
-    icon: "⊡",
-  },
-  {
-    key: "channels",
-    title: "渠道管理",
-    desc: "管理上游模型渠道（DeepSeek 官方、OpenRouter 等），配置 API Key 与模型列表。",
-    href: "/newapi-admin/channel",
-    icon: "⚡",
-  },
-  {
-    key: "tokens",
-    title: "API Key 管理",
-    desc: "查看和管理用户 API Key，调整额度、分组与模型限制。",
-    href: "/newapi-admin/token",
-    icon: "🔑",
-  },
-  {
-    key: "logs",
-    title: "使用日志",
-    desc: "查看所有用户的 API 调用记录、Token 消耗与错误日志。",
-    href: "/newapi-admin/log",
-    icon: "📋",
-  },
+const helperLinks = [
+  { href: "/admin/channels", label: "FlowAPI 渠道管理", desc: "管理主中转站自己的上游渠道与余额。"},
+  { href: "/admin/newapi-passthrough", label: "FlowAPI 直通白名单", desc: "仅用于迁移和调试，不作为默认入口。" },
+  { href: "/admin/logs", label: "FlowAPI 调用日志", desc: "查看主中转站自己的请求与错误日志。" },
 ];
 
 export default function AdminNewApiPage() {
@@ -45,7 +23,7 @@ export default function AdminNewApiPage() {
       const data = await res.json();
       setHealth(data);
     } catch {
-      setHealth({ status: "error", message: "无法连接 New API" });
+      setHealth({ status: "error", message: "无法连接 New API 原生后台" });
     } finally {
       setTesting(false);
     }
@@ -58,134 +36,175 @@ export default function AdminNewApiPage() {
     return () => window.clearTimeout(timer);
   }, []);
 
-  const config = health?.config || {};
-
   return (
-    <AdminLayout currentPath="/admin/new-api">
-      <div className="admin-page-shell">
-        <div className="admin-page-header">
-          <h1>New API 管理</h1>
-          <p className="admin-page-sub">
-            New API 是 FlowAPI 的上游中转核心，渠道配置、上游模型、API Key 和日志属于管理员功能，请谨慎操作。
-          </p>
-        </div>
+    <>
+      <Head><title>New API 原生后台 - FlowAPI Admin</title></Head>
+      <AdminLayout currentPath="/admin/new-api">
+        <main className="admin-raw-admin-page">
+          <header className="admin-raw-admin-card">
+            <span>NEW API</span>
+            <h1>New API 原生后台</h1>
+            <p>当前系统只保留 New API 原生后台的跳转说明。FlowAPI 不接管 New API 的原生配置。</p>
+          </header>
 
-        {/* Action cards — open New API via proxy path */}
-        <div className="admin-stat-grid" style={{ marginBottom: 28, gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}>
-          {NAV_CARDS.map((card) => (
-            <a
-              key={card.key}
-              href={card.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="admin-stat-card"
-              style={{
-                cursor: "pointer",
-                textAlign: "left",
-                border: "1px solid var(--page-card-border)",
-                background: "var(--page-card-bg)",
-                borderRadius: 14,
-                padding: "20px 22px",
-                transition: "box-shadow 0.2s, transform 0.2s",
-                textDecoration: "none",
-                display: "block",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = "0 6px 24px rgba(0,0,0,0.08)";
-                e.currentTarget.style.transform = "translateY(-2px)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = "";
-                e.currentTarget.style.transform = "";
-              }}
-            >
-              <div style={{ fontSize: 28, marginBottom: 8 }}>{card.icon}</div>
-              <strong style={{ display: "block", fontSize: 15, marginBottom: 4, color: "var(--page-heading)" }}>
-                {card.title}
-              </strong>
-              <span style={{ fontSize: 13, color: "var(--page-sub)", lineHeight: 1.5 }}>
-                {card.desc}
-              </span>
-              <span
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 4,
-                  marginTop: 12,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "var(--dash-accent, #6366f1)",
-                }}
-              >
-                打开 →
-              </span>
-            </a>
-          ))}
-        </div>
-
-        {/* Health check */}
-        <div className="admin-section" style={{ marginBottom: 28 }}>
-          <h2 className="admin-section-title">健康检查</h2>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
-            <button className="btn-primary" onClick={testConnection} disabled={testing}>
-              {testing ? "检测中..." : "测试连接"}
-            </button>
-            {health && (
-              <span
-                style={{
-                  fontSize: 14,
-                  fontWeight: 600,
-                  color: health.status === "ok" ? "var(--page-success-text)" : "var(--page-warning-text)",
-                }}
-              >
-                {health.status === "ok" ? "● 在线" : `● ${health.message || "离线"}`}
-                {health.latencyMs != null ? ` (${health.latencyMs}ms)` : ""}
-              </span>
-            )}
-          </div>
-          {health && (
-            <div className="admin-info-block">
-              <pre style={{ fontSize: 13, color: "var(--page-code-text)", background: "var(--page-code-bg)", padding: "12px 16px", borderRadius: 8, overflow: "auto", maxHeight: 200 }}>
-                {JSON.stringify(health, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
-
-        {/* Status overview */}
-        <div className="admin-stat-grid" style={{ marginBottom: 28 }}>
-          <div className="admin-stat-card">
-            <div className="admin-stat-label">运行时 Key</div>
-            <div className="admin-stat-value" style={{ fontSize: 15 }}>
-              {config.hasRuntimeKey ? (
-                <span style={{ color: "var(--page-success-text)" }}>已配置</span>
+          <section className="admin-raw-admin-grid">
+            <article className="admin-raw-admin-card">
+              <h2>打开 New API 原生后台</h2>
+              <p>{NEW_API_ADMIN_URL ? `已配置：${NEW_API_ADMIN_URL}` : "未配置 New API 原生后台地址。"}</p>
+              {NEW_API_ADMIN_URL ? (
+                <a href={NEW_API_ADMIN_URL} target="_blank" rel="noopener noreferrer">打开原生后台</a>
               ) : (
-                <span style={{ color: "var(--page-warning-text)" }}>未配置</span>
+                <div className="admin-raw-admin-empty">
+                  <strong>New API 原生后台未配置</strong>
+                  <p>请先在 `.env` 中设置 `NEW_API_ADMIN_URL=`，再单独部署 New API 的管理网页。</p>
+                </div>
               )}
+            </article>
+
+            <article className="admin-raw-admin-card">
+              <h2>代理模式说明</h2>
+              <p>默认优先打开 New API 自己的后台。只有 `FLOWAPI_ENABLE_NEWAPI_ADMIN_PROXY=true` 时，才会允许代理入口参与。</p>
+              <pre>{`FLOWAPI_ENABLE_NEWAPI_ADMIN_PROXY=${FLOWAPI_ENABLE_NEWAPI_ADMIN_PROXY ? "true" : "false"}`}</pre>
+            </article>
+          </section>
+
+          <section className="admin-raw-admin-card">
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <h2 style={{ marginTop: 0 }}>连接测试</h2>
+                <p style={{ marginBottom: 0 }}>这个测试只检查原生后台是否可达，不会接管配置。</p>
+              </div>
+              <button type="button" onClick={testConnection} disabled={testing}>
+                {testing ? "检测中..." : "测试连接"}
+              </button>
             </div>
-          </div>
-          <div className="admin-stat-card">
-            <div className="admin-stat-label">管理员 Token</div>
-            <div className="admin-stat-value" style={{ fontSize: 15 }}>
-              {config.hasAdminToken ? (
-                <span style={{ color: "var(--page-success-text)" }}>已配置</span>
-              ) : (
-                <span style={{ color: "var(--page-warning-text)" }}>未配置</span>
-              )}
-            </div>
-          </div>
-          <div className="admin-stat-card">
-            <div className="admin-stat-label">默认分组</div>
-            <div className="admin-stat-value" style={{ fontSize: 15 }}>{config.defaultGroup || "default"}</div>
-          </div>
-          <div className="admin-stat-card">
-            <div className="admin-stat-label">默认额度</div>
-            <div className="admin-stat-value" style={{ fontSize: 15 }}>{(config.defaultQuota || 0).toLocaleString()} Token</div>
-          </div>
-        </div>
-      </div>
-    </AdminLayout>
+            {health ? (
+              <pre style={{ marginTop: 12 }}>{JSON.stringify(health, null, 2)}</pre>
+            ) : null}
+          </section>
+
+          <section className="admin-raw-admin-links">
+            {helperLinks.map((item) => (
+              <Link key={item.href} href={item.href}>
+                <strong>{item.label}</strong>
+                <span>{item.desc}</span>
+              </Link>
+            ))}
+          </section>
+
+          {FLOWAPI_ENABLE_NEWAPI_ADMIN_PROXY ? (
+            <section className="admin-raw-admin-card">
+              <h2>可选代理入口</h2>
+              <p>仅在显式开启时可用：<code>/newapi-admin</code>。默认不推荐把它当成主入口。</p>
+            </section>
+          ) : null}
+        </main>
+      </AdminLayout>
+      <style jsx>{`
+        .admin-raw-admin-page {
+          display: grid;
+          gap: 16px;
+          color: var(--dash-text);
+        }
+        .admin-raw-admin-card,
+        .admin-raw-admin-links a {
+          border: 1px solid var(--dash-border);
+          border-radius: 14px;
+          background: var(--dash-card-bg);
+          padding: 18px 20px;
+        }
+        header.admin-raw-admin-card span {
+          color: var(--dash-accent);
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.08em;
+        }
+        header.admin-raw-admin-card h1,
+        .admin-raw-admin-card h2 {
+          margin: 8px 0 0;
+          font-size: 28px;
+          font-weight: 950;
+        }
+        .admin-raw-admin-card p,
+        .admin-raw-admin-empty p,
+        .admin-raw-admin-links span {
+          margin: 8px 0 0;
+          color: var(--dash-sub);
+          line-height: 1.7;
+          font-size: 13px;
+        }
+        .admin-raw-admin-card a,
+        .admin-raw-admin-card button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          margin-top: 14px;
+          padding: 10px 14px;
+          border-radius: 10px;
+          background: linear-gradient(135deg, #6366f1, #8b5cf6);
+          color: #fff;
+          font-weight: 800;
+          text-decoration: none;
+          border: 0;
+          cursor: pointer;
+        }
+        .admin-raw-admin-card button:disabled {
+          opacity: 0.72;
+          cursor: progress;
+        }
+        .admin-raw-admin-empty {
+          margin-top: 12px;
+          padding: 14px;
+          border-radius: 12px;
+          background: rgba(99, 102, 241, 0.08);
+        }
+        .admin-raw-admin-empty strong {
+          display: block;
+          font-size: 14px;
+          font-weight: 900;
+        }
+        .admin-raw-admin-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .admin-raw-admin-links {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .admin-raw-admin-links a {
+          text-decoration: none;
+          color: inherit;
+        }
+        .admin-raw-admin-links strong {
+          display: block;
+          font-size: 15px;
+          font-weight: 900;
+        }
+        pre {
+          margin: 12px 0 0;
+          padding: 12px 14px;
+          border-radius: 12px;
+          background: rgba(2, 6, 23, 0.55);
+          color: #bfdbfe;
+          overflow: auto;
+          white-space: pre-wrap;
+          word-break: break-word;
+        }
+        code {
+          color: #f8fafc;
+          background: rgba(15, 23, 42, 0.8);
+          padding: 2px 6px;
+          border-radius: 6px;
+        }
+        @media (max-width: 900px) {
+          .admin-raw-admin-grid,
+          .admin-raw-admin-links {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+    </>
   );
 }
-
-export const dynamic = "force-dynamic";

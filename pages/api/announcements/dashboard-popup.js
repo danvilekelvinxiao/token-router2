@@ -1,5 +1,5 @@
 import { getDashboardAnnouncementPayload } from "@/lib/announcement-utils";
-import { hasUserSeenAnnouncementVersion } from "@/lib/announcement-read-store";
+import { hasSessionSeenAnnouncementVersion } from "@/lib/announcement-read-store";
 import { getSessionPayload } from "@/lib/session";
 
 export default function handler(req, res) {
@@ -23,7 +23,10 @@ export default function handler(req, res) {
 
   const session = getSessionPayload(req);
   const userId = session?.customerId || "";
-  const seen = userId ? hasUserSeenAnnouncementVersion(userId, payload.announcementVersion) : false;
+  const sessionToken = String(req.headers["x-flowapi-session-token"] || "").trim();
+  const seen = userId && sessionToken
+    ? hasSessionSeenAnnouncementVersion(userId, sessionToken, payload.announcementVersion)
+    : false;
 
   return res.status(200).json({
     success: true,

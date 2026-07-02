@@ -1,5 +1,5 @@
 import Head from "next/head";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import AdminLayout from "@/components/AdminLayout";
 
 const TYPES = ["系统更新", "维护通知", "模型变更", "福利活动", "重要提醒"];
@@ -10,6 +10,7 @@ const initialAnnouncements = [
     id: "ann-dashboard-upgrade",
     title: "FlowAPI 数据面板升级",
     type: "系统更新",
+    summary: "数据面板已升级为 AI Token 资产分析中心。",
     content: "数据面板已升级为 AI Token 资产分析中心，新增模型成本排行、余额预测和缓存命中率。",
     status: "已发布",
     pinned: true,
@@ -20,6 +21,7 @@ const initialAnnouncements = [
     id: "ann-deepseek-online",
     title: "FlowAPI DeepSeek 官方渠道已上线",
     type: "模型变更",
+    summary: "当前已支持 deepseek-chat 和 deepseek-reasoner。",
     content: "当前已支持 deepseek-chat 和 deepseek-reasoner。用户可在 API 管理页创建 API Key 后接入。",
     status: "已发布",
     pinned: false,
@@ -33,6 +35,7 @@ function emptyForm() {
     id: "",
     title: "",
     type: "系统更新",
+    summary: "",
     content: "",
     status: "草稿",
     pinned: false,
@@ -44,38 +47,74 @@ export default function AdminAnnouncementsPage() {
   const [items, setItems] = useState(initialAnnouncements);
   const [form, setForm] = useState(emptyForm());
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/content?type=announcements")
+      .then((res) => res.ok ? res.json() : null)
+      .then((json) => {
+        if (cancelled) return;
+        if (Array.isArray(json?.data) && json.data.length > 0) {
+          setItems(json.data);
+        }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   const sortedItems = useMemo(() => (
     [...items].sort((a, b) => Number(b.pinned) - Number(a.pinned) || new Date(b.publishedAt) - new Date(a.publishedAt))
   ), [items]);
 
-  function saveAnnouncement(event) {
+  async function reloadAnnouncements() {
+    const res = await fetch("/api/admin/content?type=announcements");
+    const json = await res.json().catch(() => null);
+    if (Array.isArray(json?.data)) setItems(json.data);
+  }
+
+  async function saveAnnouncement(event) {
     event.preventDefault();
     if (!form.title.trim() || !form.content.trim()) return;
     const next = {
       ...form,
       id: form.id || `ann-${Date.now()}`,
       title: form.title.trim(),
+      summary: form.summary.trim(),
       content: form.content.trim(),
       updatedAt: new Date().toISOString(),
     };
-    setItems((current) => {
-      const exists = current.some((item) => item.id === next.id);
-      return exists ? current.map((item) => (item.id === next.id ? next : item)) : [next, ...current];
+    const isNew = !items.some((item) => item.id === next.id);
+    const res = await fetch("/api/admin/content?type=announcements", {
+      method: isNew ? "POST" : "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(isNew ? next : { id: next.id, ...next }),
     });
-    setForm(emptyForm());
+    if (res.ok) {
+      await reloadAnnouncements();
+      setForm(emptyForm());
+    }
   }
 
   function editAnnouncement(item) {
     setForm({ ...item, publishedAt: String(item.publishedAt || "").slice(0, 16) });
   }
 
-  function removeAnnouncement(id) {
+  async function removeAnnouncement(id) {
     if (!window.confirm("确定删除这条公告吗？")) return;
-    setItems((current) => current.filter((item) => item.id !== id));
+    await fetch("/api/admin/content?type=announcements", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    await reloadAnnouncements();
   }
 
-  function togglePinned(id) {
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, pinned: !item.pinned, updatedAt: new Date().toISOString() } : item)));
+  async function togglePinned(id) {
+    await fetch("/api/admin/content?type=announcements", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, toggle: "pinned" }),
+    });
+    await reloadAnnouncements();
   }
 
   return (
@@ -94,6 +133,7 @@ export default function AdminAnnouncementsPage() {
           <form className="admin-card admin-announcement-form" onSubmit={saveAnnouncement}>
             <h2>{form.id ? "编辑公告" : "新增公告"}</h2>
             <label>公告标题<input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="例如：FlowAPI 数据面板升级" /></label>
+            <label>公告摘要<input value={form.summary} onChange={(event) => setForm({ ...form, summary: event.target.value })} placeholder="一句话概述，展示在弹窗卡片中" /></label>
             <label>公告内容<textarea value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} rows={6} placeholder="写给普通用户看的中文说明" /></label>
             <div className="admin-form-grid">
               <label>公告类型<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}>{TYPES.map((type) => <option key={type}>{type}</option>)}</select></label>
@@ -116,6 +156,7 @@ export default function AdminAnnouncementsPage() {
                   <b>{item.status}</b>
                 </div>
                 <h3>{item.title}</h3>
+                <p style={{ opacity: 0.75 }}>{item.summary || item.content}</p>
                 <p>{item.content}</p>
                 <time>{new Date(item.publishedAt).toLocaleString("zh-CN", { hour12: false })}</time>
                 <div className="admin-row-actions">

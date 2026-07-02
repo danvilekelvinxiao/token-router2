@@ -99,7 +99,6 @@ export default function AdminBillingRules() {
 
   function handleSecretSave() {
     const s = secret.trim();
-    if (!s) return setMsg("请输入管理密钥");
     sessionStorage.setItem("flowapi_admin_secret", s);
     setMsg("");
     fetchData(s);

@@ -31,10 +31,10 @@ export function calculateWalletStatus({
     return { label: "暂无套餐", tone: "none", actionLabel: "立即充值" };
   }
 
-  if (remaining <= 0) return { label: "额度已用完", tone: "empty", actionLabel: "立即充值" };
+  if (remaining <= 0) return { label: "余额已用完", tone: "empty", actionLabel: "立即充值" };
 
   const ratio = remaining / total;
-  if (ratio >= 0.3) return { label: "额度充足", tone: "healthy", actionLabel: "查看详情" };
+  if (ratio >= 0.3) return { label: "余额充足", tone: "healthy", actionLabel: "查看详情" };
   if (ratio >= 0.1) return { label: "建议关注", tone: "watch", actionLabel: "查看详情" };
   return { label: "建议充值", tone: "low", actionLabel: "立即充值" };
 }

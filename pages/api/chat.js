@@ -10,9 +10,6 @@ export const config = {
 };
 
 const MODEL_MAP = {
-  DeepSeek: "deepseek-chat",
-  "deepseek-chat": "deepseek-chat",
-  "deepseek-reasoner": "deepseek-reasoner",
   Qwen: "qwen/qwen3-32b",
   "qwen/qwen3-32b": "qwen/qwen3-32b",
   "GPT-4o": "gpt-4o-mini",

@@ -74,13 +74,20 @@ async function recentFailures(publicModelId = "") {
       .map((row) => ({
         requestId: row.request_id || "",
         publicModelId: row.public_model_id || "",
+        requestedModel: row.requested_model || "",
+        requestedModelName: row.requested_model_name || "",
         actualModelId: row.actual_model_id || "",
+        upstreamModelName: row.upstream_model_name || "",
         upstreamChannelId: row.upstream_channel_id || "",
         upstreamChannel: row.upstream_channel || "",
         upstreamProvider: row.upstream_provider || "",
+        upstreamUrl: row.upstream_url || "",
+        apiKeyPreview: row.api_key_preview || "",
         attemptIndex: Number(row.attempt_index || 0),
         statusCode: Number(row.status_code || 0),
         errorCode: row.error_code || "",
+        errorKind: row.error_kind || "",
+        paymentRequired: row.payment_required === true,
         errorMessage: row.error_message || "",
         latencyMs: Number(row.latency_ms || 0),
         firstTokenMs: Number(row.first_token_ms || 0),
@@ -89,9 +96,9 @@ async function recentFailures(publicModelId = "") {
       .slice(0, 30);
   }
   const result = await query(
-    `SELECT request_id, public_model_id, actual_model_id, upstream_channel, upstream_provider,
-            upstream_channel_id,
-            attempt_index, status_code, error_code, error_message, latency_ms, first_token_ms, created_at
+    `SELECT request_id, public_model_id, requested_model, requested_model_name, actual_model_id, upstream_model_name,
+            upstream_channel, upstream_provider, upstream_channel_id, upstream_url, api_key_preview,
+            attempt_index, status_code, error_code, error_kind, payment_required, error_message, latency_ms, first_token_ms, created_at
      FROM route_attempts
      WHERE ok = false
        AND ($1 = '' OR public_model_id = $1)
@@ -102,13 +109,20 @@ async function recentFailures(publicModelId = "") {
   return result.rows.map((row) => ({
     requestId: row.request_id,
     publicModelId: row.public_model_id,
+    requestedModel: row.requested_model || "",
+    requestedModelName: row.requested_model_name || "",
     actualModelId: row.actual_model_id,
+    upstreamModelName: row.upstream_model_name || "",
     upstreamChannelId: row.upstream_channel_id,
     upstreamChannel: row.upstream_channel,
     upstreamProvider: row.upstream_provider,
+    upstreamUrl: row.upstream_url || "",
+    apiKeyPreview: row.api_key_preview || "",
     attemptIndex: Number(row.attempt_index || 0),
     statusCode: Number(row.status_code || 0),
     errorCode: row.error_code || "",
+    errorKind: row.error_kind || "",
+    paymentRequired: row.payment_required === true,
     errorMessage: row.error_message || "",
     latencyMs: Number(row.latency_ms || 0),
     firstTokenMs: Number(row.first_token_ms || 0),
@@ -127,6 +141,7 @@ async function performanceStats(matrix = []) {
     routeSwitchCount: 0,
     upstreamFailureRate: 0,
     upstream429Count: 0,
+    upstream402Count: 0,
     fastestByModel: [],
     cheapestByModel: [],
     stableByModel: [],
@@ -155,6 +170,7 @@ async function performanceStats(matrix = []) {
         COALESCE(percentile_cont(0.95) WITHIN GROUP (ORDER BY NULLIF(latency_ms, 0)), 0) AS p95_latency,
         COALESCE(SUM(GREATEST(route_attempts - 1, 0)), 0) AS route_switches,
         COUNT(*) FILTER (WHERE upstream_status = 429) AS upstream_429,
+        COUNT(*) FILTER (WHERE upstream_status = 402) AS upstream_402,
         COUNT(*) FILTER (WHERE status >= 500 OR upstream_status >= 500) AS failures,
         COUNT(*) AS total
       FROM calls
@@ -167,6 +183,7 @@ async function performanceStats(matrix = []) {
     stats.p95LatencyMs = Math.round(Number(row.p95_latency || 0));
     stats.routeSwitchCount = Number(row.route_switches || 0);
     stats.upstream429Count = Number(row.upstream_429 || 0);
+    stats.upstream402Count = Number(row.upstream_402 || 0);
     stats.upstreamFailureRate = Number(row.total || 0) > 0 ? Number((Number(row.failures || 0) / Number(row.total || 1)).toFixed(4)) : 0;
   } catch {
     // Monitoring must not block admin page.

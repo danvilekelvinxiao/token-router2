@@ -10,6 +10,7 @@
  */
 
 import { MODEL_CATALOG, getCatalogModel, getPublicModelRequestId, normalizeModelLookup } from "@/lib/models";
+import { appendRouteCodeToRequestId } from "@/lib/route-code";
 
 const SUPPORTED_MODEL_IDS = new Set(MODEL_CATALOG.map((model) => model.modelId));
 
@@ -198,7 +199,9 @@ export default async function handler(req, res) {
       });
     }
 
-    return res.status(200).json(chatCompletionToResponse(chatBody, chatJson));
+    const response = chatCompletionToResponse(chatBody, chatJson);
+    response.id = appendRouteCodeToRequestId(response.id || `resp_${Date.now().toString(36)}`, String(chatJson?.token_router?.request_id || chatJson?.token_router?.route_code || "").trim().slice(-1));
+    return res.status(200).json(response);
   } catch (error) {
     console.error("[v1/responses]", error);
     return res.status(502).json({

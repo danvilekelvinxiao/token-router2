@@ -2,6 +2,7 @@ import { getContent } from "@/lib/content-cms";
 import { listModelProductsWithConfig } from "@/lib/model-products-server";
 import { listPublishedModels, listModelPricing } from "@/lib/admin-commercial-config";
 import { dedupePublicModelList, sanitizePublicModelForClient } from "@/lib/public-model-provider";
+import { getPublicModelDisplayName, getPublicModelRequestId } from "@/lib/models";
 
 export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
@@ -33,11 +34,13 @@ export default async function handler(req, res) {
       .filter((model) => !existingIds.has(model.modelId))
       .map((model) => {
         const pricing = pricingMap.get(model.modelId);
+        const requestModelId = getPublicModelRequestId(model.requestModelId || model.publicModelId || model.modelId || model.id || "");
         return sanitizePublicModelForClient({
           id: model.modelId,
-          modelId: model.modelId,
-          publicModelId: model.modelId,
-          displayName: model.displayName,
+          modelId: requestModelId,
+          publicModelId: requestModelId,
+          requestModelId,
+          displayName: getPublicModelDisplayName(model.displayName || model.name || requestModelId, model.displayName || model.name || requestModelId),
           provider: model.provider || "FlowAPI",
           providerName: model.provider || "FlowAPI",
           officialReleaseDate: model.officialReleaseDate || "",

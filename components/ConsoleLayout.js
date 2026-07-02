@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
+import ConsoleAnnouncementCenter from "@/components/announcements/console-announcement-center";
 import ThemeToggle from "@/components/ThemeToggle";
 import LanguageSwitcher from "@/components/common/language-switcher";
 
@@ -142,7 +143,7 @@ const iconMap = {
 const menuItems = [
   { key: "dashboard", label: "数据面板", href: "/dashboard", desc: "Token 消耗与资产总览" },
   { key: "key", label: "API 管理", href: "/api-management", desc: "创建和管理 API Key" },
-  { key: "wallet", label: "充值中心", href: "/recharge", desc: "充值 Token" },
+  { key: "wallet", label: "钱包", href: "/wallet", desc: "查看余额、充值申请和流水" },
   { key: "models", label: "模型广场", href: "/models", desc: "查看模型与模型 ID" },
   { key: "image", label: "生成图片", href: "/images", desc: "统一图片生成工作台", badge: "HOT", accent: true },
   { key: "user", label: "个人资料", href: "/profile", desc: "编辑个人资料" },
@@ -265,20 +266,16 @@ function AccountMenu({ customer }) {
     timeoutRef.current = setTimeout(() => setOpen(false), 180);
   }
 
-  function handleLogout() {
+function handleLogout() {
     localStorage.removeItem("flowapi_customer");
+    localStorage.removeItem("flowapi_session_token");
+    document.cookie = "flowapi_session_public=; Path=/; Max-Age=0; SameSite=Lax";
     window.location.href = "/";
   }
 
   return (
     <div style={{ position: "relative" }} onMouseEnter={onEnter} onMouseLeave={onLeave}>
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8,
-        padding: "7px 10px", borderRadius: 999,
-        border: "1px solid var(--console-account-border)",
-        background: "var(--console-account-bg)",
-        cursor: "default",
-      }}>
+      <div className="flow-toolbar-control" style={{ gap: 8, padding: "7px 10px", minWidth: 0, cursor: "default" }}>
         <div style={{
           width: 26, height: 26, borderRadius: "50%",
           background: "var(--flow-brand-gradient)",
@@ -292,21 +289,17 @@ function AccountMenu({ customer }) {
         </span>
       </div>
 
-      <div style={{
-        position: "absolute", top: "calc(100% + 8px)", right: 0,
-        minWidth: 240, opacity: open ? 1 : 0,
-        transform: open ? "translateY(0)" : "translateY(-6px)",
-        pointerEvents: open ? "auto" : "none",
-        transition: "opacity 0.2s ease, transform 0.2s ease",
-        zIndex: 130,
-      }}>
-        <div style={{
-          background: "var(--console-dropdown-bg)",
-          borderRadius: 14,
-          border: "1px solid var(--console-dropdown-border)",
-          boxShadow: "var(--console-dropdown-shadow)",
-          overflow: "hidden",
-        }}>
+      <div
+        className="flow-toolbar-popover"
+        style={{
+          minWidth: 240,
+          opacity: open ? 1 : 0,
+          transform: open ? "translateY(0)" : "translateY(-6px)",
+          pointerEvents: open ? "auto" : "none",
+          zIndex: 130,
+        }}
+      >
+        <div style={{ overflow: "hidden" }}>
           <div style={{
             padding: "14px 16px",
             background: "var(--flow-brand-gradient)",
@@ -328,11 +321,7 @@ function AccountMenu({ customer }) {
                   href={item.href}
                   target={item.external ? "_blank" : undefined}
                   rel={item.external ? "noopener noreferrer" : undefined}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10,
-                    padding: "10px 12px", borderRadius: 8,
-                    textDecoration: "none", color: "var(--console-dropdown-text)",
-                  }}
+                  className="flow-toolbar-popover-item"
                 >
                   <span style={{ color: "var(--console-dropdown-desc)", display: "flex" }}><Icon /></span>
                   <div>
@@ -347,12 +336,8 @@ function AccountMenu({ customer }) {
           <div style={{ borderTop: "1px solid var(--console-dropdown-divider)", padding: "8px" }}>
             <button
               onClick={handleLogout}
-              style={{
-                width: "100%", display: "flex", alignItems: "center", gap: 10,
-                padding: "10px 12px", border: 0, borderRadius: 8,
-                background: "transparent", color: "#ef4444", cursor: "pointer",
-                fontSize: 14, fontWeight: 600,
-              }}
+              className="flow-toolbar-popover-item"
+              style={{ width: "100%", color: "#ef4444" }}
             >
               <IconLogout />
               退出登录
@@ -374,6 +359,7 @@ export default function ConsoleLayout({ customer, currentPath, children, content
           </Link>
           <div className="flow-console-nav-actions">
             <SpaceSwitcher />
+            <ConsoleAnnouncementCenter customerId={customer?.id || ""} />
             <ThemeToggle />
             <LanguageSwitcher />
             <AccountMenu customer={customer} />

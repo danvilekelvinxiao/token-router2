@@ -13,8 +13,8 @@ const features = [
   },
   {
     icon: "🎁",
-    title: "注册即送额度",
-    desc: "新用户注册即可获得体验额度先用起来再决定是否充值。",
+    title: "注册即送 ¥5 体验额度",
+    desc: "新用户注册即可获得 ¥5 体验额度，先用起来再决定是否充值。",
   },
   {
     icon: "⚡",
@@ -23,8 +23,8 @@ const features = [
   },
   {
     icon: "📊",
-    title: "Token 消耗可视化",
-    desc: "每一次调用都会记录 Token、金额、模型和来源。",
+    title: "消费可视化",
+    desc: "每一次调用都会记录余额、金额、模型和来源。",
   },
 ];
 
@@ -75,11 +75,16 @@ export default function HomePage() {
   return (
     <>
       <Head>
-        <title>FlowAPI - AI API Token 充值与统一调用平台</title>
+        <title>AI API Token 企业级多模型统一调用平台</title>
+        <meta property="og:title" content="AI API Token 企业级多模型统一调用平台" />
         <meta
           name="description"
-          content="FlowAPI 提供 AI API Token 充值、统一 Base URL、API Key 管理、模型调用、扣费记录和用量日志。三步接入 Claude、GPT、Gemini、DeepSeek 等 AI 模型。"
+          content="FlowAPI 提供 AI API Token 企业级多模型统一调用、API Key 管理、模型调用、扣费记录和用量日志。三步接入 Claude、GPT、Gemini、DeepSeek 等 AI 模型。"
         />
+        <meta property="og:description" content="FlowAPI 提供 AI API Token 企业级多模型统一调用、API Key 管理、模型调用、扣费记录和用量日志。三步接入 Claude、GPT、Gemini、DeepSeek 等 AI 模型。" />
+        <meta name="twitter:title" content="AI API Token 企业级多模型统一调用平台" />
+        <meta name="twitter:description" content="FlowAPI 提供 AI API Token 企业级多模型统一调用、API Key 管理、模型调用、扣费记录和用量日志。三步接入 Claude、GPT、Gemini、DeepSeek 等 AI 模型。" />
+        <meta name="apple-mobile-web-app-title" content="AI API Token 企业级多模型统一调用平台" />
       </Head>
 
       <main className="landing-shell">
@@ -121,7 +126,7 @@ export default function HomePage() {
 
         {/* ======== 第一部分：Hero ======== */}
         <section className="hero-wrap">
-          <h1 className="hero-title">AI API Token 充值与统一调用平台</h1>
+          <h1 className="hero-title">AI API Token 企业级多模型统一调用平台</h1>
           <p className="hero-subtitle">
             <strong>注册即送 ¥5 体验额度</strong>
             <br />
@@ -160,7 +165,7 @@ export default function HomePage() {
           {/* 数据条 */}
           <div className="hero-stats">
             {[
-              ["¥5", "注册送额度"],
+              ["¥5", "注册赠送"],
               ["3 步", "完成接入"],
               ["多模型", "统一调用"],
               ["1 Key", "统一接入"],
@@ -281,7 +286,7 @@ export default function HomePage() {
 
         {/* ---- Footer ---- */}
         <footer className="landing-footer">
-          FlowAPI · AI API Token 充值与统一调用平台
+          FlowAPI · AI API Token 企业级多模型统一调用平台
         </footer>
       </main>
     </>

@@ -17,7 +17,6 @@ import ActivityHeatmapCard from "@/components/dashboard/activity-heatmap-card";
 import SavingsCard from "@/components/analytics/savings-card";
 import SavingsDetailDrawer from "@/components/analytics/savings-detail-drawer";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
-import DashboardAnnouncementPopup from "@/components/announcements/dashboard-announcement-popup";
 import { getClampedTooltipPosition, getNearestChartIndex } from "@/components/charts/flowapi-chart-interaction";
 import { generateTokenForecast } from "@/lib/analytics/token-forecast";
 import { useLocale } from "@/components/providers/locale-provider";
@@ -29,13 +28,24 @@ import { useSafePolling } from "@/hooks/useSafePolling";
 
 
 const MODEL_FLOW_COLORS = {
-  deepseek: "#3b82f6",
   claude: "#8b5cf6",
   gpt: "#22c55e",
   gemini: "#f59e0b",
   qwen: "#f97316",
   others: "#94a3b8",
 };
+const MODEL_COLOR_PALETTE = [
+  "#2563eb",
+  "#16a34a",
+  "#f97316",
+  "#9333ea",
+  "#dc2626",
+  "#0891b2",
+  "#ca8a04",
+  "#4f46e5",
+  "#db2777",
+  "#059669",
+];
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
@@ -247,7 +257,7 @@ function DualLineChart({ data, unit = "K", height = 320, width = 720, onTooltip,
     futureCosts: Array.isArray(data?.futureCosts) ? data.futureCosts.map(safeChartNumber) : [],
   }), [data]);
   const { pastDates, futureDates, pastValues, futureValues, pastCosts, futureCosts } = chartInput;
-  const primaryModel = data?.primaryModel || "DeepSeek V4 Flash";
+  const primaryModel = data?.primaryModel || "GPT-5.5";
   const allDates = useMemo(() => [...pastDates, ...futureDates], [pastDates, futureDates]);
   const allValues = useMemo(() => [...pastValues, ...futureValues], [pastValues, futureValues]);
   const maxV = Math.max(...allValues, 1);
@@ -915,7 +925,7 @@ function buildDashboardHonorTitles({ isBlackGoldMember, totalUsedTokens, savedAm
 function buildLocalDemoCalls() {
   const models = [
     { model: "gpt-4o-mini", provider: "OpenAI", inputPricePerM: 1.2, outputPricePerM: 4.8, baseTokens: 8200 },
-    { model: "deepseek-chat", provider: "DeepSeek", inputPricePerM: 0.8, outputPricePerM: 2.4, baseTokens: 12600 },
+    { model: "gpt-5.5", provider: "FlowAPI", inputPricePerM: 1.2, outputPricePerM: 4.8, baseTokens: 12600 },
     { model: "claude-3-5-sonnet", provider: "Anthropic", inputPricePerM: 18, outputPricePerM: 90, baseTokens: 5200 },
     { model: "gemini-1.5-pro", provider: "Google", inputPricePerM: 8, outputPricePerM: 24, baseTokens: 6800 },
     { model: "qwen-max", provider: "Qwen", inputPricePerM: 6, outputPricePerM: 18, baseTokens: 7400 },
@@ -1074,13 +1084,19 @@ function getCallStatus(call) {
 
 function getModelColor(model, index = 0) {
   const normalized = String(model || "").toLowerCase();
-  if (normalized.includes("deepseek")) return MODEL_FLOW_COLORS.deepseek;
   if (normalized.includes("claude")) return MODEL_FLOW_COLORS.claude;
   if (normalized.includes("gpt")) return MODEL_FLOW_COLORS.gpt;
   if (normalized.includes("gemini")) return MODEL_FLOW_COLORS.gemini;
   if (normalized.includes("qwen")) return MODEL_FLOW_COLORS.qwen;
-  const fallback = ["#3b82f6", "#8b5cf6", "#22c55e", "#f59e0b", "#f97316", "#94a3b8"];
-  return fallback[index % fallback.length];
+  return MODEL_COLOR_PALETTE[index % MODEL_COLOR_PALETTE.length];
+}
+
+function hashString(value) {
+  return String(value || "").split("").reduce((hash, char) => (((hash << 5) - hash) + char.charCodeAt(0)) >>> 0, 0);
+}
+
+function getStableModelColor(model) {
+  return getModelColor(model, hashString(model));
 }
 
 function isSameDay(a, b) {
@@ -1307,6 +1323,7 @@ function buildDashboardStats(customer, calls) {
   return {
     apiKeyCount: Array.isArray(customer?.apiKeys) ? customer.apiKeys.length : 0,
     activeApiKeyCount: Array.isArray(customer?.apiKeys) ? customer.apiKeys.filter((key) => !key.disabledAt).length : 0,
+    disabledApiKeyCount: Array.isArray(customer?.apiKeys) ? customer.apiKeys.filter((key) => key.disabledAt).length : 0,
     balance: Number(customer?.balance || 0),
     totalCost: sum(calls, "cost"),
     todayCost: sum(todayCalls, "cost"),
@@ -1315,6 +1332,7 @@ function buildDashboardStats(customer, calls) {
     monthTokens: sum(monthCalls, "tokens"),
     todayRequests: todayCalls.length,
     monthRequests: monthCalls.length,
+    failedRequests: calls.filter((call) => getCallStatus(call).key !== "success").length,
     avgLatency,
     cacheHitRate: calls.length ? (cacheHits / calls.length) * 100 : 0,
     cacheStats: {
@@ -1483,6 +1501,31 @@ function buildSimpleMetricDetail({ title, description, badge = "数据面板", r
   };
 }
 
+function formatDashboardApiCredit(value, decimals = 2) {
+  return Number(value || 0).toLocaleString("zh-CN", {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+function formatDashboardTokens(value) {
+  const amount = Number(value || 0);
+  if (amount >= 1000000) return `${(amount / 1000000).toFixed(amount >= 10000000 ? 1 : 2)}M Tokens`;
+  if (amount >= 1000) return `${(amount / 1000).toFixed(amount >= 100000 ? 0 : 1)}K Tokens`;
+  return `${amount.toLocaleString("zh-CN", { maximumFractionDigits: 0 })} Tokens`;
+}
+
+function buildAssetOverviewRows(overview) {
+  return [
+    { label: "当前可用余额", value: <span className="dash3-metric-inline"><span className="dash3-metric-prefix">$</span><span className="dash3-metric-number">{formatDashboardApiCredit(overview.availableApiCredit || overview.balance || 0)}</span><span className="dash3-metric-unit">API</span></span>, note: "当前可用于模型调用的 API 额度。" },
+    { label: "累计充值人民币", value: `¥${Number(overview.totalRechargeCny || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, note: "历史真实充值金额。" },
+    { label: "累计兑换额度", value: <span className="dash3-metric-inline"><span className="dash3-metric-prefix">$</span><span className="dash3-metric-number">{formatDashboardApiCredit(overview.totalConvertedApiCredit || 0)}</span><span className="dash3-metric-unit">API</span></span>, note: "充值兑换得到的 API 额度。" },
+    { label: "累计赠送额度", value: <span className="dash3-metric-inline"><span className="dash3-metric-prefix">$</span><span className="dash3-metric-number">{formatDashboardApiCredit(overview.totalGiftApiCredit || 0)}</span><span className="dash3-metric-unit">API</span></span>, note: "活动、注册或人工赠送的 API 额度。" },
+    { label: "今日到期额度", value: <span className="dash3-metric-inline"><span className="dash3-metric-prefix">$</span><span className="dash3-metric-number">{formatDashboardApiCredit(overview.todayExpiringApiCredit || 0)}</span><span className="dash3-metric-unit">API</span></span>, note: "今日将到期的 API 额度。" },
+    { label: "长期有效额度", value: <span className="dash3-metric-inline"><span className="dash3-metric-prefix">$</span><span className="dash3-metric-number">{formatDashboardApiCredit(overview.longTermApiCredit || 0)}</span><span className="dash3-metric-unit">API</span></span>, note: "长期有效的 API 额度。" },
+  ];
+}
+
 function getFutureDateLabels(days = 7) {
   return Array.from({ length: days }, (_, index) => {
     const date = new Date();
@@ -1577,7 +1620,7 @@ function buildPredictionFromTrend(trendData, metric, balance) {
       futureValues,
       futureCosts: tokenForecast.map((tokens) => Number((Number(tokens || 0) * costPerToken).toFixed(4))),
       unit: metricConfig.unit,
-      primaryModel: "DeepSeek V4 Flash",
+      primaryModel: "GPT-5.5",
       source: "real",
     },
     summary: {
@@ -1596,7 +1639,7 @@ function buildPredictionFromTrend(trendData, metric, balance) {
 }
 
 function buildModelUsage(ranking) {
-  return ranking.slice(0, 5).map((item, index) => ({
+  return ranking.slice(0, 5).map((item) => ({
     model: item.model,
     provider: item.provider || "FlowAPI",
     requests: item.requests,
@@ -2304,11 +2347,18 @@ function AssetDetailMiniChart({ data = [], onTooltip, theme }) {
 
 function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, onTooltip, theme }) {
   const updatedAt = new Date().toLocaleString("zh-CN", { hour12: false });
+  const apiCreditTrend = trendData.map((item) => ({
+    label: item.date,
+    value: Number(item.cost || 0),
+    display: formatDashboardApiCredit(item.cost || 0),
+    tooltip: `${item.date} 消耗 ${formatDashboardApiCredit(item.cost || 0)}，请求 ${item.requests} 次`,
+    color: "#6366f1",
+  }));
   const tokenChart = trendData.map((item) => ({
     label: item.date,
     value: item.tokens,
-    display: `${formatCompactToken(item.tokens)} Token`,
-    tooltip: `${item.date} 消耗 ${formatCompactToken(item.tokens)} Token，金额 ¥${Number(item.cost || 0).toFixed(2)}`,
+    display: formatDashboardTokens(item.tokens),
+    tooltip: `${item.date} 消耗 ${formatDashboardTokens(item.tokens)}，金额 ¥${Number(item.cost || 0).toFixed(2)}`,
     color: "#6366f1",
   }));
   const costChart = trendData.map((item) => ({
@@ -2327,26 +2377,23 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
   }));
   const configs = {
     balance: {
-      title: "当前余额详情",
-      description: "查看当前可用额度、赠送额度和最近 7 天消耗趋势。",
-      rows: [
-        { label: "当前余额", value: `¥${overview.balance.toFixed(2)}`, note: "账户当前可用总额度" },
-        { label: "赠送额度", value: `¥${Number(overview.giftBalance || 0).toFixed(2)}`, note: "今日有效，调用模型时优先使用" },
-        { label: "约可调用", value: `${formatCompactToken(overview.callableTokens)} Token`, note: "按当前平均成本粗略估算" },
+      title: "可用余额详情",
+      description: "查看可用余额、充值来源、赠送来源和有效期分布。",
+      rows: buildAssetOverviewRows(overview).concat([
         { label: "最近更新时间", value: updatedAt },
-      ],
-      chartTitle: "最近 7 天金额消耗",
-      chartData: costChart,
+      ]),
+      chartTitle: "最近 7 天 API 额度消耗",
+      chartData: apiCreditTrend,
       tableTitle: "最近调用记录",
       tableRows: recentCallRows,
-      advice: "建议：赠送额度当天有效，适合优先完成测试调用；正式业务建议保持充值余额充足。",
+      advice: "建议：把到期额度和长期有效额度分开看，方便判断后续补充节奏。",
     },
     today: {
       title: "今日消耗详情",
       description: "查看今天的金额流出、Token 消耗和调用记录。",
       rows: [
-        { label: "本日消耗", value: `￥${overview.todaySpend.toFixed(2)}` },
-        { label: "本日 Token", value: `${formatCompactToken(overview.todayTokens)} Token` },
+        { label: "本日消耗", value: formatDashboardApiCredit(overview.todaySpend) },
+        { label: "本日 Token", value: formatDashboardTokens(overview.todayTokens) },
         { label: "最近调用", value: overview.lastCall?.model || "0" },
         { label: "最近更新时间", value: updatedAt },
       ],
@@ -2360,12 +2407,12 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
       title: "本周消耗详情",
       description: "查看最近 7 天的 Token 使用节奏和成本变化。",
       rows: [
-        { label: "本周消耗", value: `￥${overview.weekSpend.toFixed(2)}` },
-        { label: "本周 Token", value: `${formatCompactToken(overview.weekTokens)} Token` },
-        { label: "日均消耗", value: `￥${(overview.weekSpend / 7).toFixed(2)}` },
+        { label: "本周消耗", value: formatDashboardApiCredit(overview.weekSpend) },
+        { label: "本周 Token", value: formatDashboardTokens(overview.weekTokens) },
+        { label: "日均消耗", value: formatDashboardApiCredit(overview.weekSpend / 7) },
         { label: "最近更新时间", value: updatedAt },
       ],
-      chartTitle: "最近 7 天金额消耗",
+      chartTitle: "最近 7 天 API 额度消耗",
       chartData: costChart,
       tableTitle: "近期调用记录",
       tableRows: recentCallRows,
@@ -2376,8 +2423,8 @@ function buildAssetOverviewDetail(assetKey, { overview, trendData, recentRows, o
       description: "查看最近一次 API 调用的模型、Token 和金额。",
       rows: [
         { label: "模型", value: overview.lastCall?.model || "0" },
-        { label: "消耗 Token", value: overview.lastCall ? `${formatCompactToken(overview.lastCall.tokens)} Token` : "0 Token" },
-        { label: "消耗金额", value: overview.lastCall ? `￥${overview.lastCall.amount.toFixed(4)}` : "￥0.00" },
+        { label: "消耗 Token", value: overview.lastCall ? formatDashboardTokens(overview.lastCall.tokens) : "0 Tokens" },
+        { label: "消耗金额", value: overview.lastCall ? formatDashboardApiCredit(overview.lastCall.amount, 4) : "$0.0000 API" },
         { label: "调用时间", value: overview.lastCall?.time || "0" },
       ],
       chartTitle: "最近 7 天 Token 消耗",
@@ -2451,11 +2498,11 @@ function DashboardExchangeCard({
 function TotalAssetOverviewSection({ data, modelConsumptionChart, onOpenDetail, onOpenModel, titleText = "AI Token 资产总览", subtitleText = "查看你在 FlowAPI 的累计花费、Token 消耗、节省金额和主要使用模型。" }) {
   const hasCalls = data.totalRequests > 0;
   const commonRows = [
-    { label: "总花费", value: hasCalls ? `￥${data.totalSpendCny.toFixed(2)}` : "￥0.00" },
-    { label: "官方价花费", value: data.officialCostCny !== null ? `￥${data.officialCostCny.toFixed(2)}` : "￥0.00" },
-    { label: "FlowAPI 实际花费", value: hasCalls ? `￥${data.actualCostCny.toFixed(2)}` : "￥0.00" },
-    { label: "已节省", value: data.savedAmountCny > 0 ? `￥${data.savedAmountCny.toFixed(2)}` : "￥0.00" },
-    { label: "使用 Token", value: hasCalls ? `${formatCompactToken(data.totalTokens)} Token` : "0 Token" },
+    { label: "总花费", value: hasCalls ? formatDashboardApiCredit(data.totalSpendCny) : "$0.00 API" },
+    { label: "官方价花费", value: data.officialCostCny !== null ? formatDashboardApiCredit(data.officialCostCny) : "$0.00 API" },
+    { label: "FlowAPI 实际花费", value: hasCalls ? formatDashboardApiCredit(data.actualCostCny) : "$0.00 API" },
+    { label: "已节省", value: data.savedAmountCny > 0 ? formatDashboardApiCredit(data.savedAmountCny) : "$0.00 API" },
+    { label: "使用 Token", value: hasCalls ? formatDashboardTokens(data.totalTokens) : "0 Tokens" },
     { label: "总请求数", value: hasCalls ? `${data.totalRequests} 次` : "0 次" },
   ];
   const recentRows = data.recentRows.slice(0, 8).map((row) => ({
@@ -2483,74 +2530,99 @@ function TotalAssetOverviewSection({ data, modelConsumptionChart, onOpenDetail, 
       />
       <div className="dash3-exchange-grid dash3-exchange-grid-top">
         <DashboardExchangeCard
-          label="累计花费"
-          value={hasCalls ? <MetricValueInline prefix="￥" value={<FlashValue value={data.totalSpendCny.toFixed(2)} tick={data.tick} />} /> : "￥0.00"}
-          detail="累计 API 调用消耗金额"
+          label="可用余额"
+          value={hasCalls ? <MetricValueInline value={<FlashValue value={formatDashboardApiCredit(data.availableApiCredit || data.totalSpendCny, 2)} tick={data.tick} />} unit="" /> : "$0.00 API"}
+          detail="用户当前可用于 API 调用的余额"
           chartData={data.actualTrend}
           chartColor="purple"
           empty={!hasCalls}
-          onClick={() => open("总花费详情", data.actualTrend, commonRows, moneyFormatter, "purple")}
+          onClick={() => open("可用余额详情", data.actualTrend, buildAssetOverviewRows(data), moneyFormatter, "purple")}
         />
         <DashboardExchangeCard
-          label="累计 Token"
-          value={hasCalls ? <MetricValueInline value={<FlashValue value={formatCompactToken(data.totalTokens)} tick={data.tick} />} unit="Token" /> : "0 Token"}
-          detail="累计输入 + 输出 Token"
+          label="累计花费"
+          value={hasCalls ? <MetricValueInline value={<FlashValue value={formatDashboardApiCredit(data.totalSpendCny, 2)} tick={data.tick} />} unit="" /> : "$0.00 API"}
+          detail="用户历史调用模型累计消耗的 API 额度"
           chartData={data.tokenTrend}
           chartColor="cyan"
           chartFormatter={tokenFormatter}
           empty={!hasCalls}
-          onClick={() => open("Token 使用详情", data.tokenTrend, commonRows, tokenFormatter, "cyan")}
+          onClick={() => open("累计花费详情", data.actualTrend, commonRows, moneyFormatter, "cyan")}
+        />
+        <DashboardExchangeCard
+          label="总消耗 Token"
+          value={hasCalls ? <MetricValueInline value={<FlashValue value={formatDashboardTokens(data.totalTokens)} tick={data.tick} />} unit="" /> : "0 Tokens"}
+          detail="用户历史所有请求累计消耗的 Token 总数"
+          chartData={data.actualTrend}
+          chartColor="green"
+          chartFormatter={tokenFormatter}
+          empty={!hasCalls}
+          onClick={() => open("Token 使用详情", data.tokenTrend, commonRows, tokenFormatter, "green")}
         />
         <DashboardExchangeCard
           label="累计节省"
-          value={data.savedAmountCny > 0 ? <MetricValueInline prefix="￥" value={<FlashValue value={data.savedAmountCny.toFixed(2)} tick={data.tick} />} /> : "￥0.00"}
-          detail="相比官方价格，FlowAPI 已帮你节省的估算成本"
+          value={data.savedAmountCny > 0 ? <MetricValueInline value={<FlashValue value={formatDashboardApiCredit(data.savedAmountCny, 2)} tick={data.tick} />} unit="" /> : "$0.00 API"}
+          detail="用户通过缓存、优惠或更低渠道累计节省的 API 额度"
           chartData={data.actualTrend}
           chartColor="green"
           empty={data.savedAmountCny <= 0}
           onClick={() => open("累计节省详情", data.actualTrend, commonRows, moneyFormatter, "green")}
         />
-        <DashboardExchangeCard
-          label="总请求数"
-          value={hasCalls ? <MetricValueInline value={<FlashValue value={data.totalRequests} tick={data.tick} />} unit="次" /> : "0 次"}
-          detail="累计模型调用次数"
-          chartData={data.requestTrend}
-          chartType="bar"
-          chartColor="cyan"
-          chartFormatter={countFormatter}
-          empty={!hasCalls}
-          onClick={() => open("请求次数详情", data.requestTrend, commonRows, countFormatter, "cyan")}
-        />
       </div>
-      <div className="dash3-exchange-grid dash3-exchange-grid-bottom">
-        <DashboardExchangeCard
-          label="最常用模型"
-          value={data.mostUsedModel ? (
-            <span className="dash3-model-value-inline">
-              <ModelLogo model={data.mostUsedModel.model} provider={data.mostUsedModel.provider} size={34} />
-              <span>{data.mostUsedModel.model}</span>
-            </span>
-          ) : "0"}
-          detail={data.mostUsedModel ? `${data.mostUsedModel.provider || getModelProviderLabel(data.mostUsedModel.model)} · ${data.mostUsedModel.requests} 次调用` : "0 次"}
-          chartData={data.mostUsedTrend}
-          chartColor="purple"
-          empty={!data.mostUsedModel}
-          onClick={() => data.mostUsedModel ? onOpenModel(data.mostUsedModel) : open("最常用模型详情", [])}
-        />
-        <DashboardExchangeCard
-          label="最耗费模型"
-          value={data.mostExpensiveModel ? (
-            <span className="dash3-model-value-inline">
-              <ModelLogo model={data.mostExpensiveModel.model} provider={data.mostExpensiveModel.provider} size={34} />
-              <span>{data.mostExpensiveModel.model}</span>
-            </span>
-          ) : "0"}
-          detail={data.mostExpensiveModel ? `${data.mostExpensiveModel.provider || getModelProviderLabel(data.mostExpensiveModel.model)} · ￥${data.mostExpensiveModel.spend.toFixed(4)} 累计消耗` : "￥0.00"}
-          chartData={data.mostExpensiveTrend}
-          chartColor="yellow"
-          empty={!data.mostExpensiveModel}
-          onClick={() => data.mostExpensiveModel ? onOpenModel(data.mostExpensiveModel) : open("最耗费模型详情", [])}
-        />
+      <div className="dash3-model-stack">
+        <div className="dash3-exchange-grid dash3-exchange-grid-bottom">
+          <DashboardExchangeCard
+            label="总密钥数"
+            value={<MetricValueInline value={data.totalApiKeys || 0} unit="" />}
+            detail={`启用密钥 ${data.activeApiKeys || 0} 个 · 禁用密钥 ${data.disabledApiKeys || 0} 个`}
+            chartData={data.requestTrend}
+            chartType="bar"
+            chartColor="purple"
+            chartFormatter={countFormatter}
+            empty={!hasCalls}
+            onClick={() => open("密钥统计详情", data.requestTrend, commonRows, countFormatter, "purple")}
+          />
+          <DashboardExchangeCard
+            label="总请求数"
+            value={<MetricValueInline value={data.totalRequests || 0} unit="" />}
+            detail={`成功请求 ${data.successRequests || 0} 次 · 失败请求 ${data.failedRequests || 0} 次`}
+            chartData={data.requestTrend}
+            chartType="bar"
+            chartColor="cyan"
+            chartFormatter={countFormatter}
+            empty={!hasCalls}
+            onClick={() => open("请求次数详情", data.requestTrend, commonRows, countFormatter, "cyan")}
+          />
+        </div>
+        <div className="dash3-exchange-grid dash3-exchange-grid-bottom">
+          <DashboardExchangeCard
+            label="最常用模型"
+            value={data.mostUsedModel ? (
+              <span className="dash3-model-value-inline">
+                <ModelLogo model={data.mostUsedModel.model} provider={data.mostUsedModel.provider} size={34} />
+                <span>{data.mostUsedModel.model}</span>
+              </span>
+            ) : "暂无"}
+            detail={data.mostUsedModel ? `${data.mostUsedModel.provider || getModelProviderLabel(data.mostUsedModel.model)} · ${data.mostUsedModel.requests} 次 · 占比 ${data.mostUsedModel.share || 0}%` : "0 次"}
+            chartData={data.mostUsedTrend}
+            chartColor="purple"
+            empty={!data.mostUsedModel}
+            onClick={() => data.mostUsedModel ? onOpenModel(data.mostUsedModel) : open("最常用模型详情", [])}
+          />
+          <DashboardExchangeCard
+            label="最耗费模型"
+            value={data.mostExpensiveModel ? (
+              <span className="dash3-model-value-inline">
+                <ModelLogo model={data.mostExpensiveModel.model} provider={data.mostExpensiveModel.provider} size={34} />
+                <span>{data.mostExpensiveModel.model}</span>
+              </span>
+            ) : "暂无"}
+            detail={data.mostExpensiveModel ? `${data.mostExpensiveModel.provider || getModelProviderLabel(data.mostExpensiveModel.model)} · ${formatDashboardApiCredit(data.mostExpensiveModel.spend, 4)}` : "$0.00 API"}
+            chartData={data.mostExpensiveTrend}
+            chartColor="yellow"
+            empty={!data.mostExpensiveModel}
+            onClick={() => data.mostExpensiveModel ? onOpenModel(data.mostExpensiveModel) : open("最耗费模型详情", [])}
+          />
+        </div>
         <ModelConsumptionChartCard data={modelConsumptionChart} />
       </div>
     </section>
@@ -3801,9 +3873,6 @@ export default function DashboardPage() {
   const [walletData, setWalletData] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
   const [imageSummary, setImageSummary] = useState(null);
-  const [announcementPopupData, setAnnouncementPopupData] = useState(null);
-  const [announcementPopupOpen, setAnnouncementPopupOpen] = useState(false);
-  const [announcementMarkingSeen, setAnnouncementMarkingSeen] = useState(false);
   const localDemoMode = useSyncExternalStore(subscribeClientSnapshot, getClientLocalDemoMode, () => false);
   const [heatmapYear, setHeatmapYear] = useState(() => new Date().getFullYear());
   const [heatmapMonth, setHeatmapMonth] = useState(() => new Date().getMonth());
@@ -4057,55 +4126,9 @@ export default function DashboardPage() {
       })
       .catch(() => {
         if (!cancelled) setImageSummary(null);
-      });
+    });
     return () => { cancelled = true; };
   }, [customer?.id, localDemoMode]);
-
-  useEffect(() => {
-    if (!customer?.id) return;
-    let cancelled = false;
-    fetch("/api/announcements/dashboard-popup")
-      .then((res) => res.json())
-      .then((data) => {
-        if (cancelled || !data?.success || !data?.announcementVersion || !Array.isArray(data?.announcements) || data.announcements.length === 0) return;
-        setAnnouncementPopupData(data);
-        const localSeenKey = `flowapi_seen_announcement_version:${customer.id}`;
-        const localSeenVersion = typeof window !== "undefined" ? window.localStorage.getItem(localSeenKey) : "";
-        if ((data.shouldShow !== true && data.shouldPopup !== true) || localSeenVersion === data.announcementVersion) return;
-        window.setTimeout(() => {
-          if (!cancelled) setAnnouncementPopupOpen(true);
-        }, 300);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [customer?.id]);
-
-  const handleAnnouncementSeen = useCallback(async () => {
-    if (!announcementPopupData?.announcementVersion) {
-      setAnnouncementPopupOpen(false);
-      return;
-    }
-    const version = announcementPopupData.announcementVersion;
-    const localSeenKey = `flowapi_seen_announcement_version:${customer?.id || "anon"}`;
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(localSeenKey, version);
-      }
-      setAnnouncementMarkingSeen(true);
-      await fetch("/api/announcements/mark-seen", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ announcementVersion: version }),
-      });
-    } catch {
-      // fallback only with local storage
-    } finally {
-      setAnnouncementMarkingSeen(false);
-      setAnnouncementPopupOpen(false);
-    }
-  }, [announcementPopupData, customer?.id]);
 
   /* Computed */
   const rawUser = customer || { name: "用户", email: "", balance: 0, totalSpend: 0, apiKeys: [], calls: [] };
@@ -4147,6 +4170,7 @@ export default function DashboardPage() {
   };
   const weekRequestCount = dashboardAssetCharts.recentCalls.reduce((sum, item) => sum + Number(item.value || 0), 0);
   const modelUsage = buildModelUsage(modelSpend.ranking);
+  const modelColorMap = new Map(modelSpend.ranking.map((item) => [item.model, getStableModelColor(item.model)]));
   // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const heatmapCalendar = useMemo(() => generateMonthCalendar(usage.calls, heatmapYear, heatmapMonth), [usage.calls, heatmapYear, heatmapMonth]);
   const localDemoRankItems = modelSpend.ranking.map((item, index) => ({
@@ -4159,6 +4183,7 @@ export default function DashboardPage() {
     requests: item.requests,
     costCny: item.spend,
     share: item.share,
+    color: getStableModelColor(item.model),
   })).slice(0, 10);
   const effectiveMarketRanks = marketRanks;
   const effectiveFlowApiRanks = localDemoMode
@@ -4218,12 +4243,23 @@ export default function DashboardPage() {
   }, new Map()).entries()).sort((a, b) => b[1] - a[1]);
   const totalOverviewData = {
     tick,
+    availableApiCredit: Number(user.balance || 0),
+    totalRechargeCny: Number(user.totalRechargeCny || 0),
+    totalConvertedApiCredit: Number(user.totalConvertedApiCredit || user.balance || 0),
+    totalGiftApiCredit: Number(user.totalGiftApiCredit || user.temporaryBalance || 0),
+    todayExpiringApiCredit: Number(user.todayExpiringApiCredit || 0),
+    longTermApiCredit: Number(user.longTermApiCredit || 0),
     totalSpendCny: Number(dashboardStats.totalCost || 0),
     officialCostCny: totalOfficialCostCny,
     actualCostCny: totalActualCostCny,
     savedAmountCny: totalSavingsCny,
     totalTokens: usage.calls.reduce((sum, call) => sum + Number(call.tokens || 0), 0),
     totalRequests: usage.calls.length,
+    totalApiKeys: dashboardStats.apiKeyCount,
+    activeApiKeys: dashboardStats.activeApiKeyCount,
+    disabledApiKeys: dashboardStats.disabledApiKeyCount,
+    successRequests: usage.calls.filter((call) => getCallStatus(call).key === "success").length,
+    failedRequests: dashboardStats.failedRequests,
     mostUsedModel,
     mostExpensiveModel,
     actualTrend,
@@ -5707,33 +5743,6 @@ export default function DashboardPage() {
               </div>
             </header>
 
-            <TotalAssetOverviewSection
-              data={totalOverviewData}
-              modelConsumptionChart={walletData?.modelConsumptionChart}
-              onOpenDetail={setDetailModal}
-              onOpenModel={(model) => setDetailModal(buildModelUsageDetail(model, trendData, recentCallRows))}
-              titleText={t("dashboard.totalOverviewTitle", "AI Token 资产总览")}
-              subtitleText={t("dashboard.totalOverviewSubtitle", "查看你在 FlowAPI 的累计花费、Token 消耗、节省金额和主要使用模型。")}
-            />
-
-            <AssetOverviewSection
-              overview={usage.overview}
-              trendData={trendData}
-              calls={usage.calls}
-              tick={tick}
-              savingsData={effectiveSavingsData}
-              savingsLoading={localDemoMode ? false : savingsLoading}
-              savingsPeriod={savingsPeriod}
-              onOpenSavings={() => setSavingsOpen(true)}
-              onOpenAsset={(assetKey) => setDetailModal(buildAssetOverviewDetail(assetKey, {
-                overview: usage.overview,
-                trendData,
-                recentRows: recentCallRows,
-                onTooltip: handleTooltip,
-                theme,
-              }))}
-            />
-
             <WalletProgressCard
               mode="dashboard"
               loading={walletLoading}
@@ -5753,7 +5762,7 @@ export default function DashboardPage() {
               remainingDays={walletData?.plan?.remainingDays}
               progressPercent={Number(walletData?.wallet?.progressPercent || 0)}
               data={walletData}
-              dashboardOverview={usage.overview}
+              dashboardOverview={totalOverviewData}
             />
 
           </section>
@@ -5829,27 +5838,33 @@ export default function DashboardPage() {
               subtitle="参考 FlowAPI 站内真实用量和全球模型热度，辅助你选择模型。"
             />
             <div className="model-leaderboard-stack">
-              <ModelLeaderboard
-                title="FlowAPI 站内模型用量排行"
-                subtitle="基于 FlowAPI 用户真实调用数据，展示本站最常被使用的大模型。"
-                sourceLabel={localDemoMode ? "FlowAPI · 演示数据" : "FlowAPI · 实时数据"}
-                updatedAt={effectiveFlowApiRanks?.updatedAt}
-                items={(effectiveFlowApiRanks?.models || []).slice(0, 10)}
-                loading={localDemoMode ? false : flowApiRanksLoading}
-                emptyText="0"
-                emptyDescription="0 次"
-                period={flowApiRanksPeriod}
-                onPeriodChange={setFlowApiRanksPeriod}
+          <ModelLeaderboard
+            title="FlowAPI 站内模型用量排行"
+            subtitle="基于 FlowAPI 用户真实调用数据，展示本站最常被使用的大模型。"
+            sourceLabel={localDemoMode ? "FlowAPI · 演示数据" : "FlowAPI · 实时数据"}
+            updatedAt={effectiveFlowApiRanks?.updatedAt}
+            items={(effectiveFlowApiRanks?.models || []).slice(0, 10).map((item) => ({
+              ...item,
+              color: getStableModelColor(item.model),
+            }))}
+            loading={localDemoMode ? false : flowApiRanksLoading}
+            emptyText="0"
+            emptyDescription="0 次"
+            period={flowApiRanksPeriod}
+            onPeriodChange={setFlowApiRanksPeriod}
                 showTooltip
               />
 
               <ModelLeaderboard
-                title="全球模型目录参考"
-                subtitle="同步全球模型目录热度，仅供选型参考。"
-                sourceLabel={openRouterSourceLabel}
-                updatedAt={null}
-                items={(effectiveMarketRanks?.models || []).slice(0, 10)}
-                loading={localDemoMode ? false : marketRanksLoading}
+            title="全球模型目录参考"
+            subtitle="同步全球模型目录热度，仅供选型参考。"
+            sourceLabel={openRouterSourceLabel}
+            updatedAt={null}
+            items={(effectiveMarketRanks?.models || []).slice(0, 10).map((item) => ({
+              ...item,
+              color: getStableModelColor(item.model),
+            }))}
+            loading={localDemoMode ? false : marketRanksLoading}
                 emptyText={marketSyncStatus === "failed" ? "全球模型同步失败" : "0"}
                 emptyDescription="0"
               />
@@ -5864,13 +5879,6 @@ export default function DashboardPage() {
         onClose={() => setDetailModal(null)}
         {...(detailModal || {})}
         actions={<Link href="/api-management">去 API 管理</Link>}
-      />
-      <DashboardAnnouncementPopup
-        open={announcementPopupOpen}
-        data={announcementPopupData}
-        onClose={handleAnnouncementSeen}
-        onConfirm={handleAnnouncementSeen}
-        loading={announcementMarkingSeen}
       />
     </>
   );
