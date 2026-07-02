@@ -77,7 +77,7 @@ async function checkRuntimeModels(key) {
 async function checkAdmin() {
   if (!adminToken) {
     console.log("\n=== Admin /api/token/ === 跳过（无 NEW_API_ADMIN_TOKEN）");
-    return { ok: true, skipped: true };
+    return true;
   }
   if (!adminUrl) {
     console.log("\n=== Admin /api/token/ === 跳过（无 NEW_API_ADMIN_URL / NEW_API_BASE_URL）");
@@ -90,6 +90,10 @@ async function checkAdmin() {
     },
   });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 404) {
+    console.log("\n=== GET /api/token/ (Admin) === 404 跳过（当前 New API 版本未暴露该接口）");
+    return true;
+  }
   console.log("\n=== GET /api/token/ (Admin) ===", res.status, data.success ? "OK" : data);
   if (res.status === 404 || res.status === 405) {
     return { ok: true, skipped: true, unsupported: true };
@@ -106,7 +110,7 @@ if (!key) {
 let ok = true;
 let runtimeOk = false;
 try {
-  runtimeOk = await checkRuntimeModels(key);
+  runtimeOk = await checkRuntimeModels(relayKey || adminToken);
   ok = runtimeOk && ok;
   if (adminToken) {
     const adminCheck = await checkAdmin();
@@ -121,7 +125,7 @@ try {
 }
 
 if (!runtimeOk && adminToken && relayKey !== adminToken) {
-  console.log("\n提示: 仅检测到 NEW_API_ADMIN_TOKEN，未检测到可用于运行时的 NEW_API_KEY。");
+  console.log("\n提示: 仅检测到 NEW_API_ADMIN_TOKEN，未检测到单独的 NEW_API_KEY，已用管理员 Token 兜底校验。");
 }
 
 console.log(ok ? "\n✓ New API 运行时配置可用" : "\n✗ New API 运行时未通过，请检查 URL / runtime key / 渠道");

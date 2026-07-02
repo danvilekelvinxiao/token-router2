@@ -14,7 +14,9 @@ function normalizeTarget(target) {
 
 function getUpstreamConfig() {
   const newApiBase = process.env.NEW_API_BASE_URL;
-  const newApiKey = process.env.NEW_API_KEY;
+  const newApiKey = process.env.NEW_API_KEY || process.env.NEW_API_ADMIN_TOKEN;
+  const openAiBase = process.env.OPENAI_API_BASE_URL || process.env.OFFICIAL_OPENAI_API_BASE_URL;
+  const openAiKey = process.env.OPENAI_API_KEY || process.env.OFFICIAL_OPENAI_API_KEY;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
 
   if (newApiBase && newApiKey) {
