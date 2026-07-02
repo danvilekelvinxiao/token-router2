@@ -56,6 +56,7 @@ function getRuntimeToken() {
     process.env.NEW_API_KEY_ALL_MODELS,
     process.env[`NEW_API_KEY_${defaultGroup}`],
     process.env[`NEW_API_${defaultGroup}_KEY`],
+    process.env.NEW_API_ADMIN_TOKEN,
   ];
   return candidates.map((value) => String(value || "").trim()).find(Boolean) || "";
 }
@@ -63,8 +64,8 @@ function getRuntimeToken() {
 async function apiFetch(
   path: string,
   options: RequestInit = {},
-): Promise<{ ok: boolean; data: any }> {
-  if (!NEW_API_ADMIN_TOKEN) return { ok: false, data: null };
+): Promise<{ ok: boolean; status: number; data: any }> {
+  if (!NEW_API_ADMIN_TOKEN) return { ok: false, status: 0, data: null };
   const retryAttempts = Math.max(1, Number(process.env.NEW_API_ADMIN_RETRY_ATTEMPTS || 5));
   const retryDelayMs = Math.max(100, Number(process.env.NEW_API_ADMIN_RETRY_DELAY_MS || 500));
   const url = `${NEW_API_BASE_URL}${path}`;
@@ -84,19 +85,19 @@ async function apiFetch(
           await new Promise((resolve) => setTimeout(resolve, delay));
           continue;
         }
-        return { ok: false, data: body };
+        return { ok: false, status: res.status, data: body };
       }
-      return { ok: true, data: body?.data ?? body };
+      return { ok: true, status: res.status, data: body?.data ?? body };
     } catch {
       if (attempt < retryAttempts) {
         await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
         continue;
       }
-      return { ok: false, data: null };
+      return { ok: false, status: 0, data: null };
     }
   }
 
-  return { ok: false, data: null };
+  return { ok: false, status: 0, data: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -403,7 +404,7 @@ export async function checkNewApiHealth(): Promise<NewApiHealth> {
 
     if (NEW_API_ADMIN_TOKEN) {
       const verify = await apiFetch("/api/token/");
-      _adminValid = verify.ok;
+      _adminValid = verify.ok || verify.status === 404;
     } else {
       _adminValid = null;
     }

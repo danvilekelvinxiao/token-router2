@@ -719,9 +719,13 @@ function getNewApiGroupToken(group = "") {
   return "";
 }
 
+function getNewApiRuntimeToken(group = "") {
+  return getNewApiGroupToken(group) || String(process.env.NEW_API_KEY || process.env.NEW_API_ADMIN_TOKEN || "").trim();
+}
+
 function getNewApiAuthorizationToken({ modelProduct } = {}) {
   const executionGroup = modelProduct?.executionGroup || modelProduct?.group || process.env.NEW_API_DEFAULT_GROUP || "default";
-  const serverToken = getNewApiGroupToken(executionGroup) || String(process.env.NEW_API_KEY || "").trim();
+  const serverToken = getNewApiRuntimeToken(executionGroup);
   if (serverToken) return serverToken;
   return "";
 }

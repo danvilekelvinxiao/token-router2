@@ -15,6 +15,7 @@ const NEW_API_PROXY_TARGET =
 const NEW_API_RUNTIME_KEY =
   process.env.NEW_API_KEY ||
   process.env.NEW_API_KEY_ALL_MODELS ||
+  process.env.NEW_API_ADMIN_TOKEN ||
   "";
 
 export default async function handler(req, res) {
