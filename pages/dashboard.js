@@ -14,6 +14,7 @@ import ModelLeaderboard from "@/components/dashboard/model-leaderboard";
 import ModelConsumptionChartCard from "@/components/dashboard/model-consumption-chart-card";
 import TokenMarketPanel from "@/components/dashboard/token-market-panel";
 import ActivityHeatmapCard from "@/components/dashboard/activity-heatmap-card";
+import { buildActivityHeatmapCalendar } from "@/components/dashboard/activity-heatmap-utils";
 import SavingsCard from "@/components/analytics/savings-card";
 import SavingsDetailDrawer from "@/components/analytics/savings-detail-drawer";
 import WalletProgressCard from "@/components/wallet/wallet-progress-card";
@@ -49,6 +50,99 @@ const MODEL_COLOR_PALETTE = [
 
 const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
 
+const WELCOME_MEMBERSHIP_META = {
+  gold: { className: "member-gold" },
+  diamond: { className: "member-diamond" },
+  platinum: { className: "member-platinum" },
+  standard: { className: "member-standard" },
+};
+
+function subscribeMinuteSnapshot(callback) {
+  if (typeof window === "undefined") return () => {};
+  const now = new Date();
+  const msUntilNextMinute = Math.max(1000, (60 - now.getSeconds()) * 1000 - now.getMilliseconds());
+  let intervalId = null;
+  const timeoutId = window.setTimeout(() => {
+    callback();
+    intervalId = window.setInterval(callback, 60000);
+  }, msUntilNextMinute);
+  return () => {
+    window.clearTimeout(timeoutId);
+    if (intervalId) window.clearInterval(intervalId);
+  };
+}
+
+function normalizeWelcomeMembership(value) {
+  const next = String(value || "standard").toLowerCase();
+  if (next === "black_gold" || next === "gold") return "gold";
+  if (next === "diamond" || next === "platinum" || next === "standard") return next;
+  return "standard";
+}
+
+function resolveWelcomeTitle(profile = {}) {
+  const list = Array.isArray(profile?.titles)
+    ? profile.titles
+    : Array.isArray(profile?.displayBadges)
+      ? profile.displayBadges
+      : [];
+  const first = list.find((item) => String(item?.title || item?.name || "").trim());
+  return String(profile?.title || first?.title || first?.name || "").trim();
+}
+
+function getThemeLabel(theme, resolvedTheme) {
+  if (theme === "system") return "系统";
+  return (resolvedTheme || theme) === "dark" ? "深夜" : "浅色";
+}
+
+function DashboardWelcomeCard({ profile, theme, themeChoice, onToggleTheme }) {
+  const greeting = useSyncExternalStore(subscribeMinuteSnapshot, getClientGreeting, () => "你好");
+  const membershipKey = normalizeWelcomeMembership(profile?.membership);
+  const membershipClassName = WELCOME_MEMBERSHIP_META[membershipKey]?.className || WELCOME_MEMBERSHIP_META.standard.className;
+  const title = resolveWelcomeTitle(profile);
+  const themeLabel = getThemeLabel(themeChoice, theme);
+  const username = profile?.username || "用户";
+
+  return (
+    <section className="dash3-welcome-card" data-membership={membershipKey}>
+      <span className="dash3-welcome-grid" aria-hidden="true" />
+      <span className="dash3-welcome-sweep" aria-hidden="true" />
+      <span className="dash3-welcome-orb dash3-welcome-orb-left" aria-hidden="true" />
+      <span className="dash3-welcome-orb dash3-welcome-orb-right" aria-hidden="true" />
+      <div className="dash3-welcome-card-inner">
+        <button
+          type="button"
+          className="dash3-welcome-theme-button"
+          onClick={onToggleTheme}
+          aria-label={`切换到${theme === "dark" ? "浅色" : "深夜"}`}
+        >
+          <span>{themeLabel}</span>
+          <i aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</i>
+        </button>
+
+        <div className="dash3-welcome-copy">
+          <div className="dash3-welcome-greeting-row">
+            <span className="dash3-welcome-greeting">{greeting}</span>
+            <span className="dash3-welcome-divider" aria-hidden="true">|</span>
+            <span className={`dash3-welcome-username ${membershipClassName}`}>{username}</span>
+          </div>
+
+          <p className="dash3-welcome-tagline">
+            AI Token 在流动，<span className="dash3-welcome-brand">FlowAPI</span> 在守护
+          </p>
+
+          <p className="dash3-welcome-description">统一接入全球先进模型 · Token 消耗可视化 · 企业级稳定性</p>
+
+          {title ? (
+            <div className="dash3-welcome-title-row">
+              <span className="dash3-welcome-title-pill">🏅 {title}</span>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const subscribeClientSnapshot = (callback) => {
   if (typeof window === "undefined") return () => {};
   const id = window.setTimeout(callback, 0);
@@ -70,56 +164,8 @@ function getClientGreeting() {
   return "晚上好";
 }
 
-function generateMonthCalendar(calls, year, month) {
-  const byDate = new Map();
-  calls.forEach((call) => {
-    const rawDate = call.createdAt ? new Date(call.createdAt) : null;
-    if (!rawDate || Number.isNaN(rawDate.getTime())) return;
-    const date = rawDate.toISOString().slice(0, 10);
-    const current = byDate.get(date) || { requests: 0, tokens: 0, spend: 0 };
-    current.requests += 1;
-    current.tokens += Number(call.tokens || 0);
-    current.spend += Number(call.cost || 0);
-    byDate.set(date, current);
-  });
-
-  const maxTokens = Math.max(...Array.from(byDate.values()).map((item) => item.tokens), 0);
-
-  // Build calendar grid: 6 rows x 7 columns (Mon-Sun)
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const daysInMonth = lastDay.getDate();
-  // getDay: 0=Sun, 1=Mon... adjust so Mon=0
-  const startDow = firstDay.getDay();
-  const startCol = startDow === 0 ? 6 : startDow - 1; // Mon=0
-
-  const weeks = [];
-  let dayNum = 1;
-  for (let row = 0; row < 6; row++) {
-    const week = [];
-    for (let col = 0; col < 7; col++) {
-      if ((row === 0 && col < startCol) || dayNum > daysInMonth) {
-        week.push(null);
-      } else {
-        const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-        const day = byDate.get(dateStr) || { requests: 0, tokens: 0, spend: 0 };
-        const level = day.tokens > 0 && maxTokens > 0 ? Math.max(1, Math.ceil((day.tokens / maxTokens) * 4)) : 0;
-        week.push({
-          date: dateStr,
-          day: dayNum,
-          level,
-          requests: day.requests,
-          tokens: day.tokens,
-          spend: Number(day.spend.toFixed(4)),
-        });
-        dayNum++;
-      }
-    }
-    weeks.push(week);
-    if (dayNum > daysInMonth) break;
-  }
-
-  return { weeks, label: `${year}年${month + 1}月`, maxTokens };
+function generateMonthCalendar(calls, year, month, recharges = []) {
+  return buildActivityHeatmapCalendar(calls, recharges, year, month);
 }
 
 /* ===================================================================
@@ -2827,6 +2873,125 @@ function AssetOverviewSection({ overview, trendData, calls, tick, onOpenAsset, s
   );
 }
 
+function ApiUsageProgressSection({ walletData, overview, todayData, weekData, totalData, trendData, onOpenDetail }) {
+  const usageChannels = [
+    {
+      key: "today",
+      label: "今日 API 使用",
+      value: Number(todayData?.todaySpendCny || 0),
+      total: Number(overview?.totalQuotaCny || walletData?.wallet?.totalQuotaCny || 0) || Math.max(1, Number(overview?.balance || 0) + Number(todayData?.todaySpendCny || 0)),
+      hint: `${formatTokens(todayData?.todayTokens || 0)} · ${todayData?.todayRequests || 0} 次`,
+      detail: "查看本日调用进度和消耗分布",
+      chart: todayData?.todaySpendTrend || [],
+      color: "cyan",
+    },
+    {
+      key: "week",
+      label: "本周 API 使用",
+      value: Number(weekData?.weekSpendCny || 0),
+      total: Math.max(1, Number(weekData?.weekSpendCny || 0) + Number(weekData?.weekSavedCny || 0)),
+      hint: `${formatTokens(weekData?.weekTokens || 0)} · ${weekData?.weekRequests || 0} 次`,
+      detail: "查看本周成本和节省进度",
+      chart: weekData?.weekSpendTrend || [],
+      color: "purple",
+    },
+    {
+      key: "total",
+      label: "累计 API 使用",
+      value: Number(totalData?.actualCostCny || totalData?.totalSpendCny || 0),
+      total: Math.max(1, Number(totalData?.actualCostCny || totalData?.totalSpendCny || 0) + Number(totalData?.savedAmountCny || 0)),
+      hint: `${formatTokens(totalData?.totalTokens || 0)} · ${totalData?.totalRequests || 0} 次`,
+      detail: "查看累计花费和节省总进度",
+      chart: totalData?.actualTrend || trendData || [],
+      color: "green",
+    },
+  ];
+
+  const apiProgressItems = [
+    {
+      label: "充值余额进度",
+      value: Number(walletData?.wallet?.usedQuotaCny || 0),
+      total: Math.max(1, Number(walletData?.wallet?.totalQuotaCny || 0)),
+      hint: `${formatCurrency(walletData?.wallet?.remainingQuotaCny ?? walletData?.wallet?.balanceCny ?? 0)} 可用`,
+      detail: "充值余额的当前使用比例",
+      chart: walletData?.wallet?.progressPercent != null ? [{ label: "余额", value: Number(walletData.wallet.progressPercent || 0) }] : [],
+      color: "blue",
+    },
+    {
+      label: "套餐额度进度",
+      value: Number(walletData?.token?.usedTokens || 0),
+      total: Math.max(1, Number(walletData?.token?.totalTokens || 0)),
+      hint: `${formatTokens(walletData?.token?.remainingTokens || 0)} 剩余额度`,
+      detail: "套餐 Token 的使用比例",
+      chart: [],
+      color: "orange",
+    },
+    {
+      label: "今日到期额度",
+      value: Number(totalData?.todayExpiringApiCredit || 0),
+      total: Math.max(1, Number(totalData?.availableApiCredit || 0)),
+      hint: `剩余 ${formatCurrency(totalData?.todayExpiringApiCredit || 0)}`,
+      detail: "今日会到期的赠送额度比例",
+      chart: [],
+      color: "purple",
+    },
+  ];
+
+  const renderBar = (item) => {
+    const ratio = Math.max(0, Math.min(100, (Number(item.value || 0) / Number(item.total || 1)) * 100));
+    return (
+      <button type="button" className="dash3-api-progress-item" key={item.label} onClick={() => onOpenDetail?.(item.label, item.chart || [], moneyFormatter, item.color)}>
+        <div className="dash3-api-progress-item-head">
+          <span>{item.label}</span>
+          <strong>{ratio.toFixed(0)}%</strong>
+        </div>
+        <div className="dash3-api-progress-track" aria-hidden="true">
+          <i style={{ width: `${ratio}%` }} />
+        </div>
+        <div className="dash3-api-progress-meta">
+          <span>{item.hint}</span>
+          <span>{item.detail}</span>
+        </div>
+      </button>
+    );
+  };
+
+  return (
+    <section className="dash3-section dash3-api-usage-section">
+      <SectionTitle
+        title="API 使用进度"
+        subtitle="查看今日、本周和累计的调用进度，套餐或充值配置变化后会自动同步。"
+        right={<span className="dash3-live-status"><i />Live 状态</span>}
+      />
+      <div className="dash3-api-usage-shell">
+        <div className="dash3-api-usage-main">
+          {usageChannels.map((item) => {
+            const ratio = Math.max(0, Math.min(100, (Number(item.value || 0) / Number(item.total || 1)) * 100));
+            return (
+              <button type="button" key={item.key} className="dash3-api-usage-card" onClick={() => onOpenDetail?.(item.label, item.chart || [], moneyFormatter, item.color)}>
+                <div className="dash3-api-usage-card-head">
+                  <span>{item.label}</span>
+                  <strong>{ratio.toFixed(1)}%</strong>
+                </div>
+                <div className="dash3-api-usage-track" aria-hidden="true">
+                  <i style={{ width: `${ratio}%` }} />
+                </div>
+                <div className="dash3-api-usage-card-foot">
+                  <span>{item.hint}</span>
+                  <span>{item.detail}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div className="dash3-api-usage-side">
+          {apiProgressItems.map((item) => renderBar(item))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function ModelSpendFlowChart({ data, metric, onTooltip, theme }) {
   const [activeIndex, setActiveIndex] = useState(null);
   const svgRef = useRef(null);
@@ -3851,7 +4016,7 @@ function ImageCapabilitySection({ data }) {
 
 export default function DashboardPage() {
   const { t } = useLocale();
-  const { resolvedTheme: theme } = useTheme();
+  const { theme: themeChoice, setTheme, resolvedTheme: theme } = useTheme();
   const [customer, setCustomer] = useState(null);
   const [tick, setTick] = useState(0);
   const [tooltip, setTooltip] = useState(null);
@@ -3873,10 +4038,11 @@ export default function DashboardPage() {
   const [walletData, setWalletData] = useState(null);
   const [walletLoading, setWalletLoading] = useState(true);
   const [imageSummary, setImageSummary] = useState(null);
+  const [userTitles, setUserTitles] = useState(null);
+  const [welcomeProfileOverride, setWelcomeProfileOverride] = useState(null);
   const localDemoMode = useSyncExternalStore(subscribeClientSnapshot, getClientLocalDemoMode, () => false);
   const [heatmapYear, setHeatmapYear] = useState(() => new Date().getFullYear());
   const [heatmapMonth, setHeatmapMonth] = useState(() => new Date().getMonth());
-  const greeting = useSyncExternalStore(subscribeClientSnapshot, getClientGreeting, () => "你好");
   const tooltipFrameRef = useRef(null);
   const pendingTooltipRef = useRef(null);
 
@@ -3988,7 +4154,11 @@ export default function DashboardPage() {
     let cancelled = false;
     fetch("/api/user/titles", { cache: "no-store" })
       .then((res) => res.ok ? res.json() : null)
-      .then(() => { if (!cancelled) setTick((value) => value + 1); })
+      .then((data) => {
+        if (cancelled) return;
+        setUserTitles(data);
+        setTick((value) => value + 1);
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [customer?.id]);
@@ -4135,6 +4305,19 @@ export default function DashboardPage() {
   const user = localDemoMode ? buildLocalDemoCustomer(rawUser) : rawUser;
   const effectiveSavingsData = localDemoMode ? buildLocalDemoSavings(user.calls || []) : savingsData;
   const userName = user.name || "用户";
+  const membershipLevel = String(walletData?.membership?.level || user.membership?.level || user.membership?.status || "standard").toLowerCase();
+  const membership = membershipLevel === "black_gold" ? "gold" : ["gold", "diamond", "platinum", "standard"].includes(membershipLevel) ? membershipLevel : "standard";
+  const userProfile = {
+    username: userName,
+    membership,
+    title: resolveWelcomeTitle(userTitles),
+  };
+  const activeWelcomeProfile = {
+    ...userProfile,
+    ...welcomeProfileOverride,
+    membership: normalizeWelcomeMembership(welcomeProfileOverride?.membership || userProfile.membership),
+    title: String(welcomeProfileOverride?.title ?? userProfile.title ?? "").trim(),
+  };
   const baseBalance = Number(user.balance) || 0;
   const usage = buildDashboardUsage(user);
   const modelSpend = buildModelSpendData(usage.calls);
@@ -4171,8 +4354,12 @@ export default function DashboardPage() {
   const weekRequestCount = dashboardAssetCharts.recentCalls.reduce((sum, item) => sum + Number(item.value || 0), 0);
   const modelUsage = buildModelUsage(modelSpend.ranking);
   const modelColorMap = new Map(modelSpend.ranking.map((item) => [item.model, getStableModelColor(item.model)]));
-  // eslint-disable-next-line react-hooks/preserve-manual-memoization
-  const heatmapCalendar = useMemo(() => generateMonthCalendar(usage.calls, heatmapYear, heatmapMonth), [usage.calls, heatmapYear, heatmapMonth]);
+  const heatmapCalendar = generateMonthCalendar(
+    usage.calls,
+    heatmapYear,
+    heatmapMonth,
+    walletData?.recentRecharges?.length ? walletData.recentRecharges : (walletData?.balanceLogs || []),
+  );
   const localDemoRankItems = modelSpend.ranking.map((item, index) => ({
     rank: index + 1,
     model: item.model,
@@ -4315,6 +4502,25 @@ export default function DashboardPage() {
     background: "var(--dash-bg)",
     minHeight: "100vh",
   };
+  const handleToggleTheme = useCallback(() => {
+    const currentResolved = theme || themeChoice || "light";
+    setTheme(currentResolved === "dark" ? "light" : "dark");
+  }, [setTheme, theme, themeChoice]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    window.setUserProfile = ({ username, membership: nextMembership, title } = {}) => {
+      setWelcomeProfileOverride((current) => ({
+        ...current,
+        ...(username !== undefined ? { username } : {}),
+        ...(nextMembership !== undefined ? { membership: normalizeWelcomeMembership(nextMembership) } : {}),
+        ...(title !== undefined ? { title } : {}),
+      }));
+    };
+    return () => {
+      if (window.setUserProfile) delete window.setUserProfile;
+    };
+  }, []);
 
   return (
     <>
@@ -4356,7 +4562,7 @@ export default function DashboardPage() {
           min-width: 0 !important;
         }
 
-        .dashboard-part1 .dash3-header > div:first-child,
+        .dashboard-part1 .dash3-welcome-card,
         .dashboard-part1 .dash3-header-center,
         .dashboard-part1-heatmap .activity-heatmap-card {
           min-height: 242px !important;
@@ -4368,12 +4574,301 @@ export default function DashboardPage() {
           box-shadow: var(--card-shadow-light, 0 12px 40px rgba(15, 23, 42, 0.06)) !important;
         }
 
-        .dashboard-part1 .dash3-header > div:first-child {
+        .dashboard-part1 .dash3-welcome-card {
+          position: relative !important;
           display: grid !important;
           align-content: center !important;
           justify-content: stretch !important;
           gap: 16px !important;
           padding: 26px !important;
+          overflow: hidden !important;
+        }
+
+        .dashboard-part1 .dash3-welcome-card::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(140deg, rgba(255,255,255,0.12), transparent 42%, rgba(255,255,255,0.08));
+          opacity: 0.55;
+          pointer-events: none;
+        }
+
+        .dashboard-part1 .dash3-welcome-card::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background-image: radial-gradient(circle at 1px 1px, rgba(125, 139, 255, 0.12) 1px, transparent 1.2px);
+          background-size: 16px 16px;
+          mask-image: radial-gradient(circle at 50% 30%, rgba(0,0,0,0.78), transparent 84%);
+          opacity: 0.24;
+          pointer-events: none;
+        }
+
+        .dashboard-part1 .dash3-welcome-card:hover {
+          transform: translateY(-2px);
+          box-shadow: var(--card-shadow-light, 0 16px 42px rgba(15, 23, 42, 0.12));
+        }
+
+        .dashboard-part1 .dash3-welcome-card-inner {
+          position: relative;
+          z-index: 1;
+          display: grid;
+          gap: 16px;
+        }
+
+        .dashboard-part1 .dash3-welcome-grid,
+        .dashboard-part1 .dash3-welcome-sweep,
+        .dashboard-part1 .dash3-welcome-orb {
+          position: absolute;
+          pointer-events: none;
+        }
+
+        .dashboard-part1 .dash3-welcome-grid {
+          inset: 0;
+          background-image: linear-gradient(rgba(125, 139, 255, 0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(125, 139, 255, 0.06) 1px, transparent 1px);
+          background-size: 38px 38px;
+          opacity: 0.22;
+          mask-image: radial-gradient(circle at 40% 20%, rgba(0,0,0,0.72), transparent 80%);
+        }
+
+        .dashboard-part1 .dash3-welcome-sweep {
+          inset: -35% -20%;
+          background: conic-gradient(from 180deg at 50% 50%, transparent 0deg, rgba(96, 165, 250, 0.12) 42deg, rgba(34, 211, 238, 0.18) 78deg, rgba(168, 85, 247, 0.14) 110deg, transparent 156deg);
+          opacity: 0;
+          animation: dash3SweepTurn 12s linear infinite;
+          mix-blend-mode: screen;
+        }
+
+        .dashboard-part1 .dash3-welcome-card:hover .dash3-welcome-sweep {
+          opacity: 1;
+        }
+
+        .dashboard-part1 .dash3-welcome-orb {
+          width: 88px;
+          height: 88px;
+          border-radius: 999px;
+          filter: blur(10px);
+          opacity: 0.8;
+          animation-duration: 4.8s;
+          animation-iteration-count: infinite;
+          animation-timing-function: ease-in-out;
+        }
+
+        .dashboard-part1 .dash3-welcome-orb-left {
+          left: -18px;
+          bottom: -10px;
+          background: radial-gradient(circle, rgba(34, 211, 238, 0.42), transparent 70%);
+          animation-name: dash3OrbFloatLeft;
+        }
+
+        .dashboard-part1 .dash3-welcome-orb-right {
+          right: -10px;
+          top: -16px;
+          background: radial-gradient(circle, rgba(168, 85, 247, 0.42), transparent 70%);
+          animation-name: dash3OrbFloatRight;
+          animation-delay: -1.4s;
+        }
+
+        .dashboard-part1 .dash3-welcome-theme-button {
+          position: absolute;
+          top: 18px;
+          right: 18px;
+          z-index: 2;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          min-width: 82px;
+          height: 36px;
+          padding: 0 14px;
+          border: 1px solid var(--card-border-light, rgba(15, 23, 42, 0.08));
+          border-radius: 999px;
+          background: rgba(255, 255, 255, 0.18);
+          color: var(--dash-sub);
+          font-size: 12px;
+          font-weight: 800;
+          white-space: nowrap;
+          backdrop-filter: blur(16px);
+          box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+        }
+
+        .dashboard-part1 .dash3-welcome-theme-button i {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 20px;
+          height: 20px;
+          border-radius: 999px;
+          background: rgba(99, 102, 241, 0.12);
+          font-style: normal;
+          flex: 0 0 auto;
+        }
+
+        .dashboard-part1 .dash3-welcome-copy {
+          display: grid;
+          gap: 12px;
+          min-width: 0;
+          padding-right: 112px;
+        }
+
+        .dashboard-part1 .dash3-welcome-greeting-row {
+          display: flex;
+          flex-wrap: nowrap;
+          align-items: baseline;
+          gap: 10px;
+          min-width: 0;
+          white-space: nowrap;
+        }
+
+        .dashboard-part1 .dash3-welcome-greeting {
+          color: var(--dash-readable-number, var(--dash-text));
+          font-size: clamp(28px, 2.2vw, 34px);
+          font-weight: 950;
+          line-height: 1.04;
+          white-space: nowrap;
+          flex: 0 0 auto;
+        }
+
+        .dashboard-part1 .dash3-welcome-divider {
+          color: var(--dash-sub);
+          font-size: clamp(22px, 1.8vw, 28px);
+          font-weight: 500;
+          line-height: 1;
+          white-space: nowrap;
+          flex: 0 0 auto;
+        }
+
+        .dashboard-part1 .dash3-welcome-username {
+          position: relative;
+          display: inline-block;
+          min-width: 0;
+          color: var(--dash-readable-number, var(--dash-text));
+          font-size: clamp(28px, 2.2vw, 34px);
+          font-weight: 960;
+          line-height: 1.04;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          padding-bottom: 4px;
+        }
+
+        .dashboard-part1 .dash3-welcome-username::after {
+          content: "";
+          position: absolute;
+          left: 0;
+          bottom: 1px;
+          width: 100%;
+          height: 2px;
+          background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.92), rgba(34, 211, 238, 0.92), rgba(168, 85, 247, 0.92), transparent);
+          transform: scaleX(0.18);
+          transform-origin: left center;
+          opacity: 0.0;
+          transition: transform 180ms ease, opacity 180ms ease;
+        }
+
+        .dashboard-part1 .dash3-welcome-username:hover::after {
+          transform: scaleX(1);
+          opacity: 1;
+        }
+
+        .dashboard-part1 .member-gold {
+          background: linear-gradient(90deg, #f8d98a, #f6b84f, #fff1bf, #f4c55f, #ffd57e);
+          background-size: 240% 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          filter: drop-shadow(0 0 10px rgba(245, 181, 74, 0.35)) drop-shadow(0 0 22px rgba(245, 181, 74, 0.14));
+          animation: dash3GoldFlow 6s linear infinite;
+        }
+
+        .dashboard-part1 .member-gold::after {
+          background: linear-gradient(90deg, transparent, rgba(245, 181, 74, 0.95), rgba(255, 236, 176, 0.95), transparent);
+        }
+
+        .dashboard-part1 .member-diamond {
+          background: linear-gradient(90deg, #7dd3fc, #8b5cf6, #38bdf8, #a78bfa);
+          background-size: 220% 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          text-shadow: 0 0 12px rgba(125, 211, 252, 0.25), 0 0 18px rgba(139, 92, 246, 0.18);
+          filter: drop-shadow(0 0 10px rgba(125, 211, 252, 0.35));
+          animation: dash3DiamondPulse 4.8s ease-in-out infinite, dash3DiamondFlow 7s linear infinite;
+        }
+
+        .dashboard-part1 .member-diamond::after {
+          background: linear-gradient(90deg, transparent, rgba(124, 58, 237, 0.95), rgba(96, 165, 250, 0.95), transparent);
+        }
+
+        .dashboard-part1 .member-platinum {
+          background: linear-gradient(90deg, #f8fafc, #d6d9df, #ffffff, #cbd5e1, #f8fafc);
+          background-size: 200% 100%;
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          text-shadow: 0 0 10px rgba(255,255,255,0.16);
+          filter: drop-shadow(0 0 8px rgba(148, 163, 184, 0.22));
+          animation: dash3PlatinumSheen 8s linear infinite;
+        }
+
+        .dashboard-part1 .member-platinum::after {
+          background: linear-gradient(90deg, transparent, rgba(226, 232, 240, 0.95), rgba(148, 163, 184, 0.92), transparent);
+        }
+
+        .dashboard-part1 .member-standard {
+          color: var(--dash-readable-number, var(--dash-text));
+          text-shadow: 0 0 12px rgba(250, 204, 21, 0.08);
+        }
+
+        .dashboard-part1 .dash3-welcome-tagline {
+          margin: 0;
+          min-width: 0;
+          color: var(--dash-sub);
+          font-size: clamp(15px, 1.2vw, 17px);
+          font-weight: 720;
+          line-height: 1.35;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .dashboard-part1 .dash3-welcome-brand {
+          background: linear-gradient(90deg, #38bdf8, #8b5cf6, #22c55e);
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          font-weight: 900;
+        }
+
+        .dashboard-part1 .dash3-welcome-description {
+          margin: 0;
+          min-width: 0;
+          color: var(--dash-sub);
+          font-size: clamp(13px, 1vw, 14px);
+          line-height: 1.55;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .dashboard-part1 .dash3-welcome-title-row {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .dashboard-part1 .dash3-welcome-title-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 12px;
+          border: 1px solid rgba(168, 85, 247, 0.16);
+          border-radius: 999px;
+          background: rgba(139, 92, 246, 0.14);
+          color: #8b5cf6;
+          font-size: 12px;
+          font-weight: 850;
+          backdrop-filter: blur(16px);
         }
 
         .dashboard-part1 .dash3-header h1 {
@@ -4396,10 +4891,43 @@ export default function DashboardPage() {
         }
 
         .dashboard-part1 .dash3-header-center {
+          position: relative !important;
           display: grid !important;
           align-content: center !important;
           gap: 14px !important;
           padding: 22px !important;
+          overflow: hidden !important;
+          border: 1px solid rgba(168, 85, 247, 0.08) !important;
+          background:
+            radial-gradient(circle at 14% 0%, rgba(168, 85, 247, 0.12), transparent 32%),
+            radial-gradient(circle at 90% 0%, rgba(56, 189, 248, 0.09), transparent 28%),
+            linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03)) !important;
+        }
+
+        .dashboard-part1 .dash3-header-center::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background-image: radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.12) 1px, transparent 1.2px);
+          background-size: 18px 18px;
+          mask-image: radial-gradient(circle at 50% 26%, rgba(0,0,0,0.85), transparent 82%);
+          opacity: 0.18;
+          pointer-events: none;
+        }
+
+        .dashboard-part1 .dash3-header-center::after {
+          content: "";
+          position: absolute;
+          inset: -28% -18%;
+          background: conic-gradient(from 180deg at 50% 50%, transparent 0deg, rgba(96, 165, 250, 0.10) 44deg, rgba(34, 211, 238, 0.14) 82deg, rgba(168, 85, 247, 0.12) 118deg, transparent 166deg);
+          opacity: 0;
+          mix-blend-mode: screen;
+          animation: dash3RewardSweep 14s linear infinite;
+          pointer-events: none;
+        }
+
+        .dashboard-part1 .dash3-header-center:hover::after {
+          opacity: 1;
         }
 
         .dashboard-part1 .dash3-companion-title {
@@ -4412,6 +4940,10 @@ export default function DashboardPage() {
           font-size: 15px !important;
           font-weight: 850 !important;
           line-height: 1.2 !important;
+        }
+
+        .dashboard-part1 .dash3-companion-title .flowapi-brand-text {
+          filter: drop-shadow(0 0 10px rgba(168, 85, 247, 0.18));
         }
 
         .dashboard-part1 .dash3-companion-days {
@@ -4435,23 +4967,84 @@ export default function DashboardPage() {
         }
 
         .dashboard-part1 .dash3-login-reward {
+          position: relative !important;
+          overflow: hidden !important;
+          padding: 14px !important;
+          border: 1px solid rgba(148, 163, 184, 0.08) !important;
+          border-radius: 18px !important;
+          background: rgba(255, 255, 255, 0.18) !important;
+          backdrop-filter: blur(16px) !important;
           gap: 10px !important;
           margin-top: 2px !important;
         }
 
+        .dashboard-part1 .dash3-login-reward::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.10), transparent);
+          transform: translateX(-120%);
+          animation: dash3RewardShimmer 3.8s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        .dashboard-part1 .dash3-login-reward > * {
+          position: relative;
+          z-index: 1;
+        }
+
         .dashboard-part1 .dash3-login-reward-track {
-          height: 10px !important;
-          background: rgba(15, 23, 42, 0.08) !important;
+          height: 12px !important;
+          padding: 2px !important;
+          border: 1px solid rgba(148, 163, 184, 0.10) !important;
+          border-radius: 999px !important;
+          background: rgba(255, 255, 255, 0.32) !important;
+          box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05) !important;
+          overflow: hidden !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-track i {
+          position: relative !important;
+          display: block !important;
+          height: 100% !important;
+          border-radius: inherit !important;
+          background: linear-gradient(90deg, rgba(168, 85, 247, 0.95), rgba(59, 130, 246, 0.96), rgba(34, 211, 238, 0.95)) !important;
+          box-shadow: 0 0 18px rgba(99, 102, 241, 0.18) !important;
+          overflow: hidden !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-track i::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.55) 45%, transparent 70%);
+          transform: translateX(-140%);
+          animation: dash3TrackShimmer 3.6s linear infinite;
         }
 
         .dashboard-part1 .dash3-login-reward-tiers {
           gap: 8px !important;
+          margin-top: 2px !important;
         }
 
         .dashboard-part1 .dash3-login-reward-tiers span {
-          min-height: 32px !important;
-          padding: 0 10px !important;
-          background: rgba(99, 102, 241, 0.08) !important;
+          min-height: 34px !important;
+          padding: 0 12px !important;
+          border: 1px solid rgba(148, 163, 184, 0.10) !important;
+          border-radius: 999px !important;
+          background: rgba(255, 255, 255, 0.26) !important;
+          backdrop-filter: blur(14px) !important;
+          box-shadow: 0 6px 18px rgba(15, 23, 42, 0.05) !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-tiers span.active {
+          border-color: rgba(59, 130, 246, 0.18) !important;
+          background: rgba(59, 130, 246, 0.08) !important;
+          color: #2563eb !important;
+        }
+
+        .dashboard-part1 .dash3-login-reward-tiers span b {
+          font-weight: 900 !important;
         }
 
         .dashboard-part1-heatmap {
@@ -4475,6 +5068,127 @@ export default function DashboardPage() {
           align-items: flex-start !important;
           justify-content: space-between !important;
           gap: 10px !important;
+        }
+
+        .dashboard-part1 .dash3-api-usage-section {
+          display: grid !important;
+          gap: 14px !important;
+        }
+
+        .dashboard-part1 .dash3-api-usage-shell {
+          display: grid !important;
+          grid-template-columns: minmax(0, 1.5fr) minmax(300px, 0.95fr) !important;
+          gap: 14px !important;
+          min-width: 0 !important;
+        }
+
+        .dashboard-part1 .dash3-api-usage-main,
+        .dashboard-part1 .dash3-api-usage-side {
+          display: grid !important;
+          gap: 12px !important;
+          min-width: 0 !important;
+        }
+
+        .dashboard-part1 .dash3-api-usage-card,
+        .dashboard-part1 .dash3-api-progress-item {
+          position: relative !important;
+          display: grid !important;
+          gap: 10px !important;
+          padding: 18px !important;
+          border: 1px solid rgba(148, 163, 184, 0.10) !important;
+          border-radius: 22px !important;
+          background:
+            radial-gradient(circle at 14% 0%, rgba(168, 85, 247, 0.10), transparent 28%),
+            radial-gradient(circle at 92% 4%, rgba(34, 211, 238, 0.08), transparent 26%),
+            rgba(255, 255, 255, 0.32) !important;
+          backdrop-filter: blur(16px) !important;
+          box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05) !important;
+          overflow: hidden !important;
+          text-align: left !important;
+        }
+
+        .dashboard-part1 .dash3-api-usage-card::after,
+        .dashboard-part1 .dash3-api-progress-item::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.12) 45%, transparent 72%);
+          transform: translateX(-120%);
+          animation: dash3TrackShimmer 4.4s linear infinite;
+          pointer-events: none;
+        }
+
+        .dashboard-part1 .dash3-api-usage-card:hover,
+        .dashboard-part1 .dash3-api-progress-item:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08), 0 0 22px rgba(99, 102, 241, 0.06) !important;
+        }
+
+        .dashboard-part1 .dash3-api-usage-card-head,
+        .dashboard-part1 .dash3-api-progress-item-head {
+          display: flex !important;
+          align-items: baseline !important;
+          justify-content: space-between !important;
+          gap: 10px !important;
+          color: var(--dash-text) !important;
+        }
+
+        .dashboard-part1 .dash3-api-usage-card-head span,
+        .dashboard-part1 .dash3-api-progress-item-head span {
+          font-size: 15px !important;
+          font-weight: 850 !important;
+        }
+
+        .dashboard-part1 .dash3-api-usage-card-head strong,
+        .dashboard-part1 .dash3-api-progress-item-head strong {
+          color: var(--dash-readable-number, var(--dash-text)) !important;
+          font-size: 18px !important;
+          font-weight: 950 !important;
+        }
+
+        .dashboard-part1 .dash3-api-usage-track,
+        .dashboard-part1 .dash3-api-progress-track {
+          height: 12px !important;
+          padding: 2px !important;
+          border: 1px solid rgba(148, 163, 184, 0.10) !important;
+          border-radius: 999px !important;
+          background: rgba(255, 255, 255, 0.30) !important;
+          box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+          overflow: hidden !important;
+        }
+
+        .dashboard-part1 .dash3-api-usage-track i,
+        .dashboard-part1 .dash3-api-progress-track i {
+          display: block !important;
+          height: 100% !important;
+          border-radius: inherit !important;
+          background: linear-gradient(90deg, rgba(168, 85, 247, 0.92), rgba(59, 130, 246, 0.96), rgba(34, 211, 238, 0.96)) !important;
+          box-shadow: 0 0 18px rgba(99, 102, 241, 0.16) !important;
+          position: relative !important;
+          overflow: hidden !important;
+        }
+
+        .dashboard-part1 .dash3-api-usage-track i::after,
+        .dashboard-part1 .dash3-api-progress-track i::after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(110deg, transparent 0%, rgba(255,255,255,0.55) 45%, transparent 70%);
+          transform: translateX(-140%);
+          animation: dash3TrackShimmer 3.8s linear infinite;
+        }
+
+        .dashboard-part1 .dash3-api-usage-card-foot,
+        .dashboard-part1 .dash3-api-progress-meta {
+          display: grid !important;
+          gap: 3px !important;
+          color: var(--dash-sub) !important;
+          font-size: 12px !important;
+          line-height: 1.45 !important;
+        }
+
+        .dashboard-part1 .dash3-api-progress-item {
+          padding: 16px !important;
         }
 
         .dashboard-part1-heatmap .activity-heatmap-head span {
@@ -4740,6 +5454,57 @@ export default function DashboardPage() {
             radial-gradient(circle at 88% 0%, rgba(99, 102, 241, 0.08), transparent 30%),
             var(--page-card-bg, rgba(255, 255, 255, 0.86)) !important;
           box-shadow: var(--card-shadow-light, 0 12px 40px rgba(15, 23, 42, 0.06)) !important;
+        }
+
+        @keyframes dash3SweepTurn {
+          0% { transform: rotate(0deg) scale(1); }
+          100% { transform: rotate(360deg) scale(1); }
+        }
+
+        @keyframes dash3OrbFloatLeft {
+          0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.72; }
+          50% { transform: translate3d(0, -10px, 0) scale(1.08); opacity: 0.94; }
+        }
+
+        @keyframes dash3OrbFloatRight {
+          0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.7; }
+          50% { transform: translate3d(0, 10px, 0) scale(1.1); opacity: 0.96; }
+        }
+
+        @keyframes dash3GoldFlow {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+
+        @keyframes dash3DiamondPulse {
+          0%, 100% { filter: drop-shadow(0 0 8px rgba(125, 211, 252, 0.3)) drop-shadow(0 0 18px rgba(139, 92, 246, 0.16)); }
+          50% { filter: drop-shadow(0 0 16px rgba(125, 211, 252, 0.46)) drop-shadow(0 0 28px rgba(139, 92, 246, 0.28)); }
+        }
+
+        @keyframes dash3DiamondFlow {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+
+        @keyframes dash3PlatinumSheen {
+          0% { background-position: 0% 50%; }
+          100% { background-position: 200% 50%; }
+        }
+
+        @keyframes dash3RewardSweep {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+
+        @keyframes dash3RewardShimmer {
+          0% { transform: translateX(-140%); }
+          45% { transform: translateX(140%); }
+          100% { transform: translateX(140%); }
+        }
+
+        @keyframes dash3TrackShimmer {
+          0% { transform: translateX(-140%); }
+          100% { transform: translateX(140%); }
         }
 
         .dash3-shell .dash3-forecast-metrics article {
@@ -5354,25 +6119,27 @@ export default function DashboardPage() {
         }
 
         .activity-heatmap-cell {
+          position: relative;
           display: grid;
           width: 42px;
           height: 42px;
           aspect-ratio: 1;
           place-items: center;
-          border: 1px solid rgba(148, 163, 184, 0.16);
-          border-radius: 10px;
+          border: 1px solid rgba(148, 163, 184, 0.14);
+          border-radius: 12px;
           background: rgba(148, 163, 184, 0.08);
           color: var(--dash-sub);
           font-size: 12px;
           font-weight: 850;
           cursor: pointer;
-          transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+          transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
         }
 
         .activity-heatmap-cell:hover,
         .activity-heatmap-cell:focus-visible {
           transform: translateY(-1px);
-          box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.45), 0 8px 18px rgba(99, 102, 241, 0.12);
+          border-color: rgba(99, 102, 241, 0.28);
+          box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.34), 0 12px 22px rgba(99, 102, 241, 0.14);
           outline: none;
         }
 
@@ -5381,23 +6148,48 @@ export default function DashboardPage() {
           opacity: 0.22;
         }
 
-        .activity-heatmap-cell.level-1 { background: rgba(34, 197, 94, 0.16); color: #86efac; }
-        .activity-heatmap-cell.level-2 { background: rgba(34, 197, 94, 0.28); color: #bbf7d0; }
-        .activity-heatmap-cell.level-3 { background: rgba(16, 185, 129, 0.42); color: #ecfdf5; }
-        .activity-heatmap-cell.level-4 { background: rgba(45, 212, 191, 0.58); color: #042f2e; }
+        .activity-heatmap-cell.is-today::after {
+          content: "";
+          position: absolute;
+          inset: -4px;
+          border-radius: 16px;
+          border: 1px solid rgba(99, 102, 241, 0.42);
+          box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.34), 0 0 22px rgba(99, 102, 241, 0.24);
+          animation: activityHeatPulse 1.9s ease-in-out infinite;
+          pointer-events: none;
+        }
+
+        .activity-heatmap-cell.level-0 { background: rgba(148, 163, 184, 0.08); color: rgba(100, 116, 139, 0.92); }
+        .activity-heatmap-cell.level-1 { background: rgba(134, 239, 172, 0.36); color: #14532d; }
+        .activity-heatmap-cell.level-2 { background: rgba(74, 222, 128, 0.42); color: #14532d; }
+        .activity-heatmap-cell.level-3 { background: rgba(34, 197, 94, 0.46); color: #ecfdf5; }
+        .activity-heatmap-cell.level-4 { background: linear-gradient(135deg, rgba(34, 197, 94, 0.78), rgba(37, 99, 235, 0.84)); color: #f8fafc; }
+
+        @keyframes activityHeatPulse {
+          0%, 100% {
+            transform: scale(0.98);
+            box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.28), 0 0 24px rgba(99, 102, 241, 0.16);
+            opacity: 0.92;
+          }
+          50% {
+            transform: scale(1.04);
+            box-shadow: 0 0 0 7px rgba(99, 102, 241, 0), 0 0 36px rgba(99, 102, 241, 0.3);
+            opacity: 1;
+          }
+        }
 
         .activity-heatmap-tooltip {
           position: fixed;
           z-index: 1600;
           display: grid;
-          gap: 4px;
-          min-width: 150px;
-          padding: 10px 12px;
-          border: 1px solid var(--dash-border);
+          gap: 8px;
+          min-width: 208px;
+          padding: 12px 14px;
+          border: 1px solid rgba(148, 163, 184, 0.24);
           border-radius: 12px;
-          background: var(--dash-card-bg);
-          color: var(--dash-text);
-          box-shadow: 0 18px 42px rgba(15, 23, 42, 0.24);
+          background: rgba(255, 255, 255, 0.96);
+          color: #0f172a;
+          box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
           pointer-events: none;
           transform: translate3d(var(--tooltip-x, 0px), var(--tooltip-y, 0px), 0);
           transition: opacity 0.14s ease, transform 0.12s ease;
@@ -5405,14 +6197,24 @@ export default function DashboardPage() {
         }
 
         .activity-heatmap-tooltip strong {
+          color: #94a3b8;
           font-size: 13px;
-          font-weight: 950;
+          font-weight: 900;
         }
 
         .activity-heatmap-tooltip span {
-          color: var(--dash-sub);
-          font-size: 12px;
+          color: #334155;
+          font-size: 14px;
           font-weight: 800;
+          line-height: 1.45;
+        }
+
+        .activity-heatmap-tooltip .is-recharge {
+          color: #16a34a;
+        }
+
+        .activity-heatmap-tooltip .is-cost {
+          color: #ea580c;
         }
 
         .activity-heatmap-legend {
@@ -5432,10 +6234,11 @@ export default function DashboardPage() {
           background: rgba(148, 163, 184, 0.08);
         }
 
-        .activity-heatmap-legend .level-1 { background: rgba(34, 197, 94, 0.16); }
-        .activity-heatmap-legend .level-2 { background: rgba(34, 197, 94, 0.28); }
-        .activity-heatmap-legend .level-3 { background: rgba(16, 185, 129, 0.42); }
-        .activity-heatmap-legend .level-4 { background: rgba(45, 212, 191, 0.58); }
+        .activity-heatmap-legend .level-0 { background: rgba(148, 163, 184, 0.12); }
+        .activity-heatmap-legend .level-1 { background: rgba(134, 239, 172, 0.36); }
+        .activity-heatmap-legend .level-2 { background: rgba(74, 222, 128, 0.42); }
+        .activity-heatmap-legend .level-3 { background: rgba(34, 197, 94, 0.46); }
+        .activity-heatmap-legend .level-4 { background: linear-gradient(135deg, rgba(34, 197, 94, 0.78), rgba(37, 99, 235, 0.84)); }
 
         .activity-heatmap-empty {
           display: grid;
@@ -5460,75 +6263,374 @@ export default function DashboardPage() {
           line-height: 1.7;
         }
 
-        .activity-day-drawer-layer {
+        .activity-detail-modal-layer {
           position: fixed;
           inset: 0;
           z-index: 1500;
+          display: grid;
+          place-items: center;
+          padding: 20px;
+          background: rgba(2, 6, 23, 0.56);
+          backdrop-filter: blur(16px);
+        }
+
+        .activity-detail-modal {
+          width: min(960px, calc(100vw - 32px));
+          max-height: calc(100vh - 36px);
+          display: grid;
+          grid-template-rows: auto auto minmax(0, 1fr);
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          border-radius: 28px;
+          background: color-mix(in srgb, var(--dash-bg) 94%, white 6%);
+          color: var(--dash-text);
+          box-shadow: 0 32px 90px rgba(2, 6, 23, 0.34);
+          overflow: hidden;
+        }
+
+        .activity-detail-modal-header {
           display: flex;
-          justify-content: flex-end;
-          background: rgba(2, 6, 23, 0.52);
-          backdrop-filter: blur(10px);
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 18px;
+          padding: 28px 30px 18px;
+          border-bottom: 1px solid rgba(148, 163, 184, 0.14);
         }
 
-        .activity-day-drawer {
-          width: min(420px, 100vw);
-          height: 100%;
-          padding: 26px;
-          border-left: 1px solid var(--dash-border);
-          background: var(--dash-bg);
-          color: var(--dash-text);
-          box-shadow: -24px 0 80px rgba(2, 6, 23, 0.28);
+        .activity-detail-modal-header > div {
+          display: grid;
+          gap: 8px;
         }
 
-        .activity-day-drawer > button {
-          float: right;
-          min-height: 34px;
-          padding: 0 12px;
-          border: 1px solid var(--dash-border);
-          border-radius: 10px;
-          background: var(--dash-card-bg);
-          color: var(--dash-text);
-          font-family: inherit;
-          font-weight: 850;
-        }
-
-        .activity-day-drawer > span {
+        .activity-detail-modal-header > div > span {
           color: var(--dash-accent);
           font-size: 12px;
           font-weight: 950;
-          letter-spacing: 0.08em;
+          letter-spacing: 0.12em;
         }
 
-        .activity-day-drawer h3 {
-          margin: 8px 0 18px;
+        .activity-detail-modal-header h3 {
+          margin: 0;
+          font-size: 30px;
+          font-weight: 950;
+          line-height: 1.14;
+        }
+
+        .activity-detail-modal-header p {
+          margin: 0;
+          color: var(--dash-sub);
+          line-height: 1.65;
+        }
+
+        .activity-detail-modal-header > button {
+          display: grid;
+          place-items: center;
+          width: 42px;
+          height: 42px;
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          border-radius: 999px;
+          background: var(--dash-card-bg);
+          color: var(--dash-text);
+          font-size: 26px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: transform 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .activity-detail-modal-header > button:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 10px 22px rgba(99, 102, 241, 0.12);
+        }
+
+        .activity-detail-range-switcher {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          padding: 18px 30px 0;
+          flex-wrap: wrap;
+        }
+
+        .activity-detail-range-switcher button {
+          min-height: 40px;
+          padding: 0 18px;
+          border: 1px solid rgba(148, 163, 184, 0.18);
+          border-radius: 999px;
+          background: rgba(148, 163, 184, 0.08);
+          color: var(--dash-sub);
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 850;
+          cursor: pointer;
+          transition: all 0.18s ease;
+        }
+
+        .activity-detail-range-switcher button.is-active {
+          border-color: rgba(99, 102, 241, 0.28);
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(37, 99, 235, 0.16));
+          color: var(--dash-text);
+          box-shadow: 0 10px 26px rgba(99, 102, 241, 0.14);
+        }
+
+        .activity-detail-modal-body {
+          display: grid;
+          gap: 18px;
+          padding: 22px 30px 30px;
+          overflow-y: auto;
+        }
+
+        .activity-detail-section {
+          display: grid;
+          gap: 18px;
+          padding: 22px;
+          border: 1px solid rgba(148, 163, 184, 0.14);
+          border-radius: 22px;
+          background: color-mix(in srgb, var(--dash-card-bg) 92%, white 8%);
+        }
+
+        .activity-detail-section-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+
+        .activity-detail-section-head h4 {
+          margin: 0;
+          font-size: 18px;
+          font-weight: 900;
+        }
+
+        .activity-detail-section-head span {
+          color: var(--dash-sub);
+          font-size: 13px;
+          font-weight: 800;
+        }
+
+        .activity-detail-overview-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 14px;
+        }
+
+        .activity-detail-overview-card {
+          display: grid;
+          gap: 10px;
+          padding: 18px 18px 16px;
+          border-radius: 18px;
+          background: #f8fafc;
+          border: 1px solid rgba(226, 232, 240, 0.92);
+        }
+
+        .activity-detail-overview-card span {
+          color: #64748b;
+          font-size: 13px;
+          font-weight: 800;
+        }
+
+        .activity-detail-overview-card strong {
           font-size: 28px;
           font-weight: 950;
+          line-height: 1.1;
+          font-variant-numeric: tabular-nums;
         }
 
-        .activity-day-drawer-grid {
+        .activity-detail-overview-card.tone-green strong { color: #16a34a; }
+        .activity-detail-overview-card.tone-orange strong { color: #ea580c; }
+        .activity-detail-overview-card.tone-violet strong { color: #6366f1; }
+
+        .activity-detail-records {
+          display: grid;
+          gap: 10px;
+        }
+
+        .activity-detail-record-row {
+          display: grid;
+          grid-template-columns: minmax(72px, 110px) 1fr auto;
+          align-items: center;
+          gap: 12px;
+          padding: 14px 16px;
+          border-radius: 16px;
+          background: rgba(248, 250, 252, 0.82);
+          border: 1px solid rgba(226, 232, 240, 0.9);
+        }
+
+        .activity-detail-record-row time,
+        .activity-detail-record-row span {
+          color: var(--dash-sub);
+          font-size: 14px;
+          font-weight: 800;
+        }
+
+        .activity-detail-record-row strong {
+          color: #16a34a;
+          font-size: 16px;
+          font-weight: 950;
+          font-variant-numeric: tabular-nums;
+        }
+
+        .activity-detail-empty-state,
+        .activity-detail-empty-chart {
+          display: grid;
+          place-items: center;
+          min-height: 120px;
+          padding: 16px;
+          border-radius: 18px;
+          border: 1px dashed rgba(148, 163, 184, 0.24);
+          color: var(--dash-sub);
+          line-height: 1.7;
+          text-align: center;
+        }
+
+        .activity-detail-model-grid {
+          display: grid;
+          grid-template-columns: minmax(220px, 300px) 1fr;
+          gap: 20px;
+          align-items: center;
+        }
+
+        .activity-detail-donut-wrap {
+          display: grid;
+          place-items: center;
+        }
+
+        .activity-detail-donut {
+          position: relative;
+          display: grid;
+          place-items: center;
+          width: 220px;
+          height: 220px;
+          border-radius: 999px;
+          box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
+        }
+
+        .activity-detail-donut::after {
+          content: "";
+          position: absolute;
+          inset: 28px;
+          border-radius: 999px;
+          background: color-mix(in srgb, var(--dash-card-bg) 90%, white 10%);
+          box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
+        }
+
+        .activity-detail-donut > div {
+          position: relative;
+          z-index: 1;
+          display: grid;
+          gap: 6px;
+          text-align: center;
+        }
+
+        .activity-detail-donut strong {
+          font-size: 32px;
+          font-weight: 950;
+          line-height: 1;
+        }
+
+        .activity-detail-donut span {
+          color: var(--dash-sub);
+          font-size: 13px;
+          font-weight: 800;
+        }
+
+        .activity-detail-model-list {
           display: grid;
           gap: 12px;
         }
 
-        .activity-day-drawer-grid article {
+        .activity-detail-model-item {
           display: grid;
-          gap: 8px;
-          padding: 16px;
-          border: 1px solid var(--dash-border);
+          grid-template-columns: 14px 1fr;
+          gap: 12px;
+          align-items: start;
+          padding: 14px 16px;
           border-radius: 16px;
-          background: var(--dash-card-bg);
+          background: rgba(248, 250, 252, 0.78);
+          border: 1px solid rgba(226, 232, 240, 0.92);
         }
 
-        .activity-day-drawer-grid span,
-        .activity-day-drawer p {
-          color: var(--dash-sub);
+        .activity-detail-model-item i {
+          display: block;
+          width: 14px;
+          height: 14px;
+          margin-top: 5px;
+          border-radius: 4px;
         }
 
-        .activity-day-drawer-grid strong {
-          color: var(--dash-readable-number);
-          font-size: 22px;
+        .activity-detail-model-item div {
+          display: grid;
+          gap: 6px;
+        }
+
+        .activity-detail-model-item strong {
+          font-size: 15px;
           font-weight: 900;
-          font-variant-numeric: tabular-nums;
+        }
+
+        .activity-detail-model-item span {
+          color: var(--dash-sub);
+          font-size: 14px;
+          font-weight: 800;
+        }
+
+        .activity-detail-timeline-wrap {
+          display: grid;
+          gap: 12px;
+        }
+
+        .activity-detail-timeline-scroll {
+          overflow-x: auto;
+          padding-bottom: 6px;
+        }
+
+        .activity-detail-timeline-chart {
+          display: block;
+          width: 100%;
+          min-width: 100%;
+        }
+
+        .activity-detail-grid-line {
+          stroke: rgba(148, 163, 184, 0.2);
+          stroke-width: 1;
+          stroke-dasharray: 4 6;
+        }
+
+        .activity-detail-bar {
+          fill: rgba(99, 102, 241, 0.32);
+        }
+
+        .activity-detail-bar.is-peak {
+          fill: #6366f1;
+        }
+
+        .activity-detail-peak-dot {
+          fill: #6366f1;
+        }
+
+        .activity-detail-axis-label {
+          fill: #94a3b8;
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .activity-detail-insight {
+          padding: 12px 14px;
+          border-radius: 14px;
+          background: linear-gradient(135deg, rgba(251, 191, 36, 0.18), rgba(253, 224, 71, 0.16));
+          color: #92400e;
+          font-size: 14px;
+          font-weight: 800;
+          line-height: 1.65;
+        }
+
+        @media (max-width: 980px) {
+          .activity-detail-modal {
+            width: min(100vw - 20px, 820px);
+          }
+
+          .activity-detail-overview-grid,
+          .activity-detail-model-grid {
+            grid-template-columns: 1fr;
+          }
         }
 
         @media (max-width: 1380px) {
@@ -5552,7 +6654,7 @@ export default function DashboardPage() {
             gap: 14px !important;
           }
 
-          .dashboard-part1 .dash3-header > div:first-child,
+          .dashboard-part1 .dash3-welcome-card,
           .dashboard-part1 .dash3-header-center,
           .dashboard-part1-heatmap .activity-heatmap-card {
             min-height: auto !important;
@@ -5560,8 +6662,34 @@ export default function DashboardPage() {
             border-radius: 18px !important;
           }
 
-          .dashboard-part1 .dash3-header h1 {
+          .dashboard-part1 .dash3-welcome-copy {
+            padding-right: 96px !important;
+          }
+
+          .dashboard-part1 .dash3-welcome-greeting,
+          .dashboard-part1 .dash3-welcome-username {
             font-size: 34px !important;
+          }
+
+          .dashboard-part1 .dash3-welcome-tagline {
+            font-size: 15px !important;
+          }
+
+          .dashboard-part1 .dash3-welcome-description {
+            font-size: 13px !important;
+          }
+
+          .dashboard-part1 .dash3-welcome-theme-button {
+            top: 14px !important;
+            right: 14px !important;
+            min-width: 78px !important;
+            height: 32px !important;
+            padding: 0 10px !important;
+          }
+
+          .dashboard-part1 .dash3-welcome-title-pill {
+            padding: 7px 10px !important;
+            font-size: 11px !important;
           }
 
           .dashboard-part1 .dash3-login-reward-tiers {
@@ -5639,6 +6767,37 @@ export default function DashboardPage() {
             height: 38px !important;
           }
 
+          .activity-detail-modal-layer {
+            padding: 10px !important;
+          }
+
+          .activity-detail-modal {
+            width: calc(100vw - 20px) !important;
+            max-height: calc(100vh - 20px) !important;
+            border-radius: 22px !important;
+          }
+
+          .activity-detail-modal-header,
+          .activity-detail-range-switcher,
+          .activity-detail-modal-body {
+            padding-left: 18px !important;
+            padding-right: 18px !important;
+          }
+
+          .activity-detail-modal-header h3 {
+            font-size: 24px !important;
+          }
+
+          .activity-detail-record-row {
+            grid-template-columns: 1fr !important;
+            gap: 6px !important;
+          }
+
+          .activity-detail-donut {
+            width: 180px !important;
+            height: 180px !important;
+          }
+
           .dash3-shell .dash3-forecast-metrics article {
             min-height: 142px !important;
           }
@@ -5680,6 +6839,44 @@ export default function DashboardPage() {
             height: 42px !important;
           }
         }
+
+        @media (max-width: 380px) {
+          .dashboard-part1 {
+            padding: 14px !important;
+          }
+
+          .dashboard-part1 .dash3-welcome-card,
+          .dashboard-part1 .dash3-header-center,
+          .dashboard-part1-heatmap .activity-heatmap-card {
+            padding: 16px !important;
+          }
+
+          .dashboard-part1 .dash3-welcome-copy {
+            gap: 10px !important;
+            padding-right: 88px !important;
+          }
+
+          .dashboard-part1 .dash3-welcome-greeting,
+          .dashboard-part1 .dash3-welcome-username {
+            font-size: 26px !important;
+          }
+
+          .dashboard-part1 .dash3-welcome-divider {
+            font-size: 22px !important;
+          }
+
+          .dashboard-part1 .dash3-welcome-tagline {
+            font-size: 14px !important;
+          }
+
+          .dashboard-part1 .dash3-welcome-description {
+            font-size: 12px !important;
+          }
+
+          .dashboard-part1 .dash3-welcome-sweep {
+            inset: -48% -34% !important;
+          }
+        }
       `}</style>
 
       <ConsoleLayout customer={user} currentPath="/dashboard" contentStyle={contentStyle}>
@@ -5692,10 +6889,12 @@ export default function DashboardPage() {
 
           <section className="dashboard-part1" aria-label="FlowAPI 首页资产总览">
             <header className="dash3-header">
-              <div>
-                <h1>{greeting}，{userName}</h1>
-                <p>你的 AI Token 资产正在流动，<FlowApiBrandText size="sm" /> 帮你看清每一次模型调用、每一笔消耗和未来额度需求。</p>
-              </div>
+              <DashboardWelcomeCard
+                profile={activeWelcomeProfile}
+                theme={theme || "light"}
+                themeChoice={themeChoice || "system"}
+                onToggleTheme={handleToggleTheme}
+              />
               <div className="dash3-header-center" aria-label="登录陪伴进度">
                 <p className="dash3-companion-title">
                   <span>已陪伴</span>
@@ -5778,6 +6977,16 @@ export default function DashboardPage() {
                 document.getElementById("dash-recent-calls")?.scrollIntoView({ behavior: "smooth", block: "start" });
               }
             }}
+          />
+
+          <ApiUsageProgressSection
+            walletData={walletData}
+            overview={totalOverviewData}
+            todayData={todayOverviewData}
+            weekData={weekOverviewData}
+            totalData={totalOverviewData}
+            trendData={trendData}
+            onOpenDetail={setDetailModal}
           />
 
           <WeekUsageSection

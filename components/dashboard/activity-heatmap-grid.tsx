@@ -2,42 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { getClampedTooltipPosition } from "@/components/charts/flowapi-chart-interaction";
-
-type ActivityDay = {
-  date?: string;
-  day?: number;
-  level?: number;
-  requests?: number;
-  tokens?: number;
-  spend?: number;
-};
+import type { ActivityDay } from "@/components/dashboard/activity-heatmap-utils";
+import { formatActivityApiCost, formatActivityCalls, formatActivityDate, formatActivityRecharge } from "@/components/dashboard/activity-heatmap-utils";
 
 type ActivityHeatmapGridProps = {
   weeks: Array<Array<ActivityDay | null>>;
+  todayKey?: string;
   onSelectDay?: (day: ActivityDay) => void;
 };
 
 const WEEKDAYS = ["一", "二", "三", "四", "五", "六", "日"];
 
-function formatDate(value?: string) {
-  return value ? value.replace(/-/g, "/") : "日期同步中";
-}
-
-function formatToken(value: unknown) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "暂无数据";
-  if (number >= 1_000_000) return `${Number((number / 1_000_000).toFixed(1))}M`;
-  if (number >= 1_000) return `${Number((number / 1_000).toFixed(1))}K`;
-  return `${Math.round(number)}`;
-}
-
-function formatCny(value: unknown) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return "暂无数据";
-  return `¥${number.toFixed(number > 0 && number < 0.01 ? 6 : 2)}`;
-}
-
-export default function ActivityHeatmapGrid({ weeks, onSelectDay }: ActivityHeatmapGridProps) {
+export default function ActivityHeatmapGrid({ weeks, todayKey, onSelectDay }: ActivityHeatmapGridProps) {
   const [tooltip, setTooltip] = useState<{ day: ActivityDay; x: number; y: number } | null>(null);
   const frameRef = useRef<number | null>(null);
   const pendingRef = useRef<{ day: ActivityDay; x: number; y: number } | null>(null);
@@ -69,6 +45,11 @@ export default function ActivityHeatmapGrid({ weeks, onSelectDay }: ActivityHeat
     setTooltip(null);
   }
 
+  const tooltipHeight = Number(tooltip?.day?.rechargeAmount || 0) > 0 ? 142 : 114;
+  const tooltipPosition = tooltip
+    ? getClampedTooltipPosition({ clientX: tooltip.x, clientY: tooltip.y, width: 240, height: tooltipHeight, offsetX: 14, offsetY: 16 })
+    : { x: 0, y: 0 };
+
   return (
     <div className="activity-heatmap-grid-wrap">
       <div className="activity-heatmap-weekdays">
@@ -81,8 +62,8 @@ export default function ActivityHeatmapGrid({ weeks, onSelectDay }: ActivityHeat
               <button
                 type="button"
                 key={day.date}
-                className={`activity-heatmap-cell level-${day.level || 0}`}
-                aria-label={`${formatDate(day.date)} 调用 ${day.requests || 0} 次`}
+                className={`activity-heatmap-cell level-${day.level || 0}${day.date === todayKey || day.isToday ? " is-today" : ""}`}
+                aria-label={`${formatActivityDate(day.date)} 调用 ${day.requests || 0} 次`}
                 onClick={(event) => {
                   event.preventDefault();
                   event.currentTarget.blur();
@@ -110,14 +91,14 @@ export default function ActivityHeatmapGrid({ weeks, onSelectDay }: ActivityHeat
           style={{
             left: 0,
             top: 0,
-            "--tooltip-x": `${getClampedTooltipPosition({ clientX: tooltip.x, clientY: tooltip.y, width: 220, height: 145, offsetX: 14, offsetY: 14 }).x}px`,
-            "--tooltip-y": `${getClampedTooltipPosition({ clientX: tooltip.x, clientY: tooltip.y, width: 220, height: 145, offsetX: 14, offsetY: 14 }).y}px`,
+            "--tooltip-x": `${tooltipPosition.x}px`,
+            "--tooltip-y": `${tooltipPosition.y}px`,
           } as CSSProperties}
         >
-          <strong>{formatDate(tooltip.day.date)}</strong>
-          <span>调用：{Number(tooltip.day.requests || 0)} 次</span>
-          <span>Token：{formatToken(tooltip.day.tokens)}</span>
-          <span>花费：{formatCny(tooltip.day.spend)}</span>
+          <strong>{formatActivityDate(tooltip.day.date)}</strong>
+          {Number(tooltip.day.rechargeAmount || 0) > 0 ? <span className="is-recharge">💚 充值 {formatActivityRecharge(tooltip.day.rechargeAmount)}</span> : null}
+          <span className="is-cost">🔶 API 消费：{formatActivityApiCost(tooltip.day.spend)}</span>
+          <span>🔢 调用次数：{formatActivityCalls(tooltip.day.requests)}</span>
         </div>
       ), document.body) : null}
     </div>

@@ -1,22 +1,10 @@
 import { useState } from "react";
 import ActivityHeatmapGrid from "@/components/dashboard/activity-heatmap-grid";
-import ActivityDayDetailDrawer from "@/components/dashboard/activity-day-detail-drawer";
-
-type ActivityDay = {
-  date?: string;
-  day?: number;
-  level?: number;
-  requests?: number;
-  tokens?: number;
-  spend?: number;
-};
+import ActivityDayDetailModal from "@/components/dashboard/activity-day-detail-modal";
+import type { ActivityCalendar, ActivityDay } from "@/components/dashboard/activity-heatmap-utils";
 
 type ActivityHeatmapCardProps = {
-  calendar: {
-    label?: string;
-    weeks?: Array<Array<ActivityDay | null>>;
-    maxTokens?: number;
-  };
+  calendar: ActivityCalendar;
   hasData?: boolean;
   sourceLabel?: string;
   onPreviousMonth?: () => void;
@@ -38,7 +26,7 @@ export default function ActivityHeatmapCard({
         <div>
           <span>ACTIVITY MAP</span>
           <h2>活跃热力图</h2>
-          <p>{hasData ? "查看你每天的 API 调用活跃度。" : "完成首次 API 调用后，这里会显示你的每日调用活跃情况。"}</p>
+          <p>{hasData ? "查看你每天的 API 调用活跃度，并展开当日/本周/本月分析。" : "完成首次 API 调用后，这里会显示你的每日调用活跃情况。"}</p>
         </div>
         <div className="activity-heatmap-month">
           <button type="button" onClick={onPreviousMonth} aria-label="上个月">‹</button>
@@ -50,11 +38,11 @@ export default function ActivityHeatmapCard({
 
       {hasData ? (
         <>
-          <ActivityHeatmapGrid weeks={calendar.weeks || []} onSelectDay={setSelectedDay} />
+          <ActivityHeatmapGrid weeks={calendar.weeks || []} todayKey={calendar.todayKey} onSelectDay={setSelectedDay} />
           <div className="activity-heatmap-legend">
-            <span>少</span>
+            <span>低活跃</span>
             {[0, 1, 2, 3, 4].map((level) => <i key={level} className={`level-${level}`} />)}
-            <span>多</span>
+            <span>高活跃</span>
           </div>
         </>
       ) : (
@@ -64,7 +52,7 @@ export default function ActivityHeatmapCard({
         </div>
       )}
 
-      <ActivityDayDetailDrawer day={selectedDay} onClose={() => setSelectedDay(null)} />
+      <ActivityDayDetailModal key={selectedDay?.date || "activity-detail"} day={selectedDay} onClose={() => setSelectedDay(null)} />
     </article>
   );
 }

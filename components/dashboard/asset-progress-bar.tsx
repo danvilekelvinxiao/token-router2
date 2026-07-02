@@ -15,7 +15,7 @@ type AssetProgressBarProps = {
   expiresAt?: string | null;
   remainingDays?: number | null;
   totalDays?: number | null;
-  status?: "normal" | "warning" | "danger" | "expired" | "empty";
+  status?: "normal" | "warning" | "danger" | "exhausted" | "expired" | "empty";
   animated?: boolean;
   glow?: boolean;
   onClick?: () => void;
@@ -68,6 +68,25 @@ function renderHeadline({
   return "0 Token";
 }
 
+function isExhaustedStatus(status: AssetProgressBarProps["status"], currentValue?: number | null, totalValue?: number | null, remainingDays?: number | null) {
+  if (status === "exhausted") return true;
+  if (status === "expired" || status === "empty") return true;
+  const total = Number(totalValue || 0);
+  const current = Number(currentValue || 0);
+  if (total > 0 && current <= 0) return true;
+  if (Number.isFinite(Number(remainingDays)) && Number(remainingDays) <= 0) return true;
+  return false;
+}
+
+function resolveStatusTone(status: AssetProgressBarProps["status"], progress: number, currentValue?: number | null, totalValue?: number | null, remainingDays?: number | null) {
+  if (isExhaustedStatus(status, currentValue, totalValue, remainingDays)) return "exhausted" as const;
+  if (status === "expired" || status === "empty") return status;
+  if (status === "danger") return "danger";
+  if (status === "warning") return "warning";
+  if (progress >= 100) return "exhausted" as const;
+  return "normal" as const;
+}
+
 export default function AssetProgressBar({
   type,
   title,
@@ -95,11 +114,17 @@ export default function AssetProgressBar({
   const progress = clampWalletProgress(percent);
   const secondaryProgress = clampWalletProgress(secondaryPercent);
   const clickable = typeof onClick === "function";
+  const exhausted = resolveStatusTone(status, progress, currentValue, totalValue, remainingDays) === "exhausted";
+  const resolvedStatus = resolveStatusTone(status, progress, currentValue, totalValue, remainingDays);
+  const displayStatus = exhausted ? "exhausted" : resolvedStatus;
+  const shouldAnimate = animated && !exhausted;
+  const shouldGlow = glow && progress > 0 && !exhausted;
+  const progressLabel = exhausted ? "耗尽" : `${progress.toFixed(1)}%`;
 
   return (
     <button
       type="button"
-      className={`asset-progress-card type-${type} status-${status} ${compact ? "is-compact" : ""} ${clickable ? "is-clickable" : ""}`}
+      className={`asset-progress-card type-${type} status-${displayStatus} ${compact ? "is-compact" : ""} ${clickable ? "is-clickable" : ""}`}
       onClick={onClick}
       disabled={!clickable}
     >
@@ -116,12 +141,14 @@ export default function AssetProgressBar({
         {actionLabel ? <em>{actionLabel}</em> : null}
       </div>
 
-      <div className={`asset-progress-track type-${type} status-${status}`}>
+      <div className={`asset-progress-track type-${type} status-${displayStatus}`}>
         <div
-          className={`asset-progress-fill type-${type} ${animated ? "animated" : ""}`}
+          className={`asset-progress-fill type-${type} ${shouldAnimate ? "animated" : ""} ${exhausted ? "is-exhausted" : ""}`}
           style={{ width: `${progress}%` }}
+          data-status={displayStatus}
         >
-          {glow && progress > 0 && status !== "empty" ? <i className={`asset-progress-glow type-${type}`} aria-hidden="true" /> : null}
+          {shouldGlow ? <i className={`asset-progress-glow type-${type}`} aria-hidden="true" /> : null}
+          {exhausted ? <span className="asset-progress-endcap" aria-hidden="true" /> : null}
         </div>
       </div>
 
@@ -136,9 +163,9 @@ export default function AssetProgressBar({
             <span>{secondaryTitle || "到期时间进度"}</span>
             {expiresAt ? <small>{formatWalletDate(expiresAt)} 到期</small> : null}
           </div>
-          <div className={`asset-progress-track type-${type} secondary status-${status}`}>
+          <div className={`asset-progress-track type-${type} secondary status-${displayStatus}`}>
             <div
-              className={`asset-progress-fill type-${type} secondary ${animated ? "animated" : ""}`}
+              className={`asset-progress-fill type-${type} secondary ${shouldAnimate ? "animated" : ""} ${exhausted ? "is-exhausted" : ""}`}
               style={{ width: `${secondaryProgress}%` }}
             />
           </div>
@@ -150,6 +177,7 @@ export default function AssetProgressBar({
       ) : null}
 
       {!compact && footnote ? <div className="asset-progress-footnote">{footnote}</div> : null}
+      {!compact ? <span className="asset-progress-state-label">{progressLabel}</span> : null}
     </button>
   );
 }

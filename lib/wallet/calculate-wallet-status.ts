@@ -1,5 +1,5 @@
 export type WalletPlanStatus = "active" | "expired" | "none";
-export type WalletStatusTone = "healthy" | "watch" | "low" | "empty" | "expired" | "none";
+export type WalletStatusTone = "healthy" | "watch" | "low" | "danger" | "empty" | "expired" | "none";
 
 export type WalletStatusResult = {
   label: string;
@@ -36,5 +36,6 @@ export function calculateWalletStatus({
   const ratio = remaining / total;
   if (ratio >= 0.3) return { label: "余额充足", tone: "healthy", actionLabel: "查看详情" };
   if (ratio >= 0.1) return { label: "建议关注", tone: "watch", actionLabel: "查看详情" };
-  return { label: "建议充值", tone: "low", actionLabel: "立即充值" };
+  if (ratio > 0.02) return { label: "建议充值", tone: "low", actionLabel: "立即充值" };
+  return { label: "即将耗尽", tone: "danger", actionLabel: "立即充值" };
 }
