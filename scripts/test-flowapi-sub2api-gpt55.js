@@ -127,14 +127,6 @@ async function requestPath(pathname, options = {}) {
 }
 
 async function login() {
-  const adminSecret = process.env.FLOWAPI_ADMIN_SECRET || process.env.ADMIN_SECRET || process.env.E2E_ADMIN_SECRET || "";
-  if (adminSecret) {
-    const cookie = buildSessionCookie("admin-secret", "admin@flowapi.local");
-    if (cookie) {
-      return { cookie, customerId: "admin-secret" };
-    }
-  }
-
   const { response, json, text } = await requestPath("/api/auth/login", {
     method: "POST",
     body: JSON.stringify({
