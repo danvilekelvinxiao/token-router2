@@ -33,7 +33,7 @@ fi
 
 git fetch origin "$DEPLOY_BRANCH" >/dev/null 2>&1 || true
 if ! git merge-base --is-ancestor "$DEPLOY_COMMIT" "origin/$DEPLOY_BRANCH" 2>/dev/null; then
-  echo "当前 commit 尚未存在于 origin/$DEPLOY_BRANCH。请先 push，再部署，避免服务器 git 状态与运行代码不一致。" >&2
+  echo "当前 commit 尚未存在于 origin/${DEPLOY_BRANCH}。请先 push，再部署，避免服务器 git 状态与运行代码不一致。" >&2
   exit 1
 fi
 
