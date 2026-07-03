@@ -9,6 +9,44 @@ PUBLIC_BASE="${FLOWAPI_PUBLIC_BASE_URL:-https://flowapi.fun}"
 SUDO=""
 [ "$(id -u)" = "0" ] || SUDO="sudo"
 
+load_env_file() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+
+  local tmp
+  tmp="$(mktemp)"
+  node - "$file" <<'NODE' > "$tmp"
+const fs = require("fs");
+const file = process.argv[2];
+
+function quote(value) {
+  return JSON.stringify(String(value));
+}
+
+for (const raw of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+  const line = raw.trim();
+  if (!line || line.startsWith("#") || !line.includes("=")) continue;
+  const index = line.indexOf("=");
+  const key = line.slice(0, index).trim();
+  if (!key) continue;
+  let value = line.slice(index + 1).trim();
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    value = value.slice(1, -1);
+  }
+  process.stdout.write(`export ${key}=${quote(value)}\n`);
+}
+NODE
+  # shellcheck disable=SC1090
+  . "$tmp"
+  rm -f "$tmp"
+}
+
+if [ -f "$APP/.env.production" ]; then
+  load_env_file "$APP/.env.production"
+elif [ -f "$APP/.env.local" ]; then
+  load_env_file "$APP/.env.local"
+fi
+
 echo "==> FlowAPI Workbench deploy"
 echo "app=$APP"
 echo "branch=$BRANCH"
@@ -49,7 +87,13 @@ fi
 
 echo "==> 4. Install dependencies and migrate database"
 npm install --no-audit --no-fund
-node scripts/verify-new-api-env.mjs .env.production
+if [ -f .env.production ]; then
+  node scripts/verify-new-api-env.mjs .env.production
+elif [ -f .env.local ]; then
+  node scripts/verify-new-api-env.mjs .env.local
+else
+  echo "WARN: missing .env.production and .env.local, skipping env verification and database migrations for now."
+fi
 FLOWAPI_REQUIRE_DATABASE=true node scripts/run-production-migrations.mjs
 
 echo "==> 5. Build production bundle"
@@ -57,13 +101,18 @@ export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=512}"
 npm run build
 
 echo "==> 6. Restart app"
-pm2 delete flowapi >/dev/null 2>&1 || true
 PORT_PIDS="$(ss -ltnp 'sport = :3000' 2>/dev/null | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | sort -u || true)"
 if [ -n "$PORT_PIDS" ]; then
   kill $PORT_PIDS 2>/dev/null || true
+  sleep 2
+fi
+pm2 delete flowapi >/dev/null 2>&1 || true
+PORT_PIDS="$(ss -ltnp 'sport = :3000' 2>/dev/null | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | sort -u || true)"
+if [ -n "$PORT_PIDS" ]; then
+  kill -9 $PORT_PIDS 2>/dev/null || true
   sleep 1
 fi
-pm2 start node_modules/next/dist/bin/next --cwd "$APP" --name flowapi -- start -p 3000
+pm2 start scripts/flowapi-pm2-ecosystem.cjs --only flowapi
 pm2 save >/dev/null || true
 
 echo "==> 7. Reload nginx"
