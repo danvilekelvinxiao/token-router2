@@ -6,7 +6,7 @@ FlowAPI 把用户请求转发到 **New API（One API）**，由 New API 再调�
 
 ```
 用户 / Cursor / Claude Code
-    → https://pincc.flowapi.fun/v1  （FlowAPI，计费与风控）
+    → https://flowapi.fun/v1  （FlowAPI，计费与风控）
         → NEW_API_BASE_URL/v1     （New API，模型渠道）
             → OpenAI / Claude / DeepSeek …
 ```
@@ -81,7 +81,7 @@ curl -sS http://127.0.0.1:3000/api/newapi/health | jq .
 
 3. 用户侧 Base URL 固定为：
 
-- `https://pincc.flowapi.fun/v1`
+- `https://flowapi.fun/v1`
 
 ---
 

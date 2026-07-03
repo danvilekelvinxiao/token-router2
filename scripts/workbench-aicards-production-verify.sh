@@ -87,6 +87,10 @@ mask_env "AICARDS_API_KEY"
 mask_env "NEW_API_BASE_URL"
 mask_env "NEW_API_KEY"
 mask_env "NEW_API_ADMIN_TOKEN"
+mask_env "NEW_API_ADMIN_ACCOUNT"
+mask_env "NEW_API_ADMIN_USERNAME"
+mask_env "NEW_API_ADMIN_EMAIL"
+mask_env "NEW_API_ADMIN_PASSWORD"
 
 echo "==> 3. Install, migrate, build"
 npm install --no-audit --no-fund

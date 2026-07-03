@@ -13,8 +13,8 @@ const features = [
   },
   {
     icon: "🎁",
-    title: "注册即送 ¥5 体验额度",
-    desc: "新用户注册即可获得 ¥5 体验额度，先用起来再决定是否充值。",
+    title: "注册即送 $20 API 体验额度",
+    desc: "新用户注册即可获得 $20 API 体验额度，先用起来再决定是否充值。",
   },
   {
     icon: "⚡",
@@ -128,7 +128,7 @@ export default function HomePage() {
         <section className="hero-wrap">
           <h1 className="hero-title">AI API Token 企业级多模型统一调用平台</h1>
           <p className="hero-subtitle">
-            <strong>注册即送 ¥5 体验额度</strong>
+            <strong>注册即送 $20 API 体验额度</strong>
             <br />
             自动生成 API Key，三步完成接入
             <br />
@@ -165,7 +165,7 @@ export default function HomePage() {
           {/* 数据条 */}
           <div className="hero-stats">
             {[
-              ["¥5", "注册赠送"],
+              ["$20 API", "注册赠送"],
               ["3 步", "完成接入"],
               ["多模型", "统一调用"],
               ["1 Key", "统一接入"],

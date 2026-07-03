@@ -4,6 +4,7 @@ import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ConsoleAnnouncementCenter from "@/components/announcements/console-announcement-center";
 import ThemeToggle from "@/components/ThemeToggle";
 import LanguageSwitcher from "@/components/common/language-switcher";
+import { isAdminEmail } from "@/lib/admin-identity";
 
 function IconDashboard() {
   return (
@@ -158,7 +159,7 @@ function isAdminCustomer(customer) {
   return Boolean(
     customer?.isAdmin ||
     customer?.id === "cus_admin" ||
-    String(customer?.email || "").toLowerCase() === "xiaoyijie@flowapi.fun"
+    isAdminEmail(customer?.email)
   );
 }
 

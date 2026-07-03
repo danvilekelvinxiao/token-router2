@@ -788,12 +788,12 @@ export default function ApiManagementPage() {
           <h1>{authRequired ? "先登录，再创建你的 FlowAPI Key" : "正在读取你的 API Key 工作台"}</h1>
           <p>
             {authRequired
-              ? "注册账号后会获得 ¥5 体验额度。登录后你可以选择模型、创建 API Key、复制 Base URL，并在使用日志里看到每次 Token 和金额消耗。"
+              ? "注册账号后会获得 $20 API 体验额度。登录后你可以选择模型、创建 API Key、复制 Base URL，并在使用日志里看到每次 Token 和金额消耗。"
               : "正在同步账号、模型和调用记录，请稍等几秒。"}
           </p>
           {authRequired ? (
             <div className="api-management-auth-actions">
-              <Link href="/register">注册送 ¥5 体验额度</Link>
+              <Link href="/register">注册送 $20 API 体验额度</Link>
               <Link href="/login" className="secondary">登录账号</Link>
               <Link href="/help" className="ghost">看三步教程</Link>
             </div>

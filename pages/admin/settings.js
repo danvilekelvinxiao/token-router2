@@ -79,7 +79,7 @@ export default function AdminSettings() {
 
               <Section title="注册与用户">
                 <ToggleEditField label="开放注册" checked={!!settings.openRegistration} onChange={(v) => update("openRegistration", v)} />
-                <EditField label="注册即送额度" value={String(settings.registerBonus || 0)} onChange={(v) => update("registerBonus", Number(v))} type="number" prefix="¥" />
+                <EditField label="注册即送 $ API" value={String(settings.registerBonus || 0)} onChange={(v) => update("registerBonus", Number(v))} type="number" prefix="$ API" />
                 <EditField label="默认用户等级" value={settings.defaultLevel || ""} onChange={(v) => update("defaultLevel", v)} />
                 <EditField label="最低充值金额" value={String(settings.minRecharge || 0)} onChange={(v) => update("minRecharge", Number(v))} type="number" prefix="¥" />
               </Section>

@@ -3,6 +3,7 @@ import Head from "next/head";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import ConsoleLayout from "@/components/ConsoleLayout";
+import { isAdminEmail } from "@/lib/admin-identity";
 
 const statusText = {
   pending: "待确认",
@@ -14,7 +15,7 @@ function isAdminCustomer(customer) {
   return Boolean(
     customer?.isAdmin ||
     customer?.id === "cus_admin" ||
-    String(customer?.email || "").toLowerCase() === "xiaoyijie@flowapi.fun"
+    isAdminEmail(customer?.email)
   );
 }
 

@@ -4,6 +4,7 @@
  */
 
 import { requireAdmin } from "@/lib/admin-auth";
+import { resolveNewApiAdminAuth } from "@/lib/new-api/admin-auth.mjs";
 
 const NEW_API_ADMIN_URL =
   String(process.env.NEW_API_ADMIN_URL || "").trim();
@@ -12,12 +13,6 @@ const NEW_API_PROXY_TARGET =
   ENABLE_PROXY
     ? String(process.env.NEW_API_ADMIN_URL || process.env.NEW_API_BASE_URL || "").trim()
     : NEW_API_ADMIN_URL;
-const NEW_API_RUNTIME_KEY =
-  process.env.NEW_API_KEY ||
-  process.env.NEW_API_KEY_ALL_MODELS ||
-  process.env.NEW_API_ADMIN_TOKEN ||
-  "";
-
 export default async function handler(req, res) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -36,22 +31,38 @@ export default async function handler(req, res) {
 
   try {
     const start = Date.now();
-    if (!NEW_API_RUNTIME_KEY) {
+    const adminAuth = await resolveNewApiAdminAuth();
+    const runtimeKey =
+      process.env.NEW_API_KEY ||
+      process.env.NEW_API_KEY_ALL_MODELS ||
+      adminAuth.token ||
+      "";
+    if (!runtimeKey) {
       return res.status(200).json({
         status: "error",
         url,
-        message: "NEW_API_KEY 未配置",
+        message: "NEW_API_KEY / NEW_API_ADMIN_TOKEN / NEW_API_ADMIN_ACCOUNT 未配置",
         proxyEnabled: ENABLE_PROXY,
       });
     }
-    const upstream = await fetch(`${url}/v1/models`, {
+    let upstream = await fetch(`${url}/v1/models`, {
       headers: {
-        Authorization: `Bearer ${NEW_API_RUNTIME_KEY}`,
+        Authorization: `Bearer ${runtimeKey}`,
         "Content-Type": "application/json",
       },
       signal: AbortSignal.timeout(8000),
     });
     const latencyMs = Date.now() - start;
+
+    if (!upstream.ok && adminAuth.token && adminAuth.token !== runtimeKey) {
+      upstream = await fetch(`${url}/v1/models`, {
+        headers: {
+          Authorization: `Bearer ${adminAuth.token}`,
+          "Content-Type": "application/json",
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+    }
 
     if (!upstream.ok) {
       return res.status(200).json({

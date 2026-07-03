@@ -70,7 +70,7 @@ from openai import OpenAI
 
 client = OpenAI(
   api_key="客户在控制台创建的 API Key",
-  base_url="https://pincc.flowapi.fun/v1"
+  base_url="https://flowapi.fun/v1"
 )
 
 response = client.chat.completions.create(

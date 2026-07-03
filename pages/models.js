@@ -10,6 +10,7 @@ import { getPublicModelDisplayName, getPublicModelRequestId } from "@/lib/models
 import { getPublicApiBaseUrl } from "@/lib/public-api";
 import { sanitizePublicModelProvider } from "@/lib/public-model-provider";
 import { useSafePolling } from "@/hooks/useSafePolling";
+import { isAdminEmail } from "@/lib/admin-identity";
 
 const DEFAULT_CATEGORIES = [
   { id: "all", name: "全部" },
@@ -27,8 +28,7 @@ const DEFAULT_CATEGORIES = [
 ];
 
 function isAdminCustomer(customer) {
-  const email = String(customer?.email || "").toLowerCase();
-  return Boolean(customer?.role === "admin" || customer?.isAdmin || customer?.id === "cus_admin" || email === "xiaoyijie@flowapi.fun");
+  return Boolean(customer?.role === "admin" || customer?.isAdmin || customer?.id === "cus_admin" || isAdminEmail(customer?.email));
 }
 
 function normalizeModel(model) {

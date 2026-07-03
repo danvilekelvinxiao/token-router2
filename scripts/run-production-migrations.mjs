@@ -250,7 +250,7 @@ try {
       ('cfg_max_recharge', 'max_recharge_amount_rmb', '100000', '单次最高充值金额'),
       ('cfg_recharge_enabled', 'recharge_enabled', 'true', '是否开启充值'),
       ('cfg_manual_review', 'manual_review_enabled', 'true', '是否开启人工审核'),
-      ('cfg_new_user_bonus', 'new_user_bonus_api', '0', '新用户赠送 $ API'),
+      ('cfg_new_user_bonus', 'new_user_bonus_api', '20', '新用户赠送 $ API'),
       ('cfg_low_balance', 'low_balance_threshold_api', '1', '低余额提醒阈值')
     ON CONFLICT (key) DO NOTHING;
   `);

@@ -12,7 +12,7 @@ function readArg(name, fallback = "") {
 const baseUrl = readArg("base-url", process.env.FLOWAPI_BASE_URL || `http://127.0.0.1:${process.env.PORT || 3000}`);
 const pack = readArg("pack", "full");
 const customerId = readArg("customer-id", process.env.FLOWAPI_ADMIN_CUSTOMER_ID || "cus_admin");
-const email = readArg("email", process.env.FLOWAPI_ADMIN_EMAIL || "xiaoyijie@flowapi.fun");
+const email = readArg("email", process.env.FLOWAPI_ADMIN_EMAIL || "849481756@qq.com");
 const secret = process.env.SESSION_SECRET || process.env.NEXTAUTH_SECRET || process.env.ADMIN_SECRET || process.env.JWT_SECRET || "";
 
 if (!secret) {

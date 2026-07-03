@@ -2,6 +2,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import FlowApiBrandText from "@/components/brand/flowapi-brand-text";
 import ThemeToggle from "@/components/ThemeToggle";
+import { isAdminEmail } from "@/lib/admin-identity";
 
 const adminMenuGroups = [
   {
@@ -123,7 +124,7 @@ function isAdminCustomer(customer) {
   return Boolean(
     customer?.isAdmin ||
     customer?.id === "cus_admin" ||
-    String(customer?.email || "").toLowerCase() === "xiaoyijie@flowapi.fun"
+    isAdminEmail(customer?.email)
   );
 }
 
@@ -191,7 +192,7 @@ export default function AdminLayout({ currentPath, children }) {
       if (fallbackResponse.ok) {
         const customer = fallbackData?.customer || fallbackData?.admin || {
           id: "cus_admin",
-          email: "xiaoyijie@flowapi.fun",
+          email: "849481756@qq.com",
           role: "admin",
           isAdmin: true,
         };

@@ -6,6 +6,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { getNewApiAdminConfigState, getNewApiAdminHeaders, resolveNewApiAdminAuth } from "../lib/new-api/admin-auth.mjs";
 
 const envFile = process.argv[2] || ".env.local";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -44,16 +45,16 @@ const runtimeKeyCandidates = [
   process.env.NEW_API_ADMIN_TOKEN,
 ];
 const relayKey = runtimeKeyCandidates.find((value) => String(value || "").trim()) || "";
-const adminToken = process.env.NEW_API_ADMIN_TOKEN || "";
-const adminUserId = process.env.NEW_API_ADMIN_USER_ID || "1";
+const adminState = getNewApiAdminConfigState();
 
 console.log("=== 环境变量 ===");
 console.log("SUB2API_BASE_URL:", sub2ApiBase || "(未设置)");
 console.log("SUB2API_API_KEY:", sub2ApiKey ? `${sub2ApiKey.slice(0, 4)}****${sub2ApiKey.slice(-4)}` : "(未设置)");
 console.log("NEW_API_BASE_URL:", base || "(未设置)");
 console.log("NEW_API_RUNTIME_KEY:", relayKey ? `${relayKey.slice(0, 12)}...` : "(未设置)");
-console.log("NEW_API_ADMIN_TOKEN:", adminToken ? `${adminToken.slice(0, 12)}...` : "(未设置)");
-console.log("NEW_API_ADMIN_USER_ID:", adminUserId);
+console.log("NEW_API_ADMIN_TOKEN:", adminState.hasToken ? "(已配置)" : "(未设置)");
+console.log("NEW_API_ADMIN_ACCOUNT:", adminState.hasCredentials ? "(已配置)" : "(未设置)");
+console.log("NEW_API_ADMIN_USER_ID:", adminState.userId);
 console.log("NEW_API_DEFAULT_GROUP:", process.env.NEW_API_DEFAULT_GROUP || "default");
 console.log("NEW_API_DEFAULT_QUOTA:", process.env.NEW_API_DEFAULT_QUOTA || "500000");
 
@@ -79,15 +80,13 @@ async function checkRuntimeModels(key) {
 }
 
 async function checkAdmin() {
-  if (!adminToken) {
-    console.log("\n=== Admin /api/token/ === 跳过（无 NEW_API_ADMIN_TOKEN）");
+  const headers = await getNewApiAdminHeaders();
+  if (!headers) {
+    console.log("\n=== Admin /api/token/ === 跳过（无 NEW_API_ADMIN_TOKEN / NEW_API_ADMIN_ACCOUNT）");
     return true;
   }
   const res = await fetch(`${base}/api/token/`, {
-    headers: {
-      Authorization: `Bearer ${adminToken}`,
-      "New-Api-User": adminUserId,
-    },
+    headers,
   });
   const data = await res.json().catch(() => ({}));
   if (res.status === 404) {
@@ -98,25 +97,30 @@ async function checkAdmin() {
   return res.ok && data.success !== false;
 }
 
-const key = relayKey || adminToken;
+const auth = await resolveNewApiAdminAuth();
+const key = relayKey || auth.token;
 if (!key) {
-  console.error("\n需要 NEW_API_KEY / NEW_API_KEY_ALL_MODELS 至少一个；NEW_API_ADMIN_TOKEN 只用于后台验证");
+  console.error("\n需要 NEW_API_KEY / NEW_API_KEY_ALL_MODELS 至少一个；NEW_API_ADMIN_TOKEN / NEW_API_ADMIN_ACCOUNT 可作为后台验证");
   process.exit(1);
 }
 
 let ok = true;
 let runtimeOk = false;
 try {
-  runtimeOk = await checkRuntimeModels(relayKey || adminToken);
+  runtimeOk = await checkRuntimeModels(relayKey || auth.token);
+  if (!runtimeOk && auth.token && relayKey && relayKey !== auth.token) {
+    console.log("\n提示: 运行时 Key 失败，已改用管理员登录凭据重试。");
+    runtimeOk = await checkRuntimeModels(auth.token);
+  }
   ok = runtimeOk && ok;
-  if (adminToken) ok = (await checkAdmin()) && ok;
+  if (auth.token) ok = (await checkAdmin()) && ok;
 } catch (e) {
   console.error("\n连接失败:", e.message);
   process.exit(1);
 }
 
-if (!runtimeOk && adminToken && relayKey !== adminToken) {
-  console.log("\n提示: 仅检测到 NEW_API_ADMIN_TOKEN，未检测到单独的 NEW_API_KEY，已用管理员 Token 兜底校验。");
+if (!runtimeOk && auth.token && relayKey !== auth.token) {
+  console.log("\n提示: 仅检测到 NEW_API_ADMIN_TOKEN / NEW_API_ADMIN_ACCOUNT，未检测到单独的 NEW_API_KEY，已用管理员凭据兜底校验。");
 }
 
 console.log(ok ? "\n✓ New API 运行时配置可用" : "\n✗ New API 运行时未通过，请检查 URL / runtime key / 渠道");

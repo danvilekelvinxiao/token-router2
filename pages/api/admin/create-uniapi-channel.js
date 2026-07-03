@@ -1,10 +1,9 @@
 import { requireAdmin } from "@/lib/admin-auth";
+import { getNewApiAdminHeaders } from "@/lib/new-api/admin-auth.mjs";
 
 const NEW_API_BASE = process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080";
-const NEW_API_ADMIN_TOKEN = process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || "";
 const UNIAPI_API_KEY = process.env.UNIAPI_API_KEY || "";
 const UNIAPI_BASE_URL = "https://api.uniapi.io";
-const NEW_API_ADMIN_USER_ID = process.env.NEW_API_ADMIN_USER_ID || "1";
 
 const DEFAULT_UNIAPI_MODELS = [
   "gpt-5.5",
@@ -34,9 +33,10 @@ export default async function handler(req, res) {
   const admin = await requireAdmin(req, res);
   if (!admin) return;
 
-  if (!NEW_API_ADMIN_TOKEN) {
+  const adminHeaders = await getNewApiAdminHeaders();
+  if (!adminHeaders) {
     return res.status(500).json({
-      error: "NEW_API_ADMIN_TOKEN 未配置，无法创建 New API 渠道。",
+      error: "NEW_API_ADMIN_TOKEN / NEW_API_ADMIN_ACCOUNT / NEW_API_ADMIN_PASSWORD 未配置，无法创建 New API 渠道。",
     });
   }
 
@@ -54,8 +54,7 @@ export default async function handler(req, res) {
     const response = await fetch(`${NEW_API_BASE.replace(/\/+$/, "")}/api/channel/`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${NEW_API_ADMIN_TOKEN}`,
-        "New-Api-User": NEW_API_ADMIN_USER_ID,
+        ...adminHeaders,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

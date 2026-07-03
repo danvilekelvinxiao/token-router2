@@ -13,6 +13,8 @@
  * tokens while the local ledger remains the only customer billing authority.
  */
 
+import { getNewApiAdminConfigState, getNewApiAdminHeaders, resolveNewApiAdminAuth } from "./admin-auth.mjs";
+
 const NEW_API_BASE_URL =
   process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080";
 const NEW_API_ADMIN_TOKEN =
@@ -65,7 +67,8 @@ async function apiFetch(
   path: string,
   options: RequestInit = {},
 ): Promise<{ ok: boolean; status: number; data: any }> {
-  if (!NEW_API_ADMIN_TOKEN) return { ok: false, status: 0, data: null };
+  const authHeaders = await getNewApiAdminHeaders();
+  if (!authHeaders) return { ok: false, status: 0, data: null };
   const retryAttempts = Math.max(1, Number(process.env.NEW_API_ADMIN_RETRY_ATTEMPTS || 5));
   const retryDelayMs = Math.max(100, Number(process.env.NEW_API_ADMIN_RETRY_DELAY_MS || 500));
   const url = `${NEW_API_BASE_URL}${path}`;
@@ -74,7 +77,7 @@ async function apiFetch(
     try {
       const res = await fetch(url, {
         ...options,
-        headers: { ...adminHeaders(), ...((options.headers as Record<string, string>) || {}) },
+        headers: { ...authHeaders, ...((options.headers as Record<string, string>) || {}) },
       });
       const body = await res.json().catch(() => null);
       if (!res.ok || (body && body.success === false)) {
@@ -129,8 +132,9 @@ export async function createNewApiToken(params: {
   quota?: number;
   models?: string[];
 }): Promise<NewApiToken> {
-  if (!NEW_API_ADMIN_TOKEN) {
-    throw new Error("NEW_API_ADMIN_TOKEN 或 NEW_API_KEY 未配置，无法创建真实 New API API Key");
+  const adminAuth = await resolveNewApiAdminAuth();
+  if (!adminAuth.token) {
+    throw new Error("NEW_API_ADMIN_TOKEN / NEW_API_ADMIN_ACCOUNT / NEW_API_ADMIN_PASSWORD 未配置，无法创建真实 New API API Key");
   }
 
   const nameLimit = Number(process.env.NEW_API_TOKEN_NAME_MAX_LENGTH || 30);
@@ -359,7 +363,8 @@ export async function rechargeNewApiUserQuota(params: {
   tokenId: string;
   quota: number;
 }): Promise<{ success: boolean }> {
-  if (!NEW_API_ADMIN_TOKEN) return { success: true };
+  const adminAuth = await resolveNewApiAdminAuth();
+  if (!adminAuth.token) return { success: true };
 
   const { ok } = await apiFetch("/api/token/", {
     method: "PUT",
@@ -383,26 +388,36 @@ export interface NewApiHealth {
 }
 
 export async function checkNewApiHealth(): Promise<NewApiHealth> {
-  const runtimeToken = getRuntimeToken();
+  const adminAuth = await resolveNewApiAdminAuth();
+  const runtimeToken = getRuntimeToken() || adminAuth.token;
   if (!runtimeToken) {
-    return { ok: false, error: "NEW_API_KEY 未配置" };
+    return { ok: false, error: "NEW_API_KEY / NEW_API_ADMIN_TOKEN / NEW_API_ADMIN_ACCOUNT 未配置" };
   }
 
   try {
     const url = `${NEW_API_BASE_URL}/v1/models`;
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${runtimeToken}`,
         "Content-Type": "application/json",
       },
     });
-    const data = await res.json().catch(() => null);
 
+    if (!res.ok && adminAuth.token && adminAuth.token !== runtimeToken) {
+      res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${adminAuth.token}`,
+          "Content-Type": "application/json",
+        },
+      });
+    }
+
+    const data = await res.json().catch(() => null);
     if (!res.ok) {
       return { ok: false, error: `New API 返回 ${res.status}` };
     }
 
-    if (NEW_API_ADMIN_TOKEN) {
+    if (adminAuth.token) {
       const verify = await apiFetch("/api/token/");
       _adminValid = verify.ok || verify.status === 404;
     } else {
@@ -413,19 +428,21 @@ export async function checkNewApiHealth(): Promise<NewApiHealth> {
       ok: true,
       version: data?.data?.version || data?.version,
       uptime: data?.data?.start_time,
-      error: NEW_API_ADMIN_TOKEN && _adminValid === false ? "管理员 Token 验证失败" : undefined,
+      error: adminAuth.token && _adminValid === false ? "管理员 Token 验证失败" : undefined,
     };
   } catch (e: any) {
-    if (NEW_API_ADMIN_TOKEN) _adminValid = false;
+    if (adminAuth.token) _adminValid = false;
     return { ok: false, error: e.message };
   }
 }
 
 export function getNewApiConfig() {
+  const adminState = getNewApiAdminConfigState();
   return {
     baseUrl: NEW_API_BASE_URL,
     hasRuntimeKey: !!getRuntimeToken(),
-    hasAdminToken: !!NEW_API_ADMIN_TOKEN,
+    hasAdminToken: adminState.hasToken,
+    hasAdminCredentials: adminState.hasCredentials,
     adminValid: _adminValid,
     defaultGroup: NEW_API_DEFAULT_GROUP,
     defaultQuota: NEW_API_DEFAULT_QUOTA,

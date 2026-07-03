@@ -4,6 +4,7 @@ import { assertCustomerOwner } from "@/lib/session";
 import { seedMockData } from "@/lib/redeem-codes";
 import { upsertUserMembership } from "@/lib/membership/store";
 import { grantUserPackage } from "@/lib/packages/store";
+import { getNewApiAdminHeaders } from "@/lib/new-api/admin-auth.mjs";
 
 const NEW_API_ADMIN_USER_ID = process.env.NEW_API_ADMIN_USER_ID || "1";
 
@@ -90,15 +91,18 @@ export default async function handler(req, res) {
     const apiKeys = updatedCustomer?.apiKeys || [];
     const primaryKey = apiKeys[0];
     if (primaryKey?.newApiId) {
-      await fetch(`${(process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/+$/, "")}/api/token/${primaryKey.newApiId}/quota`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "New-Api-User": NEW_API_ADMIN_USER_ID,
-          Authorization: `Bearer ${process.env.NEW_API_ADMIN_TOKEN || process.env.NEW_API_KEY || ""}`,
-        },
-        body: JSON.stringify({ quota: Math.round((Number(updatedCustomer.balance || 0)) * 10000) }),
-      }).catch(() => {});
+      const adminHeaders = await getNewApiAdminHeaders();
+      if (adminHeaders) {
+        await fetch(`${(process.env.NEW_API_BASE_URL || "http://127.0.0.1:8080").replace(/\/+$/, "")}/api/token/${primaryKey.newApiId}/quota`, {
+          method: "POST",
+          headers: {
+            ...adminHeaders,
+            "New-Api-User": adminHeaders["New-Api-User"] || NEW_API_ADMIN_USER_ID,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ quota: Math.round((Number(updatedCustomer.balance || 0)) * 10000) }),
+        }).catch(() => {});
+      }
     }
   } catch {
     // Non-critical: sync can be retried

@@ -26,7 +26,7 @@ loadEnvFile(path.join(repoRoot, ".env.production"));
 
 const BASE_URL = (process.env.FLOWAPI_E2E_BASE_URL || process.env.E2E_BASE_URL || "http://127.0.0.1:3000").replace(/\/+$/, "");
 const ADMIN_SECRET = process.env.FLOWAPI_ADMIN_SECRET || process.env.ADMIN_SECRET || process.env.E2E_ADMIN_SECRET || "";
-const ADMIN_LOGIN_EMAIL = process.env.FLOWAPI_E2E_LOGIN_EMAIL || process.env.E2E_LOGIN_EMAIL || "xiaoyijie@flowapi.fun";
+const ADMIN_LOGIN_EMAIL = process.env.FLOWAPI_E2E_LOGIN_EMAIL || process.env.E2E_LOGIN_EMAIL || "849481756@qq.com";
 const ADMIN_LOGIN_PASSWORD = process.env.FLOWAPI_E2E_LOGIN_PASSWORD || process.env.E2E_LOGIN_PASSWORD || "xiaoyijie";
 const API_KEY = process.env.FLOWAPI_E2E_API_KEY || process.env.E2E_API_KEY || "";
 const E2E_MODEL = process.env.FLOWAPI_E2E_MODEL || process.env.E2E_MODEL || "gpt-5.5";

@@ -31,7 +31,7 @@ const PUBLIC_API_BASE_URL = (process.env.FLOWAPI_E2E_PUBLIC_API_BASE_URL || proc
 const SUB2API_BASE_URL = normalizeUpstreamBaseUrl(process.env.FLOWAPI_E2E_SUB2API_BASE_URL || process.env.SUB2API_BASE_URL || process.env.SUB2API_INTERNAL_URL || "http://127.0.0.1:8080");
 const SUB2API_API_KEY = process.env.FLOWAPI_E2E_SUB2API_API_KEY || process.env.SUB2API_API_KEY || process.env.SUB2API_API_KEY_SECONDARY || "";
 const ADMIN_SECRET = process.env.FLOWAPI_ADMIN_SECRET || process.env.ADMIN_SECRET || process.env.E2E_ADMIN_SECRET || "";
-const ADMIN_LOGIN_EMAIL = process.env.FLOWAPI_E2E_LOGIN_EMAIL || process.env.E2E_LOGIN_EMAIL || "xiaoyijie@flowapi.fun";
+const ADMIN_LOGIN_EMAIL = process.env.FLOWAPI_E2E_LOGIN_EMAIL || process.env.E2E_LOGIN_EMAIL || "849481756@qq.com";
 const ADMIN_LOGIN_PASSWORD = process.env.FLOWAPI_E2E_LOGIN_PASSWORD || process.env.E2E_LOGIN_PASSWORD || process.env.FLOWAPI_E2E_PASSWORD || process.env.E2E_PASSWORD || "FlowAPI-Admin-2026!";
 const E2E_MODEL = "gpt-5.5";
 
@@ -100,7 +100,6 @@ async function resolveSiteBaseUrl() {
     "http://127.0.0.1:8081",
     "http://127.0.0.1:8082",
     "https://flowapi.fun",
-    "https://pincc.flowapi.fun",
   ].map(normalizeSiteBaseUrl).filter(Boolean);
 
   const uniqueCandidates = [...new Set(candidates)];
@@ -184,6 +183,7 @@ async function main() {
   push("直接访问 sub2api", true, `status=${direct.response.status}（仅记录，不作为闭环硬门槛）`);
 
   const { cookie, customerId } = await login();
+  push("登录客户", Boolean(customerId), customerId || "missing");
   const apiKey = await createKey(cookie, customerId);
   push("创建测试 API Key", Boolean(apiKey), apiKey.slice(0, 12));
 
